@@ -1,5 +1,6 @@
 package com.project.game.network;
 
+import com.project.game.frame.FrameTemplate;
 import com.project.game.network.message.Message;
 import com.project.game.network.message.MessageName;
 import com.project.game.network.message.MessageWriter;
@@ -16,9 +17,10 @@ import java.util.logging.Logger;
 /** N8 bootstrap plus N11 LEGACY_DEV authentication and create-player flow. */
 public final class MessageHandler {
     private static final Logger LOGGER = Logger.getLogger(MessageHandler.class.getName());
-    // Development-only bootstrap values; canonical resource datasets are not in this repository yet.
+    // Development-only bootstrap values for the legacy client resource protocol.
     private static final int NOT_PROVIDED_VERSION = -1;
     private static final int DEV_MONSTER_VERSION = 0;
+    private static final int DEV_FRAME_VERSION = 0;
     private final Session session;
     private final AuthService authService;
     private final ResourceService resourceService;
@@ -78,6 +80,7 @@ public final class MessageHandler {
         switch (type) {
             case -1 -> sendResourceManifest();
             case 4 -> sendMonsterResource();
+            case 7 -> sendFrameResource();
             default -> LOGGER.fine(() -> "UPDATE_DATA type=" + type
                     + " is not provided by the development bootstrap session=" + session.id());
         }
@@ -94,7 +97,7 @@ public final class MessageHandler {
                 .writeByte(DEV_MONSTER_VERSION) // monster
                 .writeByte(NOT_PROVIDED_VERSION) // medal
                 .writeByte(NOT_PROVIDED_VERSION) // level
-                .writeByte(NOT_PROVIDED_VERSION) // frame
+                .writeByte(DEV_FRAME_VERSION) // frame
                 .writeByte(NOT_PROVIDED_VERSION) // mount
                 .writeByte(NOT_PROVIDED_VERSION) // bag
                 .writeByte(NOT_PROVIDED_VERSION) // skill paint
@@ -112,6 +115,41 @@ public final class MessageHandler {
         session.send(new Message(MessageName.UPDATE_DATA, writer.toByteArray()));
         LOGGER.fine(() -> "UPDATE_DATA_TX type=4 session=" + session.id()
                 + " monsterVersion=" + DEV_MONSTER_VERSION + " darts=0 monsters=0");
+    }
+
+    private void sendFrameResource() throws IOException {
+        var frames = resourceService.frames();
+        if (frames.size() > Short.MAX_VALUE) {
+            throw new IOException("too many frame templates: " + frames.size());
+        }
+        MessageWriter writer = new MessageWriter()
+                .writeByte(7)
+                .writeByte(DEV_FRAME_VERSION)
+                .writeShort(frames.size());
+        for (FrameTemplate frame : frames) {
+            writer.writeShort(frame.id())
+                    .writeShort(frame.hpBar())
+                    .writeShort(frame.chat())
+                    .writeByte(frame.dead().size());
+            frame.dead().forEach(writer::writeShort);
+            writer.writeByte(frame.stand().size());
+            frame.stand().forEach(writer::writeShort);
+            writer.writeByte(frame.run().size());
+            frame.run().forEach(writer::writeShort);
+            writer.writeShort(frame.fly())
+                    .writeShort(frame.jump())
+                    .writeShort(frame.fall())
+                    .writeShort(frame.injure())
+                    .writeByte(frame.action().size());
+            frame.action().forEach((actionId, iconId) -> writer.writeByte(actionId).writeShort(iconId));
+            writer.writeShort(frame.dx())
+                    .writeShort(frame.dy())
+                    .writeShort(frame.width())
+                    .writeShort(frame.height());
+        }
+        session.send(new Message(MessageName.UPDATE_DATA, writer.toByteArray()));
+        LOGGER.fine(() -> "UPDATE_DATA_TX type=7 session=" + session.id()
+                + " frameVersion=" + DEV_FRAME_VERSION + " count=" + frames.size());
     }
 
     private void handleRequestIcon(Message message) throws IOException {

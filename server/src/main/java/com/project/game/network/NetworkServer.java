@@ -165,10 +165,16 @@ public final class NetworkServer {
     }
 
     private static ResourceService resourceService(Properties properties) {
-        String configuredRoot = properties.getProperty("game.resource.icon-dir", "").trim();
-        return configuredRoot.isEmpty()
-                ? ResourceService.unavailable()
-                : ResourceService.fromIconRoot(java.nio.file.Path.of(configuredRoot));
+        String configuredIconRoot = properties.getProperty("game.resource.icon-dir", "").trim();
+        String configuredJsonRoot = properties.getProperty("game.resource.json-dir", "").trim();
+        java.nio.file.Path iconRoot = configuredIconRoot.isEmpty()
+                ? null : java.nio.file.Path.of(configuredIconRoot);
+        if (configuredJsonRoot.isEmpty()) {
+            return iconRoot == null
+                    ? ResourceService.unavailable()
+                    : ResourceService.fromIconRoot(iconRoot);
+        }
+        return ResourceService.fromRoots(iconRoot, java.nio.file.Path.of(configuredJsonRoot));
     }
 
     private static void overlaySystemProperties(Properties properties) {

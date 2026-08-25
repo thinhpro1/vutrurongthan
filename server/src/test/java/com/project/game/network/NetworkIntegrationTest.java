@@ -6,6 +6,7 @@ import com.project.game.network.message.Message;
 import com.project.game.network.message.MessageName;
 import com.project.game.network.message.MessageWriter;
 import com.project.game.network.transport.LegacyTcpTransport;
+import com.project.game.frame.FrameTemplate;
 import com.project.game.service.AuthService;
 import com.project.game.service.ResourceService;
 import com.project.game.service.ServerServices;
@@ -27,6 +28,72 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class NetworkIntegrationTest {
+    @Test
+    void javaClientReceivesLegacyFrameDefinitionsInUnityFieldOrder() throws Exception {
+        ResourceService resources = ResourceService.fromFrameRoot(
+                Path.of("..", "client", "Assets", "Resources", "Jsons"));
+        NetworkServer server = new NetworkServer("127.0.0.1", 0, 2, 4096, 8, 1_000,
+                "abc".getBytes(StandardCharsets.US_ASCII),
+                new ServerServices(new AuthService(), resources), null,
+                NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
+        AtomicReference<Throwable> serverFailure = new AtomicReference<>();
+        Thread serverThread = Thread.ofVirtual().start(() -> {
+            try {
+                server.start();
+            } catch (Throwable failure) {
+                serverFailure.set(failure);
+            }
+        });
+        try {
+            waitForPort(server);
+            runFrameRequest(server.localPort(), resources.frames());
+            waitForNoSessions(server);
+        } finally {
+            server.stop();
+            serverThread.join(1_000);
+        }
+        assertNull(serverFailure.get(), "network server failed during frame integration test");
+    }
+
+    @Test
+    void javaClientVersionCacheSkipsSecondFrameRequest() throws Exception {
+        ResourceService resources = ResourceService.fromFrameRoot(
+                Path.of("..", "client", "Assets", "Resources", "Jsons"));
+        AtomicInteger frameUpdateCount = new AtomicInteger();
+        NetworkEventObserver observer = (session, type) -> {
+            if (type == 7) {
+                frameUpdateCount.incrementAndGet();
+            }
+        };
+        NetworkServer server = new NetworkServer("127.0.0.1", 0, 2, 4096, 8, 1_000,
+                "abc".getBytes(StandardCharsets.US_ASCII),
+                new ServerServices(new AuthService(), resources), null,
+                NetworkConfig.defaults(), observer);
+        AtomicReference<Throwable> serverFailure = new AtomicReference<>();
+        Thread serverThread = Thread.ofVirtual().start(() -> {
+            try {
+                server.start();
+            } catch (Throwable failure) {
+                serverFailure.set(failure);
+            }
+        });
+        try {
+            waitForPort(server);
+            runFrameBootstrap(server.localPort(), true);
+            waitForNoSessions(server);
+            assertEquals(1, frameUpdateCount.get());
+
+            // Model a restart after the client persisted frame version 0.
+            runFrameBootstrap(server.localPort(), false);
+            waitForNoSessions(server);
+            assertEquals(1, frameUpdateCount.get());
+        } finally {
+            server.stop();
+            serverThread.join(1_000);
+        }
+        assertNull(serverFailure.get(), "network server failed during frame cache test");
+    }
+
     @Test
     void javaClientReceivesRequestIconResponseWithLegacySpecialFraming(@TempDir Path iconRoot) throws Exception {
         byte[] iconData = new byte[]{1, 2, 3, 4};
@@ -124,7 +191,7 @@ class NetworkIntegrationTest {
             assertEquals(MessageName.UPDATE_DATA, manifest.command());
             assertEquals(14, manifest.payload().length);
             assertArrayEquals(new byte[]{
-                    -1, -1, -1, -1, -1, -1, 0, -1, -1, -1, -1, -1, -1, -1
+                    -1, -1, -1, -1, -1, -1, 0, -1, -1, 0, -1, -1, -1, -1
             }, manifest.payload());
             var manifestReader = manifest.reader();
             assertEquals(-1, manifestReader.readByte());
@@ -136,7 +203,7 @@ class NetworkIntegrationTest {
             assertEquals(0, manifestReader.readByte());
             assertEquals(-1, manifestReader.readByte());
             assertEquals(-1, manifestReader.readByte());
-            assertEquals(-1, manifestReader.readByte());
+            assertEquals(0, manifestReader.readByte());
             assertEquals(-1, manifestReader.readByte());
             assertEquals(-1, manifestReader.readByte());
             assertEquals(-1, manifestReader.readByte());
@@ -156,6 +223,89 @@ class NetworkIntegrationTest {
                 assertEquals(0, monsterReader.readUnsignedShort());
                 assertEquals(0, monsterReader.readUnsignedShort());
                 assertEquals(0, monsterReader.remaining());
+            }
+        }
+    }
+
+    private static void runFrameRequest(int port, java.util.List<FrameTemplate> expectedFrames) throws Exception {
+        LegacyPacketCodec codec = new LegacyPacketCodec(4096);
+        try (LegacyTcpTransport transport = LegacyTcpTransport.connect("127.0.0.1", port, 1_000)) {
+            transport.socket().setSoTimeout(1_000);
+            codec.writeClient(transport.output(), null, false, new Message(MessageName.CONNECT_SERVER));
+            Message handshake = codec.read(transport.input(), null, false);
+            assertEquals(MessageName.SEND_SESSION_KEY, handshake.command());
+            LegacyCipher cipher = new LegacyCipher(reconstructKey(handshake.payload()));
+            Message version = codec.readServerResponse(transport.input(), cipher, true);
+            assertEquals(MessageName.VERSION_SOURCE, version.command());
+
+            codec.writeClient(transport.output(), cipher, true,
+                    new Message(MessageName.UPDATE_DATA, new MessageWriter().writeByte(7).toByteArray()));
+            Message response = codec.readServerResponse(transport.input(), cipher, true);
+            assertEquals(MessageName.UPDATE_DATA, response.command());
+            var reader = response.reader();
+            assertEquals(7, reader.readByte());
+            assertEquals(0, reader.readByte());
+            assertEquals(expectedFrames.size(), reader.readUnsignedShort());
+            for (FrameTemplate expected : expectedFrames) {
+                assertEquals(expected.id(), reader.readShort());
+                assertEquals(expected.hpBar(), reader.readShort());
+                assertEquals(expected.chat(), reader.readShort());
+                assertEquals(expected.dead().size(), reader.readUnsignedByte());
+                for (int iconId : expected.dead()) {
+                    assertEquals(iconId, reader.readShort());
+                }
+                assertEquals(expected.stand().size(), reader.readUnsignedByte());
+                for (int iconId : expected.stand()) {
+                    assertEquals(iconId, reader.readShort());
+                }
+                assertEquals(expected.run().size(), reader.readUnsignedByte());
+                for (int iconId : expected.run()) {
+                    assertEquals(iconId, reader.readShort());
+                }
+                assertEquals(expected.fly(), reader.readShort());
+                assertEquals(expected.jump(), reader.readShort());
+                assertEquals(expected.fall(), reader.readShort());
+                assertEquals(expected.injure(), reader.readShort());
+                assertEquals(expected.action().size(), reader.readUnsignedByte());
+                for (var action : expected.action().entrySet()) {
+                    assertEquals(action.getKey(), reader.readByte());
+                    assertEquals(action.getValue(), reader.readShort());
+                }
+                assertEquals(expected.dx(), reader.readShort());
+                assertEquals(expected.dy(), reader.readShort());
+                assertEquals(expected.width(), reader.readShort());
+                assertEquals(expected.height(), reader.readShort());
+            }
+            assertEquals(0, reader.remaining());
+        }
+    }
+
+    private static void runFrameBootstrap(int port, boolean requestFrame) throws Exception {
+        LegacyPacketCodec codec = new LegacyPacketCodec(4096);
+        try (LegacyTcpTransport transport = LegacyTcpTransport.connect("127.0.0.1", port, 1_000)) {
+            transport.socket().setSoTimeout(1_000);
+            codec.writeClient(transport.output(), null, false, new Message(MessageName.CONNECT_SERVER));
+            Message handshake = codec.read(transport.input(), null, false);
+            assertEquals(MessageName.SEND_SESSION_KEY, handshake.command());
+            LegacyCipher cipher = new LegacyCipher(reconstructKey(handshake.payload()));
+            Message version = codec.readServerResponse(transport.input(), cipher, true);
+            assertEquals(MessageName.VERSION_SOURCE, version.command());
+
+            codec.writeClient(transport.output(), cipher, true,
+                    new Message(MessageName.UPDATE_DATA, new MessageWriter().writeByte(-1).toByteArray()));
+            Message manifest = codec.readServerResponse(transport.input(), cipher, true);
+            assertArrayEquals(new byte[]{
+                    -1, -1, -1, -1, -1, -1, 0, -1, -1, 0, -1, -1, -1, -1
+            }, manifest.payload());
+
+            if (requestFrame) {
+                codec.writeClient(transport.output(), cipher, true,
+                        new Message(MessageName.UPDATE_DATA, new MessageWriter().writeByte(7).toByteArray()));
+                Message frame = codec.readServerResponse(transport.input(), cipher, true);
+                var reader = frame.reader();
+                assertEquals(7, reader.readByte());
+                assertEquals(0, reader.readByte());
+                assertEquals(6, reader.readUnsignedShort());
             }
         }
     }

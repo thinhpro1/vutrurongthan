@@ -6,6 +6,8 @@ import com.project.game.network.message.Message;
 import com.project.game.network.transport.ClientTransport;
 import com.project.game.player.PlayerProfile;
 import com.project.game.service.AuthService;
+import com.project.game.service.ResourceService;
+import com.project.game.service.ServerServices;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -41,34 +43,36 @@ public final class Session implements AutoCloseable {
 
     public Session(int id, ClientTransport transport, SessionManager manager,
                    LegacyPacketCodec codec, byte[] handshakeKey, int queueSize) {
-        this(id, transport, manager, codec, handshakeKey, queueSize, new AuthService());
+        this(id, transport, manager, codec, handshakeKey, queueSize, ServerServices.defaults(),
+                NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
     }
 
     public Session(int id, ClientTransport transport, SessionManager manager,
                    LegacyPacketCodec codec, byte[] handshakeKey, int queueSize,
                    AuthService authService) {
-        this(id, transport, manager, codec, handshakeKey, queueSize, authService, NetworkConfig.defaults(),
+        this(id, transport, manager, codec, handshakeKey, queueSize,
+                new ServerServices(authService, ResourceService.unavailable()), NetworkConfig.defaults(),
                 NetworkEventObserver.NO_OP);
     }
 
     public Session(int id, ClientTransport transport, SessionManager manager,
                    LegacyPacketCodec codec, byte[] handshakeKey, int queueSize,
                    AuthService authService, NetworkConfig networkConfig) {
-        this(id, transport, manager, codec, handshakeKey, queueSize, authService, networkConfig,
+        this(id, transport, manager, codec, handshakeKey, queueSize,
+                new ServerServices(authService, ResourceService.unavailable()), networkConfig,
                 NetworkEventObserver.NO_OP);
     }
 
     public Session(int id, ClientTransport transport, SessionManager manager,
                    LegacyPacketCodec codec, byte[] handshakeKey, int queueSize,
                    AuthService authService, NetworkConfig networkConfig, NetworkEventObserver eventObserver) {
-        this(id, transport, manager, codec, handshakeKey, queueSize, authService, networkConfig,
-                eventObserver, IconResourceProvider.UNAVAILABLE);
+        this(id, transport, manager, codec, handshakeKey, queueSize,
+                new ServerServices(authService, ResourceService.unavailable()), networkConfig, eventObserver);
     }
 
     public Session(int id, ClientTransport transport, SessionManager manager,
                    LegacyPacketCodec codec, byte[] handshakeKey, int queueSize,
-                   AuthService authService, NetworkConfig networkConfig, NetworkEventObserver eventObserver,
-                   IconResourceProvider iconResourceProvider) {
+                   ServerServices services, NetworkConfig networkConfig, NetworkEventObserver eventObserver) {
         if (queueSize < 1) {
             throw new IllegalArgumentException("queueSize must be positive");
         }
@@ -79,7 +83,7 @@ public final class Session implements AutoCloseable {
         this.handshakeKey = handshakeKey.clone();
         this.cipher = new LegacyCipher(handshakeKey);
         this.sendQueue = new ArrayBlockingQueue<>(queueSize);
-        this.handler = new MessageHandler(this, authService, networkConfig, eventObserver, iconResourceProvider);
+        this.handler = new MessageHandler(this, services, networkConfig, eventObserver);
     }
 
     public int id() {

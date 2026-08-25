@@ -6,11 +6,16 @@ import com.project.game.network.message.Message;
 import com.project.game.network.message.MessageName;
 import com.project.game.network.message.MessageWriter;
 import com.project.game.network.transport.LegacyTcpTransport;
+import com.project.game.service.AuthService;
+import com.project.game.service.ResourceService;
+import com.project.game.service.ServerServices;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.charset.StandardCharsets;
-import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -23,17 +28,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class NetworkIntegrationTest {
     @Test
-    void javaClientReceivesRequestIconResponseWithLegacySpecialFraming() throws Exception {
+    void javaClientReceivesRequestIconResponseWithLegacySpecialFraming(@TempDir Path iconRoot) throws Exception {
         byte[] iconData = new byte[]{1, 2, 3, 4};
-        AtomicInteger requested = new AtomicInteger();
-        IconResourceProvider provider = iconId -> {
-            assertEquals(5, iconId);
-            requested.incrementAndGet();
-            return Optional.of(iconData.clone());
-        };
+        Files.write(iconRoot.resolve("5.png"), iconData);
         NetworkServer server = new NetworkServer("127.0.0.1", 0, 2, 1024, 8, 1_000,
-                "abc".getBytes(StandardCharsets.US_ASCII), new com.project.game.service.AuthService(),
-                null, NetworkConfig.defaults(), NetworkEventObserver.NO_OP, provider);
+                "abc".getBytes(StandardCharsets.US_ASCII),
+                new ServerServices(new AuthService(), ResourceService.fromIconRoot(iconRoot)),
+                null, NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
         AtomicReference<Throwable> serverFailure = new AtomicReference<>();
         Thread serverThread = Thread.ofVirtual().start(() -> {
             try {
@@ -50,7 +51,6 @@ class NetworkIntegrationTest {
             server.stop();
             serverThread.join(1_000);
         }
-        assertEquals(1, requested.get());
         assertNull(serverFailure.get(), "network server failed during icon integration test");
     }
 

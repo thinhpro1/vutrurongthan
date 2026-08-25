@@ -1,4 +1,4 @@
-package com.project.game.network;
+package com.project.game.service;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -10,22 +10,26 @@ import java.nio.file.Path;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-class IconResourceProviderTest {
+class ResourceServiceTest {
     @Test
     void loadsOnlyNumericPngFilesBelowConfiguredRoot(@TempDir Path root) throws IOException {
         byte[] expected = new byte[]{1, 2, 3, 4};
         Files.write(root.resolve("5.png"), expected);
-        FileSystemIconResourceProvider provider = new FileSystemIconResourceProvider(root);
+        ResourceService resources = ResourceService.fromIconRoot(root);
 
-        assertArrayEquals(expected, provider.load(5).orElseThrow());
-        assertTrue(provider.load(6).isEmpty());
+        assertArrayEquals(expected, resources.loadIcon(5).orElseThrow());
+        assertTrue(resources.loadIcon(6).isEmpty());
     }
 
     @Test
     void absentRootReportsMissingWithoutFabricatingBytes(@TempDir Path root) {
-        FileSystemIconResourceProvider provider = new FileSystemIconResourceProvider(
-                root.resolve("does-not-exist"));
+        ResourceService resources = ResourceService.fromIconRoot(root.resolve("does-not-exist"));
 
-        assertTrue(provider.load(5).isEmpty());
+        assertTrue(resources.loadIcon(5).isEmpty());
+    }
+
+    @Test
+    void unavailableServiceReportsMissing() {
+        assertTrue(ResourceService.unavailable().loadIcon(5).isEmpty());
     }
 }

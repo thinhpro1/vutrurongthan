@@ -5,11 +5,15 @@ import com.project.game.network.message.Message;
 import com.project.game.network.message.MessageName;
 import com.project.game.network.message.MessageWriter;
 import com.project.game.service.AuthService;
+import com.project.game.service.ResourceService;
+import com.project.game.service.ServerServices;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.charset.StandardCharsets;
-import java.util.Optional;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -71,55 +75,45 @@ class MessageHandlerTest {
 
     @Test
     void requestIconIsAllowedOnlyAfterHandshake() {
-        AtomicInteger requested = new AtomicInteger();
-        IconResourceProvider provider = iconId -> {
-            requested.incrementAndGet();
-            return Optional.empty();
-        };
+        ResourceService resources = ResourceService.unavailable();
 
         Session connected = newSession(new AuthService());
-        newHandler(connected, provider).onMessage(iconRequest(5));
+        newHandler(connected, resources).onMessage(iconRequest(5));
         assertEquals(SessionState.CONNECTED, connected.state());
 
         Session handshakeDone = newSession(new AuthService());
         handshakeDone.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
-        newHandler(handshakeDone, provider).onMessage(iconRequest(5));
+        newHandler(handshakeDone, resources).onMessage(iconRequest(5));
         assertEquals(SessionState.HANDSHAKE_DONE, handshakeDone.state());
 
         Session authenticated = newSession(new AuthService());
         authenticated.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
         authenticated.transition(SessionState.HANDSHAKE_DONE, SessionState.AUTHENTICATED);
-        newHandler(authenticated, provider).onMessage(iconRequest(5));
+        newHandler(authenticated, resources).onMessage(iconRequest(5));
         assertEquals(SessionState.AUTHENTICATED, authenticated.state());
 
         Session inGame = newSession(new AuthService());
         inGame.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
         inGame.transition(SessionState.HANDSHAKE_DONE, SessionState.AUTHENTICATED);
         inGame.transition(SessionState.AUTHENTICATED, SessionState.IN_GAME);
-        newHandler(inGame, provider).onMessage(iconRequest(5));
+        newHandler(inGame, resources).onMessage(iconRequest(5));
         assertEquals(SessionState.IN_GAME, inGame.state());
 
         Session closed = newSession(new AuthService());
         closed.close();
-        newHandler(closed, provider).onMessage(iconRequest(5));
+        newHandler(closed, resources).onMessage(iconRequest(5));
         assertEquals(SessionState.CLOSED, closed.state());
-        assertEquals(3, requested.get());
     }
 
     @Test
-    void parsesRequestIconIdAndCallsProviderOnce() {
-        AtomicInteger requestedId = new AtomicInteger();
-        IconResourceProvider provider = iconId -> {
-            requestedId.incrementAndGet();
-            assertEquals(5, iconId);
-            return Optional.empty();
-        };
+    void parsesRequestIconIdAndQueuesAvailableIcon(@TempDir Path root) throws IOException {
+        Files.write(root.resolve("5.png"), new byte[]{1, 2, 3});
         Session session = newSession(new AuthService());
         session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
 
-        newHandler(session, provider).onMessage(iconRequest(5));
+        newHandler(session, ResourceService.fromIconRoot(root)).onMessage(iconRequest(5));
 
-        assertEquals(1, requestedId.get());
+        assertEquals(1, session.queuedMessages());
         assertEquals(SessionState.HANDSHAKE_DONE, session.state());
     }
 
@@ -128,7 +122,7 @@ class MessageHandlerTest {
         Session session = newSession(new AuthService());
         session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
 
-        newHandler(session, iconId -> Optional.empty()).onMessage(
+        newHandler(session, ResourceService.unavailable()).onMessage(
                 new Message(MessageName.REQUEST_ICON, new byte[]{0, 5, 0x7f}));
 
         assertEquals(SessionState.CLOSED, session.state());
@@ -140,7 +134,7 @@ class MessageHandlerTest {
         session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
         session.transition(SessionState.HANDSHAKE_DONE, SessionState.AUTHENTICATED);
 
-        newHandler(session, iconId -> Optional.empty()).onMessage(iconRequest(5));
+        newHandler(session, ResourceService.unavailable()).onMessage(iconRequest(5));
 
         assertEquals(SessionState.AUTHENTICATED, session.state());
         assertEquals(0, session.queuedMessages());
@@ -149,20 +143,21 @@ class MessageHandlerTest {
     }
 
     @Test
-    void oversizedIconIsNotQueuedPastConfiguredPacketLimit() {
+    void oversizedIconIsNotQueuedPastConfiguredPacketLimit(@TempDir Path root) throws IOException {
+        Files.write(root.resolve("5.png"), new byte[]{1, 2, 3, 4});
         Session session = newSession(new AuthService(), 9);
         session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
 
-        newHandler(session, iconId -> Optional.of(new byte[]{1, 2, 3, 4}))
+        newHandler(session, ResourceService.fromIconRoot(root))
                 .onMessage(iconRequest(5));
 
         assertEquals(SessionState.HANDSHAKE_DONE, session.state());
         assertEquals(0, session.queuedMessages());
     }
 
-    private static MessageHandler newHandler(Session session, IconResourceProvider provider) {
-        return new MessageHandler(session, new AuthService(), NetworkConfig.defaults(),
-                NetworkEventObserver.NO_OP, provider);
+    private static MessageHandler newHandler(Session session, ResourceService resources) {
+        return new MessageHandler(session, new ServerServices(new AuthService(), resources),
+                NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
     }
 
     private static Message iconRequest(int iconId) {

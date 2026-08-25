@@ -6,6 +6,8 @@ import com.project.game.network.transport.LegacyTcpTransport;
 import com.project.game.network.transport.TlsContextFactory;
 import com.project.game.network.transport.TlsTcpTransport;
 import com.project.game.service.AuthService;
+import com.project.game.service.ResourceService;
+import com.project.game.service.ServerServices;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -27,11 +29,10 @@ public final class NetworkServer {
     private final int sendQueueSize;
     private final int handshakeTimeoutMillis;
     private final byte[] handshakeKey;
-    private final AuthService authService;
+    private final ServerServices services;
     private final SSLContext tlsContext;
     private final NetworkConfig networkConfig;
     private final NetworkEventObserver eventObserver;
-    private final IconResourceProvider iconResourceProvider;
     private final SessionManager sessions = new SessionManager();
     private volatile boolean running;
     private volatile ServerSocket serverSocket;
@@ -39,28 +40,31 @@ public final class NetworkServer {
     public NetworkServer(String host, int port, int maxSessionsPerIp, int maxPacketSize,
                          int sendQueueSize, int handshakeTimeoutMillis, byte[] handshakeKey) {
         this(host, port, maxSessionsPerIp, maxPacketSize, sendQueueSize, handshakeTimeoutMillis,
-                handshakeKey, new AuthService(), null, NetworkConfig.defaults());
+                handshakeKey, ServerServices.defaults(), null, NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
     }
 
     public NetworkServer(String host, int port, int maxSessionsPerIp, int maxPacketSize,
                          int sendQueueSize, int handshakeTimeoutMillis, byte[] handshakeKey,
                          AuthService authService) {
         this(host, port, maxSessionsPerIp, maxPacketSize, sendQueueSize, handshakeTimeoutMillis,
-                handshakeKey, authService, null, NetworkConfig.defaults());
+                handshakeKey, new ServerServices(authService, ResourceService.unavailable()), null,
+                NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
     }
 
     public NetworkServer(String host, int port, int maxSessionsPerIp, int maxPacketSize,
                          int sendQueueSize, int handshakeTimeoutMillis, byte[] handshakeKey,
                          AuthService authService, SSLContext tlsContext) {
         this(host, port, maxSessionsPerIp, maxPacketSize, sendQueueSize, handshakeTimeoutMillis,
-                handshakeKey, authService, tlsContext, NetworkConfig.defaults());
+                handshakeKey, new ServerServices(authService, ResourceService.unavailable()), tlsContext,
+                NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
     }
 
     public NetworkServer(String host, int port, int maxSessionsPerIp, int maxPacketSize,
                          int sendQueueSize, int handshakeTimeoutMillis, byte[] handshakeKey,
                          AuthService authService, SSLContext tlsContext, NetworkConfig networkConfig) {
         this(host, port, maxSessionsPerIp, maxPacketSize, sendQueueSize, handshakeTimeoutMillis,
-                handshakeKey, authService, tlsContext, networkConfig, NetworkEventObserver.NO_OP);
+                handshakeKey, new ServerServices(authService, ResourceService.unavailable()), tlsContext,
+                networkConfig, NetworkEventObserver.NO_OP);
     }
 
     public NetworkServer(String host, int port, int maxSessionsPerIp, int maxPacketSize,
@@ -68,14 +72,14 @@ public final class NetworkServer {
                          AuthService authService, SSLContext tlsContext, NetworkConfig networkConfig,
                          NetworkEventObserver eventObserver) {
         this(host, port, maxSessionsPerIp, maxPacketSize, sendQueueSize, handshakeTimeoutMillis,
-                handshakeKey, authService, tlsContext, networkConfig, eventObserver,
-                IconResourceProvider.UNAVAILABLE);
+                handshakeKey, new ServerServices(authService, ResourceService.unavailable()), tlsContext,
+                networkConfig, eventObserver);
     }
 
     public NetworkServer(String host, int port, int maxSessionsPerIp, int maxPacketSize,
                          int sendQueueSize, int handshakeTimeoutMillis, byte[] handshakeKey,
-                         AuthService authService, SSLContext tlsContext, NetworkConfig networkConfig,
-                         NetworkEventObserver eventObserver, IconResourceProvider iconResourceProvider) {
+                         ServerServices services, SSLContext tlsContext, NetworkConfig networkConfig,
+                         NetworkEventObserver eventObserver) {
         if (port < 0 || port > 65535 || maxSessionsPerIp < 1 || maxPacketSize < 1 || sendQueueSize < 1
                 || handshakeTimeoutMillis < 1) {
             throw new IllegalArgumentException("invalid network configuration");
@@ -90,11 +94,10 @@ public final class NetworkServer {
         if (this.handshakeKey.length == 0) {
             throw new IllegalArgumentException("handshakeKey must not be empty");
         }
-        this.authService = Objects.requireNonNull(authService, "authService");
+        this.services = Objects.requireNonNull(services, "services");
         this.tlsContext = tlsContext;
         this.networkConfig = Objects.requireNonNull(networkConfig, "networkConfig");
         this.eventObserver = Objects.requireNonNull(eventObserver, "eventObserver");
-        this.iconResourceProvider = Objects.requireNonNull(iconResourceProvider, "iconResourceProvider");
     }
 
     public static NetworkServer fromSystemProperties() {
@@ -126,8 +129,8 @@ public final class NetworkServer {
                 integer(properties, "game.network.send-queue-size", 256),
                 integer(properties, "game.network.handshake-timeout-ms", 10000),
                 "abc".getBytes(java.nio.charset.StandardCharsets.US_ASCII),
-                new AuthService(), tlsContext, NetworkConfig.fromProperties(properties),
-                NetworkEventObserver.NO_OP, iconResourceProvider(properties));
+                new ServerServices(new AuthService(), resourceService(properties)), tlsContext,
+                NetworkConfig.fromProperties(properties), NetworkEventObserver.NO_OP);
     }
 
     public void start() throws IOException {
@@ -157,7 +160,7 @@ public final class NetworkServer {
                 }
                 LegacyPacketCodec codec = new LegacyPacketCodec(maxPacketSize);
                 Session session = new Session(sessions.nextId(), transport, sessions, codec, handshakeKey,
-                        sendQueueSize, authService, networkConfig, eventObserver, iconResourceProvider);
+                        sendQueueSize, services, networkConfig, eventObserver);
                 if (!sessions.tryAdd(session, maxSessionsPerIp)) {
                     transport.close();
                     continue;
@@ -200,11 +203,11 @@ public final class NetworkServer {
         return Integer.parseInt(properties.getProperty(key, Integer.toString(fallback)));
     }
 
-    private static IconResourceProvider iconResourceProvider(Properties properties) {
+    private static ResourceService resourceService(Properties properties) {
         String configuredRoot = properties.getProperty("game.resource.icon-dir", "").trim();
         return configuredRoot.isEmpty()
-                ? IconResourceProvider.UNAVAILABLE
-                : new FileSystemIconResourceProvider(java.nio.file.Path.of(configuredRoot));
+                ? ResourceService.unavailable()
+                : ResourceService.fromIconRoot(java.nio.file.Path.of(configuredRoot));
     }
 
     private static void overlaySystemProperties(Properties properties) {

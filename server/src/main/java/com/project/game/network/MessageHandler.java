@@ -5,6 +5,8 @@ import com.project.game.network.message.MessageName;
 import com.project.game.network.message.MessageWriter;
 import com.project.game.player.PlayerProfile;
 import com.project.game.service.AuthService;
+import com.project.game.service.ResourceService;
+import com.project.game.service.ServerServices;
 
 import java.io.IOException;
 import java.util.Objects;
@@ -19,9 +21,9 @@ public final class MessageHandler {
     private static final int DEV_MONSTER_VERSION = 0;
     private final Session session;
     private final AuthService authService;
+    private final ResourceService resourceService;
     private final NetworkConfig networkConfig;
     private final NetworkEventObserver eventObserver;
-    private final IconResourceProvider iconResourceProvider;
 
     public MessageHandler(Session session, AuthService authService) {
         this(session, authService, NetworkConfig.defaults());
@@ -33,16 +35,17 @@ public final class MessageHandler {
 
     public MessageHandler(Session session, AuthService authService, NetworkConfig networkConfig,
                           NetworkEventObserver eventObserver) {
-        this(session, authService, networkConfig, eventObserver, IconResourceProvider.UNAVAILABLE);
+        this(session, new ServerServices(authService, ResourceService.unavailable()), networkConfig, eventObserver);
     }
 
-    public MessageHandler(Session session, AuthService authService, NetworkConfig networkConfig,
-                          NetworkEventObserver eventObserver, IconResourceProvider iconResourceProvider) {
+    public MessageHandler(Session session, ServerServices services, NetworkConfig networkConfig,
+                          NetworkEventObserver eventObserver) {
         this.session = session;
-        this.authService = authService;
+        services = Objects.requireNonNull(services, "services");
+        this.authService = services.auth();
+        this.resourceService = services.resources();
         this.networkConfig = networkConfig;
         this.eventObserver = eventObserver;
-        this.iconResourceProvider = Objects.requireNonNull(iconResourceProvider, "iconResourceProvider");
     }
 
     public void onMessage(Message message) {
@@ -132,7 +135,7 @@ public final class MessageHandler {
         }
         LOGGER.fine(() -> "REQUEST_ICON id=" + iconId + " session=" + session.id());
 
-        var data = iconResourceProvider.load(iconId);
+        var data = resourceService.loadIcon(iconId);
         if (data.isEmpty()) {
             LOGGER.fine(() -> "REQUEST_ICON_MISS id=" + iconId + " session=" + session.id());
             return;

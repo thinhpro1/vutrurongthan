@@ -13,6 +13,9 @@ import java.util.logging.Logger;
 /** N8 bootstrap plus N11 LEGACY_DEV authentication and create-player flow. */
 public final class MessageHandler {
     private static final Logger LOGGER = Logger.getLogger(MessageHandler.class.getName());
+    // Development-only bootstrap values; canonical resource datasets are not in this repository yet.
+    private static final int NOT_PROVIDED_VERSION = -1;
+    private static final int DEV_MONSTER_VERSION = 0;
     private final Session session;
     private final AuthService authService;
     private final NetworkConfig networkConfig;
@@ -66,9 +69,50 @@ public final class MessageHandler {
     }
 
     private void handleUpdateData(Message message) throws IOException {
-        int type = message.reader().readByte();
+        var reader = message.reader();
+        int type = reader.readByte();
+        if (reader.remaining() != 0) {
+            throw new IOException("trailing UPDATE_DATA payload bytes");
+        }
         LOGGER.fine(() -> "UPDATE_DATA type=" + type + " session=" + session.id());
         eventObserver.onUpdateData(session, type);
+        switch (type) {
+            case -1 -> sendResourceManifest();
+            case 4 -> sendMonsterResource();
+            default -> LOGGER.fine(() -> "UPDATE_DATA type=" + type
+                    + " is not provided by the development bootstrap session=" + session.id());
+        }
+    }
+
+    private void sendResourceManifest() throws IOException {
+        MessageWriter writer = new MessageWriter()
+                .writeByte(-1)
+                .writeByte(NOT_PROVIDED_VERSION) // image
+                .writeByte(NOT_PROVIDED_VERSION) // item template
+                .writeByte(NOT_PROVIDED_VERSION) // item option template
+                .writeByte(NOT_PROVIDED_VERSION) // npc
+                .writeByte(NOT_PROVIDED_VERSION) // effect
+                .writeByte(DEV_MONSTER_VERSION) // monster
+                .writeByte(NOT_PROVIDED_VERSION) // medal
+                .writeByte(NOT_PROVIDED_VERSION) // level
+                .writeByte(NOT_PROVIDED_VERSION) // frame
+                .writeByte(NOT_PROVIDED_VERSION) // mount
+                .writeByte(NOT_PROVIDED_VERSION) // bag
+                .writeByte(NOT_PROVIDED_VERSION) // skill paint
+                .writeByte(NOT_PROVIDED_VERSION); // aura (client 0.9.5)
+        session.send(new Message(MessageName.UPDATE_DATA, writer.toByteArray()));
+        LOGGER.fine(() -> "UPDATE_DATA_TX type=-1 session=" + session.id());
+    }
+
+    private void sendMonsterResource() throws IOException {
+        MessageWriter writer = new MessageWriter()
+                .writeByte(4)
+                .writeByte(DEV_MONSTER_VERSION)
+                .writeShort(0) // dart template count
+                .writeShort(0); // monster template count
+        session.send(new Message(MessageName.UPDATE_DATA, writer.toByteArray()));
+        LOGGER.fine(() -> "UPDATE_DATA_TX type=4 session=" + session.id()
+                + " monsterVersion=" + DEV_MONSTER_VERSION + " darts=0 monsters=0");
     }
 
     private void handleLogin(Message message) throws IOException {

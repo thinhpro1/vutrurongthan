@@ -16,21 +16,32 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class NetworkIntegrationTest {
     @Test
-    void javaClientCompletesLegacyG1BootstrapAndReconnects() throws Exception {
+    void javaClientCompletesLegacyG1BootstrapAndReconnectsWithoutDuplicateMonsterRequest() throws Exception {
         AtomicInteger updateCount = new AtomicInteger();
+        AtomicInteger monsterUpdateCount = new AtomicInteger();
         CountDownLatch firstUpdate = new CountDownLatch(1);
         CountDownLatch secondUpdate = new CountDownLatch(1);
+        CountDownLatch firstMonsterUpdate = new CountDownLatch(1);
+        CountDownLatch secondMonsterUpdate = new CountDownLatch(1);
         NetworkEventObserver observer = (session, type) -> {
-            assertEquals(-1, type);
-            if (updateCount.incrementAndGet() == 1) {
-                firstUpdate.countDown();
-            } else {
-                secondUpdate.countDown();
+            if (type == -1) {
+                if (updateCount.incrementAndGet() == 1) {
+                    firstUpdate.countDown();
+                } else {
+                    secondUpdate.countDown();
+                }
+            } else if (type == 4) {
+                if (monsterUpdateCount.incrementAndGet() == 1) {
+                    firstMonsterUpdate.countDown();
+                } else {
+                    secondMonsterUpdate.countDown();
+                }
             }
         };
         NetworkServer server = new NetworkServer("127.0.0.1", 0, 2, 1024, 8, 1_000,
@@ -46,11 +57,14 @@ class NetworkIntegrationTest {
         });
         try {
             waitForPort(server);
-            runBootstrap(server.localPort());
+            runBootstrap(server.localPort(), true);
             assertTrue(firstUpdate.await(1, TimeUnit.SECONDS));
+            assertTrue(firstMonsterUpdate.await(1, TimeUnit.SECONDS));
             waitForNoSessions(server);
-            runBootstrap(server.localPort());
+            // Model a restart after the client persisted monster version 0.
+            runBootstrap(server.localPort(), false);
             assertTrue(secondUpdate.await(1, TimeUnit.SECONDS));
+            assertTrue(!secondMonsterUpdate.await(100, TimeUnit.MILLISECONDS));
             waitForNoSessions(server);
         } finally {
             server.stop();
@@ -59,7 +73,7 @@ class NetworkIntegrationTest {
         assertNull(serverFailure.get(), "network server failed during integration test");
     }
 
-    private static void runBootstrap(int port) throws Exception {
+    private static void runBootstrap(int port, boolean requestMonster) throws Exception {
         LegacyPacketCodec codec = new LegacyPacketCodec(1024);
         try (LegacyTcpTransport transport = LegacyTcpTransport.connect("127.0.0.1", port, 1_000)) {
             codec.writeClient(transport.output(), null, false, new Message(MessageName.CONNECT_SERVER));
@@ -72,6 +86,43 @@ class NetworkIntegrationTest {
             assertEquals("0.9.5", version.reader().readUtf());
             codec.writeClient(transport.output(), cipher, true,
                     new Message(MessageName.UPDATE_DATA, new MessageWriter().writeByte(-1).toByteArray()));
+            Message manifest = codec.readServerResponse(transport.input(), cipher, true);
+            assertEquals(MessageName.UPDATE_DATA, manifest.command());
+            assertEquals(14, manifest.payload().length);
+            assertArrayEquals(new byte[]{
+                    -1, -1, -1, -1, -1, -1, 0, -1, -1, -1, -1, -1, -1, -1
+            }, manifest.payload());
+            var manifestReader = manifest.reader();
+            assertEquals(-1, manifestReader.readByte());
+            assertEquals(-1, manifestReader.readByte());
+            assertEquals(-1, manifestReader.readByte());
+            assertEquals(-1, manifestReader.readByte());
+            assertEquals(-1, manifestReader.readByte());
+            assertEquals(-1, manifestReader.readByte());
+            assertEquals(0, manifestReader.readByte());
+            assertEquals(-1, manifestReader.readByte());
+            assertEquals(-1, manifestReader.readByte());
+            assertEquals(-1, manifestReader.readByte());
+            assertEquals(-1, manifestReader.readByte());
+            assertEquals(-1, manifestReader.readByte());
+            assertEquals(-1, manifestReader.readByte());
+            assertEquals(-1, manifestReader.readByte());
+            assertEquals(0, manifestReader.remaining());
+
+            if (requestMonster) {
+                codec.writeClient(transport.output(), cipher, true,
+                        new Message(MessageName.UPDATE_DATA, new MessageWriter().writeByte(4).toByteArray()));
+                Message monster = codec.readServerResponse(transport.input(), cipher, true);
+                assertEquals(MessageName.UPDATE_DATA, monster.command());
+                assertArrayEquals(new byte[]{4, 0, 0, 0, 0, 0}, monster.payload());
+                assertEquals(6, monster.payload().length);
+                var monsterReader = monster.reader();
+                assertEquals(4, monsterReader.readByte());
+                assertEquals(0, monsterReader.readByte());
+                assertEquals(0, monsterReader.readUnsignedShort());
+                assertEquals(0, monsterReader.readUnsignedShort());
+                assertEquals(0, monsterReader.remaining());
+            }
         }
     }
 

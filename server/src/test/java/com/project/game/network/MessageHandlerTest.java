@@ -54,6 +54,18 @@ class MessageHandlerTest {
         assertEquals(SessionState.CLOSED, session.state());
     }
 
+    @Test
+    void closesWhenUpdateDataContainsTrailingBytes() {
+        AuthService auth = new AuthService();
+        Session session = newSession(auth);
+        session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
+        MessageHandler handler = new MessageHandler(session, auth);
+
+        handler.onMessage(new Message(MessageName.UPDATE_DATA, new byte[]{-1, 123}));
+
+        assertEquals(SessionState.CLOSED, session.state());
+    }
+
     private static AuthService registeredAuth() {
         AuthService auth = new AuthService();
         auth.register("user01", "secret1");

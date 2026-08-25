@@ -1,6 +1,7 @@
 package com.project.game.network;
 
 import com.project.game.network.codec.LegacyPacketCodec;
+import com.project.game.network.codec.LegacyCipher;
 import com.project.game.network.message.Message;
 import com.project.game.network.message.MessageName;
 import com.project.game.network.transport.ClientTransport;
@@ -71,6 +72,8 @@ class SessionTest {
                     new Message(MessageName.START_CREATE_PLAYER_SCREEN, new byte[]{2, 3}),
                     new Message(MessageName.CREATE_PLAYER, new byte[]{4, 5, 6}));
             session.start();
+            session.completeHandshake();
+            output.reset();
             for (Message message : expected) {
                 assertTrue(session.send(message));
             }
@@ -78,9 +81,10 @@ class SessionTest {
 
             ByteArrayInputStream wire = new ByteArrayInputStream(output.toByteArray());
             LegacyPacketCodec codec = new LegacyPacketCodec(1024);
-            assertEquals(expected.get(0), codec.readServerResponse(wire, null, false));
-            assertEquals(expected.get(1), codec.readServerResponse(wire, null, false));
-            assertEquals(expected.get(2), codec.readServerResponse(wire, null, false));
+            LegacyCipher cipher = new LegacyCipher("abc".getBytes(StandardCharsets.US_ASCII));
+            assertEquals(expected.get(0), codec.readServerResponse(wire, cipher, true));
+            assertEquals(expected.get(1), codec.readServerResponse(wire, cipher, true));
+            assertEquals(expected.get(2), codec.readServerResponse(wire, cipher, true));
             assertEquals(0, wire.available());
             session.close();
         }

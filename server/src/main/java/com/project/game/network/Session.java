@@ -15,6 +15,7 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Logger;
+import java.util.logging.Level;
 
 /** One client connection: transport, protocol cursors, lifecycle and bounded writer queue. */
 public final class Session implements AutoCloseable {
@@ -46,12 +47,20 @@ public final class Session implements AutoCloseable {
     public Session(int id, ClientTransport transport, SessionManager manager,
                    LegacyPacketCodec codec, byte[] handshakeKey, int queueSize,
                    AuthService authService) {
-        this(id, transport, manager, codec, handshakeKey, queueSize, authService, NetworkConfig.defaults());
+        this(id, transport, manager, codec, handshakeKey, queueSize, authService, NetworkConfig.defaults(),
+                NetworkEventObserver.NO_OP);
     }
 
     public Session(int id, ClientTransport transport, SessionManager manager,
                    LegacyPacketCodec codec, byte[] handshakeKey, int queueSize,
                    AuthService authService, NetworkConfig networkConfig) {
+        this(id, transport, manager, codec, handshakeKey, queueSize, authService, networkConfig,
+                NetworkEventObserver.NO_OP);
+    }
+
+    public Session(int id, ClientTransport transport, SessionManager manager,
+                   LegacyPacketCodec codec, byte[] handshakeKey, int queueSize,
+                   AuthService authService, NetworkConfig networkConfig, NetworkEventObserver eventObserver) {
         if (queueSize < 1) {
             throw new IllegalArgumentException("queueSize must be positive");
         }
@@ -62,7 +71,7 @@ public final class Session implements AutoCloseable {
         this.handshakeKey = handshakeKey.clone();
         this.cipher = new LegacyCipher(handshakeKey);
         this.sendQueue = new ArrayBlockingQueue<>(queueSize);
-        this.handler = new MessageHandler(this, authService, networkConfig);
+        this.handler = new MessageHandler(this, authService, networkConfig, eventObserver);
     }
 
     public int id() {
@@ -185,6 +194,9 @@ public final class Session implements AutoCloseable {
             }
         } catch (IOException ignored) {
             close("read failure or peer disconnect");
+        } catch (RuntimeException exception) {
+            LOGGER.log(Level.SEVERE, "Unhandled session failure id=" + id, exception);
+            close("unexpected handler failure");
         }
     }
 

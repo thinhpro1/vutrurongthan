@@ -16,15 +16,22 @@ public final class MessageHandler {
     private final Session session;
     private final AuthService authService;
     private final NetworkConfig networkConfig;
+    private final NetworkEventObserver eventObserver;
 
     public MessageHandler(Session session, AuthService authService) {
         this(session, authService, NetworkConfig.defaults());
     }
 
     public MessageHandler(Session session, AuthService authService, NetworkConfig networkConfig) {
+        this(session, authService, networkConfig, NetworkEventObserver.NO_OP);
+    }
+
+    public MessageHandler(Session session, AuthService authService, NetworkConfig networkConfig,
+                          NetworkEventObserver eventObserver) {
         this.session = session;
         this.authService = authService;
         this.networkConfig = networkConfig;
+        this.eventObserver = eventObserver;
     }
 
     public void onMessage(Message message) {
@@ -61,6 +68,7 @@ public final class MessageHandler {
     private void handleUpdateData(Message message) throws IOException {
         int type = message.reader().readByte();
         LOGGER.fine(() -> "UPDATE_DATA type=" + type + " session=" + session.id());
+        eventObserver.onUpdateData(session, type);
     }
 
     private void handleLogin(Message message) throws IOException {

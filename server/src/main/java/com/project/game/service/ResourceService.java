@@ -1,24 +1,24 @@
 package com.project.game.service;
 
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParseException;
+import com.google.gson.JsonParser;
 import com.project.game.frame.FrameTemplate;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.Set;
 
 /** Development resource access for static legacy data such as numeric-ID icons. */
 public final class ResourceService {
     private static final List<Integer> REQUIRED_FRAME_IDS = List.of(3, 4, 5, 21, 22, 23);
-    private static final Set<Integer> REQUIRED_FRAME_ID_SET = Set.copyOf(REQUIRED_FRAME_IDS);
     private static final ResourceService UNAVAILABLE = new ResourceService(null, null);
     private final Path iconRoot;
     private final List<FrameTemplate> frames;
@@ -71,267 +71,88 @@ public final class ResourceService {
         }
         try {
             String json = Files.readString(source, StandardCharsets.UTF_8);
-            Map<Integer, FrameTemplate> parsed = new FrameJsonParser(json).parse();
+            JsonElement parsed = JsonParser.parseString(json);
+            if (!parsed.isJsonObject()) {
+                throw new IllegalArgumentException("Frame.json root must be an object");
+            }
+            JsonObject rootObject = parsed.getAsJsonObject();
             List<FrameTemplate> selected = new ArrayList<>(REQUIRED_FRAME_IDS.size());
             for (int id : REQUIRED_FRAME_IDS) {
-                FrameTemplate frame = parsed.get(id);
-                if (frame == null) {
+                JsonElement value = rootObject.get(Integer.toString(id));
+                if (value == null || !value.isJsonObject()) {
                     throw new IllegalArgumentException("Frame.json is missing required frame " + id);
                 }
-                selected.add(frame);
+                selected.add(readFrame(id, value.getAsJsonObject()));
             }
             return List.copyOf(selected);
-        } catch (IOException | RuntimeException exception) {
-            if (exception instanceof IllegalArgumentException illegalArgumentException) {
-                throw illegalArgumentException;
-            }
+        } catch (IOException exception) {
             throw new IllegalStateException("cannot read " + source, exception);
+        } catch (JsonParseException exception) {
+            throw new IllegalArgumentException("invalid Frame.json at " + source, exception);
         }
     }
 
-    private static final class FrameJsonParser {
-        private final String input;
-        private int index;
+    private static FrameTemplate readFrame(int id, JsonObject value) {
+        return new FrameTemplate(id,
+                readInt(value, "type"),
+                readInt(value, "hp_bar"),
+                readInt(value, "chat"),
+                readIntList(value, "dead"),
+                readIntList(value, "stand"),
+                readIntList(value, "run"),
+                readInt(value, "fly"),
+                readInt(value, "jump"),
+                readInt(value, "fall"),
+                readInt(value, "injure"),
+                readIntMap(value, "action"),
+                readInt(value, "dx"),
+                readInt(value, "dy"),
+                readInt(value, "width"),
+                readInt(value, "height"));
+    }
 
-        private FrameJsonParser(String input) {
-            this.input = Objects.requireNonNull(input, "input");
+    private static int readInt(JsonObject object, String field) {
+        JsonElement value = object.get(field);
+        if (value == null || !value.isJsonPrimitive() || !value.getAsJsonPrimitive().isNumber()) {
+            throw new IllegalArgumentException("missing numeric Frame field " + field);
         }
+        return value.getAsInt();
+    }
 
-        private Map<Integer, FrameTemplate> parse() {
-            expect('{');
-            Map<Integer, FrameTemplate> frames = new HashMap<>();
-            skipWhitespace();
-            if (peek('}')) {
-                index++;
-                return frames;
-            }
-            while (true) {
-                int id = Integer.parseInt(readString());
-                expect(':');
-                FrameTemplate frame = readFrame(id);
-                if (REQUIRED_FRAME_ID_SET.contains(id)) {
-                    frames.put(id, frame);
-                }
-                skipWhitespace();
-                if (peek('}')) {
-                    index++;
-                    return frames;
-                }
-                expect(',');
-            }
+    private static List<Integer> readIntList(JsonObject object, String field) {
+        JsonElement value = object.get(field);
+        if (value == null || !value.isJsonArray()) {
+            throw new IllegalArgumentException("missing Frame array " + field);
         }
+        List<Integer> result = new ArrayList<>(value.getAsJsonArray().size());
+        for (JsonElement element : value.getAsJsonArray()) {
+            if (!element.isJsonPrimitive() || !element.getAsJsonPrimitive().isNumber()) {
+                throw new IllegalArgumentException("Frame array " + field + " contains a non-number");
+            }
+            result.add(element.getAsInt());
+        }
+        return result;
+    }
 
-        private FrameTemplate readFrame(int id) {
-            expect('{');
-            int type = 0;
-            Integer hpBar = null;
-            Integer chat = null;
-            List<Integer> dead = null;
-            List<Integer> stand = null;
-            List<Integer> run = null;
-            Integer fly = null;
-            Integer jump = null;
-            Integer fall = null;
-            Integer injure = null;
-            Map<Integer, Integer> action = null;
-            Integer dx = null;
-            Integer dy = null;
-            Integer width = null;
-            Integer height = null;
-            skipWhitespace();
-            if (!peek('}')) {
-                while (true) {
-                    String field = readString();
-                    expect(':');
-                    switch (field) {
-                        case "type" -> type = readInt();
-                        case "hp_bar" -> hpBar = readInt();
-                        case "chat" -> chat = readInt();
-                        case "dead" -> dead = readIntList();
-                        case "stand" -> stand = readIntList();
-                        case "run" -> run = readIntList();
-                        case "fly" -> fly = readInt();
-                        case "jump" -> jump = readInt();
-                        case "fall" -> fall = readInt();
-                        case "injure" -> injure = readInt();
-                        case "action" -> action = readIntMap();
-                        case "dx" -> dx = readInt();
-                        case "dy" -> dy = readInt();
-                        case "width" -> width = readInt();
-                        case "height" -> height = readInt();
-                        default -> skipValue();
-                    }
-                    skipWhitespace();
-                    if (peek('}')) {
-                        index++;
-                        break;
-                    }
-                    expect(',');
-                }
-            } else {
-                index++;
-            }
-            return new FrameTemplate(id, type, required(hpBar, "hp_bar"), required(chat, "chat"),
-                    required(dead, "dead"), required(stand, "stand"), required(run, "run"),
-                    required(fly, "fly"), required(jump, "jump"), required(fall, "fall"),
-                    required(injure, "injure"), required(action, "action"), required(dx, "dx"),
-                    required(dy, "dy"), required(width, "width"), required(height, "height"));
+    private static Map<Integer, Integer> readIntMap(JsonObject object, String field) {
+        JsonElement value = object.get(field);
+        if (value == null || !value.isJsonObject()) {
+            throw new IllegalArgumentException("missing Frame object " + field);
         }
-
-        private List<Integer> readIntList() {
-            expect('[');
-            List<Integer> values = new ArrayList<>();
-            skipWhitespace();
-            if (peek(']')) {
-                index++;
-                return values;
+        Map<Integer, Integer> result = new java.util.LinkedHashMap<>();
+        for (Map.Entry<String, JsonElement> entry : value.getAsJsonObject().entrySet()) {
+            final int actionId;
+            try {
+                actionId = Integer.parseInt(entry.getKey());
+            } catch (NumberFormatException exception) {
+                throw new IllegalArgumentException("invalid Frame action id " + entry.getKey(), exception);
             }
-            while (true) {
-                values.add(readInt());
-                skipWhitespace();
-                if (peek(']')) {
-                    index++;
-                    return values;
-                }
-                expect(',');
+            JsonElement icon = entry.getValue();
+            if (!icon.isJsonPrimitive() || !icon.getAsJsonPrimitive().isNumber()) {
+                throw new IllegalArgumentException("Frame action " + entry.getKey() + " is not numeric");
             }
+            result.put(actionId, icon.getAsInt());
         }
-
-        private Map<Integer, Integer> readIntMap() {
-            expect('{');
-            Map<Integer, Integer> values = new LinkedHashMap<>();
-            skipWhitespace();
-            if (peek('}')) {
-                index++;
-                return values;
-            }
-            while (true) {
-                int key = Integer.parseInt(readString());
-                expect(':');
-                values.put(key, readInt());
-                skipWhitespace();
-                if (peek('}')) {
-                    index++;
-                    return values;
-                }
-                expect(',');
-            }
-        }
-
-        private void skipValue() {
-            skipWhitespace();
-            if (peek('{')) {
-                index++;
-                skipWhitespace();
-                if (peek('}')) {
-                    index++;
-                    return;
-                }
-                while (true) {
-                    readString();
-                    expect(':');
-                    skipValue();
-                    skipWhitespace();
-                    if (peek('}')) {
-                        index++;
-                        return;
-                    }
-                    expect(',');
-                }
-            }
-            if (peek('[')) {
-                index++;
-                skipWhitespace();
-                if (peek(']')) {
-                    index++;
-                    return;
-                }
-                while (true) {
-                    skipValue();
-                    skipWhitespace();
-                    if (peek(']')) {
-                        index++;
-                        return;
-                    }
-                    expect(',');
-                }
-            }
-            if (peek('"')) {
-                readString();
-            } else {
-                readInt();
-            }
-        }
-
-        private int readInt() {
-            skipWhitespace();
-            int start = index;
-            if (peek('-')) {
-                index++;
-            }
-            while (index < input.length() && Character.isDigit(input.charAt(index))) {
-                index++;
-            }
-            if (start == index || (input.charAt(start) == '-' && start + 1 == index)) {
-                throw error("expected integer");
-            }
-            return Integer.parseInt(input.substring(start, index));
-        }
-
-        private String readString() {
-            skipWhitespace();
-            expect('"');
-            StringBuilder value = new StringBuilder();
-            while (index < input.length()) {
-                char current = input.charAt(index++);
-                if (current == '"') {
-                    return value.toString();
-                }
-                if (current == '\\') {
-                    if (index >= input.length()) {
-                        throw error("unterminated escape");
-                    }
-                    char escaped = input.charAt(index++);
-                    value.append(switch (escaped) {
-                        case '"', '\\', '/' -> escaped;
-                        case 'b' -> '\b';
-                        case 'f' -> '\f';
-                        case 'n' -> '\n';
-                        case 'r' -> '\r';
-                        case 't' -> '\t';
-                        default -> throw error("unsupported escape");
-                    });
-                } else {
-                    value.append(current);
-                }
-            }
-            throw error("unterminated string");
-        }
-
-        private void expect(char expected) {
-            skipWhitespace();
-            if (index >= input.length() || input.charAt(index) != expected) {
-                throw error("expected '" + expected + "'");
-            }
-            index++;
-        }
-
-        private boolean peek(char value) {
-            return index < input.length() && input.charAt(index) == value;
-        }
-
-        private void skipWhitespace() {
-            while (index < input.length() && Character.isWhitespace(input.charAt(index))) {
-                index++;
-            }
-        }
-
-        private IllegalArgumentException error(String message) {
-            return new IllegalArgumentException(message + " at JSON offset " + index);
-        }
-
-        private static <T> T required(T value, String field) {
-            return Objects.requireNonNull(value, "missing Frame field " + field);
-        }
+        return result;
     }
 }

@@ -87,6 +87,8 @@ public final class MessageHandler {
     }
 
     private void sendResourceManifest() throws IOException {
+        int frameVersion = resourceService.frames().isEmpty()
+                ? NOT_PROVIDED_VERSION : DEV_FRAME_VERSION;
         MessageWriter writer = new MessageWriter()
                 .writeByte(-1)
                 .writeByte(NOT_PROVIDED_VERSION) // image
@@ -97,7 +99,7 @@ public final class MessageHandler {
                 .writeByte(DEV_MONSTER_VERSION) // monster
                 .writeByte(NOT_PROVIDED_VERSION) // medal
                 .writeByte(NOT_PROVIDED_VERSION) // level
-                .writeByte(DEV_FRAME_VERSION) // frame
+                .writeByte(frameVersion) // frame
                 .writeByte(NOT_PROVIDED_VERSION) // mount
                 .writeByte(NOT_PROVIDED_VERSION) // bag
                 .writeByte(NOT_PROVIDED_VERSION) // skill paint
@@ -119,6 +121,11 @@ public final class MessageHandler {
 
     private void sendFrameResource() throws IOException {
         var frames = resourceService.frames();
+        if (frames.isEmpty()) {
+            LOGGER.fine(() -> "UPDATE_DATA type=7 skipped because Frame resources are unavailable session="
+                    + session.id());
+            return;
+        }
         if (frames.size() > Short.MAX_VALUE) {
             throw new IOException("too many frame templates: " + frames.size());
         }

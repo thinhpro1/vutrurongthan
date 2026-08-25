@@ -61,6 +61,22 @@ class ResourceServiceTest {
                 10513, 10512, 10514, 10526, 10515);
     }
 
+    @Test
+    void ignoresUnknownJsonNullValuesWhenLoadingFrames(@TempDir Path root) throws IOException {
+        String frame = "{\"type\":0,\"hp_bar\":1,\"chat\":2,\"dead\":[3,4],"
+                + "\"stand\":[5,6],\"run\":[7,8,9,10,11,12],\"fly\":13,"
+                + "\"jump\":14,\"fall\":15,\"injure\":16,\"action\":{\"11\":17},"
+                + "\"dx\":0,\"dy\":0,\"width\":66,\"height\":90,\"metadata\":null}";
+        String json = "{\"3\":" + frame + ",\"4\":" + frame + ",\"5\":" + frame
+                + ",\"21\":" + frame + ",\"22\":" + frame + ",\"23\":" + frame + "}";
+        Files.writeString(root.resolve("Frame.json"), json);
+
+        ResourceService resources = ResourceService.fromFrameRoot(root);
+
+        assertEquals(List.of(3, 4, 5, 21, 22, 23),
+                resources.frames().stream().map(FrameTemplate::id).toList());
+    }
+
     private static void assertFrame(FrameTemplate frame, int id, int type, int hpBar, int chat,
                                     int deadStart, int standStart, int runStart, int fly,
                                     int jump, int fall, int injure, int actionStart) {

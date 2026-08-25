@@ -10,6 +10,8 @@ import com.project.game.service.ServerServices;
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -25,6 +27,17 @@ class NetworkConfigTest {
 
         assertEquals("0.9.6", config.clientVersion());
         assertEquals(2, config.loginVersion());
+    }
+
+    @Test
+    void defaultResourceRootsStayUnderServerResources() throws IOException {
+        Properties properties = new Properties();
+        try (InputStream input = NetworkConfigTest.class.getResourceAsStream("/application.properties")) {
+            properties.load(input);
+        }
+
+        assertEquals("resources/icon", properties.getProperty("game.resource.icon-dir"));
+        assertEquals("resources/json", properties.getProperty("game.resource.json-dir"));
     }
 
     @Test

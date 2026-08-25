@@ -73,6 +73,18 @@ class MessageHandlerTest {
     }
 
     @Test
+    void doesNotSendEmptyFrameDatasetWhenFrameResourcesAreUnavailable() {
+        Session session = newSession(new AuthService());
+        session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
+
+        newHandler(session, ResourceService.unavailable()).onMessage(
+                new Message(MessageName.UPDATE_DATA, new byte[]{7}));
+
+        assertEquals(0, session.queuedMessages());
+        assertEquals(SessionState.HANDSHAKE_DONE, session.state());
+    }
+
+    @Test
     void requestIconIsAllowedOnlyAfterHandshake() {
         ResourceService resources = ResourceService.unavailable();
 

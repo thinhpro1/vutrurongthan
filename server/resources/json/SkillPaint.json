@@ -1,0 +1,4436 @@
+{
+  "0": {
+    "info": [
+      {
+        "action": [
+          26,
+          27
+        ],
+        "effect": [
+          {
+            "id": 0,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          28,
+          29
+        ],
+        "effect": [
+          {
+            "id": 1,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          24,
+          25
+        ],
+        "effect": [
+          {
+            "id": 2,
+            "loop": 4
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          24,
+          25
+        ],
+        "effect": [
+          {
+            "id": 3,
+            "loop": 4
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": 0
+      },
+      {
+        "action": [
+          24,
+          25
+        ],
+        "effect": [
+          {
+            "id": 3,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      }
+    ],
+    "dx_fly": 0,
+    "dy_fly": -15
+  },
+  "1": {
+    "info": [
+      {
+        "action": [
+          26,
+          27
+        ],
+        "effect": [
+          {
+            "id": 4,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          28,
+          29
+        ],
+        "effect": [
+          {
+            "id": 5,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          26,
+          27
+        ],
+        "effect": [
+          {
+            "id": 6,
+            "loop": 4
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          28,
+          29
+        ],
+        "effect": [
+          {
+            "id": 7,
+            "loop": 4
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": 0
+      },
+      {
+        "action": [
+          32,
+          32
+        ],
+        "effect": [
+          {
+            "id": 7,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      }
+    ],
+    "dx_fly": 0,
+    "dy_fly": -15
+  },
+  "2": {
+    "info": [
+      {
+        "action": [
+          26,
+          27
+        ],
+        "effect": [
+          {
+            "id": 8,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          28,
+          29
+        ],
+        "effect": [
+          {
+            "id": 9,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          24,
+          25
+        ],
+        "effect": [
+          {
+            "id": 10,
+            "loop": 4
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          24,
+          25
+        ],
+        "effect": [
+          {
+            "id": 11,
+            "loop": 4
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": 1
+      },
+      {
+        "action": [
+          24,
+          25
+        ],
+        "effect": [
+          {
+            "id": 11,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      }
+    ],
+    "dx_fly": 0,
+    "dy_fly": -15
+  },
+  "3": {
+    "info": [
+      {
+        "action": [
+          26,
+          27
+        ],
+        "effect": [
+          {
+            "id": 12,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          28,
+          29
+        ],
+        "effect": [
+          {
+            "id": 13,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          26,
+          27
+        ],
+        "effect": [
+          {
+            "id": 14,
+            "loop": 4
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          28,
+          29
+        ],
+        "effect": [
+          {
+            "id": 15,
+            "loop": 4
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": 1
+      },
+      {
+        "action": [
+          26,
+          27
+        ],
+        "effect": [
+          {
+            "id": 15,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      }
+    ],
+    "dx_fly": 0,
+    "dy_fly": -15
+  },
+  "4": {
+    "info": [
+      {
+        "action": [
+          12,
+          13
+        ],
+        "effect": [
+          {
+            "id": 16,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          26,
+          27
+        ],
+        "effect": [
+          {
+            "id": 17,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          26,
+          27
+        ],
+        "effect": [
+          {
+            "id": 18,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          26,
+          27
+        ],
+        "effect": [
+          {
+            "id": 19,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          28,
+          29
+        ],
+        "effect": [
+          {
+            "id": 20,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          24,
+          25
+        ],
+        "effect": [
+          {
+            "id": 21,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": 2
+      },
+      {
+        "action": [
+          24,
+          25
+        ],
+        "effect": [
+          {
+            "id": 22,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      }
+    ],
+    "dx_fly": 0,
+    "dy_fly": -15
+  },
+  "5": {
+    "info": [
+      {
+        "action": [
+          12,
+          13
+        ],
+        "effect": [
+          {
+            "id": 16,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          26,
+          27
+        ],
+        "effect": [
+          {
+            "id": 23,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          26,
+          27
+        ],
+        "effect": [
+          {
+            "id": 24,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          26,
+          27
+        ],
+        "effect": [
+          {
+            "id": 25,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          28,
+          29
+        ],
+        "effect": [
+          {
+            "id": 26,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          24,
+          25
+        ],
+        "effect": [
+          {
+            "id": 27,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": 2
+      },
+      {
+        "action": [
+          24,
+          25
+        ],
+        "effect": [
+          {
+            "id": 28,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      }
+    ],
+    "dx_fly": 0,
+    "dy_fly": -15
+  },
+  "6": {
+    "info": [
+      {
+        "action": [
+          26,
+          27
+        ],
+        "effect": [
+          {
+            "id": 29,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          28,
+          29
+        ],
+        "effect": [
+          {
+            "id": 30,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          24,
+          25
+        ],
+        "effect": [
+          {
+            "id": 31,
+            "loop": 4
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          24,
+          25
+        ],
+        "effect": [
+          {
+            "id": 32,
+            "loop": 4
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": 3
+      },
+      {
+        "action": [
+          24,
+          25
+        ],
+        "effect": [
+          {
+            "id": 32,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      }
+    ],
+    "dx_fly": 0,
+    "dy_fly": -15
+  },
+  "7": {
+    "info": [
+      {
+        "action": [
+          26,
+          27
+        ],
+        "effect": [
+          {
+            "id": 33,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          28,
+          29
+        ],
+        "effect": [
+          {
+            "id": 34,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          26,
+          27
+        ],
+        "effect": [
+          {
+            "id": 35,
+            "loop": 4
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          28,
+          29
+        ],
+        "effect": [
+          {
+            "id": 36,
+            "loop": 4
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": 3
+      },
+      {
+        "action": [
+          26,
+          27
+        ],
+        "effect": [
+          {
+            "id": 36,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      }
+    ],
+    "dx_fly": 0,
+    "dy_fly": -15
+  },
+  "8": {
+    "info": [
+      {
+        "action": [
+          12,
+          13
+        ],
+        "effect": [
+          {
+            "id": 37,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          26,
+          27
+        ],
+        "effect": [
+          {
+            "id": 38,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          26,
+          27
+        ],
+        "effect": [
+          {
+            "id": 39,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          26,
+          27
+        ],
+        "effect": [
+          {
+            "id": 40,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          28,
+          29
+        ],
+        "effect": [
+          {
+            "id": 41,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          24,
+          25
+        ],
+        "effect": [
+          {
+            "id": 42,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": 4
+      },
+      {
+        "action": [
+          24,
+          25
+        ],
+        "effect": [
+          {
+            "id": 43,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      }
+    ],
+    "dx_fly": 0,
+    "dy_fly": -15
+  },
+  "9": {
+    "info": [
+      {
+        "action": [
+          12,
+          13
+        ],
+        "effect": [
+          {
+            "id": 37,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          26,
+          27
+        ],
+        "effect": [
+          {
+            "id": 44,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          26,
+          27
+        ],
+        "effect": [
+          {
+            "id": 45,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          26,
+          27
+        ],
+        "effect": [
+          {
+            "id": 46,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          28,
+          29
+        ],
+        "effect": [
+          {
+            "id": 47,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          24,
+          25
+        ],
+        "effect": [
+          {
+            "id": 48,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": 4
+      },
+      {
+        "action": [
+          24,
+          25
+        ],
+        "effect": [
+          {
+            "id": 49,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      }
+    ],
+    "dx_fly": 0,
+    "dy_fly": -15
+  },
+  "10": {
+    "info": [
+      {
+        "action": [
+          26,
+          27
+        ],
+        "effect": [
+          {
+            "id": 50,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          28,
+          29
+        ],
+        "effect": [
+          {
+            "id": 51,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          24,
+          25
+        ],
+        "effect": [
+          {
+            "id": 52,
+            "loop": 4
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          24,
+          25
+        ],
+        "effect": [
+          {
+            "id": 53,
+            "loop": 4
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": 5
+      },
+      {
+        "action": [
+          24,
+          25
+        ],
+        "effect": [
+          {
+            "id": 53,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      }
+    ],
+    "dx_fly": 0,
+    "dy_fly": -15
+  },
+  "11": {
+    "info": [
+      {
+        "action": [
+          30,
+          30
+        ],
+        "effect": [
+          {
+            "id": 54,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          30,
+          30
+        ],
+        "effect": [
+          {
+            "id": 55,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          31,
+          31
+        ],
+        "effect": [
+          {
+            "id": 56,
+            "loop": 4
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          32,
+          32
+        ],
+        "effect": [
+          {
+            "id": 57,
+            "loop": 4
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": 5
+      },
+      {
+        "action": [
+          32,
+          32
+        ],
+        "effect": [
+          {
+            "id": 57,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      }
+    ],
+    "dx_fly": 0,
+    "dy_fly": -15
+  },
+  "12": {
+    "info": [
+      {
+        "action": [
+          12,
+          13
+        ],
+        "effect": [
+          {
+            "id": 58,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          26,
+          27
+        ],
+        "effect": [
+          {
+            "id": 59,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          26,
+          27
+        ],
+        "effect": [
+          {
+            "id": 60,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          26,
+          27
+        ],
+        "effect": [
+          {
+            "id": 61,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          28,
+          29
+        ],
+        "effect": [
+          {
+            "id": 62,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          24,
+          25
+        ],
+        "effect": [
+          {
+            "id": 63,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": 6
+      },
+      {
+        "action": [
+          24,
+          25
+        ],
+        "effect": [
+          {
+            "id": 64,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      }
+    ],
+    "dx_fly": 0,
+    "dy_fly": -15
+  },
+  "13": {
+    "info": [
+      {
+        "action": [
+          12,
+          13
+        ],
+        "effect": [
+          {
+            "id": 58,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          26,
+          27
+        ],
+        "effect": [
+          {
+            "id": 65,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          26,
+          27
+        ],
+        "effect": [
+          {
+            "id": 66,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          26,
+          27
+        ],
+        "effect": [
+          {
+            "id": 67,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          28,
+          29
+        ],
+        "effect": [
+          {
+            "id": 68,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          24,
+          25
+        ],
+        "effect": [
+          {
+            "id": 69,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": 6
+      },
+      {
+        "action": [
+          24,
+          25
+        ],
+        "effect": [
+          {
+            "id": 70,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      }
+    ],
+    "dx_fly": 0,
+    "dy_fly": -15
+  },
+  "14": {
+    "info": [
+      {
+        "action": [
+          26,
+          27
+        ],
+        "effect": [
+          {
+            "id": 71,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          28,
+          29
+        ],
+        "effect": [
+          {
+            "id": 72,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          24,
+          25
+        ],
+        "effect": [
+          {
+            "id": 73,
+            "loop": 4
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          24,
+          25
+        ],
+        "effect": [
+          {
+            "id": 74,
+            "loop": 4
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": 7
+      },
+      {
+        "action": [
+          24,
+          25
+        ],
+        "effect": [
+          {
+            "id": 74,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      }
+    ],
+    "dx_fly": 0,
+    "dy_fly": -15
+  },
+  "15": {
+    "info": [
+      {
+        "action": [
+          26,
+          27
+        ],
+        "effect": [
+          {
+            "id": 75,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          28,
+          29
+        ],
+        "effect": [
+          {
+            "id": 76,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          26,
+          27
+        ],
+        "effect": [
+          {
+            "id": 77,
+            "loop": 4
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          28,
+          29
+        ],
+        "effect": [
+          {
+            "id": 78,
+            "loop": 4
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": 7
+      },
+      {
+        "action": [
+          26,
+          27
+        ],
+        "effect": [
+          {
+            "id": 78,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      }
+    ],
+    "dx_fly": 0,
+    "dy_fly": -15
+  },
+  "16": {
+    "info": [
+      {
+        "action": [
+          12,
+          13
+        ],
+        "effect": [
+          {
+            "id": 79,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          26,
+          27
+        ],
+        "effect": [
+          {
+            "id": 80,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          26,
+          27
+        ],
+        "effect": [
+          {
+            "id": 81,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          26,
+          27
+        ],
+        "effect": [
+          {
+            "id": 82,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          28,
+          29
+        ],
+        "effect": [
+          {
+            "id": 83,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          24,
+          25
+        ],
+        "effect": [
+          {
+            "id": 84,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": 8
+      },
+      {
+        "action": [
+          24,
+          25
+        ],
+        "effect": [
+          {
+            "id": 85,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      }
+    ],
+    "dx_fly": 0,
+    "dy_fly": -15
+  },
+  "17": {
+    "info": [
+      {
+        "action": [
+          12,
+          13
+        ],
+        "effect": [
+          {
+            "id": 79,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          26,
+          27
+        ],
+        "effect": [
+          {
+            "id": 86,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          26,
+          27
+        ],
+        "effect": [
+          {
+            "id": 87,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          26,
+          27
+        ],
+        "effect": [
+          {
+            "id": 88,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          28,
+          29
+        ],
+        "effect": [
+          {
+            "id": 89,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          24,
+          25
+        ],
+        "effect": [
+          {
+            "id": 90,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": 8
+      },
+      {
+        "action": [
+          24,
+          25
+        ],
+        "effect": [
+          {
+            "id": 91,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      }
+    ],
+    "dx_fly": 0,
+    "dy_fly": -15
+  },
+  "18": {
+    "info": [
+      {
+        "action": [
+          26,
+          27
+        ],
+        "effect": [
+          {
+            "id": 92,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          28,
+          29
+        ],
+        "effect": [
+          {
+            "id": 93,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          24,
+          25
+        ],
+        "effect": [
+          {
+            "id": 94,
+            "loop": 4
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          24,
+          25
+        ],
+        "effect": [
+          {
+            "id": 95,
+            "loop": 4
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": 9
+      },
+      {
+        "action": [
+          24,
+          25
+        ],
+        "effect": [
+          {
+            "id": 95,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      }
+    ],
+    "dx_fly": 0,
+    "dy_fly": -15
+  },
+  "19": {
+    "info": [
+      {
+        "action": [
+          26,
+          27
+        ],
+        "effect": [
+          {
+            "id": 96,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          28,
+          29
+        ],
+        "effect": [
+          {
+            "id": 97,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          26,
+          27
+        ],
+        "effect": [
+          {
+            "id": 98,
+            "loop": 4
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          28,
+          29
+        ],
+        "effect": [
+          {
+            "id": 99,
+            "loop": 4
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": 9
+      },
+      {
+        "action": [
+          26,
+          27
+        ],
+        "effect": [
+          {
+            "id": 99,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      }
+    ],
+    "dx_fly": 0,
+    "dy_fly": -15
+  },
+  "20": {
+    "info": [
+      {
+        "action": [
+          12,
+          13
+        ],
+        "effect": [
+          {
+            "id": 100,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          26,
+          27
+        ],
+        "effect": [
+          {
+            "id": 101,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          26,
+          27
+        ],
+        "effect": [
+          {
+            "id": 102,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          26,
+          27
+        ],
+        "effect": [
+          {
+            "id": 103,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          28,
+          29
+        ],
+        "effect": [
+          {
+            "id": 104,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          24,
+          25
+        ],
+        "effect": [
+          {
+            "id": 105,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": 10
+      },
+      {
+        "action": [
+          24,
+          25
+        ],
+        "effect": [
+          {
+            "id": 106,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      }
+    ],
+    "dx_fly": 0,
+    "dy_fly": -15
+  },
+  "21": {
+    "info": [
+      {
+        "action": [
+          12,
+          13
+        ],
+        "effect": [
+          {
+            "id": 100,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          26,
+          27
+        ],
+        "effect": [
+          {
+            "id": 107,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          26,
+          27
+        ],
+        "effect": [
+          {
+            "id": 108,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          26,
+          27
+        ],
+        "effect": [
+          {
+            "id": 109,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          28,
+          29
+        ],
+        "effect": [
+          {
+            "id": 110,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          24,
+          25
+        ],
+        "effect": [
+          {
+            "id": 111,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": 10
+      },
+      {
+        "action": [
+          24,
+          25
+        ],
+        "effect": [
+          {
+            "id": 112,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      }
+    ],
+    "dx_fly": 0,
+    "dy_fly": -15
+  },
+  "22": {
+    "info": [
+      {
+        "action": [
+          26,
+          27
+        ],
+        "effect": [
+          {
+            "id": 113,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          28,
+          29
+        ],
+        "effect": [
+          {
+            "id": 114,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          24,
+          25
+        ],
+        "effect": [
+          {
+            "id": 115,
+            "loop": 4
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          24,
+          25
+        ],
+        "effect": [
+          {
+            "id": 116,
+            "loop": 4
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": 11
+      },
+      {
+        "action": [
+          24,
+          25
+        ],
+        "effect": [
+          {
+            "id": 116,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      }
+    ],
+    "dx_fly": 0,
+    "dy_fly": -15
+  },
+  "23": {
+    "info": [
+      {
+        "action": [
+          26,
+          27
+        ],
+        "effect": [
+          {
+            "id": 117,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          28,
+          29
+        ],
+        "effect": [
+          {
+            "id": 118,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          26,
+          27
+        ],
+        "effect": [
+          {
+            "id": 119,
+            "loop": 4
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          28,
+          29
+        ],
+        "effect": [
+          {
+            "id": 120,
+            "loop": 4
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": 11
+      },
+      {
+        "action": [
+          26,
+          27
+        ],
+        "effect": [
+          {
+            "id": 120,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      }
+    ],
+    "dx_fly": 0,
+    "dy_fly": -15
+  },
+  "24": {
+    "info": [
+      {
+        "action": [
+          12,
+          13
+        ],
+        "effect": [
+          {
+            "id": 121,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          26,
+          27
+        ],
+        "effect": [
+          {
+            "id": 122,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          26,
+          27
+        ],
+        "effect": [
+          {
+            "id": 123,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          26,
+          27
+        ],
+        "effect": [
+          {
+            "id": 124,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          28,
+          29
+        ],
+        "effect": [
+          {
+            "id": 125,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          24,
+          25
+        ],
+        "effect": [
+          {
+            "id": 126,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": 12
+      },
+      {
+        "action": [
+          24,
+          25
+        ],
+        "effect": [
+          {
+            "id": 127,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      }
+    ],
+    "dx_fly": 0,
+    "dy_fly": -15
+  },
+  "25": {
+    "info": [
+      {
+        "action": [
+          12,
+          13
+        ],
+        "effect": [
+          {
+            "id": 121,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          26,
+          27
+        ],
+        "effect": [
+          {
+            "id": 128,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          26,
+          27
+        ],
+        "effect": [
+          {
+            "id": 129,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          26,
+          27
+        ],
+        "effect": [
+          {
+            "id": 130,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          28,
+          29
+        ],
+        "effect": [
+          {
+            "id": 131,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          24,
+          25
+        ],
+        "effect": [
+          {
+            "id": 132,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": 12
+      },
+      {
+        "action": [
+          24,
+          25
+        ],
+        "effect": [
+          {
+            "id": 133,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      }
+    ],
+    "dx_fly": 0,
+    "dy_fly": -15
+  },
+  "26": {
+    "info": [
+      {
+        "action": [
+          18,
+          19
+        ],
+        "effect": [
+          {
+            "id": 134,
+            "loop": 3
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          18,
+          19
+        ],
+        "effect": [
+          {
+            "id": 135,
+            "loop": 3
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          18,
+          19
+        ],
+        "effect": [
+          {
+            "id": 136,
+            "loop": 3
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          18,
+          19
+        ],
+        "effect": [
+          {
+            "id": 134,
+            "loop": 3
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          18,
+          19
+        ],
+        "effect": [
+          {
+            "id": 135,
+            "loop": 3
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          18,
+          19
+        ],
+        "effect": [
+          {
+            "id": 136,
+            "loop": 3
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          26,
+          27
+        ],
+        "effect": [
+          {
+            "id": 137,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": 13
+      },
+      {
+        "action": [
+          26,
+          27
+        ],
+        "effect": [
+          {
+            "id": 137,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      }
+    ],
+    "dx_fly": 0,
+    "dy_fly": -15
+  },
+  "27": {
+    "info": [
+      {
+        "action": [
+          18,
+          19
+        ],
+        "effect": [
+          {
+            "id": 134,
+            "loop": 3
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          18,
+          19
+        ],
+        "effect": [
+          {
+            "id": 135,
+            "loop": 3
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          18,
+          19
+        ],
+        "effect": [
+          {
+            "id": 136,
+            "loop": 3
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          18,
+          19
+        ],
+        "effect": [
+          {
+            "id": 134,
+            "loop": 3
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          18,
+          19
+        ],
+        "effect": [
+          {
+            "id": 135,
+            "loop": 3
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          18,
+          19
+        ],
+        "effect": [
+          {
+            "id": 136,
+            "loop": 3
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          26,
+          27
+        ],
+        "effect": [
+          {
+            "id": 137,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": 14
+      },
+      {
+        "action": [
+          26,
+          27
+        ],
+        "effect": [
+          {
+            "id": 137,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      }
+    ],
+    "dx_fly": 0,
+    "dy_fly": -15
+  },
+  "28": {
+    "info": [
+      {
+        "action": [
+          18,
+          19
+        ],
+        "effect": [
+          {
+            "id": 134,
+            "loop": 3
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          18,
+          19
+        ],
+        "effect": [
+          {
+            "id": 135,
+            "loop": 3
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          18,
+          19
+        ],
+        "effect": [
+          {
+            "id": 136,
+            "loop": 3
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          18,
+          19
+        ],
+        "effect": [
+          {
+            "id": 134,
+            "loop": 3
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          18,
+          19
+        ],
+        "effect": [
+          {
+            "id": 135,
+            "loop": 3
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          18,
+          19
+        ],
+        "effect": [
+          {
+            "id": 136,
+            "loop": 3
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          26,
+          27
+        ],
+        "effect": [
+          {
+            "id": 137,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": 15
+      },
+      {
+        "action": [
+          26,
+          27
+        ],
+        "effect": [
+          {
+            "id": 137,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      }
+    ],
+    "dx_fly": 0,
+    "dy_fly": -15
+  },
+  "29": {
+    "info": [
+      {
+        "action": [
+          18,
+          19
+        ],
+        "effect": [
+          {
+            "id": 138,
+            "loop": 3
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          18,
+          19
+        ],
+        "effect": [
+          {
+            "id": 139,
+            "loop": 3
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          18,
+          19
+        ],
+        "effect": [
+          {
+            "id": 140,
+            "loop": 3
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          18,
+          19
+        ],
+        "effect": [
+          {
+            "id": 138,
+            "loop": 3
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          18,
+          19
+        ],
+        "effect": [
+          {
+            "id": 139,
+            "loop": 3
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          18,
+          19
+        ],
+        "effect": [
+          {
+            "id": 140,
+            "loop": 3
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          20,
+          21
+        ],
+        "effect": [
+          {
+            "id": 141,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": 16
+      },
+      {
+        "action": [
+          20,
+          21
+        ],
+        "effect": [
+          {
+            "id": 141,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      }
+    ],
+    "dx_fly": 0,
+    "dy_fly": -15
+  },
+  "30": {
+    "info": [
+      {
+        "action": [
+          18,
+          19
+        ],
+        "effect": [
+          {
+            "id": 138,
+            "loop": 3
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          18,
+          19
+        ],
+        "effect": [
+          {
+            "id": 139,
+            "loop": 3
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          18,
+          19
+        ],
+        "effect": [
+          {
+            "id": 140,
+            "loop": 3
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          18,
+          19
+        ],
+        "effect": [
+          {
+            "id": 138,
+            "loop": 3
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          18,
+          19
+        ],
+        "effect": [
+          {
+            "id": 139,
+            "loop": 3
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          18,
+          19
+        ],
+        "effect": [
+          {
+            "id": 140,
+            "loop": 3
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          20,
+          21
+        ],
+        "effect": [
+          {
+            "id": 141,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": 17
+      },
+      {
+        "action": [
+          20,
+          21
+        ],
+        "effect": [
+          {
+            "id": 141,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      }
+    ],
+    "dx_fly": 0,
+    "dy_fly": -15
+  },
+  "31": {
+    "info": [
+      {
+        "action": [
+          18,
+          19
+        ],
+        "effect": [
+          {
+            "id": 138,
+            "loop": 3
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          18,
+          19
+        ],
+        "effect": [
+          {
+            "id": 139,
+            "loop": 3
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          18,
+          19
+        ],
+        "effect": [
+          {
+            "id": 140,
+            "loop": 3
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          18,
+          19
+        ],
+        "effect": [
+          {
+            "id": 138,
+            "loop": 3
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          18,
+          19
+        ],
+        "effect": [
+          {
+            "id": 139,
+            "loop": 3
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          18,
+          19
+        ],
+        "effect": [
+          {
+            "id": 140,
+            "loop": 3
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          20,
+          21
+        ],
+        "effect": [
+          {
+            "id": 141,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": 18
+      },
+      {
+        "action": [
+          20,
+          21
+        ],
+        "effect": [
+          {
+            "id": 141,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      }
+    ],
+    "dx_fly": 0,
+    "dy_fly": -15
+  },
+  "32": {
+    "info": [
+      {
+        "action": [
+          18,
+          19
+        ],
+        "effect": [
+          {
+            "id": 142,
+            "loop": 4
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          18,
+          19
+        ],
+        "effect": [
+          {
+            "id": 143,
+            "loop": 4
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          18,
+          19
+        ],
+        "effect": [
+          {
+            "id": 144,
+            "loop": 4
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          18,
+          19
+        ],
+        "effect": [
+          {
+            "id": 142,
+            "loop": 4
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          18,
+          19
+        ],
+        "effect": [
+          {
+            "id": 143,
+            "loop": 4
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          18,
+          19
+        ],
+        "effect": [
+          {
+            "id": 144,
+            "loop": 4
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          20,
+          21
+        ],
+        "effect": [
+          {
+            "id": 145,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": 19
+      },
+      {
+        "action": [
+          20,
+          21
+        ],
+        "effect": [
+          {
+            "id": 145,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      }
+    ],
+    "dx_fly": 0,
+    "dy_fly": -15
+  },
+  "33": {
+    "info": [
+      {
+        "action": [
+          18,
+          19
+        ],
+        "effect": [
+          {
+            "id": 142,
+            "loop": 4
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          18,
+          19
+        ],
+        "effect": [
+          {
+            "id": 143,
+            "loop": 4
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          18,
+          19
+        ],
+        "effect": [
+          {
+            "id": 144,
+            "loop": 4
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          18,
+          19
+        ],
+        "effect": [
+          {
+            "id": 142,
+            "loop": 4
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          18,
+          19
+        ],
+        "effect": [
+          {
+            "id": 143,
+            "loop": 4
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          18,
+          19
+        ],
+        "effect": [
+          {
+            "id": 144,
+            "loop": 4
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          20,
+          21
+        ],
+        "effect": [
+          {
+            "id": 145,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": 20
+      },
+      {
+        "action": [
+          20,
+          21
+        ],
+        "effect": [
+          {
+            "id": 145,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      }
+    ],
+    "dx_fly": 0,
+    "dy_fly": -15
+  },
+  "34": {
+    "info": [
+      {
+        "action": [
+          18,
+          19
+        ],
+        "effect": [
+          {
+            "id": 142,
+            "loop": 4
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          18,
+          19
+        ],
+        "effect": [
+          {
+            "id": 143,
+            "loop": 4
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          18,
+          19
+        ],
+        "effect": [
+          {
+            "id": 144,
+            "loop": 4
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          18,
+          19
+        ],
+        "effect": [
+          {
+            "id": 142,
+            "loop": 4
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          18,
+          19
+        ],
+        "effect": [
+          {
+            "id": 143,
+            "loop": 4
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          18,
+          19
+        ],
+        "effect": [
+          {
+            "id": 144,
+            "loop": 4
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          20,
+          21
+        ],
+        "effect": [
+          {
+            "id": 145,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": 21
+      },
+      {
+        "action": [
+          20,
+          21
+        ],
+        "effect": [
+          {
+            "id": 145,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      }
+    ],
+    "dx_fly": 0,
+    "dy_fly": -15
+  },
+  "35": {
+    "info": [
+      {
+        "action": [
+          18,
+          19
+        ],
+        "effect": [
+          {
+            "id": 147,
+            "loop": -1
+          },
+          {
+            "id": 146,
+            "loop": 6
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          20,
+          21
+        ],
+        "effect": [
+          {
+            "id": 147,
+            "loop": -1
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": 22
+      },
+      {
+        "action": [
+          20,
+          21
+        ],
+        "effect": [
+          {
+            "id": -1,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      }
+    ],
+    "dx_fly": 0,
+    "dy_fly": -15
+  },
+  "36": {
+    "info": [
+      {
+        "action": [
+          14,
+          15
+        ],
+        "effect": [
+          {
+            "id": 148,
+            "loop": 3
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          14,
+          15
+        ],
+        "effect": [
+          {
+            "id": -1,
+            "loop": 1
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      }
+    ],
+    "dx_fly": 0,
+    "dy_fly": -10
+  },
+  "37": {
+    "info": [
+      {
+        "action": [
+          22,
+          22
+        ],
+        "effect": [
+          {
+            "id": -1,
+            "loop": 10
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          12,
+          13
+        ],
+        "effect": [
+          {
+            "id": -1,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      }
+    ],
+    "dx_fly": 0,
+    "dy_fly": -10
+  },
+  "38": {
+    "info": [
+      {
+        "action": [
+          16,
+          17
+        ],
+        "effect": [
+          {
+            "id": 149,
+            "loop": 1
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": 23
+      },
+      {
+        "action": [
+          16,
+          17
+        ],
+        "effect": [
+          {
+            "id": -1,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      }
+    ],
+    "dx_fly": 0,
+    "dy_fly": -10
+  },
+  "39": {
+    "info": [
+      {
+        "action": [
+          33,
+          33
+        ],
+        "effect": [
+          {
+            "id": 151,
+            "loop": 2
+          },
+          {
+            "id": 150,
+            "loop": -1
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          33,
+          33
+        ],
+        "effect": [
+          {
+            "id": 152,
+            "loop": 2
+          },
+          {
+            "id": 150,
+            "loop": -1
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          33,
+          33
+        ],
+        "effect": [
+          {
+            "id": 153,
+            "loop": 2
+          },
+          {
+            "id": 150,
+            "loop": -1
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          33,
+          33
+        ],
+        "effect": [
+          {
+            "id": 154,
+            "loop": 2
+          },
+          {
+            "id": 150,
+            "loop": -1
+          }
+        ],
+        "time_out": 3000,
+        "sound_id": -1,
+        "dart_id": 24
+      },
+      {
+        "action": [
+          35,
+          17
+        ],
+        "effect": [
+          {
+            "id": -1,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      }
+    ],
+    "dx_fly": 0,
+    "dy_fly": -10
+  },
+  "40": {
+    "info": [
+      {
+        "action": [
+          22,
+          22
+        ],
+        "effect": [
+          {
+            "id": 155,
+            "loop": 1
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          12,
+          13
+        ],
+        "effect": [
+          {
+            "id": 157,
+            "loop": -1
+          },
+          {
+            "id": 156,
+            "loop": -1
+          }
+        ],
+        "time_out": 3000,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          12,
+          13
+        ],
+        "effect": [
+          {
+            "id": 157,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": 25
+      },
+      {
+        "action": [
+          12,
+          13
+        ],
+        "effect": [
+          {
+            "id": -1,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      }
+    ],
+    "dx_fly": 0,
+    "dy_fly": -10
+  },
+  "41": {
+    "info": [
+      {
+        "action": [
+          23,
+          23
+        ],
+        "effect": [
+          {
+            "id": 158,
+            "loop": -1
+          },
+          {
+            "id": 159,
+            "loop": -1
+          }
+        ],
+        "time_out": 3000,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          20,
+          21
+        ],
+        "effect": [
+          {
+            "id": 158,
+            "loop": -1
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": 26
+      },
+      {
+        "action": [
+          20,
+          21
+        ],
+        "effect": [
+          {
+            "id": -1,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      }
+    ],
+    "dx_fly": 0,
+    "dy_fly": -15
+  },
+  "42": {
+    "info": [
+      {
+        "action": [
+          22,
+          22
+        ],
+        "effect": [
+          {
+            "id": 155,
+            "loop": 1
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          12,
+          13
+        ],
+        "effect": [
+          {
+            "id": 155,
+            "loop": 4
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          12,
+          13
+        ],
+        "effect": [
+          {
+            "id": -1,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      }
+    ],
+    "dx_fly": 0,
+    "dy_fly": -10
+  },
+  "43": {
+    "info": [
+      {
+        "action": [
+          22,
+          22
+        ],
+        "effect": [
+          {
+            "id": 160,
+            "loop": 1
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          12,
+          13
+        ],
+        "effect": [
+          {
+            "id": 160,
+            "loop": 4
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          12,
+          13
+        ],
+        "effect": [
+          {
+            "id": -1,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      }
+    ],
+    "dx_fly": 0,
+    "dy_fly": -10
+  },
+  "44": {
+    "info": [
+      {
+        "action": [
+          22,
+          22
+        ],
+        "effect": [
+          {
+            "id": -1,
+            "loop": 10
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          12,
+          13
+        ],
+        "effect": [
+          {
+            "id": -1,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      }
+    ],
+    "dx_fly": 0,
+    "dy_fly": -10
+  },
+  "45": {
+    "info": [
+      {
+        "action": [
+          20,
+          21
+        ],
+        "effect": [
+          {
+            "id": 161,
+            "loop": 1
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": 27
+      },
+      {
+        "action": [
+          20,
+          21
+        ],
+        "effect": [
+          {
+            "id": -1,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      }
+    ],
+    "dx_fly": 0,
+    "dy_fly": -10
+  },
+  "46": {
+    "info": [
+      {
+        "action": [
+          11,
+          33
+        ],
+        "effect": [
+          {
+            "id": 162,
+            "loop": -1
+          },
+          {
+            "id": 166,
+            "loop": 10
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          20,
+          21
+        ],
+        "effect": [
+          {
+            "id": 162,
+            "loop": -1
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": 28
+      },
+      {
+        "action": [
+          20,
+          21
+        ],
+        "effect": [
+          {
+            "id": -1,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      }
+    ],
+    "dx_fly": 0,
+    "dy_fly": -15
+  },
+  "47": {
+    "info": [
+      {
+        "action": [
+          20,
+          21
+        ],
+        "effect": [
+          {
+            "id": 164,
+            "loop": -1
+          },
+          {
+            "id": 165,
+            "loop": 10
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          20,
+          21
+        ],
+        "effect": [
+          {
+            "id": 164,
+            "loop": -1
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": 31
+      },
+      {
+        "action": [
+          20,
+          21
+        ],
+        "effect": [
+          {
+            "id": -1,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      }
+    ],
+    "dx_fly": 0,
+    "dy_fly": -15
+  },
+  "48": {
+    "info": [
+      {
+        "action": [
+          18,
+          19
+        ],
+        "effect": [
+          {
+            "id": 147,
+            "loop": -1
+          },
+          {
+            "id": 146,
+            "loop": 6
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          20,
+          21
+        ],
+        "effect": [
+          {
+            "id": 147,
+            "loop": -1
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": 29
+      },
+      {
+        "action": [
+          20,
+          21
+        ],
+        "effect": [
+          {
+            "id": -1,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      }
+    ],
+    "dx_fly": 0,
+    "dy_fly": -15
+  },
+  "49": {
+    "info": [
+      {
+        "action": [
+          18,
+          19
+        ],
+        "effect": [
+          {
+            "id": 162,
+            "loop": -1
+          },
+          {
+            "id": 166,
+            "loop": 10
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          20,
+          21
+        ],
+        "effect": [
+          {
+            "id": 162,
+            "loop": -1
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": 30
+      },
+      {
+        "action": [
+          20,
+          21
+        ],
+        "effect": [
+          {
+            "id": -1,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      }
+    ],
+    "dx_fly": 0,
+    "dy_fly": -15
+  },
+  "50": {
+    "info": [
+      {
+        "action": [
+          20,
+          21
+        ],
+        "effect": [
+          {
+            "id": 164,
+            "loop": -1
+          },
+          {
+            "id": 165,
+            "loop": 10
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      },
+      {
+        "action": [
+          20,
+          21
+        ],
+        "effect": [
+          {
+            "id": 164,
+            "loop": -1
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": 32
+      },
+      {
+        "action": [
+          20,
+          21
+        ],
+        "effect": [
+          {
+            "id": -1,
+            "loop": 2
+          }
+        ],
+        "time_out": -1,
+        "sound_id": -1,
+        "dart_id": -1
+      }
+    ],
+    "dx_fly": 0,
+    "dy_fly": -15
+  }
+}

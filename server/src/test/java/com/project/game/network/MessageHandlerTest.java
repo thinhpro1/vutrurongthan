@@ -160,7 +160,7 @@ class MessageHandlerTest {
 
     @Test
     void oversizedIconIsNotQueuedPastConfiguredPacketLimit(@TempDir Path root) throws IOException {
-        Files.write(root.resolve("5.png"), new byte[]{1, 2, 3, 4});
+        Files.write(root.resolve("5.png"), new byte[70_000]);
         Session session = newSession(new AuthService(), 9);
         session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
 

@@ -122,6 +122,60 @@ class NetworkIntegrationTest {
     }
 
     @Test
+    void javaClientReceivesLargeIconAboveNormalTwoByteLength(@TempDir Path iconRoot) throws Exception {
+        byte[] iconData = patternedBytes(70_000);
+        Files.write(iconRoot.resolve("2170.png"), iconData);
+        NetworkServer server = new NetworkServer("127.0.0.1", 0, 2, 262_144, 8, 1_000,
+                "abc".getBytes(StandardCharsets.US_ASCII),
+                new ServerServices(new AuthService(), ResourceService.fromIconRoot(iconRoot)),
+                null, NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
+        AtomicReference<Throwable> serverFailure = new AtomicReference<>();
+        Thread serverThread = Thread.ofVirtual().start(() -> {
+            try {
+                server.start();
+            } catch (Throwable failure) {
+                serverFailure.set(failure);
+            }
+        });
+        try {
+            waitForPort(server);
+            runIconRequest(server.localPort(), 2170, iconData);
+            waitForNoSessions(server);
+        } finally {
+            server.stop();
+            serverThread.join(1_000);
+        }
+        assertNull(serverFailure.get(), "network server failed during large icon integration test");
+    }
+
+    @Test
+    void javaClientReceivesObservedLargestIconPayload(@TempDir Path iconRoot) throws Exception {
+        byte[] iconData = patternedBytes(127_617);
+        Files.write(iconRoot.resolve("2170.png"), iconData);
+        NetworkServer server = new NetworkServer("127.0.0.1", 0, 2, 262_144, 8, 1_000,
+                "abc".getBytes(StandardCharsets.US_ASCII),
+                new ServerServices(new AuthService(), ResourceService.fromIconRoot(iconRoot)),
+                null, NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
+        AtomicReference<Throwable> serverFailure = new AtomicReference<>();
+        Thread serverThread = Thread.ofVirtual().start(() -> {
+            try {
+                server.start();
+            } catch (Throwable failure) {
+                serverFailure.set(failure);
+            }
+        });
+        try {
+            waitForPort(server);
+            runIconRequest(server.localPort(), 2170, iconData);
+            waitForNoSessions(server);
+        } finally {
+            server.stop();
+            serverThread.join(1_000);
+        }
+        assertNull(serverFailure.get(), "network server failed during observed icon integration test");
+    }
+
+    @Test
     void javaClientCompletesLegacyG1BootstrapAndReconnectsWithoutDuplicateMonsterRequest() throws Exception {
         AtomicInteger updateCount = new AtomicInteger();
         AtomicInteger monsterUpdateCount = new AtomicInteger();
@@ -311,8 +365,13 @@ class NetworkIntegrationTest {
     }
 
     private static void runIconRequest(int port) throws Exception {
-        LegacyPacketCodec codec = new LegacyPacketCodec(1024);
+        runIconRequest(port, 5, new byte[]{1, 2, 3, 4});
+    }
+
+    private static void runIconRequest(int port, int iconId, byte[] expectedBytes) throws Exception {
+        LegacyPacketCodec codec = new LegacyPacketCodec(Math.max(1024, expectedBytes.length + 6));
         try (LegacyTcpTransport transport = LegacyTcpTransport.connect("127.0.0.1", port, 1_000)) {
+            transport.socket().setSoTimeout(2_000);
             codec.writeClient(transport.output(), null, false, new Message(MessageName.CONNECT_SERVER));
             Message handshake = codec.read(transport.input(), null, false);
             assertEquals(MessageName.SEND_SESSION_KEY, handshake.command());
@@ -321,16 +380,23 @@ class NetworkIntegrationTest {
             assertEquals(MessageName.VERSION_SOURCE, version.command());
 
             codec.writeClient(transport.output(), cipher, true,
-                    new Message(MessageName.REQUEST_ICON, new MessageWriter().writeShort(5).toByteArray()));
+                    new Message(MessageName.REQUEST_ICON, new MessageWriter().writeShort(iconId).toByteArray()));
             Message response = codec.readServerResponse(transport.input(), cipher, true);
             assertEquals(MessageName.REQUEST_ICON, response.command());
-            assertArrayEquals(new byte[]{0, 5, 0, 0, 0, 4, 1, 2, 3, 4}, response.payload());
             var reader = response.reader();
-            assertEquals(5, reader.readShort());
-            assertEquals(4, reader.readInt());
-            assertArrayEquals(new byte[]{1, 2, 3, 4}, reader.readBytes(4));
+            assertEquals(iconId, reader.readShort());
+            assertEquals(expectedBytes.length, reader.readInt());
+            assertArrayEquals(expectedBytes, reader.readBytes(expectedBytes.length));
             assertEquals(0, reader.remaining());
         }
+    }
+
+    private static byte[] patternedBytes(int length) {
+        byte[] bytes = new byte[length];
+        for (int index = 0; index < bytes.length; index++) {
+            bytes[index] = (byte) (index * 31 + 7);
+        }
+        return bytes;
     }
 
     private static byte[] reconstructKey(byte[] payload) {

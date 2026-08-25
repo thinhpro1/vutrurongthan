@@ -131,6 +131,10 @@ desktop.ini
 *.temp
 *.bak
 
+# Large local legacy icon datasets
+/server/resources/icon/
+/client/Assets/Resources/SmallImages/
+
 # =========================================================
 # IMPORTANT: DO NOT IGNORE GAME IMAGES
 # =========================================================
@@ -145,3 +149,7 @@ desktop.ini
 # *.meta
 #
 # Đây là các phần cần thiết để clone project Unity sang máy khác.
+
+# Large local legacy icon dataset
+/server/resources/icon/
+/client/Assets/Resources/SmallImages/

@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class LegacyPacketCodecTest {
     private static final byte[] KEY = "abc".getBytes(StandardCharsets.US_ASCII);
@@ -49,6 +50,15 @@ class LegacyPacketCodecTest {
         codec.write(wire, new LegacyCipher(KEY), true, expected);
 
         assertEquals(expected, decodeAsUnitySession(wire.toByteArray(), KEY));
+    }
+
+    @Test
+    void largeConfiguredLimitDoesNotRelaxNormalTwoByteFrames() {
+        LegacyPacketCodec codec = new LegacyPacketCodec(262_144);
+
+        assertThrows(IOException.class, () -> codec.write(
+                new ByteArrayOutputStream(), new LegacyCipher(KEY), true,
+                new Message(MessageName.LOGIN, new byte[65_536])));
     }
 
     private static Message decodeAsUnitySession(byte[] wire, byte[] key) throws IOException {

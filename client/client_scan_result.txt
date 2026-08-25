@@ -1,0 +1,513 @@
+TONG SO FILE C#: 164
+SO FILE CO ICON REFERENCE: 52
+
+============================================================
+SUMMARY: FILES WITH ICON REFERENCES
+============================================================
+  Commands\CmdIntrinsic.cs: 2 matches
+  Commands\CmdPotential.cs: 2 matches
+  Commands\CmdSkill.cs: 1 matches
+  Controllers\Controller.cs: 39 matches
+  Dialogs\Menu.cs: 2 matches
+  Dialogs\MenuCommad.cs: 3 matches
+  Dialogs\MenuNpc.cs: 3 matches
+  Effects\EffectFly.cs: 2 matches
+  Effects\EffectImage.cs: 4 matches
+  Effects\EffectLoop.cs: 5 matches
+  Effects\EffectManager.cs: 10 matches
+  Effects\EffectTime.cs: 8 matches
+  Effects\EffectTimeTemplate.cs: 1 matches
+  Entites\Entity.cs: 1 matches
+  Entites\ItemMaps\ItemMap.cs: 4 matches
+  Entites\Monsters\BigMonster.cs: 1 matches
+  Entites\Monsters\Monster.cs: 9 matches
+  Entites\Monsters\MonsterDart.cs: 10 matches
+  Entites\Monsters\MonsterManager.cs: 20 matches
+  Entites\Monsters\MonsterPet.cs: 4 matches
+  Entites\Monsters\MonsterTemplate.cs: 9 matches
+  Entites\Npcs\Npc.cs: 3 matches
+  Entites\Npcs\NpcManager.cs: 4 matches
+  Entites\Npcs\NpcTemplate.cs: 1 matches
+  Entites\Players\Player.cs: 32 matches
+  Frames\Aura.cs: 3 matches
+  Frames\Bag.cs: 5 matches
+  Frames\Frame.cs: 1 matches
+  Frames\FrameManager.cs: 23 matches
+  Frames\Medal.cs: 3 matches
+  Frames\MountTemplate.cs: 3 matches
+  Games\GameCanvas.cs: 2 matches
+  GraphicCustoms\GraphicManager.cs: 20 matches
+  GraphicCustoms\MyFont.cs: 2 matches
+  Items\Item.cs: 2 matches
+  Items\ItemManager.cs: 2 matches
+  Items\ItemTemplate.cs: 1 matches
+  Models\EffectInfoImage.cs: 1 matches
+  Models\EffectMap.cs: 1 matches
+  Models\Map.cs: 6 matches
+  Models\Spaceship.cs: 4 matches
+  Models\TabInfo.cs: 8 matches
+  Networks\Session.cs: 7 matches
+  Screens\GameScreen.cs: 5 matches
+  Screens\Panel.cs: 28 matches
+  Services\Service.cs: 2 matches
+  Skills\DartTemplateInfo.cs: 1 matches
+  Skills\Skill.cs: 3 matches
+  Skills\SkillDart.cs: 11 matches
+  Skills\SkillEffectInfo.cs: 1 matches
+  Skills\SkillManager.cs: 21 matches
+  Skills\SkillTemplate.cs: 1 matches
+
+============================================================
+DETAILED RESULTS
+============================================================
+
+=== Commands\CmdIntrinsic.cs (2 matches) ===
+  L12: public int iconId;
+  L38: GraphicManager.instance.Draw(g, iconId, x + 12, y + 11, 0, StaticObj.TOP_LEFT);
+
+=== Commands\CmdPotential.cs (2 matches) ===
+  L12: public Image icon;
+  L47: g.DrawImage(icon, x + 10, y + 10);
+
+=== Commands\CmdSkill.cs (1 matches) ===
+  L52: GraphicManager.instance.Draw(g, skill.GetIcon(), x, y, 0, StaticObj.VCENTER_HCENTER);
+
+=== Controllers\Controller.cs (39 matches) ===
+  L170: template.iconId = message.ReadShort();
+  L208: template.icons.Add(message.ReadShort());
+  L232: effect.icons = new List<int>();
+  L233: int count_icon = message.ReadSByte();
+  L234: for (int j = 0; j < count_icon; j++)
+  L236: effect.icons.Add(message.ReadShort());
+  L250: template.iconId = message.ReadShort();
+  L272: template.light.icon.Add(message.ReadShort());
+  L281: template.bullet.icon.Add(message.ReadShort());
+  L290: template.explode.icon.Add(message.ReadShort());
+  L310: template.iconsMove.Add(message.ReadShort());
+  L312: template.iconInjure = message.ReadShort();
+  L313: template.iconAttack = message.ReadShort();
+  L337: medal.icons.Add(message.ReadShort());
+  L416: mount.icons.Add(message.ReadShort());
+  L438: bag.icons.Add(message.ReadShort());
+  L468: template.bullet.icon.Add(reader.ReadShort());
+  L477: template.explode.icon.Add(reader.ReadShort());
+  L492: effectInfo.icons.Add(reader.ReadShort());
+  L555: aura.icons.Add(message.ReadShort());
+  L693: monster.template.LoadIcons();
+  L764: monster.template.LoadIcons();
+  L2268: /*int[][] iconId = new int[][]
+  L2289: GameScr.effects.Add(new Effect(xStart + Utils.random(-300, 300), TileMap.getYSd(xStart) - Utils.random(300, 500), iconId[Utils.random(0, 9)]));
+  L2338: screenManager.gameScreen.iconsDragon.Clear();
+  L2342: screenManager.gameScreen.iconsDragon.Add(message.ReadShort());
+  L2482: skill.template.iconId = new int[message.ReadSByte()];
+  L2483: for (int j = 0; j < skill.template.iconId.Length; j++)
+  L2485: skill.template.iconId[j] = message.ReadShort();
+  L2719: // request icon
+  L2720: int iconId = message.ReadShort();
+  L2726: if (GraphicManager.instance.datas.ContainsKey(iconId))
+  L2728: GraphicManager.instance.datas.Remove(iconId);
+  L2730: GraphicManager.instance.datas.Add(iconId, data);
+  L2731: Rms.SaveString("icon_" + GraphicManager.instance.versionImage + "_" + iconId,
+  L2885: intrinsic.iconId = message.ReadShort();
+  L3105: skill.template.iconId = new int[message.ReadSByte()];
+  L3106: for (int j = 0; j < skill.template.iconId.Length; j++)
+  L3108: skill.template.iconId[j] = message.ReadShort();
+
+=== Dialogs\Menu.cs (2 matches) ===
+  L39: public int iconId;
+  L77: public abstract void StartAt(List<CmdMenu> commands, string title, int iconId);
+
+=== Dialogs\MenuCommad.cs (3 matches) ===
+  L28: public override void StartAt(List<CmdMenu> commands, string title, int iconId)
+  L31: this.iconId = iconId;
+  L92: GraphicManager.instance.Draw(g, iconId, xPopup + 20, yPopup, 0, StaticObj.BOTTOM_LEFT);
+
+=== Dialogs\MenuNpc.cs (3 matches) ===
+  L57: //GraphicManager.instance.Draw(g, iconId, xPopup + 20, yPopup, 0, StaticObj.BOTTOM_LEFT);
+  L117: public override void StartAt(List<CmdMenu> commands, string title, int iconId)
+  L120: this.iconId = iconId;
+
+=== Effects\EffectFly.cs (2 matches) ===
+  L39: GraphicManager.instance.Draw(g, effectImage.icons[tick], x, y, 0, StaticObj.VCENTER_HCENTER);
+  L61: if (tick < effectImage.icons.Count - 1)
+
+=== Effects\EffectImage.cs (4 matches) ===
+  L18: public List<int> icons;
+  L25: public EffectImage(int id, int dx, int dy, int delay, params int[] icon)
+  L31: this.icons = new List<int>();
+  L32: this.icons.AddRange(icon);
+
+=== Effects\EffectLoop.cs (5 matches) ===
+  L86: if (effectImage == null || effectImage.icons.Count == 0)
+  L92: GraphicManager.instance.Draw(g, effectImage.icons[tick], x - dx * entity.dir, y - dy, transform == -1 ? (entity.dir == 1 ? 0 : 2) : transform, anchor == -1 ? ((entity.dir == -1) ? StaticObj.BOTTOM_LEFT : StaticObj.BOTTOM_RIGHT) : anchor);
+  L96: GraphicManager.instance.Draw(g, effectImage.icons[tick], x, y, transform, anchor);
+  L106: if (effectImage != null && effectImage.icons.Count > 0)
+  L115: if (tick < effectImage.icons.Count - 1)
+
+=== Effects\EffectManager.cs (10 matches) ===
+  L48: effect.icons = new List<int>();
+  L49: int count_icon = reader.ReadSbyte();
+  L50: for (int j = 0; j < count_icon; j++)
+  L52: int iconId = reader.ReadShort();
+  L53: effect.icons.Add(iconId);
+  L67: template.iconId = reader.ReadShort();
+  L92: writer.WriteSByte(effect.icons.Count);
+  L93: foreach (int icon in effect.icons)
+  L95: writer.WriteShort(icon);
+  L111: writer.WriteShort(template.iconId);
+
+=== Effects\EffectTime.cs (8 matches) ===
+  L49: if (effectImage == null || effectImage.icons.Count == 0)
+  L56: if (player.body != null && player.body.icon == player.body.template.fly)
+  L59: GraphicManager.instance.Draw(g, effectImage.icons[tick], entity.x - effectImage.dx * entity.dir + entity.w * entity.dir, entity.y - entity.h * 2 / 3, angle, entity.dir == 1 ? MyGraphics.VCENTER | MyGraphics.RIGHT : MyGraphics.VCENTER | MyGraphics.LEFT);
+  L63: GraphicManager.instance.Draw(g, effectImage.icons[tick], entity.x - effectImage.dx * entity.dir, entity.y + effectImage.dy, entity.dir == 1 ? 0 : 2, StaticObj.BOTTOM_HCENTER);
+  L68: if (template.iconId == -1)
+  L73: GraphicManager.instance.Draw(g, template.iconId, x - w / 2, y - h / 2, 0, StaticObj.VCENTER_HCENTER);
+  L105: if (effectImage != null && effectImage.icons.Count > 0)
+  L110: if (tick < effectImage.icons.Count - 1)
+
+=== Effects\EffectTimeTemplate.cs (1 matches) ===
+  L7: public int iconId;
+
+=== Entites\Entity.cs (1 matches) ===
+  L47: public int frameIcon;
+
+=== Entites\ItemMaps\ItemMap.cs (4 matches) ===
+  L44: GraphicManager.instance.Draw(g, template.iconId, x, y - 20, 0, StaticObj.BOTTOM_HCENTER);
+  L114: GraphicManager.instance.CreateImage(template.iconId);
+  L117: h = GraphicManager.instance.images[template.iconId].GetHeight();
+  L118: w = GraphicManager.instance.images[template.iconId].GetWidth();
+
+=== Entites\Monsters\BigMonster.cs (1 matches) ===
+  L62: iconPaint = template.iconInjure;
+
+=== Entites\Monsters\Monster.cs (9 matches) ===
+  L34: public int iconPaint;
+  L70: GraphicManager.instance.Draw(g, iconPaint, x + template.dx, y + template.dx, (dir == 1) ? 0 : 2, StaticObj.BOTTOM_HCENTER);
+  L153: iconPaint = template.iconInjure;
+  L202: iconPaint = template.iconAttack;
+  L232: iconPaint = template.iconInjure;
+  L271: iconPaint = template.iconsMove[index];
+  L321: if (frame >= template.iconsMove.Count || frame < 0)
+  L330: if (frame < template.iconsMove.Count - 1)
+  L340: iconPaint = template.iconsMove[frame];
+
+=== Entites\Monsters\MonsterDart.cs (10 matches) ===
+  L81: if (status == 0 && template.light.icon.Count > 0)
+  L83: GraphicManager.instance.Draw(g, template.light.icon[tick], xStart, yStart, angle);
+  L86: if (status == 1 && template.bullet.icon.Count > 0)
+  L88: GraphicManager.instance.Draw(g, template.bullet.icon[tick], x, y, angle);
+  L116: if (template.light.icon.Count > 0)
+  L126: if (tick < template.light.icon.Count - 1)
+  L149: if (template.bullet.icon.Count > 0)
+  L158: if (tick < template.bullet.icon.Count - 1)
+  L206: if (isExplode || template.bullet.icon.Count == 0)
+  L225: EffectImage effectImage = new EffectImage(-1, 0, 0, template.explode.delay, template.explode.icon.ToArray());
+
+=== Entites\Monsters\MonsterManager.cs (20 matches) ===
+  L50: template.light.icon.Add(reader.ReadShort());
+  L59: template.bullet.icon.Add(reader.ReadShort());
+  L68: template.explode.icon.Add(reader.ReadShort());
+  L88: template.iconsMove.Add(reader.ReadShort());
+  L90: template.iconInjure = reader.ReadShort();
+  L91: template.iconAttack = reader.ReadShort();
+  L118: writer.WriteSByte(template.light.icon.Count);
+  L119: foreach (int icon in template.light.icon)
+  L121: writer.WriteShort(icon);
+  L126: writer.WriteSByte(template.bullet.icon.Count);
+  L127: foreach (int icon in template.bullet.icon)
+  L129: writer.WriteShort(icon);
+  L134: writer.WriteSByte(template.explode.icon.Count);
+  L135: foreach (int icon in template.explode.icon)
+  L137: writer.WriteShort(icon);
+  L153: writer.WriteSByte(template.iconsMove.Count);
+  L154: foreach (int icon in template.iconsMove)
+  L156: writer.WriteShort(icon);
+  L158: writer.WriteShort(template.iconInjure);
+  L159: writer.WriteShort(template.iconAttack);
+
+=== Entites\Monsters\MonsterPet.cs (4 matches) ===
+  L51: iconPaint = template.iconsMove[index];
+  L82: if (frame >= template.iconsMove.Count || frame < 0)
+  L91: if (frame < template.iconsMove.Count - 1)
+  L101: iconPaint = template.iconsMove[frame];
+
+=== Entites\Monsters\MonsterTemplate.cs (9 matches) ===
+  L18: public List<int> iconsMove = new List<int>();
+  L19: public List<int> iconsStand = new List<int>();
+  L21: public int iconInjure;
+  L23: public int iconAttack;
+  L35: public void LoadIcons()
+  L39: foreach (int id in iconsMove)
+  L43: foreach (int id in iconsStand)
+  L47: GraphicManager.instance.CreateImage(iconInjure);
+  L48: GraphicManager.instance.CreateImage(iconAttack);
+
+=== Entites\Npcs\Npc.cs (3 matches) ===
+  L47: GraphicManager.instance.Draw(g, template.icons[frame], x + template.dx, y + template.dy, (dir == 1) ? 0 : 2, StaticObj.BOTTOM_HCENTER);
+  L92: if (template.icons.Count == 2)
+  L112: if (frame >= template.icons.Count - 1)
+
+=== Entites\Npcs\NpcManager.cs (4 matches) ===
+  L42: template.icons.Add(reader.ReadShort());
+  L69: writer.WriteSByte(template.icons.Count);
+  L70: foreach (int icon in template.icons)
+  L72: writer.WriteShort(icon);
+
+=== Entites\Npcs\NpcTemplate.cs (1 matches) ===
+  L11: public List<int> icons = new List<int>();
+
+=== Entites\Players\Player.cs (32 matches) ===
+  L571: if (head != null && head.icon != -1)
+  L573: GraphicManager.instance.Draw(g, head.icon, x + head.template.dx * dir, y + head.template.dy, (dir == 1) ? 0 : 2, StaticObj.BOTTOM_HCENTER);
+  L575: if (body != null && body.icon != -1)
+  L577: GraphicManager.instance.Draw(g, body.icon, x + body.template.dx * dir, y + body.template.dy, (dir == 1) ? 0 : 2, StaticObj.BOTTOM_HCENTER);
+  L591: GraphicManager.instance.Draw(g, effectInfo.icons[effect.index], x + dir * (effectInfo.dx + dx + (skillPaint.isFly ? skillPaint.dxFly : 0)),
+  L685: head.icon = head.template.action[skillPaintInfo.action[skillPaint.isFly ? 1 : 0]];
+  L689: body.icon = body.template.action[skillPaintInfo.action[skillPaint.isFly ? 1 : 0]];
+  L698: if (effect.index < effect.effectInfo.icons.Count - 1)
+  L862: head.icon = head.template.injure;
+  L866: body.icon = body.template.injure;
+  L1158: head.icon = head.template.injure;
+  L1162: body.icon = body.template.injure;
+  L1206: head.icon = head.template.injure;
+  L1210: body.icon = body.template.injure;
+  L1228: head.icon = head.template.dead[index];
+  L1232: body.icon = body.template.dead[index];
+  L1309: head.icon = head.template.stand[index];
+  L1313: body.icon = body.template.stand[index];
+  L1320: head.icon = head.template.fall;
+  L1324: body.icon = body.template.fall;
+  L1430: head.icon = head.template.stand[index];
+  L1434: body.icon = body.template.stand[index];
+  L1441: head.icon = head.template.fly;
+  L1445: body.icon = body.template.fly;
+  L1469: head.icon = head.template.stand[index];
+  L1473: body.icon = body.template.stand[index];
+  L1544: head.icon = head.template.run[frameTick];
+  L1548: body.icon = body.template.run[frameTick];
+  L1628: head.icon = head.template.stand[index];
+  L1632: body.icon = body.template.stand[index];
+  L1639: head.icon = head.template.jump;
+  L1643: body.icon = body.template.jump;
+
+=== Frames\Aura.cs (3 matches) ===
+  L12: public List<int> icons = new List<int>();
+  L28: if (tick < icons.Count - 1)
+  L42: GraphicManager.instance.Draw(g, icons[tick], x + dx, y + dy, (dir == 1) ? 0 : 2, StaticObj.BOTTOM_HCENTER);
+
+=== Frames\Bag.cs (5 matches) ===
+  L15: public List<int> icons = new List<int>();
+  L45: if (tick < icons.Count - 1)
+  L112: if (player.body != null && player.body.icon == player.body.template.fly)
+  L114: GraphicManager.instance.Draw(g, icons[tick], player.x + dxFly * player.dir + player.dx * player.dir + xFly * player.dir + dx * player.dir, player.y + dyFly + player.dy + yFly * player.dir, player.dir == 1 ? 0 : 2, StaticObj.BOTTOM_HCENTER);
+  L118: GraphicManager.instance.Draw(g, icons[tick], player.x - player.dx * player.dir + xFly * player.dir + dx * player.dir, player.y + 2 * player.dy + yFly * player.dir, player.dir == 1 ? 0 : 2, StaticObj.BOTTOM_HCENTER);
+
+=== Frames\Frame.cs (1 matches) ===
+  L7: public int icon;
+
+=== Frames\FrameManager.cs (23 matches) ===
+  L110: icon = -1
+  L154: bag.icons.Add(reader.ReadShort());
+  L182: writer.WriteSByte(bag.icons.Count);
+  L183: foreach (int icon in bag.icons)
+  L185: writer.WriteShort(icon);
+  L259: foreach (int iconId in template.dead)
+  L261: writer.WriteShort(iconId);
+  L264: foreach (int iconId in template.stand)
+  L266: writer.WriteShort(iconId);
+  L269: foreach (int iconId in template.run)
+  L271: writer.WriteShort(iconId);
+  L308: mount.icons.Add(reader.ReadShort());
+  L333: writer.WriteSByte(mount.icons.Count);
+  L334: foreach (int icon in mount.icons)
+  L336: writer.WriteShort(icon);
+  L360: medal.icons.Add(reader.ReadShort());
+  L384: writer.WriteSByte(medal.icons.Count);
+  L385: foreach (int icon in medal.icons)
+  L387: writer.WriteShort(icon);
+  L410: aura.icons.Add(reader.ReadShort());
+  L434: writer.WriteSByte(aura.icons.Count);
+  L435: foreach (int icon in aura.icons)
+  L437: writer.WriteShort(icon);
+
+=== Frames\Medal.cs (3 matches) ===
+  L11: public List<int> icons = new List<int>();
+  L27: if (tick < icons.Count - 1)
+  L41: GraphicManager.instance.Draw(g, icons[tick], x + dx, y + dy, 0, StaticObj.BOTTOM_HCENTER);
+
+=== Frames\MountTemplate.cs (3 matches) ===
+  L11: public List<int> icons = new List<int>();
+  L29: if (tick < icons.Count - 1)
+  L43: GraphicManager.instance.Draw(g, icons[tick], x + dx * dir, y + dy, (dir == 1) ? 0 : 2, StaticObj.TOP_CENTER);
+
+=== Games\GameCanvas.cs (2 matches) ===
+  L629: public static void StartAt(List<CmdMenu> commands, string title, int iconId)
+  L645: menu.StartAt(commands, title, iconId);
+
+=== GraphicCustoms\GraphicManager.cs (20 matches) ===
+  L24: public Dictionary<int, long> timeRequestIcons;
+  L33: timeRequestIcons = new Dictionary<int, long>();
+  L52: Image icon = GameCanvas.LoadImage("SmallImages/" + id);
+  L53: if (icon != null)
+  L55: images.Add(id, icon);
+  L72: if (timeRequestIcons.ContainsKey(id))
+  L74: time = timeRequestIcons[id];
+  L78: timeRequestIcons.Add(id, 0);
+  L84: timeRequestIcons[id] = now;
+  L85: if (!ServerManager.instance.session.iconRequest.Contains(id))
+  L87: ServerManager.instance.session.iconRequest.Add(id);
+  L96: Image icon = GameCanvas.LoadImage("SmallImages/" + id);
+  L97: if (icon != null)
+  L99: images.Add(id, icon);
+  L105: if (timeRequestIcons.ContainsKey(id))
+  L107: time = timeRequestIcons[id];
+  L111: timeRequestIcons.Add(id, 0);
+  L117: timeRequestIcons[id] = now;
+  L125: //array = Utils.Cast(Convert.FromBase64String(Decrypt(HexToString(Rms.LoadString("icon_" + versionImage + "_" + id)), versionImage + "" + versionImage)));
+  L140: Service.instance.RequestIcon(id);
+
+=== GraphicCustoms\MyFont.cs (2 matches) ===
+  L459: return (int)gUIStyle.CalcSize(new GUIContent(s)).x;
+  L482: height = (int)gUIStyle.CalcSize(new GUIContent("Ag")).y;
+
+=== Items\Item.cs (2 matches) ===
+  L123: GraphicManager.instance.Draw(g, template.iconId, x + w / 2, y + h / 2, 0, 3);
+  L140: GraphicManager.instance.Draw(g, template.iconId, x + w / 2, y + h / 2, 0, 3);
+
+=== Items\ItemManager.cs (2 matches) ===
+  L50: template.iconId = reader.ReadShort();
+  L103: writer.WriteShort(template.iconId);
+
+=== Items\ItemTemplate.cs (1 matches) ===
+  L15: public int iconId;
+
+=== Models\EffectInfoImage.cs (1 matches) ===
+  L5: public int iconId;
+
+=== Models\EffectMap.cs (1 matches) ===
+  L11: public int[] icons;
+
+=== Models\Map.cs (6 matches) ===
+  L147: if (effect.index >= effect.icons.Length)
+  L151: GraphicManager.instance.Draw(g, effect.icons[effect.index], effect.x, effect.y, 0, StaticObj.BOTTOM_HCENTER);
+  L171: int[][] icons = new int[][] { new int[] { 377, 378, 379 }, new int[] { 380, 381, 382 } };
+  L175: effectInfoImage.icons = icons[Utils.random(0, 1)];
+  L184: int[][] icons = new int[][] { new int[] { 383, 384 }, new int[] { 385, 386 } };
+  L188: effectInfoImage.icons = icons[Utils.random(0, 1)];
+
+=== Models\Spaceship.cs (4 matches) ===
+  L52: private static int[,] iconsFire = new int[,] { { 88, 89, 90, 91 }, { 254, 255, 256, 257 } };
+  L138: GraphicManager.instance.Draw(g, iconsFire[level, ticks], x, y + 20, 180f, StaticObj.BOTTOM_HCENTER);
+  L142: GraphicManager.instance.Draw(g, iconsFire[level, ticks], x, y - imageSpaceship.GetHeight() - 20, 0, StaticObj.TOP_CENTER);
+  L181: if (ticks < iconsFire.GetLength(1) - 1)
+
+=== Models\TabInfo.cs (8 matches) ===
+  L60: private int iconId;
+  L97: int xIcon = 0;
+  L98: if (iconId != -1)
+  L100: xIcon += 30;
+  L101: GraphicManager.instance.Draw(g, iconId, x + 40, y + 40, 0);
+  L103: MyFont.text_big_green.DrawString(g, title, x + 40 + xIcon, y + 20, 0);
+  L276: public void ShowInfo(string title, string info, int iconId, int star, int star_use, params Command[] commands)
+  L279: this.iconId = iconId;
+
+=== Networks\Session.cs (7 matches) ===
+  L59: public List<int> iconRequest = new List<int>();
+  L234: iconRequest.Clear();
+  L363: while (iconRequest.Count > 0)
+  L365: int id = iconRequest[0];
+  L369: string hex = Rms.LoadString("icon_" + GraphicManager.instance.versionImage + "_" + id);
+  L382: Service.instance.RequestIcon(id);
+  L384: iconRequest.RemoveAt(0);
+
+=== Screens\GameScreen.cs (5 matches) ===
+  L328: public List<int> iconsDragon = new List<int>();
+  L673: if (indexShowDragon >= iconsDragon.Count)
+  L678: GraphicManager.instance.Draw(g, iconsDragon[indexShowDragon], xS, Map.GetYSd(xS) + 50, 0, StaticObj.BOTTOM_HCENTER);
+  L844: if (effectTime.template.iconId != -1)
+  L1724: GraphicManager.instance.Draw(g, itemSpins[i].template.iconId, cmxPaintItemSpin + i * 75, yPaintItemSpin + 37, 0, StaticObj.VCENTER_HCENTER);
+
+=== Screens\Panel.cs (28 matches) ===
+  L46: private Image imgIconHp;
+  L47: private Image imgIconMp;
+  L48: private Image imgIconDmg;
+  L191: public int[] iconFlags;
+  L262: imgIconHp = GameCanvas.LoadImage("MainImages/Panels/img_icon_hp");
+  L263: imgIconMp = GameCanvas.LoadImage("MainImages/Panels/img_icon_mp");
+  L264: imgIconDmg = GameCanvas.LoadImage("MainImages/Panels/img_icon_dmg");
+  L340: cmdPotentials[i].icon = GameCanvas.LoadImage("MainImages/Panels/img_potential_" + i);
+  L4714: tabInfo.ShowInfo(item.template.name + text_upgrade, info, item.template.iconId, star, star_use, GetCmdActionItems(item, action).ToArray());
+  L5641: int icon = Player.me.head.template.stand[frame];
+  L5642: if (icon != -1)
+  L5644: GraphicManager.instance.Draw(g, icon, xPlayerBag + Player.me.head.template.dx, yPlayerBag - 25 - Player.me.head.template.dy, 0, StaticObj.BOTTOM_HCENTER);
+  L5649: int icon = Player.me.body.template.stand[frame];
+  L5650: if (icon != -1)
+  L5652: GraphicManager.instance.Draw(g, icon, xPlayerBag + Player.me.body.template.dx, yPlayerBag - 25 - Player.me.body.template.dy, 0, StaticObj.BOTTOM_HCENTER);
+  L7800: int icon = playerMenu.head.template.stand[frame];
+  L7801: if (icon != -1)
+  L7803: GraphicManager.instance.Draw(g, icon, xPlayerBag + playerMenu.head.template.dx, yPlayerBag - 25 - playerMenu.head.template.dy, 0, StaticObj.BOTTOM_HCENTER);
+  L7808: int icon = playerMenu.body.template.stand[frame];
+  L7809: if (icon != -1)
+  L7811: GraphicManager.instance.Draw(g, icon, xPlayerBag + playerMenu.body.template.dx, yPlayerBag - 25 - playerMenu.body.template.dy, 0, StaticObj.BOTTOM_HCENTER);
+  L8432: int icon = Player.disciple.head.template.stand[frame];
+  L8433: if (icon != -1)
+  L8435: GraphicManager.instance.Draw(g, icon, xPlayerBag + Player.disciple.head.template.dx, yPlayerBag - 25 - Player.disciple.head.template.dy, 0, StaticObj.BOTTOM_HCENTER);
+  L8440: int icon = Player.disciple.body.template.stand[frame];
+  L8441: if (icon != -1)
+  L8443: GraphicManager.instance.Draw(g, icon, xPlayerBag + Player.disciple.body.template.dx, yPlayerBag - 25 - Player.disciple.body.template.dy, 0, StaticObj.BOTTOM_HCENTER);
+  L8956: GraphicManager.instance.Draw(g, petMenu.iconPaint, xPlayerBag + petMenu.template.dx, yPlayerBag + petMenu.template.dx - 25, 0, StaticObj.BOTTOM_HCENTER);
+
+=== Services\Service.cs (2 matches) ===
+  L86: public void RequestIcon(int iconId)
+  L91: message.writer().WriteShort(iconId);
+
+=== Skills\DartTemplateInfo.cs (1 matches) ===
+  L7: public List<int> icon = new List<int>();
+
+=== Skills\Skill.cs (3 matches) ===
+  L50: public int GetIcon()
+  L54: return template.iconId[template.iconId.Length - 1];
+  L56: return template.iconId[0];
+
+=== Skills\SkillDart.cs (11 matches) ===
+  L110: if (status == 0 && template.bullet.icon.Count > 0)
+  L130: GraphicManager.instance.Draw(g, template.bullet.icon[1], xStart + i * dirX, yStart + num, angle);
+  L147: GraphicManager.instance.Draw(g, template.bullet.icon[1], xStart + num, yStart + i * dirX, angle);
+  L150: GraphicManager.instance.Draw(g, template.bullet.icon[0], xStart, yStart, angle);
+  L151: GraphicManager.instance.Draw(g, template.bullet.icon[2], xEnd, yEnd, angle);
+  L156: GraphicManager.instance.Draw(g, template.bullet.icon[tick], x, y, angle);
+  L187: if (template.bullet.icon.Count > 0 && !template.isLine)
+  L196: if (tick < template.bullet.icon.Count - 1)
+  L256: if ((isExplode && !isLine) || template.bullet.icon.Count == 0)
+  L276: if (template.bullet.icon.Count == 0)
+  L281: EffectImage effectImage = new EffectImage(-1, 0, 0, template.explode.delay, template.explode.icon.ToArray());
+
+=== Skills\SkillEffectInfo.cs (1 matches) ===
+  L9: public List<int> icons = new List<int>();
+
+=== Skills\SkillManager.cs (21 matches) ===
+  L42: foreach (int icon in skillEffectInfo.icons)
+  L44: GraphicManager.instance.CreateImage(icon);
+  L51: foreach (int icon in dartTemplate.bullet.icon)
+  L53: GraphicManager.instance.CreateImage(icon);
+  L58: foreach (int icon in dartTemplate.explode.icon)
+  L60: GraphicManager.instance.CreateImage(icon);
+  L84: template.bullet.icon = Utils.ReadIntList(item.Value["bullet"]["icon"]);
+  L89: template.explode.icon = Utils.ReadIntList(item.Value["explode"]["icon"]);
+  L96: effectInfo.icons = Utils.ReadIntList(item.Value["icons"]);
+  L151: template.bullet.icon.Add(reader.ReadShort());
+  L160: template.explode.icon.Add(reader.ReadShort());
+  L175: effectInfo.icons.Add(reader.ReadShort());
+  L241: writer.WriteSByte(template.bullet.icon.Count);
+  L242: foreach (int icon in template.bullet.icon)
+  L244: writer.WriteShort(icon);
+  L249: writer.WriteSByte(template.explode.icon.Count);
+  L250: foreach (int icon in template.explode.icon)
+  L252: writer.WriteShort(icon);
+  L263: writer.WriteSByte(effectInfo.icons.Count);
+  L264: foreach (int icon in effectInfo.icons)
+  L266: writer.WriteShort(icon);
+
+=== Skills\SkillTemplate.cs (1 matches) ===
+  L28: public int[] iconId;

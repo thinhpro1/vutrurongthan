@@ -1,0 +1,95 @@
+# Phân Tích Logic Skill Paint & Dart (Rong Than Online)
+
+## 1. Luồng Dữ Liệu (Data Flow)
+
+Quy trình quyết định hình ảnh hiển thị của một Skill khi nhân vật sử dụng:
+
+1.  **Database**: Lưu trữ thông tin cơ bản của Skill (ID, Tên, Cấp độ).
+    *   Ví dụ: Skill "Super Kamejoko" có ID = `33`.
+2.  **Server List (`SkillName.java`)**: Ánh xạ ID từ Database sang tên biến dễ nhớ.
+    *   `public static final int SUPER_KAME = 33;`
+3.  **Server Logic (`Skill.java`)**: Quyết định **Paint ID** dựa trên ID Skill và Cấp độ (Level/Upgrade).
+    *   **Input**: Skill ID `33` (Super Kame).
+    *   **Condition**:
+        *   Nếu `upgrade > 0` (đã nâng cấp sách/đệ tử): Trả về Paint ID **`48`**.
+        *   Nếu `chưa nâng cấp`: Trả về Paint ID **`35`**.
+4.  **Client Visual (`SkillPaint.json`)**: Định nghĩa chi tiết hình ảnh cho từng Paint ID.
+    *   **Input**: Paint ID `35` hoặc `48`.
+    *   **Output**: Danh sách các Action, Effect, và **Dart ID** cần dùng.
+5.  **Projectile (`Dart.json`)**: Định nghĩa chi tiết viên đạn/chưởng.
+    *   **Input**: Dart ID (ví dụ `22` từ SkillPaint 35).
+    *   **Output**: Hình viên đạn (`bullet`), hình nổ (`explode`), cách bay (`is_line`, `is_target`).
+
+---
+
+## 2. Chi Tiết File Cấu Hình
+
+### A. `SkillPaint.json`
+Quy định chuỗi hành động và hiệu ứng của một lần tung chiêu.
+Một Paint ID chứa một hoặc nhiều `Action` (Hành động nhân vật) đi kèm `Effect` (Hiệu ứng hình ảnh).
+
+*   **`action`**: `[start_frame, end_frame]` - Frame chuyển động của nhân vật (ví dụ: giơ tay, gồng, chưởng).
+*   **`effect`**: Danh sách các hiệu ứng đi kèm.
+    *   `id`: ID của hiệu ứng trong `SkillEffect.json`.
+    *   `loop`: Số lần lặp lại hiệu ứng.
+*   **`dart_id`**: ID của viên đạn/chưởng sẽ bắn ra (nếu có). Tham chiếu sang `Dart.json`.
+
+**Ví dụ Phân Tích Paint ID 35 (Super Kame thường):**
+- **Giai đoạn 1 (Gồng):** Action `[18, 19]`, Effect `[147, 146]`. (Gồng tay, hiện hào quang tụ khí).
+- **Giai đoạn 2 (Bắn):** Action `[20, 21]`, Effect `[147]`. (Đẩy tay tới trước).
+- **Đạn:** Sử dụng **Dart ID 22**.
+
+### B. `Dart.json`
+Quy định hình dạng và tính chất vật lý của viên đạn (Projectile).
+
+*   **Key (ID)**: ID của Dart (ví dụ `22`).
+*   **`bullet`**: Cấu hình viên đạn đang bay.
+    *   `icon`: `[id1, id2...]` - Các frame hình ảnh của đầu đạn.
+    *   `dx`, `dy`: Độ lệch vị trí xuất phát so với nhân vật.
+    *   `delay`: Tốc độ bay/chuyển frame.
+*   **`explode`**: Cấu hình vụ nổ khi trúng đích.
+    *   `icon`: `[id1, id2...]` - Các frame hình ảnh vụ nổ.
+*   **`is_target`**: `true` = Đạn đuổi theo mục tiêu; `false` = Đạn bay thẳng/vô hướng.
+*   **`is_line`**: `true` = Đạng chưởng tia (Laser/Kame); `false` = Dạng viên đạn rời (Quả cầu).
+
+**Ví dụ Phân Tích Dart ID 22 (Đạn Super Kame):**
+- **Bullet:** Icon `[2847, 2848, 2849]` (Đầu rồng/đầu chưởng), xuất phát lệch `dx: 70`, `dy: -56`.
+- **Explode:** Icon `[2838, 2839, 2840]` (Nổ lan tỏa).
+- **Tính chất:** `is_target: true` (đuổi), `is_line: true` (nối đuôi dài).
+
+---
+
+## 3. Tổng Kết Mapping (Ví dụ Super Kame)
+
+| Bước | File / Nguồn | Giá Trị | Ý Nghĩa |
+| :--- | :--- | :--- | :--- |
+| 1 | **Database** | ID `33` | Skill "Super Kamejoko" |
+| 2 | **Skill.java** | Logic | Nếu `level` thường -> Chọn Paint `35` |
+| 3 | **SkillPaint.json** | Key `"35"` | Gồm Action gồng/bắn + **Dart `22`** |
+| 4 | **Dart.json** | Key `"22"` | Đạn hình rồng (Icon 2847...), Nổ (Icon 2838...) |
+
+---
+
+## 4. Các Lưu Ý Bổ Sung (Quan Trọng)
+
+### A. `SkillEffect.json`
+Đây là kho chứa các hiệu ứng hình ảnh đơn lẻ (ví dụ: đốm sáng, vòng hào quang).
+*   **Cấu trúc**: Mapping từ `ID` -> `icons` (danh sách ảnh) + `dx`, `dy` (tọa độ lệch).
+*   **ID `-1`**: Thường là hiệu ứng rỗng (không hiện gì).
+
+### B. Cơ Chế Tọa Độ (`dx`, `dy`)
+Cần chú ý cộng dồn tọa độ:
+*   `Action` có dx/dy riêng.
+*   `Dart` (Bullet) có dx/dy xuất phát từ vị trí nhân vật.
+*   `SkillEffect` cũng có dx/dy riêng.
+-> Khi render, Client sẽ phải tính toán vị trí cuối cùng = `Vị trí gốc (Char/Target)` + `Offset`.
+
+### C. Cơ Chế Loop (Lặp)
+Trong `SkillPaint.json`, tham số `loop` rất quan trọng:
+*   `loop > 0`: Lặp lại hiệu ứng đúng số lần quy định rồi dừng.
+*   `loop = -1`: Lặp vô tận (cho đến khi Action kết thúc hoặc chuyển sang Action khác). Thường dùng cho hiệu ứng gồng/tụ khí.
+
+### D. Icon Skill (UI) vs Icon Effect (In-game)
+Đừng nhầm lẫn giữa:
+*   **Skill Template `iconId`**: Là icon hiển thị trên **thanh kỹ năng/Menu** (ví dụ: hình mặt Goku nhỏ).
+*   **Skill Paint/Dart/Effect `icon`**: Là hình ảnh **chiêu thức thực tế** bay trên màn hình (ví dụ: hình con rồng của Super Kame).

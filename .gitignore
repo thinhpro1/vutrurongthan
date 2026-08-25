@@ -1,0 +1,147 @@
+# =========================================================
+# ROOT
+# Repo structure:
+# /
+# ├── .github/
+# ├── client/       Unity client
+# ├── server/       Java / Spring Boot server
+# ├── *.md          Plans / documentation
+# └── README.md
+# =========================================================
+
+# =========================================================
+# UNITY CLIENT
+# =========================================================
+
+# Unity generated/cache folders
+/client/[Ll]ibrary/
+/client/[Tt]emp/
+/client/[Oo]bj/
+/client/[Bb]uild/
+/client/[Bb]uilds/
+/client/[Ll]ogs/
+/client/[Mm]emoryCaptures/
+/client/[Uu]ser[Ss]ettings/
+/client/[Rr]ecordings/
+
+# Unity generated crash/debug files
+/client/sysinfo.txt
+
+# Visual Studio generated files for Unity
+/client/.vs/
+/client/*.csproj
+/client/*.unityproj
+/client/*.sln
+/client/*.suo
+/client/*.user
+/client/*.userprefs
+/client/*.pidb
+/client/*.booproj
+/client/*.svd
+/client/*.pdb
+/client/*.mdb
+/client/*.opendb
+/client/*.VC.db
+
+# Rider / JetBrains inside Unity client
+/client/.idea/
+/client/*.sln.iml
+
+# Android / Gradle generated caches if Unity creates them
+/client/.gradle/
+
+# =========================================================
+# JAVA / SPRING BOOT SERVER
+# =========================================================
+
+# Maven build output
+/server/target/
+
+# Java compiled/output files
+/server/out/
+/server/*.class
+
+# IntelliJ IDEA
+/server/.idea/
+/server/*.iml
+/server/*.iws
+/server/*.ipr
+
+# Eclipse
+/server/.classpath
+/server/.project
+/server/.settings/
+
+# VS Code
+/server/.vscode/
+
+# Server logs
+/server/logs/
+/server/*.log
+
+# =========================================================
+# LOCAL CONFIG / SECRETS
+# =========================================================
+
+# Environment files
+.env
+.env.*
+/server/.env
+/server/.env.*
+
+# Local Spring configuration
+/server/src/main/resources/application-local.properties
+/server/src/main/resources/application-secret.properties
+/server/src/main/resources/application-secrets.properties
+
+# Keep example config in Git
+!/server/src/main/resources/application-example.properties
+
+# TLS/private keys and keystores
+*.key
+*.pem
+*.p12
+*.pfx
+*.jks
+*.keystore
+
+# =========================================================
+# IDE / EDITOR AT REPO ROOT
+# =========================================================
+
+/.idea/
+/.vscode/
+*.swp
+*.swo
+*~
+
+# =========================================================
+# OS GENERATED FILES
+# =========================================================
+
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# =========================================================
+# TEMPORARY FILES
+# =========================================================
+
+*.tmp
+*.temp
+*.bak
+
+# =========================================================
+# IMPORTANT: DO NOT IGNORE GAME IMAGES
+# =========================================================
+# Không ignore *.png / *.jpg / *.jpeg.
+# Unity thường dùng các file này cho texture, sprite, UI, icon...
+# và chúng cần được commit cùng file .meta.
+#
+# Cũng KHÔNG ignore:
+# /client/Assets/
+# /client/Packages/
+# /client/ProjectSettings/
+# *.meta
+#
+# Đây là các phần cần thiết để clone project Unity sang máy khác.

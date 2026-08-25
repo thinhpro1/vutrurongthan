@@ -1,0 +1,24 @@
+fileFormatVersion: 2
+guid: 7f9e1dcea5779a14e9b3cebca1c0de05
+TrueTypeFontImporter:
+  externalObjects: {}
+  serializedVersion: 4
+  fontSize: 30
+  forceTextureCase: -2
+  characterSpacing: 0
+  characterPadding: 1
+  includeFontData: 1
+  fontNames:
+  - UTM Nokia Standard
+  fallbackFontReferences:
+  - {fileID: 12800000, guid: 9a3198fc10c7a2841a382470c94ac53c, type: 3}
+  - {fileID: 12800000, guid: 2b3a6c3d175a6774283f5fa93e5ea311, type: 3}
+  - {fileID: 12800000, guid: 96cd94b0d8e86b1459e767e2f1ce5976, type: 3}
+  customCharacters: 
+  fontRenderingMode: 0
+  ascentCalculationMode: 1
+  useLegacyBoundsCalculation: 0
+  shouldRoundAdvanceValue: 1
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

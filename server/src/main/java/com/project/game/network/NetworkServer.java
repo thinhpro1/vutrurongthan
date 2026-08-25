@@ -29,6 +29,7 @@ public final class NetworkServer {
     private final byte[] handshakeKey;
     private final AuthService authService;
     private final SSLContext tlsContext;
+    private final NetworkConfig networkConfig;
     private final SessionManager sessions = new SessionManager();
     private volatile boolean running;
     private volatile ServerSocket serverSocket;
@@ -36,20 +37,27 @@ public final class NetworkServer {
     public NetworkServer(String host, int port, int maxSessionsPerIp, int maxPacketSize,
                          int sendQueueSize, int handshakeTimeoutMillis, byte[] handshakeKey) {
         this(host, port, maxSessionsPerIp, maxPacketSize, sendQueueSize, handshakeTimeoutMillis,
-                handshakeKey, new AuthService(), null);
+                handshakeKey, new AuthService(), null, NetworkConfig.defaults());
     }
 
     public NetworkServer(String host, int port, int maxSessionsPerIp, int maxPacketSize,
                          int sendQueueSize, int handshakeTimeoutMillis, byte[] handshakeKey,
                          AuthService authService) {
         this(host, port, maxSessionsPerIp, maxPacketSize, sendQueueSize, handshakeTimeoutMillis,
-                handshakeKey, authService, null);
+                handshakeKey, authService, null, NetworkConfig.defaults());
     }
 
     public NetworkServer(String host, int port, int maxSessionsPerIp, int maxPacketSize,
                          int sendQueueSize, int handshakeTimeoutMillis, byte[] handshakeKey,
                          AuthService authService, SSLContext tlsContext) {
-        if (port < 1 || port > 65535 || maxSessionsPerIp < 1 || maxPacketSize < 1 || sendQueueSize < 1
+        this(host, port, maxSessionsPerIp, maxPacketSize, sendQueueSize, handshakeTimeoutMillis,
+                handshakeKey, authService, tlsContext, NetworkConfig.defaults());
+    }
+
+    public NetworkServer(String host, int port, int maxSessionsPerIp, int maxPacketSize,
+                         int sendQueueSize, int handshakeTimeoutMillis, byte[] handshakeKey,
+                         AuthService authService, SSLContext tlsContext, NetworkConfig networkConfig) {
+        if (port < 0 || port > 65535 || maxSessionsPerIp < 1 || maxPacketSize < 1 || sendQueueSize < 1
                 || handshakeTimeoutMillis < 1) {
             throw new IllegalArgumentException("invalid network configuration");
         }
@@ -65,6 +73,7 @@ public final class NetworkServer {
         }
         this.authService = Objects.requireNonNull(authService, "authService");
         this.tlsContext = tlsContext;
+        this.networkConfig = Objects.requireNonNull(networkConfig, "networkConfig");
     }
 
     public static NetworkServer fromSystemProperties() {
@@ -96,7 +105,7 @@ public final class NetworkServer {
                 integer(properties, "game.network.send-queue-size", 256),
                 integer(properties, "game.network.handshake-timeout-ms", 10000),
                 "abc".getBytes(java.nio.charset.StandardCharsets.US_ASCII),
-                new AuthService(), tlsContext);
+                new AuthService(), tlsContext, NetworkConfig.fromProperties(properties));
     }
 
     public void start() throws IOException {
@@ -126,12 +135,17 @@ public final class NetworkServer {
                 }
                 LegacyPacketCodec codec = new LegacyPacketCodec(maxPacketSize);
                 Session session = new Session(sessions.nextId(), transport, sessions, codec, handshakeKey,
-                        sendQueueSize, authService);
+                        sendQueueSize, authService, networkConfig);
                 if (!sessions.tryAdd(session, maxSessionsPerIp)) {
                     transport.close();
                     continue;
                 }
-                session.start();
+                try {
+                    session.start();
+                } catch (IOException exception) {
+                    session.close();
+                    throw exception;
+                }
             } catch (IOException exception) {
                 if (running) {
                     LOGGER.warning("Accept failed: " + exception.getMessage());
@@ -153,6 +167,11 @@ public final class NetworkServer {
 
     public SessionManager sessions() {
         return sessions;
+    }
+
+    public int localPort() {
+        ServerSocket listener = serverSocket;
+        return listener == null ? 0 : listener.getLocalPort();
     }
 
     private static int integer(Properties properties, String key, int fallback) {

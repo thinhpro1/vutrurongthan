@@ -36,14 +36,30 @@ public final class SessionManager {
         }
     }
 
-    public boolean tryBindAccount(Session session, String accountName) {
-        return sessionsByAccount.putIfAbsent(accountName, session) == null;
+    public boolean bindAccount(Session session, String accountName) {
+        if (accountName == null || accountName.isBlank()) {
+            return false;
+        }
+        synchronized (session) {
+            if (session.state() == SessionState.CLOSED
+                    || sessionsByAccount.putIfAbsent(accountName, session) != null) {
+                return false;
+            }
+            if (session.state() == SessionState.CLOSED) {
+                sessionsByAccount.remove(accountName, session);
+                return false;
+            }
+            session.bindAccount(accountName);
+            return true;
+        }
     }
 
     public void unbindAccount(Session session) {
-        String accountName = session.accountName();
-        if (accountName != null) {
-            sessionsByAccount.remove(accountName, session);
+        synchronized (session) {
+            String accountName = session.accountName();
+            if (accountName != null) {
+                sessionsByAccount.remove(accountName, session);
+            }
         }
     }
 

@@ -13,14 +13,18 @@ import java.util.logging.Logger;
 /** N8 bootstrap plus N11 LEGACY_DEV authentication and create-player flow. */
 public final class MessageHandler {
     private static final Logger LOGGER = Logger.getLogger(MessageHandler.class.getName());
-    private static final String CLIENT_VERSION = "0.9.5";
-    private static final int LOGIN_VERSION = 1;
     private final Session session;
     private final AuthService authService;
+    private final NetworkConfig networkConfig;
 
     public MessageHandler(Session session, AuthService authService) {
+        this(session, authService, NetworkConfig.defaults());
+    }
+
+    public MessageHandler(Session session, AuthService authService, NetworkConfig networkConfig) {
         this.session = session;
         this.authService = authService;
+        this.networkConfig = networkConfig;
     }
 
     public void onMessage(Message message) {
@@ -50,7 +54,7 @@ public final class MessageHandler {
     private void handleConnect() throws IOException {
         LOGGER.fine(() -> "CONNECT session=" + session.id());
         session.completeHandshake();
-        MessageWriter writer = new MessageWriter().writeUtf(CLIENT_VERSION);
+        MessageWriter writer = new MessageWriter().writeUtf(networkConfig.clientVersion());
         session.send(new Message(MessageName.VERSION_SOURCE, writer.toByteArray()));
     }
 
@@ -64,15 +68,16 @@ public final class MessageHandler {
         String clientVersion = reader.readUtf();
         String username = reader.readUtf();
         String password = reader.readUtf();
-        if (!CLIENT_VERSION.equals(clientVersion)) {
+        if (!networkConfig.clientVersion().equals(clientVersion)) {
             sendDialog("Phiên bản client không được hỗ trợ");
             return;
         }
-        if (reader.remaining() > 0) {
-            if (reader.readByte() < LOGIN_VERSION) {
-                sendDialog("Vui lòng cập nhật phiên bản mới");
-                return;
-            }
+        if (reader.readByte() < networkConfig.loginVersion()) {
+            sendDialog("Vui lòng cập nhật phiên bản mới");
+            return;
+        }
+        if (reader.remaining() != 0) {
+            throw new IOException("trailing login payload bytes");
         }
         AuthService.AuthResult result = authService.login(username, password);
         if (!result.success()) {
@@ -80,11 +85,10 @@ public final class MessageHandler {
             return;
         }
         String accountName = result.value();
-        if (!session.manager().tryBindAccount(session, accountName)) {
+        if (!session.manager().bindAccount(session, accountName)) {
             sendDialog("Tài khoản đang đăng nhập ở thiết bị khác");
             return;
         }
-        session.bindAccount(accountName);
         session.transition(SessionState.HANDSHAKE_DONE, SessionState.AUTHENTICATED);
         PlayerProfile player = authService.findPlayer(accountName);
         if (player == null) {
@@ -135,7 +139,7 @@ public final class MessageHandler {
                     || command == MessageName.LOGIN
                     || command == MessageName.REGISTER_USER;
             case AUTHENTICATED -> command == MessageName.CREATE_PLAYER;
-            case IN_GAME -> true;
+            case IN_GAME -> false;
             case CLOSED -> false;
         };
     }

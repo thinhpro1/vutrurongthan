@@ -14,9 +14,11 @@ import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.logging.Logger;
 
 /** One client connection: transport, protocol cursors, lifecycle and bounded writer queue. */
 public final class Session implements AutoCloseable {
+    private static final Logger LOGGER = Logger.getLogger(Session.class.getName());
     private final int id;
     private final ClientTransport transport;
     private final SessionManager manager;
@@ -44,6 +46,12 @@ public final class Session implements AutoCloseable {
     public Session(int id, ClientTransport transport, SessionManager manager,
                    LegacyPacketCodec codec, byte[] handshakeKey, int queueSize,
                    AuthService authService) {
+        this(id, transport, manager, codec, handshakeKey, queueSize, authService, NetworkConfig.defaults());
+    }
+
+    public Session(int id, ClientTransport transport, SessionManager manager,
+                   LegacyPacketCodec codec, byte[] handshakeKey, int queueSize,
+                   AuthService authService, NetworkConfig networkConfig) {
         if (queueSize < 1) {
             throw new IllegalArgumentException("queueSize must be positive");
         }
@@ -54,7 +62,7 @@ public final class Session implements AutoCloseable {
         this.handshakeKey = handshakeKey.clone();
         this.cipher = new LegacyCipher(handshakeKey);
         this.sendQueue = new ArrayBlockingQueue<>(queueSize);
-        this.handler = new MessageHandler(this, authService);
+        this.handler = new MessageHandler(this, authService, networkConfig);
     }
 
     public int id() {
@@ -85,7 +93,7 @@ public final class Session implements AutoCloseable {
         return player;
     }
 
-    public void bindAccount(String accountName) {
+    void bindAccount(String accountName) {
         this.accountName = accountName;
     }
 
@@ -98,10 +106,16 @@ public final class Session implements AutoCloseable {
     }
 
     public void start() throws IOException {
-        input = transport.input();
-        output = transport.output();
-        readerThread = startThread("session-reader-" + id, this::readLoop);
-        writerThread = startThread("session-writer-" + id, this::writeLoop);
+        try {
+            input = transport.input();
+            output = transport.output();
+            LOGGER.info(() -> "SESSION_OPEN id=" + id + " ip=" + remoteAddress());
+            readerThread = startThread("session-reader-" + id, this::readLoop);
+            writerThread = startThread("session-writer-" + id, this::writeLoop);
+        } catch (IOException exception) {
+            close("start failure");
+            throw exception;
+        }
     }
 
     public void completeHandshake() throws IOException {
@@ -115,29 +129,36 @@ public final class Session implements AutoCloseable {
         if (!state.compareAndSet(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE)) {
             throw new IOException("handshake state changed unexpectedly");
         }
+        LOGGER.info(() -> "HANDSHAKE_OK id=" + id);
     }
 
     public boolean send(Message message) {
         if (message == null || state() == SessionState.CLOSED || !sendQueue.offer(message)) {
-            close();
+            close("outbound queue overflow or closed session");
             return false;
         }
         return true;
     }
 
     public boolean transition(SessionState expected, SessionState next) {
-        if (next == SessionState.CLOSED) {
-            return state.compareAndSet(expected, next);
+        boolean transitioned = state.compareAndSet(expected, next);
+        if (transitioned) {
+            LOGGER.info(() -> "STATE id=" + id + " " + expected + " -> " + next);
         }
-        return state.compareAndSet(expected, next);
+        return transitioned;
     }
 
     @Override
     public void close() {
+        close("requested");
+    }
+
+    private void close(String reason) {
         if (!closed.compareAndSet(false, true)) {
             return;
         }
         state.set(SessionState.CLOSED);
+        LOGGER.info(() -> "SESSION_CLOSE id=" + id + " ip=" + remoteAddress() + " reason=" + reason);
         sendQueue.clear();
         if (readerThread != null) {
             readerThread.interrupt();
@@ -158,10 +179,12 @@ public final class Session implements AutoCloseable {
         try {
             while (state() != SessionState.CLOSED) {
                 Message message = codec.read(input, cipher, state() != SessionState.CONNECTED);
+                LOGGER.fine(() -> "RX id=" + id + " cmd=" + message.command()
+                        + " len=" + message.payload().length);
                 handler.onMessage(message);
             }
         } catch (IOException ignored) {
-            close();
+            close("read failure or peer disconnect");
         }
     }
 
@@ -171,13 +194,15 @@ public final class Session implements AutoCloseable {
                 Message message = sendQueue.take();
                 synchronized (writeLock) {
                     codec.write(output, cipher, state() != SessionState.CONNECTED, message);
+                    LOGGER.fine(() -> "TX id=" + id + " cmd=" + message.command()
+                            + " len=" + message.payload().length);
                 }
             }
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
-            close();
+            close("writer interrupted");
         } catch (IOException ignored) {
-            close();
+            close("write failure");
         }
     }
 

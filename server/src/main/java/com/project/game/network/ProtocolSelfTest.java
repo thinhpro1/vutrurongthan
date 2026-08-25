@@ -47,12 +47,20 @@ public final class ProtocolSelfTest {
     private static void continuousCipher() throws Exception {
         LegacyPacketCodec codec = new LegacyPacketCodec(65535);
         ByteArrayOutputStream output = new ByteArrayOutputStream();
-        codec.writeClient(output, new LegacyCipher(KEY), true,
-                new Message(MessageName.UPDATE_DATA, new byte[]{-1}));
-        check(Arrays.equals(output.toByteArray(), new byte[]{(byte) 0xe2, 0x62, 0x62, (byte) 0x9e}), "known update frame");
-        Message decoded = codec.read(new ByteArrayInputStream(output.toByteArray()), new LegacyCipher(KEY), true);
-        check(decoded.command() == MessageName.UPDATE_DATA, "decoded command");
-        check(Arrays.equals(decoded.payload(), new byte[]{-1}), "decoded payload");
+        LegacyCipher writer = new LegacyCipher(KEY);
+        Message[] expected = {
+                new Message(MessageName.UPDATE_DATA, new byte[]{-1}),
+                new Message(MessageName.LOGIN, new byte[]{1, 2}),
+                new Message(MessageName.REGISTER_USER, new byte[]{3, 4, 5})
+        };
+        for (Message message : expected) {
+            codec.writeClient(output, writer, true, message);
+        }
+        ByteArrayInputStream input = new ByteArrayInputStream(output.toByteArray());
+        LegacyCipher reader = new LegacyCipher(KEY);
+        for (Message message : expected) {
+            check(message.equals(codec.read(input, reader, true)), "continuous cipher frame " + message.command());
+        }
     }
 
     private static void specialResponse() throws Exception {

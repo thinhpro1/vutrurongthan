@@ -30,6 +30,7 @@ public final class NetworkServer {
     private final AuthService authService;
     private final SSLContext tlsContext;
     private final NetworkConfig networkConfig;
+    private final NetworkEventObserver eventObserver;
     private final SessionManager sessions = new SessionManager();
     private volatile boolean running;
     private volatile ServerSocket serverSocket;
@@ -57,6 +58,14 @@ public final class NetworkServer {
     public NetworkServer(String host, int port, int maxSessionsPerIp, int maxPacketSize,
                          int sendQueueSize, int handshakeTimeoutMillis, byte[] handshakeKey,
                          AuthService authService, SSLContext tlsContext, NetworkConfig networkConfig) {
+        this(host, port, maxSessionsPerIp, maxPacketSize, sendQueueSize, handshakeTimeoutMillis,
+                handshakeKey, authService, tlsContext, networkConfig, NetworkEventObserver.NO_OP);
+    }
+
+    public NetworkServer(String host, int port, int maxSessionsPerIp, int maxPacketSize,
+                         int sendQueueSize, int handshakeTimeoutMillis, byte[] handshakeKey,
+                         AuthService authService, SSLContext tlsContext, NetworkConfig networkConfig,
+                         NetworkEventObserver eventObserver) {
         if (port < 0 || port > 65535 || maxSessionsPerIp < 1 || maxPacketSize < 1 || sendQueueSize < 1
                 || handshakeTimeoutMillis < 1) {
             throw new IllegalArgumentException("invalid network configuration");
@@ -74,6 +83,7 @@ public final class NetworkServer {
         this.authService = Objects.requireNonNull(authService, "authService");
         this.tlsContext = tlsContext;
         this.networkConfig = Objects.requireNonNull(networkConfig, "networkConfig");
+        this.eventObserver = Objects.requireNonNull(eventObserver, "eventObserver");
     }
 
     public static NetworkServer fromSystemProperties() {
@@ -135,7 +145,7 @@ public final class NetworkServer {
                 }
                 LegacyPacketCodec codec = new LegacyPacketCodec(maxPacketSize);
                 Session session = new Session(sessions.nextId(), transport, sessions, codec, handshakeKey,
-                        sendQueueSize, authService, networkConfig);
+                        sendQueueSize, authService, networkConfig, eventObserver);
                 if (!sessions.tryAdd(session, maxSessionsPerIp)) {
                     transport.close();
                     continue;

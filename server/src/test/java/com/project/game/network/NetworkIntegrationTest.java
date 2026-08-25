@@ -10,32 +10,53 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class NetworkIntegrationTest {
     @Test
     void javaClientCompletesLegacyG1BootstrapAndReconnects() throws Exception {
+        AtomicInteger updateCount = new AtomicInteger();
+        CountDownLatch firstUpdate = new CountDownLatch(1);
+        CountDownLatch secondUpdate = new CountDownLatch(1);
+        NetworkEventObserver observer = (session, type) -> {
+            assertEquals(-1, type);
+            if (updateCount.incrementAndGet() == 1) {
+                firstUpdate.countDown();
+            } else {
+                secondUpdate.countDown();
+            }
+        };
         NetworkServer server = new NetworkServer("127.0.0.1", 0, 2, 1024, 8, 1_000,
-                "abc".getBytes(StandardCharsets.US_ASCII));
+                "abc".getBytes(StandardCharsets.US_ASCII), new com.project.game.service.AuthService(),
+                null, NetworkConfig.defaults(), observer);
+        AtomicReference<Throwable> serverFailure = new AtomicReference<>();
         Thread serverThread = Thread.ofVirtual().start(() -> {
             try {
                 server.start();
-            } catch (IOException exception) {
-                throw new RuntimeException(exception);
+            } catch (Throwable failure) {
+                serverFailure.set(failure);
             }
         });
         try {
             waitForPort(server);
             runBootstrap(server.localPort());
+            assertTrue(firstUpdate.await(1, TimeUnit.SECONDS));
             waitForNoSessions(server);
             runBootstrap(server.localPort());
+            assertTrue(secondUpdate.await(1, TimeUnit.SECONDS));
             waitForNoSessions(server);
         } finally {
             server.stop();
             serverThread.join(1_000);
         }
+        assertNull(serverFailure.get(), "network server failed during integration test");
     }
 
     private static void runBootstrap(int port) throws Exception {

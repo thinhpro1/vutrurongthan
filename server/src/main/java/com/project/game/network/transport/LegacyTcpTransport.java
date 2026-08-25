@@ -41,6 +41,10 @@ public final class LegacyTcpTransport implements ClientTransport {
 
     @Override
     public String remoteAddress() {
+        if (socket.getRemoteSocketAddress() instanceof InetSocketAddress address
+                && address.getAddress() != null) {
+            return address.getAddress().getHostAddress();
+        }
         return String.valueOf(socket.getRemoteSocketAddress());
     }
 

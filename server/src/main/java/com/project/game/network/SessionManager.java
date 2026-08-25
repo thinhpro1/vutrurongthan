@@ -8,6 +8,7 @@ public final class SessionManager {
     private final AtomicInteger nextId = new AtomicInteger(1);
     private final Map<Integer, Session> sessions = new ConcurrentHashMap<>();
     private final Map<String, AtomicInteger> sessionsByIp = new ConcurrentHashMap<>();
+    private final Map<String, Session> sessionsByAccount = new ConcurrentHashMap<>();
 
     public int nextId() {
         return nextId.getAndIncrement();
@@ -33,6 +34,21 @@ public final class SessionManager {
                 sessionsByIp.remove(session.remoteAddress(), count);
             }
         }
+    }
+
+    public boolean tryBindAccount(Session session, String accountName) {
+        return sessionsByAccount.putIfAbsent(accountName, session) == null;
+    }
+
+    public void unbindAccount(Session session) {
+        String accountName = session.accountName();
+        if (accountName != null) {
+            sessionsByAccount.remove(accountName, session);
+        }
+    }
+
+    public Session findByAccount(String accountName) {
+        return sessionsByAccount.get(accountName);
     }
 
     public Session find(int id) {

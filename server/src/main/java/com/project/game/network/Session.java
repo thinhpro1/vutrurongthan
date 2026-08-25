@@ -4,7 +4,8 @@ import com.project.game.network.codec.LegacyCipher;
 import com.project.game.network.codec.LegacyPacketCodec;
 import com.project.game.network.message.Message;
 import com.project.game.network.transport.ClientTransport;
-import com.project.game.network.transport.LegacyTcpTransport;
+import com.project.game.player.PlayerProfile;
+import com.project.game.service.AuthService;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -27,6 +28,9 @@ public final class Session implements AutoCloseable {
     private final AtomicBoolean closed = new AtomicBoolean();
     private final Object writeLock = new Object();
     private final MessageHandler handler;
+    private volatile String accountName;
+    private volatile PlayerProfile player;
+    private int protocolViolations;
     private volatile InputStream input;
     private volatile OutputStream output;
     private volatile Thread readerThread;
@@ -34,6 +38,12 @@ public final class Session implements AutoCloseable {
 
     public Session(int id, ClientTransport transport, SessionManager manager,
                    LegacyPacketCodec codec, byte[] handshakeKey, int queueSize) {
+        this(id, transport, manager, codec, handshakeKey, queueSize, new AuthService());
+    }
+
+    public Session(int id, ClientTransport transport, SessionManager manager,
+                   LegacyPacketCodec codec, byte[] handshakeKey, int queueSize,
+                   AuthService authService) {
         if (queueSize < 1) {
             throw new IllegalArgumentException("queueSize must be positive");
         }
@@ -44,11 +54,15 @@ public final class Session implements AutoCloseable {
         this.handshakeKey = handshakeKey.clone();
         this.cipher = new LegacyCipher(handshakeKey);
         this.sendQueue = new ArrayBlockingQueue<>(queueSize);
-        this.handler = new MessageHandler(this);
+        this.handler = new MessageHandler(this, authService);
     }
 
     public int id() {
         return id;
+    }
+
+    public SessionManager manager() {
+        return manager;
     }
 
     public String remoteAddress() {
@@ -61,6 +75,26 @@ public final class Session implements AutoCloseable {
 
     public int queuedMessages() {
         return sendQueue.size();
+    }
+
+    public String accountName() {
+        return accountName;
+    }
+
+    public PlayerProfile player() {
+        return player;
+    }
+
+    public void bindAccount(String accountName) {
+        this.accountName = accountName;
+    }
+
+    public void bindPlayer(PlayerProfile player) {
+        this.player = player;
+    }
+
+    public boolean recordProtocolViolation() {
+        return ++protocolViolations >= 3;
     }
 
     public void start() throws IOException {
@@ -77,16 +111,14 @@ public final class Session implements AutoCloseable {
         synchronized (writeLock) {
             codec.writeHandshakeKey(output, handshakeKey);
         }
-        if (transport instanceof LegacyTcpTransport legacyTransport) {
-            legacyTransport.setReadTimeout(0);
-        }
+        transport.setReadTimeout(0);
         if (!state.compareAndSet(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE)) {
             throw new IOException("handshake state changed unexpectedly");
         }
     }
 
     public boolean send(Message message) {
-        if (state() == SessionState.CLOSED || !sendQueue.offer(message)) {
+        if (message == null || state() == SessionState.CLOSED || !sendQueue.offer(message)) {
             close();
             return false;
         }
@@ -118,6 +150,7 @@ public final class Session implements AutoCloseable {
         } catch (IOException ignored) {
             // Closing an already broken socket is best-effort.
         }
+        manager.unbindAccount(this);
         manager.remove(this);
     }
 
@@ -149,9 +182,6 @@ public final class Session implements AutoCloseable {
     }
 
     private static Thread startThread(String name, Runnable task) {
-        Thread thread = new Thread(task, name);
-        thread.setDaemon(true);
-        thread.start();
-        return thread;
+        return Thread.ofVirtual().name(name).start(task);
     }
 }

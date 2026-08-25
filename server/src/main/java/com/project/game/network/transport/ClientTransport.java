@@ -11,6 +11,9 @@ public interface ClientTransport extends AutoCloseable {
 
     String remoteAddress();
 
+    default void setReadTimeout(int timeoutMillis) throws IOException {
+    }
+
     @Override
     void close() throws IOException;
 }

@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -21,6 +22,38 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class NetworkIntegrationTest {
+    @Test
+    void javaClientReceivesRequestIconResponseWithLegacySpecialFraming() throws Exception {
+        byte[] iconData = new byte[]{1, 2, 3, 4};
+        AtomicInteger requested = new AtomicInteger();
+        IconResourceProvider provider = iconId -> {
+            assertEquals(5, iconId);
+            requested.incrementAndGet();
+            return Optional.of(iconData.clone());
+        };
+        NetworkServer server = new NetworkServer("127.0.0.1", 0, 2, 1024, 8, 1_000,
+                "abc".getBytes(StandardCharsets.US_ASCII), new com.project.game.service.AuthService(),
+                null, NetworkConfig.defaults(), NetworkEventObserver.NO_OP, provider);
+        AtomicReference<Throwable> serverFailure = new AtomicReference<>();
+        Thread serverThread = Thread.ofVirtual().start(() -> {
+            try {
+                server.start();
+            } catch (Throwable failure) {
+                serverFailure.set(failure);
+            }
+        });
+        try {
+            waitForPort(server);
+            runIconRequest(server.localPort());
+            waitForNoSessions(server);
+        } finally {
+            server.stop();
+            serverThread.join(1_000);
+        }
+        assertEquals(1, requested.get());
+        assertNull(serverFailure.get(), "network server failed during icon integration test");
+    }
+
     @Test
     void javaClientCompletesLegacyG1BootstrapAndReconnectsWithoutDuplicateMonsterRequest() throws Exception {
         AtomicInteger updateCount = new AtomicInteger();
@@ -123,6 +156,29 @@ class NetworkIntegrationTest {
                 assertEquals(0, monsterReader.readUnsignedShort());
                 assertEquals(0, monsterReader.remaining());
             }
+        }
+    }
+
+    private static void runIconRequest(int port) throws Exception {
+        LegacyPacketCodec codec = new LegacyPacketCodec(1024);
+        try (LegacyTcpTransport transport = LegacyTcpTransport.connect("127.0.0.1", port, 1_000)) {
+            codec.writeClient(transport.output(), null, false, new Message(MessageName.CONNECT_SERVER));
+            Message handshake = codec.read(transport.input(), null, false);
+            assertEquals(MessageName.SEND_SESSION_KEY, handshake.command());
+            LegacyCipher cipher = new LegacyCipher(reconstructKey(handshake.payload()));
+            Message version = codec.readServerResponse(transport.input(), cipher, true);
+            assertEquals(MessageName.VERSION_SOURCE, version.command());
+
+            codec.writeClient(transport.output(), cipher, true,
+                    new Message(MessageName.REQUEST_ICON, new MessageWriter().writeShort(5).toByteArray()));
+            Message response = codec.readServerResponse(transport.input(), cipher, true);
+            assertEquals(MessageName.REQUEST_ICON, response.command());
+            assertArrayEquals(new byte[]{0, 5, 0, 0, 0, 4, 1, 2, 3, 4}, response.payload());
+            var reader = response.reader();
+            assertEquals(5, reader.readShort());
+            assertEquals(4, reader.readInt());
+            assertArrayEquals(new byte[]{1, 2, 3, 4}, reader.readBytes(4));
+            assertEquals(0, reader.remaining());
         }
     }
 

@@ -32,6 +32,12 @@ mvn test
 & "$env:JAVA_HOME\bin\java.exe" -cp "target/test-classes;target/classes" com.project.game.network.ProtocolIntegrationClient 127.0.0.1 1707
 ```
 
+Để bật phục vụ icon từ thư mục local (chỉ dành cho DEV), chạy server với:
+
+```powershell
+java '-Dgame.resource.icon-dir=../client/Assets/Resources/SmallImages' -cp target/classes com.project.game.GameApplication
+```
+
 ## Chạy server
 
 ```powershell

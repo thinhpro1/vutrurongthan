@@ -7,6 +7,7 @@ import com.project.game.player.PlayerProfile;
 import com.project.game.service.AuthService;
 
 import java.io.IOException;
+import java.util.Objects;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -20,6 +21,7 @@ public final class MessageHandler {
     private final AuthService authService;
     private final NetworkConfig networkConfig;
     private final NetworkEventObserver eventObserver;
+    private final IconResourceProvider iconResourceProvider;
 
     public MessageHandler(Session session, AuthService authService) {
         this(session, authService, NetworkConfig.defaults());
@@ -31,10 +33,16 @@ public final class MessageHandler {
 
     public MessageHandler(Session session, AuthService authService, NetworkConfig networkConfig,
                           NetworkEventObserver eventObserver) {
+        this(session, authService, networkConfig, eventObserver, IconResourceProvider.UNAVAILABLE);
+    }
+
+    public MessageHandler(Session session, AuthService authService, NetworkConfig networkConfig,
+                          NetworkEventObserver eventObserver, IconResourceProvider iconResourceProvider) {
         this.session = session;
         this.authService = authService;
         this.networkConfig = networkConfig;
         this.eventObserver = eventObserver;
+        this.iconResourceProvider = Objects.requireNonNull(iconResourceProvider, "iconResourceProvider");
     }
 
     public void onMessage(Message message) {
@@ -49,6 +57,7 @@ public final class MessageHandler {
             switch (message.command()) {
                 case MessageName.CONNECT_SERVER -> handleConnect();
                 case MessageName.UPDATE_DATA -> handleUpdateData(message);
+                case MessageName.REQUEST_ICON -> handleRequestIcon(message);
                 case MessageName.LOGIN -> handleLogin(message);
                 case MessageName.REGISTER_USER -> handleRegister(message);
                 case MessageName.CREATE_PLAYER -> handleCreatePlayer(message);
@@ -113,6 +122,40 @@ public final class MessageHandler {
         session.send(new Message(MessageName.UPDATE_DATA, writer.toByteArray()));
         LOGGER.fine(() -> "UPDATE_DATA_TX type=4 session=" + session.id()
                 + " monsterVersion=" + DEV_MONSTER_VERSION + " darts=0 monsters=0");
+    }
+
+    private void handleRequestIcon(Message message) throws IOException {
+        var reader = message.reader();
+        int iconId = reader.readShort();
+        if (reader.remaining() != 0) {
+            throw new IOException("trailing REQUEST_ICON payload bytes");
+        }
+        LOGGER.fine(() -> "REQUEST_ICON id=" + iconId + " session=" + session.id());
+
+        var data = iconResourceProvider.load(iconId);
+        if (data.isEmpty()) {
+            LOGGER.fine(() -> "REQUEST_ICON_MISS id=" + iconId + " session=" + session.id());
+            return;
+        }
+        byte[] bytes = data.get();
+        if (bytes.length == 0) {
+            LOGGER.fine(() -> "REQUEST_ICON_MISS id=" + iconId + " session=" + session.id());
+            return;
+        }
+        MessageWriter writer = new MessageWriter()
+                .writeShort(iconId)
+                .writeInt(bytes.length)
+                .writeBytes(bytes);
+        byte[] payload = writer.toByteArray();
+        if (payload.length > session.maxPacketSize()) {
+            LOGGER.fine(() -> "REQUEST_ICON_TOO_LARGE id=" + iconId + " bytes=" + bytes.length
+                    + " maxPacketSize=" + session.maxPacketSize() + " session=" + session.id());
+            return;
+        }
+        if (session.send(new Message(MessageName.REQUEST_ICON, payload))) {
+            LOGGER.fine(() -> "REQUEST_ICON_TX id=" + iconId + " bytes=" + bytes.length
+                    + " session=" + session.id());
+        }
     }
 
     private void handleLogin(Message message) throws IOException {
@@ -189,9 +232,11 @@ public final class MessageHandler {
             case CONNECTED -> command == MessageName.CONNECT_SERVER;
             case HANDSHAKE_DONE -> command == MessageName.UPDATE_DATA
                     || command == MessageName.LOGIN
-                    || command == MessageName.REGISTER_USER;
-            case AUTHENTICATED -> command == MessageName.CREATE_PLAYER;
-            case IN_GAME -> false;
+                    || command == MessageName.REGISTER_USER
+                    || command == MessageName.REQUEST_ICON;
+            case AUTHENTICATED -> command == MessageName.CREATE_PLAYER
+                    || command == MessageName.REQUEST_ICON;
+            case IN_GAME -> command == MessageName.REQUEST_ICON;
             case CLOSED -> false;
         };
     }

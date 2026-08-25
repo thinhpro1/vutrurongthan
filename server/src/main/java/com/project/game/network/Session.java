@@ -61,6 +61,14 @@ public final class Session implements AutoCloseable {
     public Session(int id, ClientTransport transport, SessionManager manager,
                    LegacyPacketCodec codec, byte[] handshakeKey, int queueSize,
                    AuthService authService, NetworkConfig networkConfig, NetworkEventObserver eventObserver) {
+        this(id, transport, manager, codec, handshakeKey, queueSize, authService, networkConfig,
+                eventObserver, IconResourceProvider.UNAVAILABLE);
+    }
+
+    public Session(int id, ClientTransport transport, SessionManager manager,
+                   LegacyPacketCodec codec, byte[] handshakeKey, int queueSize,
+                   AuthService authService, NetworkConfig networkConfig, NetworkEventObserver eventObserver,
+                   IconResourceProvider iconResourceProvider) {
         if (queueSize < 1) {
             throw new IllegalArgumentException("queueSize must be positive");
         }
@@ -71,7 +79,7 @@ public final class Session implements AutoCloseable {
         this.handshakeKey = handshakeKey.clone();
         this.cipher = new LegacyCipher(handshakeKey);
         this.sendQueue = new ArrayBlockingQueue<>(queueSize);
-        this.handler = new MessageHandler(this, authService, networkConfig, eventObserver);
+        this.handler = new MessageHandler(this, authService, networkConfig, eventObserver, iconResourceProvider);
     }
 
     public int id() {
@@ -92,6 +100,10 @@ public final class Session implements AutoCloseable {
 
     public int queuedMessages() {
         return sendQueue.size();
+    }
+
+    int maxPacketSize() {
+        return codec.maxPacketSize();
     }
 
     public String accountName() {

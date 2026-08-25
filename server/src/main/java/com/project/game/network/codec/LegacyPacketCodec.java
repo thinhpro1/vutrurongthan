@@ -21,6 +21,10 @@ public final class LegacyPacketCodec {
         this.maxPacketSize = maxPacketSize;
     }
 
+    public int maxPacketSize() {
+        return maxPacketSize;
+    }
+
     public Message read(InputStream input, LegacyCipher cipher, boolean keyReady) throws IOException {
         // Server receives client frames. The legacy Unity client always uses a 2-byte length here,
         // including UPDATE_DATA and REQUEST_ICON.

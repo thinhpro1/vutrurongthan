@@ -26,10 +26,10 @@ Nó không import và không ghi đè `../server/src` legacy.
 ```powershell
 $env:JAVA_HOME = 'C:\Program Files\Java\jdk-21'
 mvn test
-& "$env:JAVA_HOME\bin\java.exe" -cp target/classes com.project.game.network.ProtocolSelfTest
-& "$env:JAVA_HOME\bin\java.exe" -cp target/classes com.project.game.network.transport.TlsTransportSelfTest
-& "$env:JAVA_HOME\bin\java.exe" -cp target/classes com.project.game.network.TlsNetworkSelfTest
-& "$env:JAVA_HOME\bin\java.exe" -cp target/classes com.project.game.network.ProtocolIntegrationClient 127.0.0.1 1707
+& "$env:JAVA_HOME\bin\java.exe" -cp "target/test-classes;target/classes" com.project.game.network.ProtocolSelfTest
+& "$env:JAVA_HOME\bin\java.exe" -cp "target/test-classes;target/classes" com.project.game.network.transport.TlsTransportSelfTest
+& "$env:JAVA_HOME\bin\java.exe" -cp "target/test-classes;target/classes" com.project.game.network.TlsNetworkSelfTest
+& "$env:JAVA_HOME\bin\java.exe" -cp "target/test-classes;target/classes" com.project.game.network.ProtocolIntegrationClient 127.0.0.1 1707
 ```
 
 ## Chạy server
@@ -42,7 +42,7 @@ java -cp target/classes com.project.game.GameApplication
 Test cả auth/create-player:
 
 ```powershell
-& "$env:JAVA_HOME\bin\java.exe" -cp target/classes com.project.game.network.ProtocolIntegrationClient 127.0.0.1 1707 codex01 secret1
+& "$env:JAVA_HOME\bin\java.exe" -cp "target/test-classes;target/classes" com.project.game.network.ProtocolIntegrationClient 127.0.0.1 1707 codex01 secret1
 ```
 
 Mặc định server nghe `127.0.0.1:1707`. Admission ticket, repository/DB thật và domain packet writers vẫn để ở các gate sau theo plan.

@@ -78,7 +78,8 @@ class NetworkIntegrationTest {
             }
         };
         NetworkServer server = new NetworkServer("127.0.0.1", 0, 2, 1024, 8, 1_000,
-                "abc".getBytes(StandardCharsets.US_ASCII), new com.project.game.service.AuthService(),
+                "abc".getBytes(StandardCharsets.US_ASCII),
+                new ServerServices(new AuthService(), ResourceService.unavailable()),
                 null, NetworkConfig.defaults(), observer);
         AtomicReference<Throwable> serverFailure = new AtomicReference<>();
         Thread serverThread = Thread.ofVirtual().start(() -> {

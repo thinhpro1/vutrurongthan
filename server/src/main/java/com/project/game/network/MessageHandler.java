@@ -25,19 +25,6 @@ public final class MessageHandler {
     private final NetworkConfig networkConfig;
     private final NetworkEventObserver eventObserver;
 
-    public MessageHandler(Session session, AuthService authService) {
-        this(session, authService, NetworkConfig.defaults());
-    }
-
-    public MessageHandler(Session session, AuthService authService, NetworkConfig networkConfig) {
-        this(session, authService, networkConfig, NetworkEventObserver.NO_OP);
-    }
-
-    public MessageHandler(Session session, AuthService authService, NetworkConfig networkConfig,
-                          NetworkEventObserver eventObserver) {
-        this(session, new ServerServices(authService, ResourceService.unavailable()), networkConfig, eventObserver);
-    }
-
     public MessageHandler(Session session, ServerServices services, NetworkConfig networkConfig,
                           NetworkEventObserver eventObserver) {
         this.session = session;

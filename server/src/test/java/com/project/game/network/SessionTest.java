@@ -5,6 +5,7 @@ import com.project.game.network.codec.LegacyCipher;
 import com.project.game.network.message.Message;
 import com.project.game.network.message.MessageName;
 import com.project.game.network.transport.ClientTransport;
+import com.project.game.service.ServerServices;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -49,7 +50,8 @@ class SessionTest {
             }
         };
         Session session = new Session(manager.nextId(), transport, manager,
-                new LegacyPacketCodec(1024), "abc".getBytes(StandardCharsets.US_ASCII), 4);
+                new LegacyPacketCodec(1024), "abc".getBytes(StandardCharsets.US_ASCII), 4,
+                ServerServices.defaults(), NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
         assertTrue(manager.tryAdd(session, 1));
 
         assertThrows(IOException.class, session::start);
@@ -66,7 +68,8 @@ class SessionTest {
             ByteArrayOutputStream output = new ByteArrayOutputStream();
             SessionManager manager = new SessionManager();
             Session session = new Session(manager.nextId(), new TestTransport(input, output, "127.0.0.1"), manager,
-                    new LegacyPacketCodec(1024), "abc".getBytes(StandardCharsets.US_ASCII), 8);
+                    new LegacyPacketCodec(1024), "abc".getBytes(StandardCharsets.US_ASCII), 8,
+                    ServerServices.defaults(), NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
             List<Message> expected = List.of(
                     new Message(MessageName.DIALOG_OK, new byte[]{1}),
                     new Message(MessageName.START_CREATE_PLAYER_SCREEN, new byte[]{2, 3}),

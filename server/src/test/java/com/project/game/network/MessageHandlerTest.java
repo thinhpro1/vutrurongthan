@@ -16,7 +16,6 @@ import java.nio.file.Path;
 import java.nio.charset.StandardCharsets;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 
 class MessageHandlerTest {
     @Test
@@ -25,7 +24,7 @@ class MessageHandlerTest {
         session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
         session.transition(SessionState.HANDSHAKE_DONE, SessionState.AUTHENTICATED);
         session.transition(SessionState.AUTHENTICATED, SessionState.IN_GAME);
-        MessageHandler handler = new MessageHandler(session, new AuthService());
+        MessageHandler handler = newHandler(session, new AuthService());
 
         handler.onMessage(new Message(MessageName.PLAYER_MOVE));
         handler.onMessage(new Message(MessageName.PLAYER_MOVE));
@@ -39,7 +38,7 @@ class MessageHandlerTest {
         AuthService auth = registeredAuth();
         Session session = newSession(auth);
         session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
-        MessageHandler handler = new MessageHandler(session, auth);
+        MessageHandler handler = newHandler(session, auth);
         MessageWriter login = new MessageWriter().writeUtf("0.9.5").writeUtf("user01").writeUtf("secret1");
 
         handler.onMessage(new Message(MessageName.LOGIN, login.toByteArray()));
@@ -52,7 +51,7 @@ class MessageHandlerTest {
         AuthService auth = registeredAuth();
         Session session = newSession(auth);
         session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
-        MessageHandler handler = new MessageHandler(session, auth);
+        MessageHandler handler = newHandler(session, auth);
         MessageWriter login = new MessageWriter().writeUtf("0.9.5").writeUtf("user01")
                 .writeUtf("secret1").writeByte(1).writeByte(99);
 
@@ -66,7 +65,7 @@ class MessageHandlerTest {
         AuthService auth = new AuthService();
         Session session = newSession(auth);
         session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
-        MessageHandler handler = new MessageHandler(session, auth);
+        MessageHandler handler = newHandler(session, auth);
 
         handler.onMessage(new Message(MessageName.UPDATE_DATA, new byte[]{-1, 123}));
 
@@ -134,12 +133,17 @@ class MessageHandlerTest {
         session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
         session.transition(SessionState.HANDSHAKE_DONE, SessionState.AUTHENTICATED);
 
-        newHandler(session, ResourceService.unavailable()).onMessage(iconRequest(5));
+        MessageHandler handler = newHandler(session, ResourceService.unavailable());
+        handler.onMessage(iconRequest(5));
 
         assertEquals(SessionState.AUTHENTICATED, session.state());
         assertEquals(0, session.queuedMessages());
-        assertFalse(session.recordProtocolViolation());
-        assertFalse(session.recordProtocolViolation());
+        handler.onMessage(new Message(MessageName.PLAYER_MOVE));
+        assertEquals(SessionState.AUTHENTICATED, session.state());
+        handler.onMessage(new Message(MessageName.PLAYER_MOVE));
+        assertEquals(SessionState.AUTHENTICATED, session.state());
+        handler.onMessage(new Message(MessageName.PLAYER_MOVE));
+        assertEquals(SessionState.CLOSED, session.state());
     }
 
     @Test
@@ -155,9 +159,17 @@ class MessageHandlerTest {
         assertEquals(0, session.queuedMessages());
     }
 
+    private static MessageHandler newHandler(Session session, AuthService authService) {
+        return newHandler(session, new ServerServices(authService, ResourceService.unavailable()),
+                NetworkConfig.defaults());
+    }
+
     private static MessageHandler newHandler(Session session, ResourceService resources) {
-        return new MessageHandler(session, new ServerServices(new AuthService(), resources),
-                NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
+        return newHandler(session, new ServerServices(new AuthService(), resources), NetworkConfig.defaults());
+    }
+
+    private static MessageHandler newHandler(Session session, ServerServices services, NetworkConfig config) {
+        return new MessageHandler(session, services, config, NetworkEventObserver.NO_OP);
     }
 
     private static Message iconRequest(int iconId) {
@@ -178,6 +190,8 @@ class MessageHandlerTest {
     private static Session newSession(AuthService authService, int maxPacketSize) {
         SessionManager manager = new SessionManager();
         return new Session(manager.nextId(), new TestTransport(), manager,
-                new LegacyPacketCodec(maxPacketSize), "abc".getBytes(StandardCharsets.US_ASCII), 4, authService);
+                new LegacyPacketCodec(maxPacketSize), "abc".getBytes(StandardCharsets.US_ASCII), 4,
+                new ServerServices(authService, ResourceService.unavailable()), NetworkConfig.defaults(),
+                NetworkEventObserver.NO_OP);
     }
 }

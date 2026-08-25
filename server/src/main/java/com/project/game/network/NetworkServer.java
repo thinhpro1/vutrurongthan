@@ -38,45 +38,6 @@ public final class NetworkServer {
     private volatile ServerSocket serverSocket;
 
     public NetworkServer(String host, int port, int maxSessionsPerIp, int maxPacketSize,
-                         int sendQueueSize, int handshakeTimeoutMillis, byte[] handshakeKey) {
-        this(host, port, maxSessionsPerIp, maxPacketSize, sendQueueSize, handshakeTimeoutMillis,
-                handshakeKey, ServerServices.defaults(), null, NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
-    }
-
-    public NetworkServer(String host, int port, int maxSessionsPerIp, int maxPacketSize,
-                         int sendQueueSize, int handshakeTimeoutMillis, byte[] handshakeKey,
-                         AuthService authService) {
-        this(host, port, maxSessionsPerIp, maxPacketSize, sendQueueSize, handshakeTimeoutMillis,
-                handshakeKey, new ServerServices(authService, ResourceService.unavailable()), null,
-                NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
-    }
-
-    public NetworkServer(String host, int port, int maxSessionsPerIp, int maxPacketSize,
-                         int sendQueueSize, int handshakeTimeoutMillis, byte[] handshakeKey,
-                         AuthService authService, SSLContext tlsContext) {
-        this(host, port, maxSessionsPerIp, maxPacketSize, sendQueueSize, handshakeTimeoutMillis,
-                handshakeKey, new ServerServices(authService, ResourceService.unavailable()), tlsContext,
-                NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
-    }
-
-    public NetworkServer(String host, int port, int maxSessionsPerIp, int maxPacketSize,
-                         int sendQueueSize, int handshakeTimeoutMillis, byte[] handshakeKey,
-                         AuthService authService, SSLContext tlsContext, NetworkConfig networkConfig) {
-        this(host, port, maxSessionsPerIp, maxPacketSize, sendQueueSize, handshakeTimeoutMillis,
-                handshakeKey, new ServerServices(authService, ResourceService.unavailable()), tlsContext,
-                networkConfig, NetworkEventObserver.NO_OP);
-    }
-
-    public NetworkServer(String host, int port, int maxSessionsPerIp, int maxPacketSize,
-                         int sendQueueSize, int handshakeTimeoutMillis, byte[] handshakeKey,
-                         AuthService authService, SSLContext tlsContext, NetworkConfig networkConfig,
-                         NetworkEventObserver eventObserver) {
-        this(host, port, maxSessionsPerIp, maxPacketSize, sendQueueSize, handshakeTimeoutMillis,
-                handshakeKey, new ServerServices(authService, ResourceService.unavailable()), tlsContext,
-                networkConfig, eventObserver);
-    }
-
-    public NetworkServer(String host, int port, int maxSessionsPerIp, int maxPacketSize,
                          int sendQueueSize, int handshakeTimeoutMillis, byte[] handshakeKey,
                          ServerServices services, SSLContext tlsContext, NetworkConfig networkConfig,
                          NetworkEventObserver eventObserver) {

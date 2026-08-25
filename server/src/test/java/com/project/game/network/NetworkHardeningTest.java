@@ -6,6 +6,8 @@ import com.project.game.network.message.Message;
 import com.project.game.network.message.MessageName;
 import com.project.game.network.message.MessageWriter;
 import com.project.game.service.AuthService;
+import com.project.game.service.ResourceService;
+import com.project.game.service.ServerServices;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayOutputStream;
@@ -30,7 +32,8 @@ class NetworkHardeningTest {
             TestTransport transport = new TestTransport(input, new ByteArrayOutputStream(), "127.0.0.1");
             AtomicBoolean observerCalled = new AtomicBoolean();
             Session session = new Session(manager.nextId(), transport, manager, new LegacyPacketCodec(1024),
-                    "abc".getBytes(StandardCharsets.US_ASCII), 4, new AuthService(), NetworkConfig.defaults(),
+                    "abc".getBytes(StandardCharsets.US_ASCII), 4,
+                    new ServerServices(new AuthService(), ResourceService.unavailable()), NetworkConfig.defaults(),
                     (ignored, type) -> {
                         observerCalled.set(true);
                         throw new IllegalStateException("observer failed");
@@ -71,7 +74,8 @@ class NetworkHardeningTest {
             BlockingOutput output = new BlockingOutput();
             TestTransport transport = new TestTransport(input, output, "127.0.0.1");
             Session session = new Session(manager.nextId(), transport, manager, new LegacyPacketCodec(1024),
-                    "abc".getBytes(StandardCharsets.US_ASCII), 1);
+                    "abc".getBytes(StandardCharsets.US_ASCII), 1, ServerServices.defaults(),
+                    NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
             assertTrue(manager.tryAdd(session, 1));
             session.start();
             assertTrue(session.send(new Message(MessageName.DIALOG_OK)));
@@ -87,7 +91,8 @@ class NetworkHardeningTest {
     private static Session session(SessionManager manager, String ip, int queueSize) {
         return new Session(manager.nextId(), new TestTransport(new java.io.ByteArrayInputStream(new byte[0]),
                 new ByteArrayOutputStream(), ip), manager, new LegacyPacketCodec(1024),
-                "abc".getBytes(StandardCharsets.US_ASCII), queueSize);
+                "abc".getBytes(StandardCharsets.US_ASCII), queueSize, ServerServices.defaults(),
+                NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
     }
 
     private static void waitForClosed(Session session) throws InterruptedException {

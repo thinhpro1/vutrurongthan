@@ -5,6 +5,8 @@ import com.project.game.network.message.Message;
 import com.project.game.network.message.MessageName;
 import com.project.game.network.message.MessageWriter;
 import com.project.game.service.AuthService;
+import com.project.game.service.ResourceService;
+import com.project.game.service.ServerServices;
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
@@ -31,9 +33,13 @@ class NetworkConfigTest {
         auth.register("user01", "secret1");
         SessionManager manager = new SessionManager();
         Session session = new Session(manager.nextId(), new TestTransport(), manager,
-                new LegacyPacketCodec(1024), "abc".getBytes(StandardCharsets.US_ASCII), 4, auth);
+                new LegacyPacketCodec(1024), "abc".getBytes(StandardCharsets.US_ASCII), 4,
+                new ServerServices(auth, ResourceService.unavailable()), NetworkConfig.defaults(),
+                NetworkEventObserver.NO_OP);
         session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
-        MessageHandler handler = new MessageHandler(session, auth, new NetworkConfig("0.9.6", 2));
+        MessageHandler handler = new MessageHandler(session,
+                new ServerServices(auth, ResourceService.unavailable()), new NetworkConfig("0.9.6", 2),
+                NetworkEventObserver.NO_OP);
         MessageWriter login = new MessageWriter().writeUtf("0.9.5").writeUtf("user01")
                 .writeUtf("secret1").writeByte(1);
 

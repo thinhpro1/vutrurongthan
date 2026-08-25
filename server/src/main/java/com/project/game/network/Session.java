@@ -5,8 +5,6 @@ import com.project.game.network.codec.LegacyPacketCodec;
 import com.project.game.network.message.Message;
 import com.project.game.network.transport.ClientTransport;
 import com.project.game.player.PlayerProfile;
-import com.project.game.service.AuthService;
-import com.project.game.service.ResourceService;
 import com.project.game.service.ServerServices;
 
 import java.io.IOException;
@@ -40,35 +38,6 @@ public final class Session implements AutoCloseable {
     private volatile OutputStream output;
     private volatile Thread readerThread;
     private volatile Thread writerThread;
-
-    public Session(int id, ClientTransport transport, SessionManager manager,
-                   LegacyPacketCodec codec, byte[] handshakeKey, int queueSize) {
-        this(id, transport, manager, codec, handshakeKey, queueSize, ServerServices.defaults(),
-                NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
-    }
-
-    public Session(int id, ClientTransport transport, SessionManager manager,
-                   LegacyPacketCodec codec, byte[] handshakeKey, int queueSize,
-                   AuthService authService) {
-        this(id, transport, manager, codec, handshakeKey, queueSize,
-                new ServerServices(authService, ResourceService.unavailable()), NetworkConfig.defaults(),
-                NetworkEventObserver.NO_OP);
-    }
-
-    public Session(int id, ClientTransport transport, SessionManager manager,
-                   LegacyPacketCodec codec, byte[] handshakeKey, int queueSize,
-                   AuthService authService, NetworkConfig networkConfig) {
-        this(id, transport, manager, codec, handshakeKey, queueSize,
-                new ServerServices(authService, ResourceService.unavailable()), networkConfig,
-                NetworkEventObserver.NO_OP);
-    }
-
-    public Session(int id, ClientTransport transport, SessionManager manager,
-                   LegacyPacketCodec codec, byte[] handshakeKey, int queueSize,
-                   AuthService authService, NetworkConfig networkConfig, NetworkEventObserver eventObserver) {
-        this(id, transport, manager, codec, handshakeKey, queueSize,
-                new ServerServices(authService, ResourceService.unavailable()), networkConfig, eventObserver);
-    }
 
     public Session(int id, ClientTransport transport, SessionManager manager,
                    LegacyPacketCodec codec, byte[] handshakeKey, int queueSize,

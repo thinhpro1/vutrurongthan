@@ -49,6 +49,10 @@ public record PlayerProfile(
         int y
 ) {
     public PlayerProfile withPosition(int x, int y) {
+        return withLocation(mapId, zoneId, x, y);
+    }
+
+    public PlayerProfile withLocation(int mapId, int zoneId, int x, int y) {
         return new PlayerProfile(
                 accountName,
                 id,

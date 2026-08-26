@@ -15,6 +15,8 @@ import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.Objects;
 import java.util.logging.Logger;
 import java.util.logging.Level;
@@ -34,6 +36,7 @@ public final class Session implements AutoCloseable {
     private final MapService mapService;
     private final Object writeLock = new Object();
     private final MessageHandler handler;
+    private final Set<Integer> sentMapTemplates = ConcurrentHashMap.newKeySet();
     private volatile String accountName;
     private volatile PlayerProfile player;
     private int protocolViolations;
@@ -97,6 +100,14 @@ public final class Session implements AutoCloseable {
 
     public void bindPlayer(PlayerProfile player) {
         this.player = player;
+    }
+
+    public boolean hasSentMapTemplate(int mapId) {
+        return sentMapTemplates.contains(mapId);
+    }
+
+    public void markMapTemplateSent(int mapId) {
+        sentMapTemplates.add(mapId);
     }
 
     public boolean recordProtocolViolation() {

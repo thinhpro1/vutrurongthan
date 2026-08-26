@@ -2,6 +2,7 @@ package com.project.game.service;
 
 import com.project.game.frame.FrameTemplate;
 import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import com.google.gson.JsonParser;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -133,10 +134,11 @@ class ResourceServiceTest {
     }
 
     @Test
-    void loadsExactMapZeroBootstrap() {
+    void loadsExactMapZeroBootstrap() throws Exception {
         ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
 
         var map = resources.map(0).orElseThrow();
+        var map1 = resources.map(1).orElseThrow();
 
         assertEquals(0, map.id());
         assertEquals(0, map.iconId());
@@ -154,6 +156,54 @@ class ResourceServiceTest {
         ), map.colorsBgr());
         assertFalse(map.line());
         assertNull(map.dataLine());
+
+        assertEquals(1, map1.id());
+        assertEquals(1, map1.iconId());
+        assertEquals("Bờ sông Pu", map1.name());
+        assertEquals(20, map1.row());
+        assertEquals(62, map1.column());
+        assertEquals(1240, map1.data().length());
+        assertEquals("12ab5df64139502d93e61d4049bae5a5ed0639a0bb70623312b082f449ce7365",
+                HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+                        .digest(map1.data().getBytes(StandardCharsets.UTF_8))));
+        assertEquals(List.of(51, 52, 53), map1.imagesBgr());
+        assertEquals(map.colorsBgr(), map1.colorsBgr());
+        assertFalse(map1.line());
+        assertNull(map1.dataLine());
+
+        assertEquals(1, map.waypoints().size());
+        var toMap1 = map.waypoints().getFirst();
+        assertEquals(2, toMap1.id());
+        assertEquals(1, toMap1.goMap());
+        assertEquals(4464, toMap1.x());
+        assertEquals(936, toMap1.y());
+        assertEquals(90, toMap1.goX());
+        assertEquals(1008, toMap1.goY());
+        assertEquals(1, toMap1.type());
+        assertTrue(toMap1.contains(4414, 736));
+        assertTrue(toMap1.contains(4464, 936));
+        assertTrue(toMap1.contains(4440, 900));
+        assertFalse(toMap1.contains(4413, 900));
+        assertFalse(toMap1.contains(4465, 900));
+        assertFalse(toMap1.contains(4440, 735));
+        assertFalse(toMap1.contains(4440, 937));
+
+        assertEquals(1, map1.waypoints().size());
+        var toMap0 = map1.waypoints().getFirst();
+        assertEquals(3, toMap0.id());
+        assertEquals(0, toMap0.goMap());
+        assertEquals(0, toMap0.x());
+        assertEquals(1008, toMap0.y());
+        assertEquals(4374, toMap0.goX());
+        assertEquals(936, toMap0.goY());
+        assertEquals(0, toMap0.type());
+        assertTrue(toMap0.contains(0, 808));
+        assertTrue(toMap0.contains(50, 1008));
+        assertTrue(toMap0.contains(20, 950));
+        assertFalse(toMap0.contains(-1, 950));
+        assertFalse(toMap0.contains(51, 950));
+        assertFalse(toMap0.contains(20, 807));
+        assertFalse(toMap0.contains(20, 1009));
     }
 
     @Test
@@ -228,18 +278,80 @@ class ResourceServiceTest {
     @Test
     void rejectsMapZeroGridDataLengthMismatch(@TempDir Path root) throws IOException {
         Files.copy(Path.of("resources", "json", "Frame.json"), root.resolve("Frame.json"));
-        Files.writeString(root.resolve("MapBootstrap.json"), """
-                {"0":{"id":0,"iconId":0,"name":"Núi Paozu","row":2,"column":2,
-                "data":"010","imagesBgr":[51,52,53],
-                "colorsBgr":[[128,213,242],[141,185,128],[90,154,64],[69,153,51]],
-                "isLine":false,"dataLine":null}}
-                """);
+        var bootstrap = JsonParser.parseString(
+                Files.readString(Path.of("resources", "json", "MapBootstrap.json")))
+                .getAsJsonObject();
+        var map0 = bootstrap.getAsJsonObject("0");
+        map0.addProperty("row", 2);
+        map0.addProperty("column", 2);
+        map0.addProperty("data", "010");
+        Files.writeString(root.resolve("MapBootstrap.json"),
+                new GsonBuilder().serializeNulls().create().toJson(bootstrap));
 
         IllegalArgumentException failure = assertThrows(IllegalArgumentException.class,
                 () -> ResourceService.fromFrameRoot(root));
-        assertTrue(failure.getMessage().contains("Map0"));
-        assertTrue(failure.getMessage().contains("grid"));
-        assertTrue(failure.getMessage().contains("data length"));
+        assertTrue(failure.getMessage().contains("grid"), failure.getMessage());
+        assertTrue(failure.getMessage().contains("data length"), failure.getMessage());
+    }
+
+    @Test
+    void pinsCanonicalMapBootstrapHash() throws Exception {
+        byte[] bytes = Files.readAllBytes(Path.of("resources", "json", "MapBootstrap.json"));
+        String hash = HexFormat.of().formatHex(
+                MessageDigest.getInstance("SHA-256").digest(bytes));
+
+        assertEquals("6298f902bb2797f63c539acbe6e51c176847954cdbb7a1c5cc3e017cd9530df3", hash);
+    }
+
+    @Test
+    void rejectsMapBootstrapMissingMap1(@TempDir Path root) throws IOException {
+        var bootstrap = productionMapBootstrap();
+        bootstrap.remove("1");
+
+        assertMapBootstrapRejected(root, bootstrap);
+    }
+
+    @Test
+    void rejectsMapBootstrapExtraMap(@TempDir Path root) throws IOException {
+        var bootstrap = productionMapBootstrap();
+        bootstrap.add("2", bootstrap.getAsJsonObject("1").deepCopy());
+
+        assertMapBootstrapRejected(root, bootstrap);
+    }
+
+    @Test
+    void rejectsWaypointTargetOutsideLoadedMaps(@TempDir Path root) throws IOException {
+        var bootstrap = productionMapBootstrap();
+        bootstrap.getAsJsonObject("0").getAsJsonArray("waypoints")
+                .get(0).getAsJsonObject().addProperty("goMap", 9);
+
+        assertMapBootstrapRejected(root, bootstrap);
+    }
+
+    @Test
+    void rejectsUnsupportedWaypointType(@TempDir Path root) throws IOException {
+        var bootstrap = productionMapBootstrap();
+        bootstrap.getAsJsonObject("0").getAsJsonArray("waypoints")
+                .get(0).getAsJsonObject().addProperty("type", 3);
+
+        assertMapBootstrapRejected(root, bootstrap);
+    }
+
+    @Test
+    void rejectsMap1DataLengthMismatch(@TempDir Path root) throws IOException {
+        var bootstrap = productionMapBootstrap();
+        bootstrap.getAsJsonObject("1").addProperty("data", "0");
+
+        assertMapBootstrapRejected(root, bootstrap);
+    }
+
+    @Test
+    void rejectsDuplicateWaypointId(@TempDir Path root) throws IOException {
+        var bootstrap = productionMapBootstrap();
+        var waypoints = bootstrap.getAsJsonObject("0").getAsJsonArray("waypoints");
+        waypoints.add(waypoints.get(0).deepCopy());
+
+        assertMapBootstrapRejected(root, bootstrap);
     }
 
     @Test
@@ -295,6 +407,22 @@ class ResourceServiceTest {
         }
         return HexFormat.of().formatHex(
                 digest.digest(canonical.toString().getBytes(StandardCharsets.UTF_8)));
+    }
+
+    private static com.google.gson.JsonObject productionMapBootstrap() throws IOException {
+        return JsonParser.parseString(
+                Files.readString(Path.of("resources", "json", "MapBootstrap.json")))
+                .getAsJsonObject();
+    }
+
+    private static void assertMapBootstrapRejected(Path root,
+                                                    com.google.gson.JsonObject bootstrap)
+            throws IOException {
+        Files.copy(Path.of("resources", "json", "Frame.json"), root.resolve("Frame.json"));
+        Files.writeString(root.resolve("MapBootstrap.json"),
+                new GsonBuilder().serializeNulls().create().toJson(bootstrap));
+        assertThrows(IllegalArgumentException.class,
+                () -> ResourceService.fromFrameRoot(root));
     }
 
     private static void assertFrame(FrameTemplate frame, int id, int type, int hpBar, int chat,

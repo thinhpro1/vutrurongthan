@@ -19,9 +19,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -34,6 +36,142 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class NetworkIntegrationTest {
+    @Test
+    void javaClientRoundTripsMap0AndMap1WithCachedTemplates() throws Exception {
+        ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
+        AuthService auth = new AuthService();
+        assertTrue(auth.register("mapround1", "secret1").success());
+        NetworkServer server = new NetworkServer("127.0.0.1", 0, 2, 262_144, 8, 1_000,
+                "abc".getBytes(StandardCharsets.US_ASCII),
+                new ServerServices(auth, resources), null,
+                NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
+        AtomicReference<Throwable> serverFailure = new AtomicReference<>();
+        Thread serverThread = Thread.ofVirtual().start(() -> {
+            try {
+                server.start();
+            } catch (Throwable failure) {
+                serverFailure.set(failure);
+            }
+        });
+
+        try {
+            waitForPort(server);
+            try (LivePlayerClient client = LivePlayerClient.create(
+                    server.localPort(), "mapround1", "round", 0)) {
+                client.finishLoadMap();
+                client.move(4464, 936);
+                client.requestChangeMap();
+                ParsedMapInfo map1 = client.readMapInfo();
+                assertEquals(1, map1.mapId());
+                assertEquals(90, map1.x());
+                assertEquals(1008, map1.y());
+                assertEquals(List.of(new ParsedWaypoint(0, 1008, 0, "Núi Paozu")),
+                        map1.waypoints());
+                assertEquals(0, map1.npcCount());
+                assertEquals(0, map1.monsterCount());
+                assertEquals(0, map1.itemMapCount());
+                assertFalse(map1.dragonActive());
+                client.finishLoadMap();
+
+                client.move(20, 1008);
+                client.requestChangeMap();
+                ParsedMapInfo map0 = client.readMapInfo();
+                assertEquals(0, map0.mapId());
+                assertEquals(4374, map0.x());
+                assertEquals(936, map0.y());
+                assertEquals(List.of(new ParsedWaypoint(4464, 936, 1, "Bờ sông Pu")),
+                        map0.waypoints());
+                assertTrue(map0.name() == null, "cached Map0 packet must omit static template");
+                assertEquals(0, map0.remaining());
+                client.finishLoadMap();
+
+                client.move(4464, 936);
+                client.requestChangeMap();
+                ParsedMapInfo secondMap1 = client.readMapInfo();
+                assertEquals(1, secondMap1.mapId());
+                assertTrue(secondMap1.name() == null,
+                        "cached Map1 packet must omit static template");
+                assertEquals(90, secondMap1.x());
+                assertEquals(1008, secondMap1.y());
+                assertEquals(0, secondMap1.remaining());
+            }
+            waitForNoSessions(server);
+        } finally {
+            server.stop();
+            serverThread.join(1_000);
+        }
+        assertNull(serverFailure.get(), "network server failed during map round-trip test");
+    }
+
+    @Test
+    void javaClientsFollowEachOtherAcrossMapsWithoutCrossMapPresence() throws Exception {
+        ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
+        AuthService auth = new AuthService();
+        assertTrue(auth.register("mapzonea", "secret1").success());
+        assertTrue(auth.register("mapzoneb", "secret1").success());
+        NetworkServer server = new NetworkServer("127.0.0.1", 0, 4, 262_144, 16, 1_000,
+                "abc".getBytes(StandardCharsets.US_ASCII),
+                new ServerServices(auth, resources), null,
+                NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
+        AtomicReference<Throwable> serverFailure = new AtomicReference<>();
+        Thread serverThread = Thread.ofVirtual().start(() -> {
+            try {
+                server.start();
+            } catch (Throwable failure) {
+                serverFailure.set(failure);
+            }
+        });
+
+        try {
+            waitForPort(server);
+            try (LivePlayerClient first = LivePlayerClient.create(
+                    server.localPort(), "mapzonea", "alpha1", 0);
+                 LivePlayerClient second = LivePlayerClient.create(
+                         server.localPort(), "mapzoneb", "beta22", 1)) {
+                first.finishLoadMap();
+                second.finishLoadMap();
+                assertAddPlayer(second.readServerMessage(), first.playerInfo().id(), "alpha1", 0);
+                assertAddPlayer(first.readServerMessage(), second.playerInfo().id(), "beta22", 1);
+
+                first.move(4464, 936);
+                assertEquals(MessageName.PLAYER_MOVE, second.readServerMessage().command());
+                first.requestChangeMap();
+                assertEquals(1, first.readMapInfo().mapId());
+                assertEquals(MessageName.REMOVE_PLAYER, second.readServerMessage().command());
+                first.finishLoadMap();
+
+                first.move(120, 1000);
+                assertNoServerMessage(second);
+                second.move(1260, 640);
+                assertNoServerMessage(first);
+
+                second.move(4464, 936);
+                second.requestChangeMap();
+                assertEquals(1, second.readMapInfo().mapId());
+                second.finishLoadMap();
+                assertAddPlayerId(first.readServerMessage(), second.playerInfo().id());
+                assertAddPlayerId(second.readServerMessage(), first.playerInfo().id());
+                second.finishLoadMap();
+                assertNoServerMessage(first);
+                assertNoServerMessage(second);
+
+                first.move(150, 1000);
+                Message movement = second.readServerMessage();
+                assertEquals(MessageName.PLAYER_MOVE, movement.command());
+                var movementReader = movement.reader();
+                assertEquals(first.playerInfo().id(), movementReader.readInt());
+                assertEquals(150, movementReader.readShort());
+                assertEquals(1000, movementReader.readShort());
+                assertEquals(0, movementReader.remaining());
+            }
+            waitForNoSessions(server);
+        } finally {
+            server.stop();
+            serverThread.join(1_000);
+        }
+        assertNull(serverFailure.get(), "network server failed during cross-map test");
+    }
+
     @Test
     void twoClientsSeeSameZonePresenceMovementAndDisconnect() throws Exception {
         ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
@@ -1022,36 +1160,60 @@ class NetworkIntegrationTest {
 
     private static ParsedMapInfo parseMapInfo(Message message) throws IOException {
         assertEquals(MessageName.MAP_INFO, message.command());
+        return parseMapInfo(message, new HashSet<>());
+    }
+
+    private static ParsedMapInfo parseMapInfo(Message message, Set<Integer> cachedMapIds)
+            throws IOException {
+        assertEquals(MessageName.MAP_INFO, message.command());
         var reader = message.reader();
 
         int mapId = reader.readShort();
-        int iconId = reader.readShort();
-        String name = reader.readUtf();
-        int row = reader.readShort();
-        int column = reader.readShort();
-        String data = reader.readUtf();
+        int iconId = 0;
+        String name = null;
+        int row = 0;
+        int column = 0;
+        String data = null;
+        List<Integer> imagesBgr = List.of();
+        List<List<Integer>> colorsBgr = List.of();
+        boolean line = false;
+        String dataLine = null;
+        if (cachedMapIds.add(mapId)) {
+            iconId = reader.readShort();
+            name = reader.readUtf();
+            row = reader.readShort();
+            column = reader.readShort();
+            data = reader.readUtf();
 
-        List<Integer> imagesBgr = new ArrayList<>(3);
-        for (int index = 0; index < 3; index++) {
-            imagesBgr.add((int) reader.readShort());
-        }
-
-        List<List<Integer>> colorsBgr = new ArrayList<>(4);
-        for (int rowIndex = 0; rowIndex < 4; rowIndex++) {
-            List<Integer> color = new ArrayList<>(3);
-            for (int columnIndex = 0; columnIndex < 3; columnIndex++) {
-                color.add((int) reader.readShort());
+            List<Integer> imageValues = new ArrayList<>(3);
+            for (int index = 0; index < 3; index++) {
+                imageValues.add((int) reader.readShort());
             }
-            colorsBgr.add(List.copyOf(color));
-        }
+            imagesBgr = List.copyOf(imageValues);
 
-        boolean line = reader.readBoolean();
-        String dataLine = line ? reader.readUtf() : null;
+            List<List<Integer>> colorValues = new ArrayList<>(4);
+            for (int rowIndex = 0; rowIndex < 4; rowIndex++) {
+                List<Integer> color = new ArrayList<>(3);
+                for (int columnIndex = 0; columnIndex < 3; columnIndex++) {
+                    color.add((int) reader.readShort());
+                }
+                colorValues.add(List.copyOf(color));
+            }
+            colorsBgr = List.copyOf(colorValues);
+
+            line = reader.readBoolean();
+            dataLine = line ? reader.readUtf() : null;
+        }
 
         int zoneId = reader.readByte();
         int x = reader.readShort();
         int y = reader.readShort();
         int waypointCount = reader.readUnsignedByte();
+        List<ParsedWaypoint> waypoints = new ArrayList<>(waypointCount);
+        for (int index = 0; index < waypointCount; index++) {
+            waypoints.add(new ParsedWaypoint(
+                    reader.readShort(), reader.readShort(), reader.readByte(), reader.readUtf()));
+        }
         int npcCount = reader.readUnsignedByte();
         int monsterCount = reader.readUnsignedByte();
         int itemMapCount = reader.readUnsignedShort();
@@ -1060,7 +1222,7 @@ class NetworkIntegrationTest {
         return new ParsedMapInfo(
                 mapId, iconId, name, row, column, data,
                 List.copyOf(imagesBgr), List.copyOf(colorsBgr), line, dataLine,
-                zoneId, x, y, waypointCount, npcCount, monsterCount, itemMapCount,
+                zoneId, x, y, waypoints, npcCount, monsterCount, itemMapCount,
                 dragonActive, reader.remaining());
     }
 
@@ -1104,7 +1266,9 @@ class NetworkIntegrationTest {
         assertEquals(0, map.zoneId());
         assertEquals(1250, map.x());
         assertEquals(648, map.y());
-        assertEquals(0, map.waypointCount());
+        assertEquals(1, map.waypoints().size());
+        assertEquals(new ParsedWaypoint(4464, 936, 1, "Bờ sông Pu"),
+                map.waypoints().getFirst());
         assertEquals(0, map.npcCount());
         assertEquals(0, map.monsterCount());
         assertEquals(0, map.itemMapCount());
@@ -1193,13 +1357,15 @@ class NetworkIntegrationTest {
             int zoneId,
             int x,
             int y,
-            int waypointCount,
+            List<ParsedWaypoint> waypoints,
             int npcCount,
             int monsterCount,
             int itemMapCount,
             boolean dragonActive,
             int remaining
     ) {}
+
+    private record ParsedWaypoint(int x, int y, int type, String name) {}
 
     private static void runIconRequest(int port, int iconId, byte[] expectedBytes) throws Exception {
         LegacyPacketCodec codec = new LegacyPacketCodec(Math.max(1024, expectedBytes.length + 6));
@@ -1262,6 +1428,11 @@ class NetworkIntegrationTest {
         assertEquals(0, reader.remaining());
     }
 
+    private static void assertAddPlayerId(Message message, int expectedId) throws IOException {
+        assertEquals(MessageName.ADD_PLAYER, message.command());
+        assertEquals(expectedId, message.reader().readInt());
+    }
+
     private static void assertNoServerMessage(LivePlayerClient client) throws Exception {
         client.transport.socket().setSoTimeout(250);
         try {
@@ -1279,13 +1450,16 @@ class NetworkIntegrationTest {
         private final LegacyTcpTransport transport;
         private final LegacyCipher cipher;
         private final ParsedPlayerInfo playerInfo;
+        private final Set<Integer> cachedMapIds;
 
         private LivePlayerClient(LegacyPacketCodec codec, LegacyTcpTransport transport,
-                                 LegacyCipher cipher, ParsedPlayerInfo playerInfo) {
+                                 LegacyCipher cipher, ParsedPlayerInfo playerInfo,
+                                 Set<Integer> cachedMapIds) {
             this.codec = codec;
             this.transport = transport;
             this.cipher = cipher;
             this.playerInfo = playerInfo;
+            this.cachedMapIds = cachedMapIds;
         }
 
         private static LivePlayerClient create(int port, String username,
@@ -1320,8 +1494,9 @@ class NetworkIntegrationTest {
                         new Message(MessageName.CREATE_PLAYER, create.toByteArray()));
                 ParsedPlayerInfo player = parsePlayerInfo(
                         codec.readServerResponse(transport.input(), cipher, true));
-                parseMapInfo(codec.readServerResponse(transport.input(), cipher, true));
-                return new LivePlayerClient(codec, transport, cipher, player);
+                Set<Integer> cachedMapIds = new HashSet<>();
+                parseMapInfo(codec.readServerResponse(transport.input(), cipher, true), cachedMapIds);
+                return new LivePlayerClient(codec, transport, cipher, player, cachedMapIds);
             } catch (Throwable failure) {
                 try {
                     transport.close();
@@ -1348,6 +1523,15 @@ class NetworkIntegrationTest {
 
         private Message readServerMessage() throws IOException {
             return codec.readServerResponse(transport.input(), cipher, true);
+        }
+
+        private ParsedMapInfo readMapInfo() throws IOException {
+            return parseMapInfo(readServerMessage(), cachedMapIds);
+        }
+
+        private void requestChangeMap() throws IOException {
+            codec.writeClient(transport.output(), cipher, true,
+                    new Message(MessageName.REQUEST_CHANGE_MAP));
         }
 
         @Override

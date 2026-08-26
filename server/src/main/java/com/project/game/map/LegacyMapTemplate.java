@@ -12,6 +12,7 @@ public record LegacyMapTemplate(
         List<Integer> imagesBgr,
         List<List<Integer>> colorsBgr,
         boolean line,
-        String dataLine
+        String dataLine,
+        List<LegacyWaypoint> waypoints
 ) {
 }

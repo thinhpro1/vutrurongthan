@@ -28,9 +28,135 @@ import java.util.List;
 import java.util.concurrent.BlockingQueue;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class MessageHandlerTest {
+    @Test
+    void tracksMapTemplatesPerSession() {
+        Session session = newSession(new AuthService());
+
+        assertFalse(session.hasSentMapTemplate(0));
+        session.markMapTemplateSent(0);
+        assertTrue(session.hasSentMapTemplate(0));
+        assertFalse(session.hasSentMapTemplate(1));
+    }
+
+    @Test
+    void changesMapOnlyWhenInsideSupportedWaypoint() throws Exception {
+        ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
+        MapService maps = new MapService(new PlayerPacketWriter());
+        ServerServices services = new ServerServices(new AuthService(), resources, maps);
+        PlayerProfile start = PlayerProfile.initial("user01", 7, "alpha1", 0)
+                .withLocation(0, 0, 4464, 936);
+        Session session = inGameSession(services, start);
+        MessageHandler handler = newHandler(session, services, NetworkConfig.defaults());
+        session.markMapTemplateSent(0);
+
+        handler.onMessage(new Message(MessageName.REQUEST_CHANGE_MAP));
+
+        assertEquals(SessionState.IN_GAME, session.state());
+        assertEquals(new PlayerProfile(
+                "user01", 7, "alpha1", 0,
+                1, 1, 1, 1, 5, 6, -1, -1, -1, -1,
+                10, 5, 5, 5, 10, 10, 10, 10,
+                150, 150, 100, 100, 12, 0, 0, 1,
+                "0%", "0%", "0%", "0%", "0%", "0%",
+                10, 0, 10_000, 0, 25, 0, 1, 0, 90, 1008), session.player());
+        assertEquals(1, session.queuedMessages());
+        Message mapInfo = drainMessages(session).getFirst();
+        assertEquals(MessageName.MAP_INFO, mapInfo.command());
+        var reader = mapInfo.reader();
+        assertEquals(1, reader.readShort());
+        assertEquals(1, reader.readShort());
+        assertEquals("Bờ sông Pu", reader.readUtf());
+        assertEquals(20, reader.readShort());
+        assertEquals(62, reader.readShort());
+        assertEquals(1240, reader.readUtf().length());
+        for (int i = 0; i < 3; i++) {
+            reader.readShort();
+        }
+        for (int i = 0; i < 12; i++) {
+            reader.readShort();
+        }
+        assertFalse(reader.readBoolean());
+        assertEquals(0, reader.readByte());
+        assertEquals(90, reader.readShort());
+        assertEquals(1008, reader.readShort());
+        assertEquals(1, reader.readUnsignedByte());
+        assertEquals(0, reader.readShort());
+        assertEquals(1008, reader.readShort());
+        assertEquals(0, reader.readByte());
+        assertEquals("Núi Paozu", reader.readUtf());
+        assertEquals(0, reader.readUnsignedByte());
+        assertEquals(0, reader.readUnsignedByte());
+        assertEquals(0, reader.readUnsignedShort());
+        assertFalse(reader.readBoolean());
+        assertEquals(0, reader.remaining());
+    }
+
+    @Test
+    void requestChangeMapOutsideWaypointIsNoOp() throws Exception {
+        ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
+        MapService maps = new MapService(new PlayerPacketWriter());
+        ServerServices services = new ServerServices(new AuthService(), resources, maps);
+        PlayerProfile start = PlayerProfile.initial("user01", 7, "alpha1", 0)
+                .withLocation(0, 0, 1250, 648);
+        Session session = inGameSession(services, start);
+        MessageHandler handler = newHandler(session, services, NetworkConfig.defaults());
+
+        handler.onMessage(new Message(MessageName.REQUEST_CHANGE_MAP));
+
+        assertEquals(SessionState.IN_GAME, session.state());
+        assertEquals(start, session.player());
+        assertEquals(0, session.queuedMessages());
+        assertEquals(0, maps.memberCount(0, 0));
+    }
+
+    @Test
+    void requestChangeMapRejectsNonEmptyPayload() {
+        ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
+        Session session = inGameSession(new ServerServices(new AuthService(), resources),
+                PlayerProfile.initial("user01", 7, "alpha1", 0));
+
+        newHandler(session, resources).onMessage(new Message(
+                MessageName.REQUEST_CHANGE_MAP, new byte[]{1}));
+
+        assertEquals(SessionState.CLOSED, session.state());
+    }
+
+    @Test
+    void mapInfoRevisitUsesCachedTemplateLayout() throws Exception {
+        ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
+        Session session = inGameSession(new ServerServices(new AuthService(), resources),
+                PlayerProfile.initial("user01", 7, "alpha1", 0)
+                        .withLocation(0, 0, 4464, 936));
+        MessageHandler handler = newHandler(session, resources);
+        session.markMapTemplateSent(0);
+
+        handler.onMessage(new Message(MessageName.REQUEST_CHANGE_MAP));
+        drainMessages(session);
+        session.bindPlayer(session.player().withLocation(1, 0, 20, 1008));
+        handler.onMessage(new Message(MessageName.REQUEST_CHANGE_MAP));
+        Message mapInfo = drainMessages(session).getFirst();
+
+        var reader = mapInfo.reader();
+        assertEquals(0, reader.readShort());
+        assertEquals(0, reader.readByte());
+        assertEquals(4374, reader.readShort());
+        assertEquals(936, reader.readShort());
+        assertEquals(1, reader.readUnsignedByte());
+        assertEquals(4464, reader.readShort());
+        assertEquals(936, reader.readShort());
+        assertEquals(1, reader.readByte());
+        assertEquals("Bờ sông Pu", reader.readUtf());
+        assertEquals(0, reader.readUnsignedByte());
+        assertEquals(0, reader.readUnsignedByte());
+        assertEquals(0, reader.readUnsignedShort());
+        assertFalse(reader.readBoolean());
+        assertEquals(0, reader.remaining());
+    }
+
     @Test
     void finishLoadRegistersPresenceAndMovementDoesNotAckMover() throws Exception {
         AuthService auth = new AuthService();

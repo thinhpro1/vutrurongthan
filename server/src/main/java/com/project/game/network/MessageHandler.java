@@ -59,6 +59,7 @@ public final class MessageHandler {
                 case MessageName.REGISTER_USER -> handleRegister(message);
                 case MessageName.CREATE_PLAYER -> handleCreatePlayer(message);
                 case MessageName.FINISH_LOAD_MAP -> handleFinishLoadMap(message);
+                case MessageName.REQUEST_CHANGE_MAP -> handleRequestChangeMap(message);
                 case MessageName.PLAYER_MOVE -> handlePlayerMove(message);
                 default -> LOGGER.fine(() -> "RX cmd=" + message.command()
                         + " len=" + message.payload().length);
@@ -340,6 +341,43 @@ public final class MessageHandler {
         mapService.finishLoad(session);
     }
 
+    private void handleRequestChangeMap(Message message) throws IOException {
+        if (message.payload().length != 0) {
+            throw new IOException("trailing REQUEST_CHANGE_MAP payload bytes");
+        }
+        PlayerProfile player = session.player();
+        if (player == null) {
+            throw new IOException("REQUEST_CHANGE_MAP without bound player");
+        }
+
+        var map = resourceService.map(player.mapId())
+                .orElseThrow(() -> new IOException(
+                        "legacy map bootstrap unavailable for map " + player.mapId()));
+        var waypoint = map.waypoints().stream()
+                .filter(candidate -> candidate.contains(player.x(), player.y()))
+                .findFirst()
+                .orElse(null);
+        if (waypoint == null) {
+            LOGGER.fine(() -> "REQUEST_CHANGE_MAP ignored outside waypoint session=" + session.id());
+            return;
+        }
+
+        var destination = resourceService.map(waypoint.goMap()).orElse(null);
+        if (destination == null) {
+            LOGGER.fine(() -> "REQUEST_CHANGE_MAP ignored for unavailable destination map="
+                    + waypoint.goMap() + " session=" + session.id());
+            return;
+        }
+
+        mapService.leave(session);
+        PlayerProfile changed = player.withLocation(
+                waypoint.goMap(), 0, waypoint.goX(), waypoint.goY());
+        session.bindPlayer(changed);
+        sendMapInfo(changed);
+        LOGGER.info(() -> "REQUEST_CHANGE_MAP_TX from=" + player.mapId()
+                + " to=" + changed.mapId() + " session=" + session.id());
+    }
+
     private void handlePlayerMove(Message message) throws IOException {
         PlayerProfile player = session.player();
         if (player == null) {
@@ -434,41 +472,61 @@ public final class MessageHandler {
                 .orElseThrow(() -> new IOException(
                         "legacy map bootstrap unavailable for map " + player.mapId()));
 
-        MessageWriter writer = new MessageWriter()
-                .writeShort(map.id())
-                .writeShort(map.iconId())
-                .writeUtf(map.name())
-                .writeShort(map.row())
-                .writeShort(map.column())
-                .writeUtf(map.data());
+        boolean sendTemplate = !session.hasSentMapTemplate(map.id());
+        MessageWriter writer = new MessageWriter().writeShort(map.id());
+        if (sendTemplate) {
+            writer.writeShort(map.iconId())
+                    .writeUtf(map.name())
+                    .writeShort(map.row())
+                    .writeShort(map.column())
+                    .writeUtf(map.data());
 
-        for (int imageId : map.imagesBgr()) {
-            writer.writeShort(imageId);
-        }
-        for (var colorRow : map.colorsBgr()) {
-            for (int value : colorRow) {
-                writer.writeShort(value);
+            for (int imageId : map.imagesBgr()) {
+                writer.writeShort(imageId);
             }
-        }
+            for (var colorRow : map.colorsBgr()) {
+                for (int value : colorRow) {
+                    writer.writeShort(value);
+                }
+            }
 
-        writer.writeBoolean(map.line());
-        if (map.line()) {
-            if (map.dataLine() == null) {
-                throw new IOException("line map missing dataLine for map " + map.id());
+            writer.writeBoolean(map.line());
+            if (map.line()) {
+                if (map.dataLine() == null) {
+                    throw new IOException("line map missing dataLine for map " + map.id());
+                }
+                writer.writeUtf(map.dataLine());
             }
-            writer.writeUtf(map.dataLine());
         }
 
         writer.writeByte(player.zoneId())
                 .writeShort(player.x())
-                .writeShort(player.y())
-                .writeByte(0)
-                .writeByte(0)
+                .writeShort(player.y());
+
+        var waypoints = map.waypoints();
+        if (waypoints.size() > Byte.MAX_VALUE) {
+            throw new IOException("too many waypoints for map " + map.id());
+        }
+        writer.writeByte(waypoints.size());
+        for (var waypoint : waypoints) {
+            var target = resourceService.map(waypoint.goMap())
+                    .orElseThrow(() -> new IOException(
+                            "waypoint target map unavailable: " + waypoint.goMap()));
+            writer.writeShort(waypoint.x())
+                    .writeShort(waypoint.y())
+                    .writeByte(waypoint.type())
+                    .writeUtf(target.name());
+        }
+
+        writer.writeByte(0)
                 .writeByte(0)
                 .writeShort(0)
                 .writeBoolean(false);
 
         if (session.send(new Message(MessageName.MAP_INFO, writer.toByteArray()))) {
+            if (sendTemplate) {
+                session.markMapTemplateSent(map.id());
+            }
             LOGGER.info(() -> "MAP_INFO_TX map=" + map.id()
                     + " zone=" + player.zoneId()
                     + " x=" + player.x()
@@ -573,6 +631,7 @@ public final class MessageHandler {
                     || command == MessageName.REQUEST_ICON;
             case IN_GAME -> command == MessageName.REQUEST_ICON
                     || command == MessageName.FINISH_LOAD_MAP
+                    || command == MessageName.REQUEST_CHANGE_MAP
                     || command == MessageName.PLAYER_MOVE;
             case CLOSED -> false;
         };

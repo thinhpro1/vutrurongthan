@@ -233,14 +233,36 @@ public final class ResourceService {
             throw new IllegalArgumentException("skill field " + field + " must be an array");
         }
         List<LegacySkillPaint> paints = new ArrayList<>(value.getAsJsonArray().size());
+        double previousPercent = 0d;
+        int paintIndex = 0;
         for (JsonElement element : value.getAsJsonArray()) {
             if (!element.isJsonObject()) {
                 throw new IllegalArgumentException("skill paint must be an object");
             }
             JsonObject paint = element.getAsJsonObject();
+            String percent = readString(paint, "percent");
+            final double cumulativePercent;
+            try {
+                cumulativePercent = Double.parseDouble(percent);
+            } catch (NumberFormatException exception) {
+                throw new IllegalArgumentException(
+                        "skill field " + field + " paint " + paintIndex
+                                + " percent must be numeric: " + percent,
+                        exception);
+            }
+            if (!Double.isFinite(cumulativePercent)
+                    || cumulativePercent <= previousPercent
+                    || cumulativePercent > 100d) {
+                throw new IllegalArgumentException(
+                        "skill field " + field + " paint " + paintIndex
+                                + " percent must be strictly increasing and within (0,100]: "
+                                + percent);
+            }
             paints.add(new LegacySkillPaint(
-                    readString(paint, "percent"),
+                    percent,
                     readInt(paint, "paintId")));
+            previousPercent = cumulativePercent;
+            paintIndex++;
         }
         return paints;
     }

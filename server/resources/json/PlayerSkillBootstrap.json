@@ -207,7 +207,7 @@
           "paintId": 0
         },
         {
-          "percent": "50.0",
+          "percent": "100.0",
           "paintId": 1
         }
       ]
@@ -378,7 +378,7 @@
           "paintId": 0
         },
         {
-          "percent": "50.0",
+          "percent": "100.0",
           "paintId": 1
         }
       ]
@@ -549,7 +549,7 @@
           "paintId": 0
         },
         {
-          "percent": "50.0",
+          "percent": "100.0",
           "paintId": 1
         }
       ]
@@ -3509,11 +3509,11 @@
           "paintId": 5
         },
         {
-          "percent": "10.0",
+          "percent": "20.0",
           "paintId": 17
         },
         {
-          "percent": "10.0",
+          "percent": "30.0",
           "paintId": 25
         }
       ]

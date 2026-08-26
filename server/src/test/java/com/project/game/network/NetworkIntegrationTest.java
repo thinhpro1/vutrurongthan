@@ -18,7 +18,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -50,6 +52,11 @@ class NetworkIntegrationTest {
             ParsedPlayerInfo earth = runCreatePlayer(server.localPort(), "user01", "alpha1", 0);
             assertFreshPlayer(earth, "alpha1", 0, 5, 6,
                     List.of(0, 3, 6, 9, 12, 15, 30, 31, 32, 33, 36));
+            assertEquals(List.of(new ParsedPaint("50.0", 0), new ParsedPaint("100.0", 1)),
+                    earth.paints().get(0));
+            assertEquals(List.of(new ParsedPaint("10.0", 5), new ParsedPaint("20.0", 17),
+                            new ParsedPaint("30.0", 25)),
+                    earth.paints().get(31));
             waitForNoSessions(server);
 
             ParsedPlayerInfo namek = runCreatePlayer(server.localPort(), "user02", "beta22", 1);
@@ -500,8 +507,10 @@ class NetworkIntegrationTest {
 
         int skillCount = reader.readUnsignedByte();
         List<Integer> skillIds = new ArrayList<>(skillCount);
+        Map<Integer, List<ParsedPaint>> paintsBySkillId = new LinkedHashMap<>();
         for (int skillIndex = 0; skillIndex < skillCount; skillIndex++) {
-            skillIds.add((int) reader.readByte());
+            int skillId = reader.readByte();
+            skillIds.add(skillId);
             skipUtfList(reader);
             skipUtfList(reader);
             reader.readByte(); // type
@@ -531,10 +540,11 @@ class NetworkIntegrationTest {
                 reader.readLong();
             }
             int paintCount = reader.readUnsignedByte();
+            List<ParsedPaint> paints = new ArrayList<>(paintCount);
             for (int paintIndex = 0; paintIndex < paintCount; paintIndex++) {
-                reader.readUtf();
-                reader.readShort();
+                paints.add(new ParsedPaint(reader.readUtf(), reader.readShort()));
             }
+            paintsBySkillId.put(skillId, List.copyOf(paints));
         }
         int keySkillCount = reader.readUnsignedByte();
         List<Integer> keySkillIds = new ArrayList<>(keySkillCount);
@@ -550,7 +560,7 @@ class NetworkIntegrationTest {
         assertEquals(0, reader.remaining());
         return new ParsedPlayerInfo(id, name, gender, head, body, baseDamage, baseHp, baseMp,
                 baseConstitution, maxHp, maxMp, hp, mp,
-                List.copyOf(skillIds), List.copyOf(keySkillIds), mySkillId);
+                List.copyOf(skillIds), Map.copyOf(paintsBySkillId), List.copyOf(keySkillIds), mySkillId);
     }
 
     private static void assertFreshPlayer(ParsedPlayerInfo player, String name, int gender,
@@ -628,9 +638,12 @@ class NetworkIntegrationTest {
             long hp,
             long mp,
             List<Integer> skillIds,
+            Map<Integer, List<ParsedPaint>> paints,
             List<Integer> keySkillIds,
             int mySkillId
     ) {}
+
+    private record ParsedPaint(String percent, int paintId) {}
 
     private static void runIconRequest(int port, int iconId, byte[] expectedBytes) throws Exception {
         LegacyPacketCodec codec = new LegacyPacketCodec(Math.max(1024, expectedBytes.length + 6));

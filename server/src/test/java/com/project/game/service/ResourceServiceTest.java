@@ -1,6 +1,8 @@
 package com.project.game.service;
 
 import com.project.game.frame.FrameTemplate;
+import com.google.gson.Gson;
+import com.google.gson.JsonParser;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -14,6 +16,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ResourceServiceTest {
@@ -114,6 +117,34 @@ class ResourceServiceTest {
         assertEquals(7, earth.maxUpgrade());
         assertEquals(List.of(0, 30_000, 35_000, 40_000, 45_000, 50_000, 55_000),
                 earth.pointUpgrade());
+        assertEquals(List.of("50.0", "100.0"),
+                earth.paints().stream().map(ResourceService.LegacySkillPaint::percent).toList());
+        ResourceService.LegacyPlayerSkill teleport = resources.playerSkills(0).stream()
+                .filter(skill -> skill.id() == 31)
+                .findFirst()
+                .orElseThrow();
+        assertEquals(List.of("10.0", "20.0", "30.0"),
+                teleport.paints().stream().map(ResourceService.LegacySkillPaint::percent).toList());
+    }
+
+    @Test
+    void rejectsNonIncreasingInitialPaintThresholds(@TempDir Path root) throws IOException {
+        Path resourceRoot = Path.of("resources", "json");
+        Files.copy(resourceRoot.resolve("Frame.json"), root.resolve("Frame.json"));
+        var bootstrap = JsonParser.parseString(
+                Files.readString(resourceRoot.resolve("PlayerSkillBootstrap.json")))
+                .getAsJsonObject();
+        bootstrap.getAsJsonObject("templates")
+                .getAsJsonObject("0")
+                .getAsJsonArray("initialPaints")
+                .get(1)
+                .getAsJsonObject()
+                .addProperty("percent", "50.0");
+        Files.writeString(root.resolve("PlayerSkillBootstrap.json"), new Gson().toJson(bootstrap));
+
+        IllegalArgumentException failure = assertThrows(IllegalArgumentException.class,
+                () -> ResourceService.fromFrameRoot(root));
+        assertTrue(failure.getMessage().contains("initialPaints"));
     }
 
     private static void assertFrame(FrameTemplate frame, int id, int type, int hpBar, int chat,

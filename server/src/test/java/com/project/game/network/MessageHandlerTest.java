@@ -459,6 +459,107 @@ class MessageHandlerTest {
     }
 
     @Test
+    void serializesExactLegacyMonsterResourceInUnityFieldOrder() throws Exception {
+        ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
+        PipedInputStream input = new PipedInputStream();
+        try (PipedOutputStream inputWriter = new PipedOutputStream(input)) {
+            ByteArrayOutputStream output = new ByteArrayOutputStream();
+            SessionManager manager = new SessionManager();
+            byte[] key = "abc".getBytes(StandardCharsets.US_ASCII);
+            Session session = new Session(manager.nextId(), new TestTransport(input, output, "127.0.0.1"),
+                    manager, new LegacyPacketCodec(262_144), key, 4,
+                    new ServerServices(new AuthService(), resources), NetworkConfig.defaults(),
+                    NetworkEventObserver.NO_OP);
+            try {
+                session.start();
+                session.completeHandshake();
+                output.reset();
+                newHandler(session, resources).onMessage(new Message(
+                        MessageName.UPDATE_DATA, new MessageWriter().writeByte(4).toByteArray()));
+
+                waitForOutput(output);
+                Message response = new LegacyPacketCodec(262_144).readServerResponse(
+                        new ByteArrayInputStream(output.toByteArray()), new LegacyCipher(key), true);
+                assertEquals(MessageName.UPDATE_DATA, response.command());
+                var reader = response.reader();
+                assertEquals(4, reader.readByte());
+                assertEquals(1, reader.readByte());
+                assertEquals(1, reader.readShort());
+                assertEquals(0, reader.readShort());
+                assertFalse(reader.readBoolean());
+                assertEquals(3, reader.readByte());
+                assertEquals(2198, reader.readShort());
+                assertEquals(2199, reader.readShort());
+                assertEquals(2200, reader.readShort());
+                assertEquals(0, reader.readShort());
+                assertEquals(0, reader.readShort());
+                assertEquals(30, reader.readShort());
+                assertEquals(3, reader.readByte());
+                assertEquals(2190, reader.readShort());
+                assertEquals(2191, reader.readShort());
+                assertEquals(2192, reader.readShort());
+                assertEquals(0, reader.readShort());
+                assertEquals(0, reader.readShort());
+                assertEquals(30, reader.readShort());
+                assertEquals(5, reader.readByte());
+                assertEquals(2193, reader.readShort());
+                assertEquals(2194, reader.readShort());
+                assertEquals(2195, reader.readShort());
+                assertEquals(2196, reader.readShort());
+                assertEquals(2197, reader.readShort());
+                assertEquals(0, reader.readShort());
+                assertEquals(0, reader.readShort());
+                assertEquals(20, reader.readShort());
+                assertEquals(1, reader.readShort());
+                assertEquals(1, reader.readShort());
+                assertEquals("Hổ nanh kiếm", reader.readUtf());
+                assertEquals(100, reader.readShort());
+                assertEquals(1, reader.readByte());
+                assertEquals(1, reader.readByte());
+                assertEquals(0, reader.readByte());
+                assertEquals(5, reader.readByte());
+                assertEquals(11818, reader.readShort());
+                assertEquals(11819, reader.readShort());
+                assertEquals(11820, reader.readShort());
+                assertEquals(11821, reader.readShort());
+                assertEquals(11822, reader.readShort());
+                assertEquals(11824, reader.readShort());
+                assertEquals(11823, reader.readShort());
+                assertEquals(175, reader.readShort());
+                assertEquals(95, reader.readShort());
+                assertEquals(0, reader.readByte());
+                assertEquals(0, reader.readByte());
+                assertEquals(0, reader.remaining());
+            } finally {
+                session.close();
+            }
+        }
+    }
+
+    @Test
+    void doesNotSendEmptyMonsterDatasetWhenMonsterResourcesAreUnavailable() {
+        Session session = newSession(new AuthService());
+        session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
+
+        newHandler(session, ResourceService.unavailable()).onMessage(new Message(
+                MessageName.UPDATE_DATA, new byte[]{4}));
+
+        assertEquals(0, session.queuedMessages());
+        assertEquals(SessionState.HANDSHAKE_DONE, session.state());
+    }
+
+    @Test
+    void manifestAdvertisesLoadedMonsterVersionOne() throws Exception {
+        assertEquals(1, readManifestMonsterVersion(ResourceService.fromFrameRoot(
+                Path.of("resources", "json"))));
+    }
+
+    @Test
+    void manifestAdvertisesUnavailableMonsterVersionMinusOne() throws Exception {
+        assertEquals(-1, readManifestMonsterVersion(ResourceService.unavailable()));
+    }
+
+    @Test
     void doesNotSendEmptyEffectDatasetWhenEffectResourcesAreUnavailable() {
         Session session = newSession(new AuthService());
         session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
@@ -650,5 +751,41 @@ class MessageHandlerTest {
             return;
         }
         assertTrue(output.size() > 0, "timed out waiting for level resource response");
+    }
+
+    private static int readManifestMonsterVersion(ResourceService resources) throws Exception {
+        PipedInputStream input = new PipedInputStream();
+        try (PipedOutputStream inputWriter = new PipedOutputStream(input)) {
+            ByteArrayOutputStream output = new ByteArrayOutputStream();
+            SessionManager manager = new SessionManager();
+            byte[] key = "abc".getBytes(StandardCharsets.US_ASCII);
+            Session session = new Session(manager.nextId(), new TestTransport(input, output, "127.0.0.1"),
+                    manager, new LegacyPacketCodec(262_144), key, 4,
+                    new ServerServices(new AuthService(), resources), NetworkConfig.defaults(),
+                    NetworkEventObserver.NO_OP);
+            try {
+                session.start();
+                session.completeHandshake();
+                output.reset();
+                newHandler(session, resources).onMessage(new Message(
+                        MessageName.UPDATE_DATA, new MessageWriter().writeByte(-1).toByteArray()));
+                waitForOutput(output);
+                Message response = new LegacyPacketCodec(262_144).readServerResponse(
+                        new ByteArrayInputStream(output.toByteArray()), new LegacyCipher(key), true);
+                var reader = response.reader();
+                assertEquals(-1, reader.readByte());
+                for (int index = 0; index < 5; index++) {
+                    reader.readByte();
+                }
+                int monsterVersion = reader.readByte();
+                for (int index = 0; index < 7; index++) {
+                    reader.readByte();
+                }
+                assertEquals(0, reader.remaining());
+                return monsterVersion;
+            } finally {
+                session.close();
+            }
+        }
     }
 }

@@ -2,6 +2,7 @@ package com.project.game.network;
 
 import com.project.game.frame.FrameTemplate;
 import com.project.game.map.MapService;
+import com.project.game.monster.LegacyMonsterDartPhase;
 import com.project.game.network.message.Message;
 import com.project.game.network.message.MessageName;
 import com.project.game.network.message.MessageWriter;
@@ -21,7 +22,6 @@ public final class MessageHandler {
     // Development-only bootstrap values for the legacy client resource protocol.
     private static final int NOT_PROVIDED_VERSION = -1;
     private static final int DEV_EFFECT_VERSION = 0;
-    private static final int DEV_MONSTER_VERSION = 0;
     private static final int DEV_LEVEL_VERSION = 0;
     private static final int DEV_FRAME_VERSION = 1;
     private final Session session;
@@ -103,6 +103,7 @@ public final class MessageHandler {
                 ? NOT_PROVIDED_VERSION : DEV_LEVEL_VERSION;
         int effectVersion = resourceService.effects().isEmpty()
                 ? NOT_PROVIDED_VERSION : DEV_EFFECT_VERSION;
+        int monsterVersion = resourceService.monsterVersion();
         MessageWriter writer = new MessageWriter()
                 .writeByte(-1)
                 .writeByte(NOT_PROVIDED_VERSION) // image
@@ -110,7 +111,7 @@ public final class MessageHandler {
                 .writeByte(NOT_PROVIDED_VERSION) // item option template
                 .writeByte(NOT_PROVIDED_VERSION) // npc
                 .writeByte(effectVersion) // effect
-                .writeByte(DEV_MONSTER_VERSION) // monster
+                .writeByte(monsterVersion) // monster
                 .writeByte(NOT_PROVIDED_VERSION) // medal
                 .writeByte(levelVersion) // level
                 .writeByte(frameVersion) // frame
@@ -121,6 +122,7 @@ public final class MessageHandler {
         session.send(new Message(MessageName.UPDATE_DATA, writer.toByteArray()));
         LOGGER.fine(() -> "UPDATE_DATA_TX type=-1 session=" + session.id()
                 + " effectVersion=" + effectVersion
+                + " monsterVersion=" + monsterVersion
                 + " levelVersion=" + levelVersion);
     }
 
@@ -160,14 +162,68 @@ public final class MessageHandler {
     }
 
     private void sendMonsterResource() throws IOException {
+        int version = resourceService.monsterVersion();
+        var darts = resourceService.monsterDarts();
+        var templates = resourceService.monsterTemplates();
+        if (version < 0 || darts.isEmpty() || templates.isEmpty()) {
+            LOGGER.fine(() -> "UPDATE_DATA type=4 skipped because Monster resources are unavailable session="
+                    + session.id());
+            return;
+        }
+        if (darts.size() > Short.MAX_VALUE || templates.size() > Short.MAX_VALUE) {
+            throw new IOException("too many monster resources");
+        }
         MessageWriter writer = new MessageWriter()
                 .writeByte(4)
-                .writeByte(DEV_MONSTER_VERSION)
-                .writeShort(0) // dart template count
-                .writeShort(0); // monster template count
+                .writeByte(version)
+                .writeShort(darts.size());
+        for (var dart : darts) {
+            writer.writeShort(dart.id())
+                    .writeBoolean(dart.meteorite());
+            writeMonsterDartPhase(writer, dart.light());
+            writeMonsterDartPhase(writer, dart.bullet());
+            writeMonsterDartPhase(writer, dart.explode());
+        }
+        writer.writeShort(templates.size());
+        for (var template : templates) {
+            if (template.iconsMove().size() > Byte.MAX_VALUE) {
+                throw new IOException("too many move icons for monster template " + template.id());
+            }
+            writer.writeShort(template.id())
+                    .writeUtf(template.name())
+                    .writeShort(template.rangeMove())
+                    .writeByte(template.speed())
+                    .writeByte(template.type())
+                    .writeByte(template.dartId())
+                    .writeByte(template.iconsMove().size());
+            for (int icon : template.iconsMove()) {
+                writer.writeShort(icon);
+            }
+            writer.writeShort(template.iconInjure())
+                    .writeShort(template.iconAttack())
+                    .writeShort(template.w())
+                    .writeShort(template.h())
+                    .writeByte(template.dx())
+                    .writeByte(template.dy());
+        }
         session.send(new Message(MessageName.UPDATE_DATA, writer.toByteArray()));
         LOGGER.fine(() -> "UPDATE_DATA_TX type=4 session=" + session.id()
-                + " monsterVersion=" + DEV_MONSTER_VERSION + " darts=0 monsters=0");
+                + " monsterVersion=" + version + " darts=" + darts.size()
+                + " templates=" + templates.size());
+    }
+
+    private void writeMonsterDartPhase(MessageWriter writer, LegacyMonsterDartPhase phase)
+            throws IOException {
+        if (phase.icons().size() > Byte.MAX_VALUE) {
+            throw new IOException("too many monster dart phase icons: " + phase.icons().size());
+        }
+        writer.writeByte(phase.icons().size());
+        for (int icon : phase.icons()) {
+            writer.writeShort(icon);
+        }
+        writer.writeShort(phase.dx())
+                .writeShort(phase.dy())
+                .writeShort(phase.delay());
     }
 
     private void sendLevelResource() throws IOException {

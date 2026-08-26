@@ -8,6 +8,7 @@ import com.project.game.frame.FrameTemplate;
 import com.project.game.map.LegacyMapTemplate;
 
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -24,6 +25,7 @@ import java.util.Set;
 /** Development resource access for static legacy data such as numeric-ID icons. */
 public final class ResourceService {
     private static final List<Integer> REQUIRED_FRAME_IDS = List.of(3, 4, 5, 6, 7, 8, 21, 22, 23);
+    private static final List<Integer> REQUIRED_MOVEMENT_EFFECT_IDS = List.of(6, 7);
     private static final Set<Integer> REQUIRED_PLAYER_SKILL_IDS = Set.of(
             0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17,
             30, 31, 32, 33, 34, 35, 36);
@@ -37,6 +39,7 @@ public final class ResourceService {
     private final Map<Integer, List<LegacyPlayerSkill>> playerSkills;
     private final Map<Integer, LegacyMapTemplate> maps;
     private final List<LegacyLevel> levels;
+    private final List<LegacyEffectImage> effects;
 
     private ResourceService(Path iconRoot, Path frameRoot, boolean requirePlayerSkills) {
         this.iconRoot = iconRoot == null ? null : iconRoot.toAbsolutePath().normalize();
@@ -50,6 +53,9 @@ public final class ResourceService {
         this.levels = frameRoot == null
                 ? List.of()
                 : loadLevels(frameRoot, requirePlayerSkills);
+        this.effects = frameRoot == null
+                ? List.of()
+                : loadEffects(frameRoot, requirePlayerSkills);
     }
 
     public static ResourceService unavailable() {
@@ -97,6 +103,10 @@ public final class ResourceService {
 
     public List<LegacyLevel> levels() {
         return levels;
+    }
+
+    public List<LegacyEffectImage> effects() {
+        return effects;
     }
 
     private static List<FrameTemplate> loadFrames(Path frameRoot) {
@@ -303,6 +313,121 @@ public final class ResourceService {
             throw new IllegalStateException("cannot read " + source, exception);
         } catch (JsonParseException exception) {
             throw new IllegalArgumentException("invalid LevelBootstrap.json at " + source, exception);
+        }
+    }
+
+    private static List<LegacyEffectImage> loadEffects(Path frameRoot, boolean required) {
+        Path root = Objects.requireNonNull(frameRoot, "frameRoot").toAbsolutePath().normalize();
+        Path source = root.resolve("EffectBootstrap.json").normalize();
+        if (!source.startsWith(root) || !Files.isRegularFile(source) || !Files.isReadable(source)) {
+            if (required) {
+                throw new IllegalArgumentException(
+                        "EffectBootstrap.json is not readable below " + root);
+            }
+            return List.of();
+        }
+        try {
+            String json = Files.readString(source, StandardCharsets.UTF_8);
+            JsonElement parsed = JsonParser.parseString(json);
+            if (!parsed.isJsonObject()) {
+                throw new IllegalArgumentException("EffectBootstrap.json root must be an object");
+            }
+            JsonObject rootObject = parsed.getAsJsonObject();
+            requireExactFields(rootObject, Set.of("version", "images"), "EffectBootstrap.json");
+            if (readShortValue(rootObject, "version") != 0) {
+                throw new IllegalArgumentException("EffectBootstrap.json version must be 0");
+            }
+            JsonElement imagesValue = required(rootObject, "images");
+            if (!imagesValue.isJsonArray()) {
+                throw new IllegalArgumentException("EffectBootstrap.json field images must be an array");
+            }
+            if (imagesValue.getAsJsonArray().size() != REQUIRED_MOVEMENT_EFFECT_IDS.size()) {
+                throw new IllegalArgumentException("EffectBootstrap.json must contain exactly 2 images");
+            }
+
+            List<LegacyEffectImage> loaded = new ArrayList<>(imagesValue.getAsJsonArray().size());
+            Set<Integer> ids = new HashSet<>();
+            for (int index = 0; index < imagesValue.getAsJsonArray().size(); index++) {
+                JsonElement element = imagesValue.getAsJsonArray().get(index);
+                if (!element.isJsonObject()) {
+                    throw new IllegalArgumentException("EffectBootstrap image " + index
+                            + " must be an object");
+                }
+                JsonObject image = element.getAsJsonObject();
+                requireExactFields(image, Set.of("id", "dx", "dy", "delay", "icons"),
+                        "EffectBootstrap image " + index);
+                int id = readShortValue(image, "id");
+                int expectedId = REQUIRED_MOVEMENT_EFFECT_IDS.get(index);
+                if (id != expectedId) {
+                    throw new IllegalArgumentException("EffectBootstrap image " + index
+                            + " id must be " + expectedId + " but was " + id);
+                }
+                if (!ids.add(id)) {
+                    throw new IllegalArgumentException("duplicate EffectBootstrap image " + id);
+                }
+                List<Integer> icons = readShortList(image, "icons");
+                if (icons.isEmpty()) {
+                    throw new IllegalArgumentException("EffectBootstrap image " + id
+                            + " icons must not be empty");
+                }
+                if (icons.size() > Byte.MAX_VALUE) {
+                    throw new IllegalArgumentException("too many icons for EffectBootstrap image " + id);
+                }
+                loaded.add(new LegacyEffectImage(
+                        id,
+                        readShortValue(image, "dx"),
+                        readShortValue(image, "dy"),
+                        readShortValue(image, "delay"),
+                        icons));
+            }
+            return List.copyOf(loaded);
+        } catch (IOException exception) {
+            throw new IllegalStateException("cannot read " + source, exception);
+        } catch (JsonParseException exception) {
+            throw new IllegalArgumentException("invalid EffectBootstrap.json at " + source, exception);
+        }
+    }
+
+    private static void requireExactFields(JsonObject object, Set<String> expected, String label) {
+        if (!object.keySet().equals(expected)) {
+            throw new IllegalArgumentException(label + " must contain exactly fields " + expected);
+        }
+    }
+
+    private static List<Integer> readShortList(JsonObject object, String field) {
+        JsonElement value = required(object, field);
+        if (!value.isJsonArray()) {
+            throw new IllegalArgumentException("resource field " + field + " must be an array");
+        }
+        List<Integer> result = new ArrayList<>(value.getAsJsonArray().size());
+        for (JsonElement element : value.getAsJsonArray()) {
+            if (!element.isJsonPrimitive() || !element.getAsJsonPrimitive().isNumber()) {
+                throw new IllegalArgumentException("resource field " + field
+                        + " contains a non-number");
+            }
+            result.add(readShortValue(element, field));
+        }
+        return List.copyOf(result);
+    }
+
+    private static int readShortValue(JsonObject object, String field) {
+        return readShortValue(required(object, field), field);
+    }
+
+    private static int readShortValue(JsonElement value, String field) {
+        if (!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isNumber()) {
+            throw new IllegalArgumentException("resource field " + field + " must be numeric");
+        }
+        try {
+            long number = new BigDecimal(value.getAsString()).longValueExact();
+            if (number < Short.MIN_VALUE || number > Short.MAX_VALUE) {
+                throw new IllegalArgumentException("resource field " + field
+                        + " must fit signed short: " + number);
+            }
+            return (int) number;
+        } catch (NumberFormatException | ArithmeticException exception) {
+            throw new IllegalArgumentException("resource field " + field
+                    + " must be an integer", exception);
         }
     }
 
@@ -657,6 +782,18 @@ public final class ResourceService {
     public record LegacyLevel(int id, String name, long power) {
         public LegacyLevel {
             Objects.requireNonNull(name, "name");
+        }
+    }
+
+    public record LegacyEffectImage(
+            int id,
+            int dx,
+            int dy,
+            int delay,
+            List<Integer> icons
+    ) {
+        public LegacyEffectImage {
+            icons = List.copyOf(Objects.requireNonNull(icons, "icons"));
         }
     }
 

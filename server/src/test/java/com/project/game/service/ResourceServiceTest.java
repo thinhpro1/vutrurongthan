@@ -180,6 +180,41 @@ class ResourceServiceTest {
     }
 
     @Test
+    void loadsCanonicalMovementEffects() throws Exception {
+        ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
+
+        var effects = resources.effects();
+
+        assertEquals(List.of(6, 7),
+                effects.stream().map(ResourceService.LegacyEffectImage::id).toList());
+        assertEquals(2, effects.size());
+        assertTrue(effects.stream().allMatch(effect -> !effect.icons().isEmpty()));
+        assertTrue(effects.stream().allMatch(effect -> effect.icons().size() <= Byte.MAX_VALUE));
+
+        assertEquals(new ResourceService.LegacyEffectImage(6, 0, 0, 100, List.of(71, 72)),
+                effects.get(0));
+        assertEquals(new ResourceService.LegacyEffectImage(7, 0, 0, 100, List.of(68, 69, 70)),
+                effects.get(1));
+        for (var effect : effects) {
+            assertTrue(effect.id() >= Short.MIN_VALUE && effect.id() <= Short.MAX_VALUE);
+            assertTrue(effect.dx() >= Short.MIN_VALUE && effect.dx() <= Short.MAX_VALUE);
+            assertTrue(effect.dy() >= Short.MIN_VALUE && effect.dy() <= Short.MAX_VALUE);
+            assertTrue(effect.delay() >= Short.MIN_VALUE && effect.delay() <= Short.MAX_VALUE);
+            assertTrue(effect.icons().stream()
+                    .allMatch(id -> id >= Short.MIN_VALUE && id <= Short.MAX_VALUE));
+        }
+    }
+
+    @Test
+    void pinsCanonicalMovementEffectBootstrapHash() throws Exception {
+        byte[] bytes = Files.readAllBytes(Path.of("resources", "json", "EffectBootstrap.json"));
+        String hash = HexFormat.of().formatHex(
+                MessageDigest.getInstance("SHA-256").digest(bytes));
+
+        assertEquals("0eedf588888a3461c370fd5dcaada81e29dc16dd21aa0b2bc444712026b21091", hash);
+    }
+
+    @Test
     void pinsLegacyMapZeroGridHash() throws Exception {
         ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
         var map = resources.map(0).orElseThrow();

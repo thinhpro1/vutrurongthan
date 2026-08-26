@@ -242,6 +242,74 @@ class MessageHandlerTest {
     }
 
     @Test
+    void serializesMovementEffectResourceInUnityFieldOrder() throws Exception {
+        ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
+        PipedInputStream input = new PipedInputStream();
+        try (PipedOutputStream inputWriter = new PipedOutputStream(input)) {
+            ByteArrayOutputStream output = new ByteArrayOutputStream();
+            SessionManager manager = new SessionManager();
+            byte[] key = "abc".getBytes(StandardCharsets.US_ASCII);
+            Session session = new Session(
+                    manager.nextId(),
+                    new TestTransport(input, output, "127.0.0.1"),
+                    manager,
+                    new LegacyPacketCodec(262_144),
+                    key,
+                    4,
+                    new ServerServices(new AuthService(), resources),
+                    NetworkConfig.defaults(),
+                    NetworkEventObserver.NO_OP);
+            try {
+                session.start();
+                session.completeHandshake();
+                output.reset();
+
+                newHandler(session, resources).onMessage(new Message(
+                        MessageName.UPDATE_DATA,
+                        new MessageWriter().writeByte(3).toByteArray()));
+
+                waitForOutput(output);
+                Message response = new LegacyPacketCodec(262_144).readServerResponse(
+                        new ByteArrayInputStream(output.toByteArray()),
+                        new LegacyCipher(key),
+                        true);
+
+                assertEquals(MessageName.UPDATE_DATA, response.command());
+                var reader = response.reader();
+                assertEquals(3, reader.readByte());
+                assertEquals(0, reader.readByte());
+                assertEquals(2, reader.readUnsignedShort());
+                for (var expected : resources.effects()) {
+                    assertEquals(expected.id(), reader.readShort());
+                    assertEquals(expected.dx(), reader.readShort());
+                    assertEquals(expected.dy(), reader.readShort());
+                    assertEquals(expected.delay(), reader.readShort());
+                    assertEquals(expected.icons().size(), reader.readUnsignedByte());
+                    for (int iconId : expected.icons()) {
+                        assertEquals(iconId, reader.readShort());
+                    }
+                }
+                assertEquals(0, reader.readUnsignedShort());
+                assertEquals(0, reader.remaining());
+            } finally {
+                session.close();
+            }
+        }
+    }
+
+    @Test
+    void doesNotSendEmptyEffectDatasetWhenEffectResourcesAreUnavailable() {
+        Session session = newSession(new AuthService());
+        session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
+
+        newHandler(session, ResourceService.unavailable()).onMessage(
+                new Message(MessageName.UPDATE_DATA, new byte[]{3}));
+
+        assertEquals(0, session.queuedMessages());
+        assertEquals(SessionState.HANDSHAKE_DONE, session.state());
+    }
+
+    @Test
     void requestIconIsAllowedOnlyAfterHandshake() {
         ResourceService resources = ResourceService.unavailable();
 

@@ -181,7 +181,7 @@ class NetworkIntegrationTest {
                 assertEquals(-1, manifestReader.readByte()); // item
                 assertEquals(-1, manifestReader.readByte()); // item option
                 assertEquals(-1, manifestReader.readByte()); // npc
-                assertEquals(-1, manifestReader.readByte()); // effect
+                assertEquals(0, manifestReader.readByte()); // effect
                 assertEquals(0, manifestReader.readByte()); // monster
                 assertEquals(-1, manifestReader.readByte()); // medal
                 assertEquals(0, manifestReader.readByte()); // level
@@ -228,6 +228,94 @@ class NetworkIntegrationTest {
         }
         assertNull(serverFailure.get(),
                 "network server failed during level resource integration test");
+    }
+
+    @Test
+    void javaClientLoadsMovementEffectResource() throws Exception {
+        ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
+        NetworkServer server = new NetworkServer(
+                "127.0.0.1", 0, 2, 262_144, 8, 1_000,
+                "abc".getBytes(StandardCharsets.US_ASCII),
+                new ServerServices(new AuthService(), resources),
+                null,
+                NetworkConfig.defaults(),
+                NetworkEventObserver.NO_OP);
+        AtomicReference<Throwable> serverFailure = new AtomicReference<>();
+        Thread serverThread = Thread.ofVirtual().start(() -> {
+            try {
+                server.start();
+            } catch (Throwable failure) {
+                serverFailure.set(failure);
+            }
+        });
+
+        try {
+            waitForPort(server);
+            LegacyPacketCodec codec = new LegacyPacketCodec(262_144);
+            try (LegacyTcpTransport transport = LegacyTcpTransport.connect(
+                    "127.0.0.1", server.localPort(), 1_000)) {
+                transport.socket().setSoTimeout(2_000);
+
+                codec.writeClient(transport.output(), null, false,
+                        new Message(MessageName.CONNECT_SERVER));
+                Message handshake = codec.read(transport.input(), null, false);
+                assertEquals(MessageName.SEND_SESSION_KEY, handshake.command());
+                LegacyCipher cipher = new LegacyCipher(reconstructKey(handshake.payload()));
+                assertEquals(MessageName.VERSION_SOURCE,
+                        codec.readServerResponse(transport.input(), cipher, true).command());
+
+                codec.writeClient(transport.output(), cipher, true,
+                        new Message(MessageName.UPDATE_DATA,
+                                new MessageWriter().writeByte(-1).toByteArray()));
+                Message manifest = codec.readServerResponse(transport.input(), cipher, true);
+                var manifestReader = manifest.reader();
+                assertEquals(-1, manifestReader.readByte());
+                assertEquals(-1, manifestReader.readByte()); // image
+                assertEquals(-1, manifestReader.readByte()); // item
+                assertEquals(-1, manifestReader.readByte()); // item option
+                assertEquals(-1, manifestReader.readByte()); // npc
+                assertEquals(0, manifestReader.readByte());  // effect
+                assertEquals(0, manifestReader.readByte());  // monster
+                assertEquals(-1, manifestReader.readByte()); // medal
+                assertEquals(0, manifestReader.readByte());  // level
+                assertEquals(1, manifestReader.readByte());  // frame
+                assertEquals(-1, manifestReader.readByte()); // mount
+                assertEquals(-1, manifestReader.readByte()); // bag
+                assertEquals(-1, manifestReader.readByte()); // skill paint
+                assertEquals(-1, manifestReader.readByte()); // aura
+                assertEquals(0, manifestReader.remaining());
+
+                codec.writeClient(transport.output(), cipher, true,
+                        new Message(MessageName.UPDATE_DATA,
+                                new MessageWriter().writeByte(3).toByteArray()));
+                Message response = codec.readServerResponse(transport.input(), cipher, true);
+                assertEquals(MessageName.UPDATE_DATA, response.command());
+
+                var reader = response.reader();
+                assertEquals(3, reader.readByte());
+                assertEquals(0, reader.readByte());
+                assertEquals(2, reader.readUnsignedShort());
+                for (var expected : resources.effects()) {
+                    assertEquals(expected.id(), reader.readShort());
+                    assertEquals(expected.dx(), reader.readShort());
+                    assertEquals(expected.dy(), reader.readShort());
+                    assertEquals(expected.delay(), reader.readShort());
+                    assertEquals(expected.icons().size(), reader.readUnsignedByte());
+                    for (int iconId : expected.icons()) {
+                        assertEquals(iconId, reader.readShort());
+                    }
+                }
+                assertEquals(0, reader.readUnsignedShort());
+                assertEquals(0, reader.remaining());
+            }
+            waitForNoSessions(server);
+        } finally {
+            server.stop();
+            serverThread.join(1_000);
+        }
+
+        assertNull(serverFailure.get(),
+                "network server failed during movement effect integration test");
     }
 
     @Test

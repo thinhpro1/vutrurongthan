@@ -19,6 +19,7 @@ public final class MessageHandler {
     private static final Logger LOGGER = Logger.getLogger(MessageHandler.class.getName());
     // Development-only bootstrap values for the legacy client resource protocol.
     private static final int NOT_PROVIDED_VERSION = -1;
+    private static final int DEV_EFFECT_VERSION = 0;
     private static final int DEV_MONSTER_VERSION = 0;
     private static final int DEV_LEVEL_VERSION = 0;
     private static final int DEV_FRAME_VERSION = 1;
@@ -82,6 +83,7 @@ public final class MessageHandler {
         eventObserver.onUpdateData(session, type);
         switch (type) {
             case -1 -> sendResourceManifest();
+            case 3 -> sendEffectResource();
             case 4 -> sendMonsterResource();
             case 6 -> sendLevelResource();
             case 7 -> sendFrameResource();
@@ -95,13 +97,15 @@ public final class MessageHandler {
                 ? NOT_PROVIDED_VERSION : DEV_FRAME_VERSION;
         int levelVersion = resourceService.levels().isEmpty()
                 ? NOT_PROVIDED_VERSION : DEV_LEVEL_VERSION;
+        int effectVersion = resourceService.effects().isEmpty()
+                ? NOT_PROVIDED_VERSION : DEV_EFFECT_VERSION;
         MessageWriter writer = new MessageWriter()
                 .writeByte(-1)
                 .writeByte(NOT_PROVIDED_VERSION) // image
                 .writeByte(NOT_PROVIDED_VERSION) // item template
                 .writeByte(NOT_PROVIDED_VERSION) // item option template
                 .writeByte(NOT_PROVIDED_VERSION) // npc
-                .writeByte(NOT_PROVIDED_VERSION) // effect
+                .writeByte(effectVersion) // effect
                 .writeByte(DEV_MONSTER_VERSION) // monster
                 .writeByte(NOT_PROVIDED_VERSION) // medal
                 .writeByte(levelVersion) // level
@@ -112,7 +116,43 @@ public final class MessageHandler {
                 .writeByte(NOT_PROVIDED_VERSION); // aura (client 0.9.5)
         session.send(new Message(MessageName.UPDATE_DATA, writer.toByteArray()));
         LOGGER.fine(() -> "UPDATE_DATA_TX type=-1 session=" + session.id()
+                + " effectVersion=" + effectVersion
                 + " levelVersion=" + levelVersion);
+    }
+
+    private void sendEffectResource() throws IOException {
+        var effects = resourceService.effects();
+        if (effects.isEmpty()) {
+            LOGGER.fine(() -> "UPDATE_DATA type=3 skipped because Effect resources are unavailable session="
+                    + session.id());
+            return;
+        }
+        if (effects.size() > Short.MAX_VALUE) {
+            throw new IOException("too many legacy movement effects: " + effects.size());
+        }
+
+        MessageWriter writer = new MessageWriter()
+                .writeByte(3)
+                .writeByte(DEV_EFFECT_VERSION)
+                .writeShort(effects.size());
+        for (var effect : effects) {
+            if (effect.icons().size() > Byte.MAX_VALUE) {
+                throw new IOException("too many icons for legacy effect " + effect.id());
+            }
+            writer.writeShort(effect.id())
+                    .writeShort(effect.dx())
+                    .writeShort(effect.dy())
+                    .writeShort(effect.delay())
+                    .writeByte(effect.icons().size());
+            effect.icons().forEach(writer::writeShort);
+        }
+        writer.writeShort(0); // effectTemplateCount: intentionally out of this movement slice
+
+        session.send(new Message(MessageName.UPDATE_DATA, writer.toByteArray()));
+        LOGGER.fine(() -> "UPDATE_DATA_TX type=3 session=" + session.id()
+                + " effectVersion=" + DEV_EFFECT_VERSION
+                + " images=" + effects.size()
+                + " templates=0");
     }
 
     private void sendMonsterResource() throws IOException {

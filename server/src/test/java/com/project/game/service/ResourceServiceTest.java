@@ -16,6 +16,8 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -125,6 +127,47 @@ class ResourceServiceTest {
                 .orElseThrow();
         assertEquals(List.of("10.0", "20.0", "30.0"),
                 teleport.paints().stream().map(ResourceService.LegacySkillPaint::percent).toList());
+    }
+
+    @Test
+    void loadsExactMapZeroBootstrap() {
+        ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
+
+        var map = resources.map(0).orElseThrow();
+
+        assertEquals(0, map.id());
+        assertEquals(0, map.iconId());
+        assertEquals("Núi Paozu", map.name());
+        assertEquals(20, map.row());
+        assertEquals(62, map.column());
+        assertEquals(1240, map.data().length());
+        assertTrue(map.data().chars().allMatch(ch -> ch == '0' || ch == '1'));
+        assertEquals(List.of(51, 52, 53), map.imagesBgr());
+        assertEquals(List.of(
+                List.of(128, 213, 242),
+                List.of(141, 185, 128),
+                List.of(90, 154, 64),
+                List.of(69, 153, 51)
+        ), map.colorsBgr());
+        assertFalse(map.line());
+        assertNull(map.dataLine());
+    }
+
+    @Test
+    void rejectsMapZeroGridDataLengthMismatch(@TempDir Path root) throws IOException {
+        Files.copy(Path.of("resources", "json", "Frame.json"), root.resolve("Frame.json"));
+        Files.writeString(root.resolve("MapBootstrap.json"), """
+                {"0":{"id":0,"iconId":0,"name":"Núi Paozu","row":2,"column":2,
+                "data":"010","imagesBgr":[51,52,53],
+                "colorsBgr":[[128,213,242],[141,185,128],[90,154,64],[69,153,51]],
+                "isLine":false,"dataLine":null}}
+                """);
+
+        IllegalArgumentException failure = assertThrows(IllegalArgumentException.class,
+                () -> ResourceService.fromFrameRoot(root));
+        assertTrue(failure.getMessage().contains("Map0"));
+        assertTrue(failure.getMessage().contains("grid"));
+        assertTrue(failure.getMessage().contains("data length"));
     }
 
     @Test

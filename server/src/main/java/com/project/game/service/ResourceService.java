@@ -5,6 +5,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
 import com.google.gson.JsonParser;
 import com.project.game.frame.FrameTemplate;
+import com.project.game.map.LegacyMapTemplate;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -34,6 +35,7 @@ public final class ResourceService {
     private final Path iconRoot;
     private final List<FrameTemplate> frames;
     private final Map<Integer, List<LegacyPlayerSkill>> playerSkills;
+    private final Map<Integer, LegacyMapTemplate> maps;
 
     private ResourceService(Path iconRoot, Path frameRoot, boolean requirePlayerSkills) {
         this.iconRoot = iconRoot == null ? null : iconRoot.toAbsolutePath().normalize();
@@ -41,6 +43,9 @@ public final class ResourceService {
         this.playerSkills = frameRoot == null
                 ? Map.of()
                 : loadPlayerSkills(frameRoot, requirePlayerSkills);
+        this.maps = frameRoot == null
+                ? Map.of()
+                : loadMaps(frameRoot, requirePlayerSkills);
     }
 
     public static ResourceService unavailable() {
@@ -80,6 +85,10 @@ public final class ResourceService {
 
     public List<LegacyPlayerSkill> playerSkills(int gender) {
         return playerSkills.getOrDefault(gender, List.of());
+    }
+
+    public Optional<LegacyMapTemplate> map(int mapId) {
+        return Optional.ofNullable(maps.get(mapId));
     }
 
     private static List<FrameTemplate> loadFrames(Path frameRoot) {
@@ -178,6 +187,100 @@ public final class ResourceService {
             throw new IllegalStateException("cannot read " + source, exception);
         } catch (JsonParseException exception) {
             throw new IllegalArgumentException("invalid PlayerSkillBootstrap.json at " + source, exception);
+        }
+    }
+
+    private static Map<Integer, LegacyMapTemplate> loadMaps(Path frameRoot, boolean required) {
+        Path root = Objects.requireNonNull(frameRoot, "frameRoot").toAbsolutePath().normalize();
+        Path source = root.resolve("MapBootstrap.json").normalize();
+        if (!source.startsWith(root) || !Files.isRegularFile(source) || !Files.isReadable(source)) {
+            if (required) {
+                throw new IllegalArgumentException("MapBootstrap.json is not readable below " + root);
+            }
+            return Map.of();
+        }
+        try {
+            String json = Files.readString(source, StandardCharsets.UTF_8);
+            JsonElement parsed = JsonParser.parseString(json);
+            if (!parsed.isJsonObject()) {
+                throw new IllegalArgumentException("MapBootstrap.json root must be an object");
+            }
+            JsonObject rootObject = parsed.getAsJsonObject();
+            Map<Integer, LegacyMapTemplate> loaded = new HashMap<>();
+            for (Map.Entry<String, JsonElement> entry : rootObject.entrySet()) {
+                int key = parseId(entry.getKey(), "map");
+                if (key != 0) {
+                    throw new IllegalArgumentException("MapBootstrap.json contains unsupported map " + key);
+                }
+                if (!entry.getValue().isJsonObject()) {
+                    throw new IllegalArgumentException("Map0 must be an object");
+                }
+                LegacyMapTemplate map = readMap(entry.getValue().getAsJsonObject());
+                if (map.id() != key) {
+                    throw new IllegalArgumentException("Map0 key/id mismatch");
+                }
+                validateMap(map);
+                if (loaded.put(key, map) != null) {
+                    throw new IllegalArgumentException("duplicate Map0 bootstrap");
+                }
+            }
+            if (!loaded.containsKey(0)) {
+                throw new IllegalArgumentException("MapBootstrap.json is missing Map0");
+            }
+            return Collections.unmodifiableMap(loaded);
+        } catch (IOException exception) {
+            throw new IllegalStateException("cannot read " + source, exception);
+        } catch (JsonParseException exception) {
+            throw new IllegalArgumentException("invalid MapBootstrap.json at " + source, exception);
+        }
+    }
+
+    private static LegacyMapTemplate readMap(JsonObject value) {
+        JsonElement lineValue = value.has("isLine") ? value.get("isLine") : value.get("line");
+        if (lineValue == null || lineValue.isJsonNull()
+                || !lineValue.isJsonPrimitive() || !lineValue.getAsJsonPrimitive().isBoolean()) {
+            throw new IllegalArgumentException("Map0 field isLine must be boolean");
+        }
+        return new LegacyMapTemplate(
+                readInt(value, "id"),
+                readInt(value, "iconId"),
+                readString(value, "name"),
+                readInt(value, "row"),
+                readInt(value, "column"),
+                readString(value, "data"),
+                List.copyOf(readIntList(value, "imagesBgr")),
+                immutableMatrix(readIntMatrix(value, "colorsBgr")),
+                lineValue.getAsBoolean(),
+                readNullableString(value, "dataLine"));
+    }
+
+    private static void validateMap(LegacyMapTemplate map) {
+        if (map.id() != 0) {
+            throw new IllegalArgumentException("Map0 id must be 0");
+        }
+        if (map.row() <= 0 || map.column() <= 0) {
+            throw new IllegalArgumentException("Map0 grid dimensions must be positive");
+        }
+        long expectedLength = (long) map.row() * map.column();
+        if (expectedLength > Integer.MAX_VALUE || map.data().length() != expectedLength) {
+            throw new IllegalArgumentException("Map0 grid data length must be "
+                    + expectedLength + " but was " + map.data().length());
+        }
+        if (!map.data().chars().allMatch(ch -> ch == '0' || ch == '1')) {
+            throw new IllegalArgumentException("Map0 grid data must contain only 0/1");
+        }
+        if (map.imagesBgr().size() != 3) {
+            throw new IllegalArgumentException("Map0 must contain exactly 3 background images");
+        }
+        if (map.colorsBgr().size() != 4
+                || map.colorsBgr().stream().anyMatch(row -> row.size() != 3)) {
+            throw new IllegalArgumentException("Map0 colorsBgr must be a 4x3 matrix");
+        }
+        if (!map.line() && map.dataLine() != null) {
+            throw new IllegalArgumentException("Map0 dataLine must be null when isLine is false");
+        }
+        if (map.line() && map.dataLine() == null) {
+            throw new IllegalArgumentException("Map0 line map is missing dataLine");
         }
     }
 
@@ -364,6 +467,20 @@ public final class ResourceService {
         JsonElement value = required(object, field);
         if (!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isString()) {
             throw new IllegalArgumentException("resource field " + field + " must be a string");
+        }
+        return value.getAsString();
+    }
+
+    private static String readNullableString(JsonObject object, String field) {
+        JsonElement value = object.get(field);
+        if (value == null) {
+            throw new IllegalArgumentException("missing resource field " + field);
+        }
+        if (value.isJsonNull()) {
+            return null;
+        }
+        if (!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isString()) {
+            throw new IllegalArgumentException("resource field " + field + " must be a string or null");
         }
         return value.getAsString();
     }

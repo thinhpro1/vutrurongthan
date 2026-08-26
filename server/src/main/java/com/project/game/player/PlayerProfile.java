@@ -42,7 +42,11 @@ public record PlayerProfile(
         long coinLock,
         int diamond,
         int ruby,
-        int spaceship
+        int spaceship,
+        int mapId,
+        int zoneId,
+        int x,
+        int y
 ) {
     public static PlayerProfile initial(String accountName, int id, String name, int gender) {
         int head = switch (gender) {
@@ -65,6 +69,7 @@ public record PlayerProfile(
                 150, 150, 100, 100,
                 12, 0, 0, 1,
                 "0%", "0%", "0%", "0%", "0%", "0%",
-                10, 0, 10_000, 0, 25, 0);
+                10, 0, 10_000, 0, 25, 0,
+                0, 0, 1250, 648);
     }
 }

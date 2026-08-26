@@ -226,7 +226,7 @@ public final class MessageHandler {
         } else {
             session.bindPlayer(player);
             session.transition(SessionState.AUTHENTICATED, SessionState.IN_GAME);
-            sendPlayerInfo(player);
+            enterGame(player);
         }
         LOGGER.info(() -> "LOGIN success session=" + session.id());
     }
@@ -252,7 +252,12 @@ public final class MessageHandler {
         }
         session.bindPlayer(result.player());
         session.transition(SessionState.AUTHENTICATED, SessionState.IN_GAME);
-        sendPlayerInfo(result.player());
+        enterGame(result.player());
+    }
+
+    private void enterGame(PlayerProfile player) throws IOException {
+        sendPlayerInfo(player);
+        sendMapInfo(player);
     }
 
     private void sendPlayerInfo(PlayerProfile player) throws IOException {
@@ -318,6 +323,54 @@ public final class MessageHandler {
                 .writeByte(player.gender())
                 .writeByte(0);
         session.send(new Message(MessageName.PLAYER_INFO, writer.toByteArray()));
+    }
+
+    private void sendMapInfo(PlayerProfile player) throws IOException {
+        var map = resourceService.map(player.mapId())
+                .orElseThrow(() -> new IOException(
+                        "legacy map bootstrap unavailable for map " + player.mapId()));
+
+        MessageWriter writer = new MessageWriter()
+                .writeShort(map.id())
+                .writeShort(map.iconId())
+                .writeUtf(map.name())
+                .writeShort(map.row())
+                .writeShort(map.column())
+                .writeUtf(map.data());
+
+        for (int imageId : map.imagesBgr()) {
+            writer.writeShort(imageId);
+        }
+        for (var colorRow : map.colorsBgr()) {
+            for (int value : colorRow) {
+                writer.writeShort(value);
+            }
+        }
+
+        writer.writeBoolean(map.line());
+        if (map.line()) {
+            if (map.dataLine() == null) {
+                throw new IOException("line map missing dataLine for map " + map.id());
+            }
+            writer.writeUtf(map.dataLine());
+        }
+
+        writer.writeByte(player.zoneId())
+                .writeShort(player.x())
+                .writeShort(player.y())
+                .writeByte(0)
+                .writeByte(0)
+                .writeByte(0)
+                .writeShort(0)
+                .writeBoolean(false);
+
+        if (session.send(new Message(MessageName.MAP_INFO, writer.toByteArray()))) {
+            LOGGER.info(() -> "MAP_INFO_TX map=" + map.id()
+                    + " zone=" + player.zoneId()
+                    + " x=" + player.x()
+                    + " y=" + player.y()
+                    + " session=" + session.id());
+        }
     }
 
     private void writePlayerSkill(MessageWriter writer, ResourceService.LegacyPlayerSkill skill)

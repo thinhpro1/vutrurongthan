@@ -28,12 +28,13 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class NetworkIntegrationTest {
     @Test
-    void javaClientCreatesFreshPlayerAndParsesLegacyPlayerInfo() throws Exception {
+    void javaClientCreatesFreshPlayerAndParsesLegacyMapZero() throws Exception {
         ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
         NetworkServer server = new NetworkServer("127.0.0.1", 0, 2, 262_144, 8, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
@@ -49,31 +50,68 @@ class NetworkIntegrationTest {
         });
         try {
             waitForPort(server);
-            ParsedPlayerInfo earth = runCreatePlayer(server.localPort(), "user01", "alpha1", 0);
-            assertFreshPlayer(earth, "alpha1", 0, 5, 6,
+            EnterGameResponses earth = runCreatePlayer(server.localPort(), "user01", "alpha1", 0);
+            assertFreshPlayer(earth.playerInfo(), "alpha1", 0, 5, 6,
                     List.of(0, 3, 6, 9, 12, 15, 30, 31, 32, 33, 36));
             assertEquals(List.of(new ParsedPaint("50.0", 0), new ParsedPaint("100.0", 1)),
-                    earth.paints().get(0));
+                    earth.playerInfo().paints().get(0));
             assertEquals(List.of(new ParsedPaint("10.0", 5), new ParsedPaint("20.0", 17),
                             new ParsedPaint("30.0", 25)),
-                    earth.paints().get(31));
+                    earth.playerInfo().paints().get(31));
+            assertLegacyMapZero(earth.mapInfo());
             waitForNoSessions(server);
 
-            ParsedPlayerInfo namek = runCreatePlayer(server.localPort(), "user02", "beta22", 1);
-            assertFreshPlayer(namek, "beta22", 1, 3, 7,
+            EnterGameResponses namek = runCreatePlayer(server.localPort(), "user02", "beta22", 1);
+            assertFreshPlayer(namek.playerInfo(), "beta22", 1, 3, 7,
                     List.of(1, 4, 7, 10, 13, 16, 30, 31, 32, 34, 36));
+            assertLegacyMapZero(namek.mapInfo());
             waitForNoSessions(server);
 
-            ParsedPlayerInfo saiyan = runCreatePlayer(server.localPort(), "user03", "gamma3", 2);
-            assertFreshPlayer(saiyan, "gamma3", 2, 4, 8,
+            EnterGameResponses saiyan = runCreatePlayer(server.localPort(), "user03", "gamma3", 2);
+            assertFreshPlayer(saiyan.playerInfo(), "gamma3", 2, 4, 8,
                     List.of(2, 5, 8, 11, 14, 17, 30, 31, 32, 35, 36));
+            assertLegacyMapZero(saiyan.mapInfo());
             waitForNoSessions(server);
         } finally {
             server.stop();
             serverThread.join(1_000);
         }
         assertNull(serverFailure.get(),
-                "network server failed during create-player PLAYER_INFO integration test");
+                "network server failed during create-player MAP_INFO integration test");
+    }
+
+    @Test
+    void javaClientRelogsExistingPlayerAndReceivesLegacyMapZero() throws Exception {
+        ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
+        NetworkServer server = new NetworkServer("127.0.0.1", 0, 2, 262_144, 8, 1_000,
+                "abc".getBytes(StandardCharsets.US_ASCII),
+                new ServerServices(new AuthService(), resources), null,
+                NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
+        AtomicReference<Throwable> serverFailure = new AtomicReference<>();
+        Thread serverThread = Thread.ofVirtual().start(() -> {
+            try {
+                server.start();
+            } catch (Throwable failure) {
+                serverFailure.set(failure);
+            }
+        });
+        try {
+            waitForPort(server);
+            EnterGameResponses created = runCreatePlayer(server.localPort(), "relog01", "relog", 0);
+            assertLegacyMapZero(created.mapInfo());
+            waitForNoSessions(server);
+
+            EnterGameResponses relogged = runLoginExistingPlayer(
+                    server.localPort(), "relog01", "secret1");
+            assertEquals("relog", relogged.playerInfo().name());
+            assertLegacyMapZero(relogged.mapInfo());
+            waitForNoSessions(server);
+        } finally {
+            server.stop();
+            serverThread.join(1_000);
+        }
+        assertNull(serverFailure.get(),
+                "network server failed during existing-player MAP_INFO integration test");
     }
 
     @Test
@@ -416,8 +454,8 @@ class NetworkIntegrationTest {
         runIconRequest(port, 5, new byte[]{1, 2, 3, 4});
     }
 
-    private static ParsedPlayerInfo runCreatePlayer(int port, String username,
-                                                    String name, int gender) throws Exception {
+    private static EnterGameResponses runCreatePlayer(int port, String username,
+                                                       String name, int gender) throws Exception {
         LegacyPacketCodec codec = new LegacyPacketCodec(262_144);
         try (LegacyTcpTransport transport = LegacyTcpTransport.connect("127.0.0.1", port, 1_000)) {
             transport.socket().setSoTimeout(5_000);
@@ -455,7 +493,36 @@ class NetworkIntegrationTest {
                     .writeByte(gender);
             codec.writeClient(transport.output(), cipher, true,
                     new Message(MessageName.CREATE_PLAYER, create.toByteArray()));
-            return parsePlayerInfo(codec.readServerResponse(transport.input(), cipher, true));
+            Message playerMessage = codec.readServerResponse(transport.input(), cipher, true);
+            Message mapMessage = codec.readServerResponse(transport.input(), cipher, true);
+            return new EnterGameResponses(parsePlayerInfo(playerMessage), parseMapInfo(mapMessage));
+        }
+    }
+
+    private static EnterGameResponses runLoginExistingPlayer(int port, String username,
+                                                              String password) throws Exception {
+        LegacyPacketCodec codec = new LegacyPacketCodec(262_144);
+        try (LegacyTcpTransport transport = LegacyTcpTransport.connect("127.0.0.1", port, 1_000)) {
+            transport.socket().setSoTimeout(5_000);
+            codec.writeClient(transport.output(), null, false,
+                    new Message(MessageName.CONNECT_SERVER));
+            Message handshake = codec.read(transport.input(), null, false);
+            assertEquals(MessageName.SEND_SESSION_KEY, handshake.command());
+            LegacyCipher cipher = new LegacyCipher(reconstructKey(handshake.payload()));
+            Message version = codec.readServerResponse(transport.input(), cipher, true);
+            assertEquals(MessageName.VERSION_SOURCE, version.command());
+            assertEquals("0.9.5", version.reader().readUtf());
+
+            MessageWriter login = new MessageWriter()
+                    .writeUtf("0.9.5")
+                    .writeUtf(username)
+                    .writeUtf(password)
+                    .writeByte(1);
+            codec.writeClient(transport.output(), cipher, true,
+                    new Message(MessageName.LOGIN, login.toByteArray()));
+            Message playerMessage = codec.readServerResponse(transport.input(), cipher, true);
+            Message mapMessage = codec.readServerResponse(transport.input(), cipher, true);
+            return new EnterGameResponses(parsePlayerInfo(playerMessage), parseMapInfo(mapMessage));
         }
     }
 
@@ -563,6 +630,50 @@ class NetworkIntegrationTest {
                 List.copyOf(skillIds), Map.copyOf(paintsBySkillId), List.copyOf(keySkillIds), mySkillId);
     }
 
+    private static ParsedMapInfo parseMapInfo(Message message) throws IOException {
+        assertEquals(MessageName.MAP_INFO, message.command());
+        var reader = message.reader();
+
+        int mapId = reader.readShort();
+        int iconId = reader.readShort();
+        String name = reader.readUtf();
+        int row = reader.readShort();
+        int column = reader.readShort();
+        String data = reader.readUtf();
+
+        List<Integer> imagesBgr = new ArrayList<>(3);
+        for (int index = 0; index < 3; index++) {
+            imagesBgr.add((int) reader.readShort());
+        }
+
+        List<List<Integer>> colorsBgr = new ArrayList<>(4);
+        for (int rowIndex = 0; rowIndex < 4; rowIndex++) {
+            List<Integer> color = new ArrayList<>(3);
+            for (int columnIndex = 0; columnIndex < 3; columnIndex++) {
+                color.add((int) reader.readShort());
+            }
+            colorsBgr.add(List.copyOf(color));
+        }
+
+        boolean line = reader.readBoolean();
+        String dataLine = line ? reader.readUtf() : null;
+
+        int zoneId = reader.readByte();
+        int x = reader.readShort();
+        int y = reader.readShort();
+        int waypointCount = reader.readUnsignedByte();
+        int npcCount = reader.readUnsignedByte();
+        int monsterCount = reader.readUnsignedByte();
+        int itemMapCount = reader.readUnsignedShort();
+        boolean dragonActive = reader.readBoolean();
+
+        return new ParsedMapInfo(
+                mapId, iconId, name, row, column, data,
+                List.copyOf(imagesBgr), List.copyOf(colorsBgr), line, dataLine,
+                zoneId, x, y, waypointCount, npcCount, monsterCount, itemMapCount,
+                dragonActive, reader.remaining());
+    }
+
     private static void assertFreshPlayer(ParsedPlayerInfo player, String name, int gender,
                                           int head, int body, List<Integer> skillIds) {
         assertTrue(player.id() > 0);
@@ -581,6 +692,34 @@ class NetworkIntegrationTest {
         assertEquals(skillIds, player.skillIds());
         assertEquals(List.of(gender, -1, -1, -1, -1, -1), player.keySkillIds());
         assertEquals(gender, player.mySkillId());
+    }
+
+    private static void assertLegacyMapZero(ParsedMapInfo map) {
+        assertEquals(0, map.mapId());
+        assertEquals(0, map.iconId());
+        assertEquals("Núi Paozu", map.name());
+        assertEquals(20, map.row());
+        assertEquals(62, map.column());
+        assertEquals(1240, map.data().length());
+        assertTrue(map.data().chars().allMatch(ch -> ch == '0' || ch == '1'));
+        assertEquals(List.of(51, 52, 53), map.imagesBgr());
+        assertEquals(List.of(
+                List.of(128, 213, 242),
+                List.of(141, 185, 128),
+                List.of(90, 154, 64),
+                List.of(69, 153, 51)
+        ), map.colorsBgr());
+        assertFalse(map.line());
+        assertNull(map.dataLine());
+        assertEquals(0, map.zoneId());
+        assertEquals(1250, map.x());
+        assertEquals(648, map.y());
+        assertEquals(0, map.waypointCount());
+        assertEquals(0, map.npcCount());
+        assertEquals(0, map.monsterCount());
+        assertEquals(0, map.itemMapCount());
+        assertFalse(map.dragonActive());
+        assertEquals(0, map.remaining());
     }
 
     private static void skipUtfList(com.project.game.network.message.MessageReader reader)
@@ -644,6 +783,33 @@ class NetworkIntegrationTest {
     ) {}
 
     private record ParsedPaint(String percent, int paintId) {}
+
+    private record EnterGameResponses(
+            ParsedPlayerInfo playerInfo,
+            ParsedMapInfo mapInfo
+    ) {}
+
+    private record ParsedMapInfo(
+            int mapId,
+            int iconId,
+            String name,
+            int row,
+            int column,
+            String data,
+            List<Integer> imagesBgr,
+            List<List<Integer>> colorsBgr,
+            boolean line,
+            String dataLine,
+            int zoneId,
+            int x,
+            int y,
+            int waypointCount,
+            int npcCount,
+            int monsterCount,
+            int itemMapCount,
+            boolean dragonActive,
+            int remaining
+    ) {}
 
     private static void runIconRequest(int port, int iconId, byte[] expectedBytes) throws Exception {
         LegacyPacketCodec codec = new LegacyPacketCodec(Math.max(1024, expectedBytes.length + 6));

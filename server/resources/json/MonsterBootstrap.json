@@ -1,0 +1,121 @@
+{
+  "version": 1,
+  "darts": [
+    {
+      "id": 0,
+      "isMeteorite": false,
+      "light": {
+        "icons": [2198, 2199, 2200],
+        "dx": 0,
+        "dy": 0,
+        "delay": 30
+      },
+      "bullet": {
+        "icons": [2190, 2191, 2192],
+        "dx": 0,
+        "dy": 0,
+        "delay": 30
+      },
+      "explode": {
+        "icons": [2193, 2194, 2195, 2196, 2197],
+        "dx": 0,
+        "dy": 0,
+        "delay": 20
+      }
+    }
+  ],
+  "templates": [
+    {
+      "id": 1,
+      "name": "Hổ nanh kiếm",
+      "rangeMove": 100,
+      "speed": 1,
+      "type": 1,
+      "dartId": 0,
+      "iconsMove": [11818, 11819, 11820, 11821, 11822],
+      "iconInjure": 11824,
+      "iconAttack": 11823,
+      "w": 175,
+      "h": 95,
+      "dx": 0,
+      "dy": 0
+    }
+  ],
+  "mapSpawns": {
+    "0": [],
+    "1": [
+      {
+        "type": 0,
+        "templateId": 1,
+        "id": 0,
+        "level": 2,
+        "levelStatus": 0,
+        "x": 975,
+        "y": 936,
+        "maxHp": 300,
+        "hp": 300,
+        "status": 0
+      },
+      {
+        "type": 0,
+        "templateId": 1,
+        "id": 1,
+        "level": 2,
+        "levelStatus": 0,
+        "x": 1348,
+        "y": 936,
+        "maxHp": 300,
+        "hp": 300,
+        "status": 0
+      },
+      {
+        "type": 0,
+        "templateId": 1,
+        "id": 2,
+        "level": 2,
+        "levelStatus": 0,
+        "x": 1800,
+        "y": 936,
+        "maxHp": 300,
+        "hp": 300,
+        "status": 0
+      },
+      {
+        "type": 0,
+        "templateId": 1,
+        "id": 3,
+        "level": 2,
+        "levelStatus": 0,
+        "x": 2250,
+        "y": 936,
+        "maxHp": 300,
+        "hp": 300,
+        "status": 0
+      },
+      {
+        "type": 0,
+        "templateId": 1,
+        "id": 4,
+        "level": 2,
+        "levelStatus": 0,
+        "x": 2600,
+        "y": 936,
+        "maxHp": 300,
+        "hp": 300,
+        "status": 0
+      },
+      {
+        "type": 0,
+        "templateId": 1,
+        "id": 5,
+        "level": 2,
+        "levelStatus": 0,
+        "x": 2950,
+        "y": 936,
+        "maxHp": 300,
+        "hp": 300,
+        "status": 0
+      }
+    ]
+  }
+}

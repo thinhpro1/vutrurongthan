@@ -26,27 +26,42 @@ public final class Zone {
         return zoneId;
     }
 
-    public boolean add(Session session) {
+    public synchronized boolean add(Session session) {
         Objects.requireNonNull(session, "session");
         PlayerProfile player = requirePlayer(session);
         return members.putIfAbsent(player.id(), session) == null;
     }
 
-    public boolean remove(Session session) {
+    public synchronized boolean remove(Session session) {
         Objects.requireNonNull(session, "session");
         PlayerProfile player = requirePlayer(session);
         return members.remove(player.id(), session);
     }
 
-    public boolean containsPlayer(int playerId) {
+    /**
+     * Returns the members present before this session was added, or {@code null} when it was already
+     * a member. The snapshot and insertion share this Zone monitor so a join cannot miss another
+     * concurrent join.
+     */
+    synchronized List<Session> addAndSnapshot(Session session) {
+        Objects.requireNonNull(session, "session");
+        PlayerProfile player = requirePlayer(session);
+        List<Session> existing = List.copyOf(members.values());
+        if (members.putIfAbsent(player.id(), session) != null) {
+            return null;
+        }
+        return existing;
+    }
+
+    public synchronized boolean containsPlayer(int playerId) {
         return members.containsKey(playerId);
     }
 
-    public int size() {
+    public synchronized int size() {
         return members.size();
     }
 
-    public List<Session> snapshot() {
+    public synchronized List<Session> snapshot() {
         return List.copyOf(members.values());
     }
 

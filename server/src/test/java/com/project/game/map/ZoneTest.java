@@ -73,6 +73,20 @@ class ZoneTest {
         assertThrows(IllegalStateException.class, () -> zone.add(session(null)));
     }
 
+    @Test
+    void atomicallyReturnsExistingMembersWhileAddingNewMember() {
+        Zone zone = new Zone(0, 0);
+        Session first = session(PlayerProfile.initial("user01", 1, "alpha1", 0));
+        Session second = session(PlayerProfile.initial("user02", 2, "beta22", 0));
+        zone.add(first);
+
+        List<Session> existing = zone.addAndSnapshot(second);
+
+        assertEquals(List.of(first), existing);
+        assertEquals(2, zone.size());
+        assertTrue(zone.snapshot().containsAll(List.of(first, second)));
+    }
+
     private static Session session(PlayerProfile player) {
         SessionManager manager = new SessionManager();
         Session session = new Session(manager.nextId(), new NoopTransport(), manager,

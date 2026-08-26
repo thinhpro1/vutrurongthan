@@ -29,8 +29,8 @@ public final class MapService {
             return;
         }
         Zone zone = zones.computeIfAbsent(keyOf(joining), key -> new Zone(key.mapId(), key.zoneId()));
-        var existing = zone.snapshot();
-        if (!zone.add(session)) {
+        var existing = zone.addAndSnapshot(session);
+        if (existing == null) {
             return;
         }
         for (Session member : existing) {
@@ -61,9 +61,6 @@ public final class MapService {
             if (member != session && member.state() != SessionState.CLOSED) {
                 member.send(packets.removePlayer(leaving.id()));
             }
-        }
-        if (zone.size() == 0) {
-            zones.remove(key, zone);
         }
     }
 

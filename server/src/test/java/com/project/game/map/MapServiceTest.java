@@ -23,6 +23,8 @@ import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -128,6 +130,69 @@ class MapServiceTest {
         first.bindPlayer(first.player().withPosition(1260, 640));
         maps.playerMoved(first);
         assertEquals(List.of(), drain(first));
+    }
+
+    @Test
+    void simultaneousSameZoneJoinsExchangeOnePresencePacketEach() throws Exception {
+        MapService maps = new MapService(new PlayerPacketWriter());
+        Session first = session(player(1, 0, 0));
+        Session second = session(player(2, 0, 0));
+        CyclicBarrier start = new CyclicBarrier(3);
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+        Thread firstJoin = Thread.ofVirtual().start(() -> joinAtBarrier(start, maps, first, failure));
+        Thread secondJoin = Thread.ofVirtual().start(() -> joinAtBarrier(start, maps, second, failure));
+
+        start.await();
+        firstJoin.join();
+        secondJoin.join();
+
+        if (failure.get() != null) {
+            throw new AssertionError("concurrent join failed", failure.get());
+        }
+        assertEquals(2, maps.memberCount(0, 0));
+        List<Message> firstMessages = drain(first);
+        List<Message> secondMessages = drain(second);
+        assertEquals(List.of(MessageName.ADD_PLAYER), commands(firstMessages));
+        assertEquals(List.of(MessageName.ADD_PLAYER), commands(secondMessages));
+        var firstReader = firstMessages.get(0).reader();
+        var secondReader = secondMessages.get(0).reader();
+        assertEquals(2, firstReader.readInt());
+        assertEquals(1, secondReader.readInt());
+    }
+
+    @Test
+    void leaveLastThenRejoinUsesRetainedZoneAndRemainsDiscoverable() throws Exception {
+        MapService maps = new MapService(new PlayerPacketWriter());
+        Session first = session(player(1, 0, 0));
+        Session second = session(player(2, 0, 0));
+
+        maps.finishLoad(first);
+        maps.leave(first);
+        assertEquals(0, maps.memberCount(0, 0));
+
+        maps.finishLoad(second);
+        assertEquals(1, maps.memberCount(0, 0));
+        maps.finishLoad(first);
+
+        List<Message> firstMessages = drain(first);
+        List<Message> secondMessages = drain(second);
+        assertEquals(List.of(MessageName.ADD_PLAYER), commands(firstMessages));
+        assertEquals(List.of(MessageName.ADD_PLAYER), commands(secondMessages));
+        var firstReader = firstMessages.get(0).reader();
+        var secondReader = secondMessages.get(0).reader();
+        assertEquals(2, firstReader.readInt());
+        assertEquals(1, secondReader.readInt());
+        assertEquals(2, maps.memberCount(0, 0));
+    }
+
+    private static void joinAtBarrier(CyclicBarrier start, MapService maps,
+                                      Session session, AtomicReference<Throwable> failure) {
+        try {
+            start.await();
+            maps.finishLoad(session);
+        } catch (Throwable exception) {
+            failure.compareAndSet(null, exception);
+        }
     }
 
     private static PlayerProfile player(int id, int mapId, int zoneId) {

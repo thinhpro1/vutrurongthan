@@ -1,10 +1,12 @@
 package com.project.game.network;
 
+import com.project.game.map.MapService;
 import com.project.game.network.codec.LegacyPacketCodec;
 import com.project.game.network.codec.LegacyCipher;
 import com.project.game.network.message.Message;
 import com.project.game.network.message.MessageName;
 import com.project.game.network.message.MessageWriter;
+import com.project.game.network.packet.PlayerPacketWriter;
 import com.project.game.service.AuthService;
 import com.project.game.service.ResourceService;
 import com.project.game.service.ServerServices;
@@ -20,11 +22,44 @@ import java.io.PipedOutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.charset.StandardCharsets;
+import java.lang.reflect.Field;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.BlockingQueue;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class MessageHandlerTest {
+    @Test
+    void finishLoadRegistersPresenceAndMovementDoesNotAckMover() throws Exception {
+        AuthService auth = new AuthService();
+        MapService maps = new MapService(new PlayerPacketWriter());
+        ServerServices services = new ServerServices(auth, ResourceService.unavailable(), maps);
+        Session first = inGameSession(services, PlayerProfile.initial("user01", 1, "alpha1", 0));
+        Session second = inGameSession(services, PlayerProfile.initial("user02", 2, "beta22", 0));
+        MessageHandler firstHandler = newHandler(first, services, NetworkConfig.defaults());
+        MessageHandler secondHandler = newHandler(second, services, NetworkConfig.defaults());
+
+        firstHandler.onMessage(new Message(MessageName.FINISH_LOAD_MAP));
+        secondHandler.onMessage(new Message(MessageName.FINISH_LOAD_MAP));
+        assertEquals(1, first.queuedMessages());
+        assertEquals(1, second.queuedMessages());
+        drainMessages(first);
+        drainMessages(second);
+
+        secondHandler.onMessage(moveMessage(1260, 640));
+        assertEquals(1, first.queuedMessages());
+        assertEquals(0, second.queuedMessages());
+        Message movement = drainMessages(first).get(0);
+        var reader = movement.reader();
+        assertEquals(MessageName.PLAYER_MOVE, movement.command());
+        assertEquals(2, reader.readInt());
+        assertEquals(1260, reader.readShort());
+        assertEquals(640, reader.readShort());
+        assertEquals(0, reader.remaining());
+    }
+
     @Test
     void playerMoveIsAcceptedInGameAndUpdatesSessionPosition() {
         AuthService auth = new AuthService();
@@ -58,15 +93,15 @@ class MessageHandlerTest {
 
     @Test
     void finishLoadMapRejectsTrailingBytes() {
-        Session session = newSession(new AuthService());
-        session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
-        session.transition(SessionState.HANDSHAKE_DONE, SessionState.AUTHENTICATED);
-        session.transition(SessionState.AUTHENTICATED, SessionState.IN_GAME);
-        MessageHandler handler = newHandler(session, new AuthService());
+        MapService maps = new MapService(new PlayerPacketWriter());
+        ServerServices services = new ServerServices(new AuthService(), ResourceService.unavailable(), maps);
+        Session session = inGameSession(services, PlayerProfile.initial("user01", 7, "alpha1", 0));
+        MessageHandler handler = newHandler(session, services, NetworkConfig.defaults());
 
         handler.onMessage(new Message(MessageName.FINISH_LOAD_MAP, new byte[]{1}));
 
         assertEquals(SessionState.CLOSED, session.state());
+        assertEquals(0, maps.memberCount(0, 0));
     }
 
     @Test
@@ -445,6 +480,28 @@ class MessageHandlerTest {
         session.transition(SessionState.HANDSHAKE_DONE, SessionState.AUTHENTICATED);
         session.transition(SessionState.AUTHENTICATED, SessionState.IN_GAME);
         return session;
+    }
+
+    private static Session inGameSession(ServerServices services, PlayerProfile player) {
+        SessionManager manager = new SessionManager();
+        Session session = new Session(manager.nextId(), new TestTransport(), manager,
+                new LegacyPacketCodec(1024), "abc".getBytes(StandardCharsets.US_ASCII), 4,
+                services, NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
+        session.bindPlayer(player);
+        session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
+        session.transition(SessionState.HANDSHAKE_DONE, SessionState.AUTHENTICATED);
+        session.transition(SessionState.AUTHENTICATED, SessionState.IN_GAME);
+        return session;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<Message> drainMessages(Session session) throws Exception {
+        Field field = Session.class.getDeclaredField("sendQueue");
+        field.setAccessible(true);
+        BlockingQueue<Message> queue = (BlockingQueue<Message>) field.get(session);
+        List<Message> messages = new ArrayList<>();
+        queue.drainTo(messages);
+        return messages;
     }
 
     private static void waitForOutput(ByteArrayOutputStream output) throws InterruptedException {

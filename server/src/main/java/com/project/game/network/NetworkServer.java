@@ -5,6 +5,8 @@ import com.project.game.network.transport.ClientTransport;
 import com.project.game.network.transport.LegacyTcpTransport;
 import com.project.game.network.transport.TlsContextFactory;
 import com.project.game.network.transport.TlsTcpTransport;
+import com.project.game.map.MapService;
+import com.project.game.network.packet.PlayerPacketWriter;
 import com.project.game.service.AuthService;
 import com.project.game.service.ResourceService;
 import com.project.game.service.ServerServices;
@@ -90,7 +92,8 @@ public final class NetworkServer {
                 integer(properties, "game.network.send-queue-size", 256),
                 integer(properties, "game.network.handshake-timeout-ms", 10000),
                 "abc".getBytes(java.nio.charset.StandardCharsets.US_ASCII),
-                new ServerServices(new AuthService(), resourceService(properties)), tlsContext,
+                new ServerServices(new AuthService(), resourceService(properties),
+                        new MapService(new PlayerPacketWriter())), tlsContext,
                 NetworkConfig.fromProperties(properties), NetworkEventObserver.NO_OP);
     }
 

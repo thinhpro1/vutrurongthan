@@ -1,6 +1,7 @@
 package com.project.game.network;
 
 import com.project.game.frame.FrameTemplate;
+import com.project.game.map.MapService;
 import com.project.game.network.message.Message;
 import com.project.game.network.message.MessageName;
 import com.project.game.network.message.MessageWriter;
@@ -26,6 +27,7 @@ public final class MessageHandler {
     private final Session session;
     private final AuthService authService;
     private final ResourceService resourceService;
+    private final MapService mapService;
     private final NetworkConfig networkConfig;
     private final NetworkEventObserver eventObserver;
 
@@ -35,6 +37,7 @@ public final class MessageHandler {
         services = Objects.requireNonNull(services, "services");
         this.authService = services.auth();
         this.resourceService = services.resources();
+        this.mapService = services.maps();
         this.networkConfig = networkConfig;
         this.eventObserver = eventObserver;
     }
@@ -334,6 +337,7 @@ public final class MessageHandler {
             throw new IOException("trailing FINISH_LOAD_MAP payload bytes");
         }
         LOGGER.fine(() -> "FINISH_LOAD_MAP session=" + session.id());
+        mapService.finishLoad(session);
     }
 
     private void handlePlayerMove(Message message) throws IOException {
@@ -350,6 +354,7 @@ public final class MessageHandler {
         }
 
         session.bindPlayer(player.withPosition(x, y));
+        mapService.playerMoved(session);
         LOGGER.fine(() -> "PLAYER_MOVE session=" + session.id()
                 + " x=" + x + " y=" + y);
     }

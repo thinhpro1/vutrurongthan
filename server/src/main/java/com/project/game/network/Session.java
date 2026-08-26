@@ -5,6 +5,7 @@ import com.project.game.network.codec.LegacyPacketCodec;
 import com.project.game.network.message.Message;
 import com.project.game.network.transport.ClientTransport;
 import com.project.game.player.PlayerProfile;
+import com.project.game.map.MapService;
 import com.project.game.service.ServerServices;
 
 import java.io.IOException;
@@ -14,6 +15,7 @@ import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.Objects;
 import java.util.logging.Logger;
 import java.util.logging.Level;
 
@@ -29,6 +31,7 @@ public final class Session implements AutoCloseable {
     private final BlockingQueue<Message> sendQueue;
     private final AtomicReference<SessionState> state = new AtomicReference<>(SessionState.CONNECTED);
     private final AtomicBoolean closed = new AtomicBoolean();
+    private final MapService mapService;
     private final Object writeLock = new Object();
     private final MessageHandler handler;
     private volatile String accountName;
@@ -52,6 +55,7 @@ public final class Session implements AutoCloseable {
         this.handshakeKey = handshakeKey.clone();
         this.cipher = new LegacyCipher(handshakeKey);
         this.sendQueue = new ArrayBlockingQueue<>(queueSize);
+        this.mapService = Objects.requireNonNull(services, "services").maps();
         this.handler = new MessageHandler(this, services, networkConfig, eventObserver);
     }
 
@@ -159,6 +163,11 @@ public final class Session implements AutoCloseable {
         }
         if (writerThread != null) {
             writerThread.interrupt();
+        }
+        try {
+            mapService.leave(this);
+        } catch (RuntimeException exception) {
+            LOGGER.log(Level.WARNING, "Map cleanup failed for session id=" + id, exception);
         }
         try {
             transport.close();

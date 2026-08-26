@@ -574,10 +574,26 @@ public final class MessageHandler {
                     .writeUtf(target.name());
         }
 
-        writer.writeByte(0)
-                .writeByte(0)
-                .writeShort(0)
-                .writeBoolean(false);
+        writer.writeByte(0); // npc count
+        var monsters = resourceService.monstersForMap(map.id());
+        if (monsters.size() > Byte.MAX_VALUE) {
+            throw new IOException("too many monsters for map " + map.id());
+        }
+        writer.writeByte(monsters.size());
+        for (var monster : monsters) {
+            writer.writeByte(monster.type())
+                    .writeShort(monster.templateId())
+                    .writeInt(monster.id())
+                    .writeShort(monster.level())
+                    .writeByte(monster.levelStatus())
+                    .writeShort(monster.x())
+                    .writeShort(monster.y())
+                    .writeLong(monster.maxHp())
+                    .writeLong(monster.hp())
+                    .writeByte(monster.status());
+        }
+        writer.writeShort(0) // item map count
+                .writeBoolean(false); // dragon active
 
         if (session.send(new Message(MessageName.MAP_INFO, writer.toByteArray()))) {
             if (sendTemplate) {

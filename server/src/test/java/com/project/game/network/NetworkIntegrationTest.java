@@ -68,7 +68,7 @@ class NetworkIntegrationTest {
                 assertEquals(List.of(new ParsedWaypoint(0, 1008, 0, "Núi Paozu")),
                         map1.waypoints());
                 assertEquals(0, map1.npcCount());
-                assertEquals(0, map1.monsterCount());
+                assertEquals(canonicalMap1Monsters(), map1.monsters());
                 assertEquals(0, map1.itemMapCount());
                 assertFalse(map1.dragonActive());
                 client.finishLoadMap();
@@ -82,6 +82,7 @@ class NetworkIntegrationTest {
                 assertEquals(List.of(new ParsedWaypoint(4464, 936, 1, "Bờ sông Pu")),
                         map0.waypoints());
                 assertTrue(map0.name() == null, "cached Map0 packet must omit static template");
+                assertTrue(map0.monsters().isEmpty());
                 assertEquals(0, map0.remaining());
                 client.finishLoadMap();
 
@@ -93,6 +94,7 @@ class NetworkIntegrationTest {
                         "cached Map1 packet must omit static template");
                 assertEquals(90, secondMap1.x());
                 assertEquals(1008, secondMap1.y());
+                assertEquals(canonicalMap1Monsters(), secondMap1.monsters());
                 assertEquals(0, secondMap1.remaining());
             }
             waitForNoSessions(server);
@@ -1216,13 +1218,27 @@ class NetworkIntegrationTest {
         }
         int npcCount = reader.readUnsignedByte();
         int monsterCount = reader.readUnsignedByte();
+        List<ParsedMonsterSpawn> monsters = new ArrayList<>(monsterCount);
+        for (int index = 0; index < monsterCount; index++) {
+            monsters.add(new ParsedMonsterSpawn(
+                    reader.readByte(),
+                    reader.readShort(),
+                    reader.readInt(),
+                    reader.readShort(),
+                    reader.readByte(),
+                    reader.readShort(),
+                    reader.readShort(),
+                    reader.readLong(),
+                    reader.readLong(),
+                    reader.readByte()));
+        }
         int itemMapCount = reader.readUnsignedShort();
         boolean dragonActive = reader.readBoolean();
 
         return new ParsedMapInfo(
                 mapId, iconId, name, row, column, data,
                 List.copyOf(imagesBgr), List.copyOf(colorsBgr), line, dataLine,
-                zoneId, x, y, waypoints, npcCount, monsterCount, itemMapCount,
+                zoneId, x, y, waypoints, npcCount, List.copyOf(monsters), itemMapCount,
                 dragonActive, reader.remaining());
     }
 
@@ -1270,10 +1286,20 @@ class NetworkIntegrationTest {
         assertEquals(new ParsedWaypoint(4464, 936, 1, "Bờ sông Pu"),
                 map.waypoints().getFirst());
         assertEquals(0, map.npcCount());
-        assertEquals(0, map.monsterCount());
+        assertTrue(map.monsters().isEmpty());
         assertEquals(0, map.itemMapCount());
         assertFalse(map.dragonActive());
         assertEquals(0, map.remaining());
+    }
+
+    private static List<ParsedMonsterSpawn> canonicalMap1Monsters() {
+        return List.of(
+                new ParsedMonsterSpawn(0, 1, 0, 2, 0, 975, 936, 300L, 300L, 0),
+                new ParsedMonsterSpawn(0, 1, 1, 2, 0, 1348, 936, 300L, 300L, 0),
+                new ParsedMonsterSpawn(0, 1, 2, 2, 0, 1800, 936, 300L, 300L, 0),
+                new ParsedMonsterSpawn(0, 1, 3, 2, 0, 2250, 936, 300L, 300L, 0),
+                new ParsedMonsterSpawn(0, 1, 4, 2, 0, 2600, 936, 300L, 300L, 0),
+                new ParsedMonsterSpawn(0, 1, 5, 2, 0, 2950, 936, 300L, 300L, 0));
     }
 
     private static void skipUtfList(com.project.game.network.message.MessageReader reader)
@@ -1359,10 +1385,27 @@ class NetworkIntegrationTest {
             int y,
             List<ParsedWaypoint> waypoints,
             int npcCount,
-            int monsterCount,
+            List<ParsedMonsterSpawn> monsters,
             int itemMapCount,
             boolean dragonActive,
             int remaining
+    ) {
+        int monsterCount() {
+            return monsters.size();
+        }
+    }
+
+    private record ParsedMonsterSpawn(
+            int type,
+            int templateId,
+            int id,
+            int level,
+            int levelStatus,
+            int x,
+            int y,
+            long maxHp,
+            long hp,
+            int status
     ) {}
 
     private record ParsedWaypoint(int x, int y, int type, String name) {}

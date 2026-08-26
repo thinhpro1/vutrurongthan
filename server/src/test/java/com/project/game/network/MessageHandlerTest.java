@@ -89,7 +89,19 @@ class MessageHandlerTest {
         assertEquals(0, reader.readByte());
         assertEquals("Núi Paozu", reader.readUtf());
         assertEquals(0, reader.readUnsignedByte());
-        assertEquals(0, reader.readUnsignedByte());
+        assertEquals(6, reader.readUnsignedByte());
+        for (int index = 0; index < 6; index++) {
+            reader.readByte();
+            reader.readShort();
+            reader.readInt();
+            reader.readShort();
+            reader.readByte();
+            reader.readShort();
+            reader.readShort();
+            reader.readLong();
+            reader.readLong();
+            reader.readByte();
+        }
         assertEquals(0, reader.readUnsignedShort());
         assertFalse(reader.readBoolean());
         assertEquals(0, reader.remaining());

@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
+import java.net.SocketTimeoutException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.charset.StandardCharsets;
@@ -33,6 +34,67 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class NetworkIntegrationTest {
+    @Test
+    void twoClientsSeeSameZonePresenceMovementAndDisconnect() throws Exception {
+        ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
+        AuthService auth = new AuthService();
+        assertTrue(auth.register("zonea1", "secret1").success());
+        assertTrue(auth.register("zoneb1", "secret1").success());
+        com.project.game.map.MapService maps = new com.project.game.map.MapService(
+                new com.project.game.network.packet.PlayerPacketWriter());
+        NetworkServer server = new NetworkServer(
+                "127.0.0.1", 0, 4, 262_144, 16, 1_000,
+                "abc".getBytes(StandardCharsets.US_ASCII),
+                new ServerServices(auth, resources, maps), null,
+                NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
+        AtomicReference<Throwable> serverFailure = new AtomicReference<>();
+        Thread serverThread = Thread.ofVirtual().start(() -> {
+            try {
+                server.start();
+            } catch (Exception | Error failure) {
+                serverFailure.set(failure);
+            }
+        });
+
+        try {
+            waitForPort(server);
+            try (LivePlayerClient first = LivePlayerClient.create(server.localPort(), "zonea1", "alpha1", 0);
+                 LivePlayerClient second = LivePlayerClient.create(server.localPort(), "zoneb1", "beta22", 1)) {
+                first.finishLoadMap();
+                second.finishLoadMap();
+
+                assertAddPlayer(second.readServerMessage(), first.playerInfo().id(), "alpha1", 0);
+                assertAddPlayer(first.readServerMessage(), second.playerInfo().id(), "beta22", 1);
+                assertEquals(2, maps.memberCount(0, 0));
+
+                second.move(1260, 640);
+                Message movement = first.readServerMessage();
+                assertEquals(MessageName.PLAYER_MOVE, movement.command());
+                var movementReader = movement.reader();
+                assertEquals(second.playerInfo().id(), movementReader.readInt());
+                assertEquals(1260, movementReader.readShort());
+                assertEquals(640, movementReader.readShort());
+                assertEquals(0, movementReader.remaining());
+                assertNoServerMessage(second);
+
+                second.close();
+                Message removed = first.readServerMessage();
+                assertEquals(MessageName.REMOVE_PLAYER, removed.command());
+                var removeReader = removed.reader();
+                assertEquals(second.playerInfo().id(), removeReader.readInt());
+                assertEquals(0, removeReader.remaining());
+                assertEquals(1, maps.memberCount(0, 0));
+                assertTrue(server.sessions().findByAccount("zonea1") != null);
+            }
+            waitForNoSessions(server);
+        } finally {
+            server.stop();
+            serverThread.join(1_000);
+        }
+        assertNull(serverFailure.get(),
+                "network server failed during two-client presence integration test");
+    }
+
     @Test
     void javaClientCreatesFreshPlayerAndParsesLegacyMapZero() throws Exception {
         ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
@@ -1159,6 +1221,138 @@ class NetworkIntegrationTest {
             assertEquals(expectedBytes.length, reader.readInt());
             assertArrayEquals(expectedBytes, reader.readBytes(expectedBytes.length));
             assertEquals(0, reader.remaining());
+        }
+    }
+
+    private static void assertAddPlayer(Message message, int expectedId,
+                                        String expectedName, int expectedGender) throws IOException {
+        assertEquals(MessageName.ADD_PLAYER, message.command());
+        var reader = message.reader();
+        assertEquals(expectedId, reader.readInt());
+        assertEquals(expectedName, reader.readUtf());
+        assertEquals(expectedGender, reader.readByte());
+        int expectedHead = switch (expectedGender) {
+            case 0 -> 5;
+            case 1 -> 3;
+            default -> 4;
+        };
+        int expectedBody = switch (expectedGender) {
+            case 0 -> 6;
+            case 1 -> 7;
+            default -> 8;
+        };
+        assertEquals(expectedHead, reader.readShort());
+        assertEquals(expectedBody, reader.readShort());
+        assertEquals(-1, reader.readShort()); // mount
+        assertEquals(-1, reader.readShort()); // bag
+        assertEquals(-1, reader.readShort()); // medal
+        assertEquals(-1, reader.readShort()); // aura
+        assertEquals(1250, reader.readShort());
+        assertEquals(648, reader.readShort());
+        assertEquals(150, reader.readLong());
+        assertEquals(100, reader.readLong());
+        assertEquals(0, reader.readByte()); // typePk
+        assertEquals(0, reader.readByte()); // typeFlag
+        assertEquals(1, reader.readShort());
+        assertEquals(0, reader.readByte()); // spaceship
+        assertEquals(12, reader.readByte()); // speed
+        assertEquals(-1, reader.readInt()); // no clan
+        assertEquals(-1, reader.readByte()); // no equipped upgrade
+        assertEquals(0, reader.readByte()); // no runtime effects
+        assertEquals(0, reader.remaining());
+    }
+
+    private static void assertNoServerMessage(LivePlayerClient client) throws Exception {
+        client.transport.socket().setSoTimeout(250);
+        try {
+            client.readServerMessage();
+            throw new AssertionError("mover received an unexpected server packet");
+        } catch (SocketTimeoutException expected) {
+            // No movement ACK is part of the inbound PLAYER_MOVE contract.
+        } finally {
+            client.transport.socket().setSoTimeout(5_000);
+        }
+    }
+
+    private static final class LivePlayerClient implements AutoCloseable {
+        private final LegacyPacketCodec codec;
+        private final LegacyTcpTransport transport;
+        private final LegacyCipher cipher;
+        private final ParsedPlayerInfo playerInfo;
+
+        private LivePlayerClient(LegacyPacketCodec codec, LegacyTcpTransport transport,
+                                 LegacyCipher cipher, ParsedPlayerInfo playerInfo) {
+            this.codec = codec;
+            this.transport = transport;
+            this.cipher = cipher;
+            this.playerInfo = playerInfo;
+        }
+
+        private static LivePlayerClient create(int port, String username,
+                                               String playerName, int gender) throws Exception {
+            LegacyPacketCodec codec = new LegacyPacketCodec(262_144);
+            LegacyTcpTransport transport = LegacyTcpTransport.connect("127.0.0.1", port, 1_000);
+            try {
+                transport.socket().setSoTimeout(5_000);
+                codec.writeClient(transport.output(), null, false,
+                        new Message(MessageName.CONNECT_SERVER));
+                Message handshake = codec.read(transport.input(), null, false);
+                assertEquals(MessageName.SEND_SESSION_KEY, handshake.command());
+                LegacyCipher cipher = new LegacyCipher(reconstructKey(handshake.payload()));
+                Message version = codec.readServerResponse(transport.input(), cipher, true);
+                assertEquals(MessageName.VERSION_SOURCE, version.command());
+                assertEquals("0.9.5", version.reader().readUtf());
+
+                MessageWriter login = new MessageWriter()
+                        .writeUtf("0.9.5")
+                        .writeUtf(username)
+                        .writeUtf("secret1")
+                        .writeByte(1);
+                codec.writeClient(transport.output(), cipher, true,
+                        new Message(MessageName.LOGIN, login.toByteArray()));
+                assertEquals(MessageName.START_CREATE_PLAYER_SCREEN,
+                        codec.readServerResponse(transport.input(), cipher, true).command());
+
+                MessageWriter create = new MessageWriter()
+                        .writeUtf(playerName)
+                        .writeByte(gender);
+                codec.writeClient(transport.output(), cipher, true,
+                        new Message(MessageName.CREATE_PLAYER, create.toByteArray()));
+                ParsedPlayerInfo player = parsePlayerInfo(
+                        codec.readServerResponse(transport.input(), cipher, true));
+                parseMapInfo(codec.readServerResponse(transport.input(), cipher, true));
+                return new LivePlayerClient(codec, transport, cipher, player);
+            } catch (Throwable failure) {
+                try {
+                    transport.close();
+                } catch (IOException ignored) {
+                }
+                throw failure;
+            }
+        }
+
+        private ParsedPlayerInfo playerInfo() {
+            return playerInfo;
+        }
+
+        private void finishLoadMap() throws IOException {
+            codec.writeClient(transport.output(), cipher, true,
+                    new Message(MessageName.FINISH_LOAD_MAP));
+        }
+
+        private void move(int x, int y) throws IOException {
+            codec.writeClient(transport.output(), cipher, true,
+                    new Message(MessageName.PLAYER_MOVE,
+                            new MessageWriter().writeShort(x).writeShort(y).toByteArray()));
+        }
+
+        private Message readServerMessage() throws IOException {
+            return codec.readServerResponse(transport.input(), cipher, true);
+        }
+
+        @Override
+        public void close() throws IOException {
+            transport.close();
         }
     }
 

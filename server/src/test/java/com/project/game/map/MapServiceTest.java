@@ -11,6 +11,8 @@ import com.project.game.network.message.MessageName;
 import com.project.game.network.transport.ClientTransport;
 import com.project.game.network.packet.PlayerPacketWriter;
 import com.project.game.player.PlayerProfile;
+import com.project.game.service.AuthService;
+import com.project.game.service.ResourceService;
 import com.project.game.service.ServerServices;
 import org.junit.jupiter.api.Test;
 
@@ -23,10 +25,16 @@ import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class MapServiceTest {
     @Test
@@ -185,6 +193,33 @@ class MapServiceTest {
         assertEquals(2, maps.memberCount(0, 0));
     }
 
+    @Test
+    void disconnectCannotFinishWhileJoinPresenceEnqueueIsInProgress() throws Exception {
+        MapService maps = new MapService(new PlayerPacketWriter());
+        Session leaving = session(player(1, 0, 0), maps);
+        Session joining = session(player(2, 0, 0), maps);
+        maps.finishLoad(leaving);
+        drain(leaving);
+
+        BlockingOfferQueue joiningQueue = new BlockingOfferQueue();
+        replaceSendQueue(joining, joiningQueue);
+        Thread join = Thread.ofVirtual().start(() -> maps.finishLoad(joining));
+        assertTrue(joiningQueue.offerEntered.await(5, TimeUnit.SECONDS));
+
+        CountDownLatch disconnectFinished = new CountDownLatch(1);
+        Thread disconnect = Thread.ofVirtual().start(() -> {
+            leaving.close();
+            disconnectFinished.countDown();
+        });
+        assertFalse(disconnectFinished.await(1, TimeUnit.SECONDS));
+
+        joiningQueue.releaseOffer.countDown();
+        join.join();
+        disconnect.join();
+        assertEquals(List.of(MessageName.ADD_PLAYER, MessageName.REMOVE_PLAYER),
+                commands(drain(joining)));
+    }
+
     private static void joinAtBarrier(CyclicBarrier start, MapService maps,
                                       Session session, AtomicReference<Throwable> failure) {
         try {
@@ -208,10 +243,18 @@ class MapServiceTest {
     }
 
     private static Session session(PlayerProfile player) {
+        return session(player, ServerServices.defaults());
+    }
+
+    private static Session session(PlayerProfile player, MapService maps) {
+        return session(player, new ServerServices(new AuthService(), ResourceService.unavailable(), maps));
+    }
+
+    private static Session session(PlayerProfile player, ServerServices services) {
         SessionManager manager = new SessionManager();
         Session session = new Session(manager.nextId(), new NoopTransport(), manager,
                 new LegacyPacketCodec(1024), "abc".getBytes(), 8,
-                ServerServices.defaults(), NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
+                services, NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
         session.bindPlayer(player);
         session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
         session.transition(SessionState.HANDSHAKE_DONE, SessionState.AUTHENTICATED);
@@ -231,6 +274,13 @@ class MapServiceTest {
 
     private static List<Integer> commands(List<Message> messages) {
         return messages.stream().map(Message::command).toList();
+    }
+
+    private static void replaceSendQueue(Session session, BlockingQueue<Message> replacement)
+            throws Exception {
+        Field field = Session.class.getDeclaredField("sendQueue");
+        field.setAccessible(true);
+        field.set(session, replacement);
     }
 
     private static final class NoopTransport implements ClientTransport {
@@ -258,4 +308,25 @@ class MapServiceTest {
             output.close();
         }
     }
+
+    private static final class BlockingOfferQueue extends LinkedBlockingQueue<Message> {
+        private final CountDownLatch offerEntered = new CountDownLatch(1);
+        private final CountDownLatch releaseOffer = new CountDownLatch(1);
+        private final AtomicBoolean blockFirstOffer = new AtomicBoolean(true);
+
+        @Override
+        public boolean offer(Message message) {
+            if (blockFirstOffer.compareAndSet(true, false)) {
+                offerEntered.countDown();
+                try {
+                    releaseOffer.await();
+                } catch (InterruptedException exception) {
+                    Thread.currentThread().interrupt();
+                    throw new AssertionError("offer gate interrupted", exception);
+                }
+            }
+            return super.offer(message);
+        }
+    }
+
 }

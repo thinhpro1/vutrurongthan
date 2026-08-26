@@ -29,17 +29,19 @@ public final class MapService {
             return;
         }
         Zone zone = zones.computeIfAbsent(keyOf(joining), key -> new Zone(key.mapId(), key.zoneId()));
-        var existing = zone.addAndSnapshot(session);
-        if (existing == null) {
-            return;
-        }
-        for (Session member : existing) {
-            if (member == session || member.state() == SessionState.CLOSED || member.player() == null) {
-                continue;
+        synchronized (zone) {
+            var existing = zone.addAndSnapshot(session);
+            if (existing == null) {
+                return;
             }
-            session.send(packets.addPlayer(member.player()));
-            if (session.state() != SessionState.CLOSED) {
-                member.send(packets.addPlayer(joining));
+            for (Session member : existing) {
+                if (member == session || member.state() == SessionState.CLOSED || member.player() == null) {
+                    continue;
+                }
+                session.send(packets.addPlayer(member.player()));
+                if (session.state() != SessionState.CLOSED) {
+                    member.send(packets.addPlayer(joining));
+                }
             }
         }
     }
@@ -54,12 +56,17 @@ public final class MapService {
         }
         ZoneKey key = keyOf(leaving);
         Zone zone = zones.get(key);
-        if (zone == null || !zone.remove(session)) {
+        if (zone == null) {
             return;
         }
-        for (Session member : zone.snapshot()) {
-            if (member != session && member.state() != SessionState.CLOSED) {
-                member.send(packets.removePlayer(leaving.id()));
+        synchronized (zone) {
+            if (!zone.remove(session)) {
+                return;
+            }
+            for (Session member : zone.snapshot()) {
+                if (member != session && member.state() != SessionState.CLOSED) {
+                    member.send(packets.removePlayer(leaving.id()));
+                }
             }
         }
     }

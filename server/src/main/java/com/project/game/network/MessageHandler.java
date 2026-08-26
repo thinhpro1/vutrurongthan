@@ -55,6 +55,7 @@ public final class MessageHandler {
                 case MessageName.REGISTER_USER -> handleRegister(message);
                 case MessageName.CREATE_PLAYER -> handleCreatePlayer(message);
                 case MessageName.FINISH_LOAD_MAP -> handleFinishLoadMap(message);
+                case MessageName.PLAYER_MOVE -> handlePlayerMove(message);
                 default -> LOGGER.fine(() -> "RX cmd=" + message.command()
                         + " len=" + message.payload().length);
             }
@@ -295,6 +296,24 @@ public final class MessageHandler {
         LOGGER.fine(() -> "FINISH_LOAD_MAP session=" + session.id());
     }
 
+    private void handlePlayerMove(Message message) throws IOException {
+        PlayerProfile player = session.player();
+        if (player == null) {
+            throw new IOException("PLAYER_MOVE without bound player");
+        }
+
+        var reader = message.reader();
+        int x = reader.readShort();
+        int y = reader.readShort();
+        if (reader.remaining() != 0) {
+            throw new IOException("trailing PLAYER_MOVE payload bytes");
+        }
+
+        session.bindPlayer(player.withPosition(x, y));
+        LOGGER.fine(() -> "PLAYER_MOVE session=" + session.id()
+                + " x=" + x + " y=" + y);
+    }
+
     private void enterGame(PlayerProfile player) throws IOException {
         sendPlayerInfo(player);
         sendMapInfo(player);
@@ -508,7 +527,8 @@ public final class MessageHandler {
             case AUTHENTICATED -> command == MessageName.CREATE_PLAYER
                     || command == MessageName.REQUEST_ICON;
             case IN_GAME -> command == MessageName.REQUEST_ICON
-                    || command == MessageName.FINISH_LOAD_MAP;
+                    || command == MessageName.FINISH_LOAD_MAP
+                    || command == MessageName.PLAYER_MOVE;
             case CLOSED -> false;
         };
     }

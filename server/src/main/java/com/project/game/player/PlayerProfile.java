@@ -48,6 +48,56 @@ public record PlayerProfile(
         int x,
         int y
 ) {
+    public PlayerProfile withPosition(int x, int y) {
+        return new PlayerProfile(
+                accountName,
+                id,
+                name,
+                gender,
+                power,
+                potential,
+                level,
+                pointSkill,
+                head,
+                body,
+                mount,
+                bag,
+                medal,
+                aura,
+                baseDamage,
+                baseHp,
+                baseMp,
+                baseConstitution,
+                potentialUpDamage,
+                potentialUpHp,
+                potentialUpMp,
+                potentialUpConstitution,
+                maxHp,
+                maxMp,
+                hp,
+                mp,
+                speed,
+                pointPk,
+                pointActivity,
+                countBarrack,
+                dodge,
+                critical,
+                reduceDamage,
+                bloodsucking,
+                manaSucking,
+                strikeBack,
+                damage,
+                coin,
+                coinLock,
+                diamond,
+                ruby,
+                spaceship,
+                mapId,
+                zoneId,
+                x,
+                y);
+    }
+
     public static PlayerProfile initial(String accountName, int id, String name, int gender) {
         int head = switch (gender) {
             case 0 -> 5;

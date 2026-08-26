@@ -231,6 +231,111 @@ class NetworkIntegrationTest {
     }
 
     @Test
+    void javaClientMovesThreeTimesWithoutDisconnecting() throws Exception {
+        ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
+        AuthService auth = new AuthService();
+        NetworkServer server = new NetworkServer(
+                "127.0.0.1", 0, 2, 262_144, 8, 1_000,
+                "abc".getBytes(StandardCharsets.US_ASCII),
+                new ServerServices(auth, resources),
+                null,
+                NetworkConfig.defaults(),
+                NetworkEventObserver.NO_OP);
+        AtomicReference<Throwable> serverFailure = new AtomicReference<>();
+        Thread serverThread = Thread.ofVirtual().start(() -> {
+            try {
+                server.start();
+            } catch (Throwable failure) {
+                serverFailure.set(failure);
+            }
+        });
+
+        try {
+            waitForPort(server);
+            LegacyPacketCodec codec = new LegacyPacketCodec(262_144);
+
+            try (LegacyTcpTransport transport = LegacyTcpTransport.connect(
+                    "127.0.0.1", server.localPort(), 1_000)) {
+                transport.socket().setSoTimeout(5_000);
+
+                codec.writeClient(
+                        transport.output(), null, false,
+                        new Message(MessageName.CONNECT_SERVER));
+                Message handshake = codec.read(transport.input(), null, false);
+                assertEquals(MessageName.SEND_SESSION_KEY, handshake.command());
+                LegacyCipher cipher = new LegacyCipher(reconstructKey(handshake.payload()));
+
+                Message version = codec.readServerResponse(transport.input(), cipher, true);
+                assertEquals(MessageName.VERSION_SOURCE, version.command());
+
+                codec.writeClient(
+                        transport.output(), cipher, true,
+                        new Message(
+                                MessageName.REGISTER_USER,
+                                new MessageWriter()
+                                        .writeUtf("move01")
+                                        .writeUtf("secret1")
+                                        .toByteArray()));
+                assertEquals(
+                        MessageName.DIALOG_OK,
+                        codec.readServerResponse(transport.input(), cipher, true).command());
+
+                codec.writeClient(
+                        transport.output(), cipher, true,
+                        new Message(
+                                MessageName.LOGIN,
+                                new MessageWriter()
+                                        .writeUtf("0.9.5")
+                                        .writeUtf("move01")
+                                        .writeUtf("secret1")
+                                        .writeByte(1)
+                                        .toByteArray()));
+                assertEquals(
+                        MessageName.START_CREATE_PLAYER_SCREEN,
+                        codec.readServerResponse(transport.input(), cipher, true).command());
+
+                codec.writeClient(
+                        transport.output(), cipher, true,
+                        new Message(
+                                MessageName.CREATE_PLAYER,
+                                new MessageWriter()
+                                        .writeUtf("mover1")
+                                        .writeByte(0)
+                                        .toByteArray()));
+
+                Message playerInfo = codec.readServerResponse(transport.input(), cipher, true);
+                Message mapInfo = codec.readServerResponse(transport.input(), cipher, true);
+                assertEquals(MessageName.PLAYER_INFO, playerInfo.command());
+                assertEquals(MessageName.MAP_INFO, mapInfo.command());
+
+                codec.writeClient(
+                        transport.output(), cipher, true,
+                        new Message(MessageName.FINISH_LOAD_MAP));
+
+                sendMove(codec, transport, cipher, 1260, 648);
+                sendMove(codec, transport, cipher, 1284, 620);
+                sendMove(codec, transport, cipher, 1312, 648);
+
+                waitForPlayerPosition(server, "move01", 1312, 648);
+
+                Session live = server.sessions().findByAccount("move01");
+                assertTrue(live != null);
+                assertEquals(SessionState.IN_GAME, live.state());
+                assertEquals(1312, live.player().x());
+                assertEquals(648, live.player().y());
+            }
+
+            waitForNoSessions(server);
+        } finally {
+            server.stop();
+            serverThread.join(1_000);
+        }
+
+        assertNull(serverFailure.get(),
+                "network server failed during PLAYER_MOVE integration test");
+    }
+
+    @Test
     void javaClientVersionCacheSkipsSecondFrameRequest() throws Exception {
         ResourceService resources = ResourceService.fromFrameRoot(
                 Path.of("..", "client", "Assets", "Resources", "Jsons"));
@@ -541,6 +646,52 @@ class NetworkIntegrationTest {
 
     private static void runIconRequest(int port) throws Exception {
         runIconRequest(port, 5, new byte[]{1, 2, 3, 4});
+    }
+
+    private static void sendMove(
+            LegacyPacketCodec codec,
+            LegacyTcpTransport transport,
+            LegacyCipher cipher,
+            int x,
+            int y) throws IOException {
+        codec.writeClient(
+                transport.output(),
+                cipher,
+                true,
+                new Message(
+                        MessageName.PLAYER_MOVE,
+                        new MessageWriter()
+                                .writeShort(x)
+                                .writeShort(y)
+                                .toByteArray()));
+    }
+
+    private static void waitForPlayerPosition(
+            NetworkServer server,
+            String accountName,
+            int expectedX,
+            int expectedY) throws InterruptedException {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
+        while (System.nanoTime() < deadline) {
+            Session session = server.sessions().findByAccount(accountName);
+            if (session != null
+                    && session.player() != null
+                    && session.player().x() == expectedX
+                    && session.player().y() == expectedY) {
+                return;
+            }
+            Thread.sleep(10);
+        }
+
+        Session session = server.sessions().findByAccount(accountName);
+        if (session == null) {
+            throw new AssertionError("session disappeared before PLAYER_MOVE was observed");
+        }
+        throw new AssertionError(
+                "expected PLAYER_MOVE position "
+                        + expectedX + "," + expectedY
+                        + " but was "
+                        + session.player().x() + "," + session.player().y());
     }
 
     private static EnterGameResponses runCreatePlayer(int port, String username,

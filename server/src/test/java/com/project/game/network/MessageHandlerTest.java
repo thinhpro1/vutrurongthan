@@ -8,6 +8,7 @@ import com.project.game.network.message.MessageWriter;
 import com.project.game.service.AuthService;
 import com.project.game.service.ResourceService;
 import com.project.game.service.ServerServices;
+import com.project.game.player.PlayerProfile;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -25,18 +26,19 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class MessageHandlerTest {
     @Test
-    void closesAfterThreeUnsupportedCommandsInGame() {
-        Session session = newSession(new AuthService());
-        session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
-        session.transition(SessionState.HANDSHAKE_DONE, SessionState.AUTHENTICATED);
-        session.transition(SessionState.AUTHENTICATED, SessionState.IN_GAME);
-        MessageHandler handler = newHandler(session, new AuthService());
+    void playerMoveIsAcceptedInGameAndUpdatesSessionPosition() {
+        AuthService auth = new AuthService();
+        Session session = inGameSessionWithPlayer(auth);
+        MessageHandler handler = newHandler(session, auth);
 
-        handler.onMessage(new Message(MessageName.PLAYER_MOVE));
-        handler.onMessage(new Message(MessageName.PLAYER_MOVE));
-        handler.onMessage(new Message(MessageName.PLAYER_MOVE));
+        handler.onMessage(moveMessage(1260, 648));
+        handler.onMessage(moveMessage(1284, 620));
+        handler.onMessage(moveMessage(1312, 648));
 
-        assertEquals(SessionState.CLOSED, session.state());
+        assertEquals(SessionState.IN_GAME, session.state());
+        assertEquals(1312, session.player().x());
+        assertEquals(648, session.player().y());
+        assertEquals(0, session.queuedMessages());
     }
 
     @Test
@@ -134,6 +136,68 @@ class MessageHandlerTest {
 
         assertEquals(0, session.queuedMessages());
         assertEquals(SessionState.HANDSHAKE_DONE, session.state());
+    }
+
+    @Test
+    void playerMoveRejectsTruncatedPayload() {
+        AuthService auth = new AuthService();
+        Session session = inGameSessionWithPlayer(auth);
+        MessageHandler handler = newHandler(session, auth);
+
+        byte[] truncated = new MessageWriter()
+                .writeShort(1260)
+                .writeByte(1)
+                .toByteArray();
+
+        handler.onMessage(new Message(MessageName.PLAYER_MOVE, truncated));
+
+        assertEquals(SessionState.CLOSED, session.state());
+    }
+
+    @Test
+    void playerMoveRejectsTrailingPayloadBytes() {
+        AuthService auth = new AuthService();
+        Session session = inGameSessionWithPlayer(auth);
+        MessageHandler handler = newHandler(session, auth);
+
+        byte[] trailing = new MessageWriter()
+                .writeShort(1260)
+                .writeShort(648)
+                .writeByte(1)
+                .toByteArray();
+
+        handler.onMessage(new Message(MessageName.PLAYER_MOVE, trailing));
+
+        assertEquals(SessionState.CLOSED, session.state());
+    }
+
+    @Test
+    void playerMoveRemainsRejectedBeforeInGame() {
+        AuthService auth = new AuthService();
+        Session session = newSession(auth);
+        session.bindPlayer(PlayerProfile.initial("user01", 7, "alpha1", 0));
+        session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
+        session.transition(SessionState.HANDSHAKE_DONE, SessionState.AUTHENTICATED);
+        MessageHandler handler = newHandler(session, auth);
+
+        handler.onMessage(moveMessage(1260, 648));
+        handler.onMessage(moveMessage(1260, 648));
+        handler.onMessage(moveMessage(1260, 648));
+
+        assertEquals(SessionState.CLOSED, session.state());
+    }
+
+    @Test
+    void playerMoveWithoutBoundPlayerFailsClosed() {
+        AuthService auth = new AuthService();
+        Session session = newSession(auth);
+        session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
+        session.transition(SessionState.HANDSHAKE_DONE, SessionState.AUTHENTICATED);
+        session.transition(SessionState.AUTHENTICATED, SessionState.IN_GAME);
+
+        newHandler(session, auth).onMessage(moveMessage(1260, 648));
+
+        assertEquals(SessionState.CLOSED, session.state());
     }
 
     @Test
@@ -282,6 +346,12 @@ class MessageHandlerTest {
                 new MessageWriter().writeShort(iconId).toByteArray());
     }
 
+    private static Message moveMessage(int x, int y) {
+        return new Message(
+                MessageName.PLAYER_MOVE,
+                new MessageWriter().writeShort(x).writeShort(y).toByteArray());
+    }
+
     private static AuthService registeredAuth() {
         AuthService auth = new AuthService();
         auth.register("user01", "secret1");
@@ -298,6 +368,15 @@ class MessageHandlerTest {
                 new LegacyPacketCodec(maxPacketSize), "abc".getBytes(StandardCharsets.US_ASCII), 4,
                 new ServerServices(authService, ResourceService.unavailable()), NetworkConfig.defaults(),
                 NetworkEventObserver.NO_OP);
+    }
+
+    private static Session inGameSessionWithPlayer(AuthService auth) {
+        Session session = newSession(auth);
+        session.bindPlayer(PlayerProfile.initial("user01", 7, "alpha1", 0));
+        session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
+        session.transition(SessionState.HANDSHAKE_DONE, SessionState.AUTHENTICATED);
+        session.transition(SessionState.AUTHENTICATED, SessionState.IN_GAME);
+        return session;
     }
 
     private static void waitForOutput(ByteArrayOutputStream output) throws InterruptedException {

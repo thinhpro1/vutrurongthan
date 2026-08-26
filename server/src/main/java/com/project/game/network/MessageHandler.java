@@ -53,6 +53,7 @@ public final class MessageHandler {
                 case MessageName.LOGIN -> handleLogin(message);
                 case MessageName.REGISTER_USER -> handleRegister(message);
                 case MessageName.CREATE_PLAYER -> handleCreatePlayer(message);
+                case MessageName.FINISH_LOAD_MAP -> handleFinishLoadMap(message);
                 default -> LOGGER.fine(() -> "RX cmd=" + message.command()
                         + " len=" + message.payload().length);
             }
@@ -253,6 +254,13 @@ public final class MessageHandler {
         session.bindPlayer(result.player());
         session.transition(SessionState.AUTHENTICATED, SessionState.IN_GAME);
         enterGame(result.player());
+    }
+
+    private void handleFinishLoadMap(Message message) throws IOException {
+        if (message.payload().length != 0) {
+            throw new IOException("trailing FINISH_LOAD_MAP payload bytes");
+        }
+        LOGGER.fine(() -> "FINISH_LOAD_MAP session=" + session.id());
     }
 
     private void enterGame(PlayerProfile player) throws IOException {
@@ -467,7 +475,8 @@ public final class MessageHandler {
                     || command == MessageName.REQUEST_ICON;
             case AUTHENTICATED -> command == MessageName.CREATE_PLAYER
                     || command == MessageName.REQUEST_ICON;
-            case IN_GAME -> command == MessageName.REQUEST_ICON;
+            case IN_GAME -> command == MessageName.REQUEST_ICON
+                    || command == MessageName.FINISH_LOAD_MAP;
             case CLOSED -> false;
         };
     }

@@ -7,8 +7,11 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.util.HexFormat;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -151,6 +154,17 @@ class ResourceServiceTest {
         ), map.colorsBgr());
         assertFalse(map.line());
         assertNull(map.dataLine());
+    }
+
+    @Test
+    void pinsLegacyMapZeroGridHash() throws Exception {
+        ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
+        var map = resources.map(0).orElseThrow();
+
+        String hash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+                .digest(map.data().getBytes(StandardCharsets.UTF_8)));
+
+        assertEquals("9d27d23a843599772be153cc4c94ca4b19d30403c66cb07457afb2df467a1229", hash);
     }
 
     @Test

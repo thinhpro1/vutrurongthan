@@ -34,6 +34,34 @@ class MessageHandlerTest {
     }
 
     @Test
+    void finishLoadMapIsAcceptedInGameWithoutConsumingViolationBudget() {
+        Session session = newSession(new AuthService());
+        session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
+        session.transition(SessionState.HANDSHAKE_DONE, SessionState.AUTHENTICATED);
+        session.transition(SessionState.AUTHENTICATED, SessionState.IN_GAME);
+        MessageHandler handler = newHandler(session, new AuthService());
+
+        handler.onMessage(new Message(MessageName.FINISH_LOAD_MAP));
+        handler.onMessage(new Message(MessageName.FINISH_LOAD_MAP));
+        handler.onMessage(new Message(MessageName.FINISH_LOAD_MAP));
+
+        assertEquals(SessionState.IN_GAME, session.state());
+    }
+
+    @Test
+    void finishLoadMapRejectsTrailingBytes() {
+        Session session = newSession(new AuthService());
+        session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
+        session.transition(SessionState.HANDSHAKE_DONE, SessionState.AUTHENTICATED);
+        session.transition(SessionState.AUTHENTICATED, SessionState.IN_GAME);
+        MessageHandler handler = newHandler(session, new AuthService());
+
+        handler.onMessage(new Message(MessageName.FINISH_LOAD_MAP, new byte[]{1}));
+
+        assertEquals(SessionState.CLOSED, session.state());
+    }
+
+    @Test
     void closesWhenLoginOmitsRequiredLoginVersion() throws Exception {
         AuthService auth = registeredAuth();
         Session session = newSession(auth);

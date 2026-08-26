@@ -1,6 +1,7 @@
 package com.project.game.network;
 
 import com.project.game.network.codec.LegacyPacketCodec;
+import com.project.game.network.codec.LegacyCipher;
 import com.project.game.network.message.Message;
 import com.project.game.network.message.MessageName;
 import com.project.game.network.message.MessageWriter;
@@ -10,12 +11,17 @@ import com.project.game.service.ServerServices;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.PipedInputStream;
+import java.io.PipedOutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.charset.StandardCharsets;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class MessageHandlerTest {
     @Test
@@ -128,6 +134,47 @@ class MessageHandlerTest {
 
         assertEquals(0, session.queuedMessages());
         assertEquals(SessionState.HANDSHAKE_DONE, session.state());
+    }
+
+    @Test
+    void serializesExactLegacyLevelResource() throws Exception {
+        ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
+        PipedInputStream input = new PipedInputStream();
+        try (PipedOutputStream inputWriter = new PipedOutputStream(input)) {
+            ByteArrayOutputStream output = new ByteArrayOutputStream();
+            SessionManager manager = new SessionManager();
+            byte[] key = "abc".getBytes(StandardCharsets.US_ASCII);
+            Session session = new Session(manager.nextId(), new TestTransport(input, output, "127.0.0.1"),
+                    manager, new LegacyPacketCodec(262_144), key, 4,
+                    new ServerServices(new AuthService(), resources), NetworkConfig.defaults(),
+                    NetworkEventObserver.NO_OP);
+            try {
+                session.start();
+                session.completeHandshake();
+                output.reset();
+
+                newHandler(session, resources).onMessage(new Message(
+                        MessageName.UPDATE_DATA,
+                        new MessageWriter().writeByte(6).toByteArray()));
+
+                waitForOutput(output);
+                Message response = new LegacyPacketCodec(262_144).readServerResponse(
+                        new ByteArrayInputStream(output.toByteArray()), new LegacyCipher(key), true);
+                assertEquals(MessageName.UPDATE_DATA, response.command());
+                var reader = response.reader();
+                assertEquals(6, reader.readByte());
+                assertEquals(0, reader.readByte());
+                assertEquals(102, reader.readUnsignedShort());
+                for (int id = 0; id < 102; id++) {
+                    assertEquals(id, reader.readShort());
+                    reader.readUtf();
+                    reader.readLong();
+                }
+                assertEquals(0, reader.remaining());
+            } finally {
+                session.close();
+            }
+        }
     }
 
     @Test
@@ -251,5 +298,27 @@ class MessageHandlerTest {
                 new LegacyPacketCodec(maxPacketSize), "abc".getBytes(StandardCharsets.US_ASCII), 4,
                 new ServerServices(authService, ResourceService.unavailable()), NetworkConfig.defaults(),
                 NetworkEventObserver.NO_OP);
+    }
+
+    private static void waitForOutput(ByteArrayOutputStream output) throws InterruptedException {
+        int lastSize = -1;
+        int stableChecks = 0;
+        for (int attempt = 0; attempt < 200; attempt++) {
+            int size = output.size();
+            if (size > 0 && size == lastSize) {
+                stableChecks++;
+                if (stableChecks >= 3) {
+                    return;
+                }
+            } else {
+                stableChecks = 0;
+            }
+            lastSize = size;
+            Thread.sleep(5);
+        }
+        if (output.size() > 0) {
+            return;
+        }
+        assertTrue(output.size() > 0, "timed out waiting for level resource response");
     }
 }

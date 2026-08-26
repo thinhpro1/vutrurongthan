@@ -20,6 +20,7 @@ public final class MessageHandler {
     // Development-only bootstrap values for the legacy client resource protocol.
     private static final int NOT_PROVIDED_VERSION = -1;
     private static final int DEV_MONSTER_VERSION = 0;
+    private static final int DEV_LEVEL_VERSION = 0;
     private static final int DEV_FRAME_VERSION = 1;
     private final Session session;
     private final AuthService authService;
@@ -81,6 +82,7 @@ public final class MessageHandler {
         switch (type) {
             case -1 -> sendResourceManifest();
             case 4 -> sendMonsterResource();
+            case 6 -> sendLevelResource();
             case 7 -> sendFrameResource();
             default -> LOGGER.fine(() -> "UPDATE_DATA type=" + type
                     + " is not provided by the development bootstrap session=" + session.id());
@@ -90,6 +92,8 @@ public final class MessageHandler {
     private void sendResourceManifest() throws IOException {
         int frameVersion = resourceService.frames().isEmpty()
                 ? NOT_PROVIDED_VERSION : DEV_FRAME_VERSION;
+        int levelVersion = resourceService.levels().isEmpty()
+                ? NOT_PROVIDED_VERSION : DEV_LEVEL_VERSION;
         MessageWriter writer = new MessageWriter()
                 .writeByte(-1)
                 .writeByte(NOT_PROVIDED_VERSION) // image
@@ -99,14 +103,15 @@ public final class MessageHandler {
                 .writeByte(NOT_PROVIDED_VERSION) // effect
                 .writeByte(DEV_MONSTER_VERSION) // monster
                 .writeByte(NOT_PROVIDED_VERSION) // medal
-                .writeByte(NOT_PROVIDED_VERSION) // level
+                .writeByte(levelVersion) // level
                 .writeByte(frameVersion) // frame
                 .writeByte(NOT_PROVIDED_VERSION) // mount
                 .writeByte(NOT_PROVIDED_VERSION) // bag
                 .writeByte(NOT_PROVIDED_VERSION) // skill paint
                 .writeByte(NOT_PROVIDED_VERSION); // aura (client 0.9.5)
         session.send(new Message(MessageName.UPDATE_DATA, writer.toByteArray()));
-        LOGGER.fine(() -> "UPDATE_DATA_TX type=-1 session=" + session.id());
+        LOGGER.fine(() -> "UPDATE_DATA_TX type=-1 session=" + session.id()
+                + " levelVersion=" + levelVersion);
     }
 
     private void sendMonsterResource() throws IOException {
@@ -118,6 +123,33 @@ public final class MessageHandler {
         session.send(new Message(MessageName.UPDATE_DATA, writer.toByteArray()));
         LOGGER.fine(() -> "UPDATE_DATA_TX type=4 session=" + session.id()
                 + " monsterVersion=" + DEV_MONSTER_VERSION + " darts=0 monsters=0");
+    }
+
+    private void sendLevelResource() throws IOException {
+        var levels = resourceService.levels();
+        if (levels.isEmpty()) {
+            LOGGER.fine(() -> "UPDATE_DATA type=6 skipped because Level resources are unavailable session="
+                    + session.id());
+            return;
+        }
+        if (levels.size() > Short.MAX_VALUE) {
+            throw new IOException("too many legacy levels: " + levels.size());
+        }
+
+        MessageWriter writer = new MessageWriter()
+                .writeByte(6)
+                .writeByte(DEV_LEVEL_VERSION)
+                .writeShort(levels.size());
+        for (var level : levels) {
+            writer.writeShort(level.id())
+                    .writeUtf(level.name())
+                    .writeLong(level.power());
+        }
+
+        session.send(new Message(MessageName.UPDATE_DATA, writer.toByteArray()));
+        LOGGER.fine(() -> "UPDATE_DATA_TX type=6 session=" + session.id()
+                + " levelVersion=" + DEV_LEVEL_VERSION
+                + " count=" + levels.size());
     }
 
     private void sendFrameResource() throws IOException {

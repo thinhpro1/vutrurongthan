@@ -142,6 +142,95 @@ class NetworkIntegrationTest {
     }
 
     @Test
+    void javaClientLoadsLegacyLevelResource() throws Exception {
+        ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
+        NetworkServer server = new NetworkServer("127.0.0.1", 0, 2, 262_144, 8, 1_000,
+                "abc".getBytes(StandardCharsets.US_ASCII),
+                new ServerServices(new AuthService(), resources), null,
+                NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
+        AtomicReference<Throwable> serverFailure = new AtomicReference<>();
+        Thread serverThread = Thread.ofVirtual().start(() -> {
+            try {
+                server.start();
+            } catch (Throwable failure) {
+                serverFailure.set(failure);
+            }
+        });
+        try {
+            waitForPort(server);
+            LegacyPacketCodec codec = new LegacyPacketCodec(262_144);
+            try (LegacyTcpTransport transport = LegacyTcpTransport.connect(
+                    "127.0.0.1", server.localPort(), 1_000)) {
+                transport.socket().setSoTimeout(2_000);
+                codec.writeClient(transport.output(), null, false,
+                        new Message(MessageName.CONNECT_SERVER));
+                Message handshake = codec.read(transport.input(), null, false);
+                assertEquals(MessageName.SEND_SESSION_KEY, handshake.command());
+                LegacyCipher cipher = new LegacyCipher(reconstructKey(handshake.payload()));
+                Message version = codec.readServerResponse(transport.input(), cipher, true);
+                assertEquals(MessageName.VERSION_SOURCE, version.command());
+
+                codec.writeClient(transport.output(), cipher, true,
+                        new Message(MessageName.UPDATE_DATA,
+                                new MessageWriter().writeByte(-1).toByteArray()));
+                Message manifest = codec.readServerResponse(transport.input(), cipher, true);
+                assertEquals(MessageName.UPDATE_DATA, manifest.command());
+                var manifestReader = manifest.reader();
+                assertEquals(-1, manifestReader.readByte()); // subtype
+                assertEquals(-1, manifestReader.readByte()); // image
+                assertEquals(-1, manifestReader.readByte()); // item
+                assertEquals(-1, manifestReader.readByte()); // item option
+                assertEquals(-1, manifestReader.readByte()); // npc
+                assertEquals(-1, manifestReader.readByte()); // effect
+                assertEquals(0, manifestReader.readByte()); // monster
+                assertEquals(-1, manifestReader.readByte()); // medal
+                assertEquals(0, manifestReader.readByte()); // level
+                assertEquals(1, manifestReader.readByte()); // frame
+                assertEquals(-1, manifestReader.readByte()); // mount
+                assertEquals(-1, manifestReader.readByte()); // bag
+                assertEquals(-1, manifestReader.readByte()); // skill paint
+                assertEquals(-1, manifestReader.readByte()); // aura
+                assertEquals(0, manifestReader.remaining());
+
+                codec.writeClient(transport.output(), cipher, true,
+                        new Message(MessageName.UPDATE_DATA,
+                                new MessageWriter().writeByte(6).toByteArray()));
+                Message levelResponse = codec.readServerResponse(transport.input(), cipher, true);
+                assertEquals(MessageName.UPDATE_DATA, levelResponse.command());
+                var reader = levelResponse.reader();
+                assertEquals(6, reader.readByte());
+                assertEquals(0, reader.readByte());
+                assertEquals(102, reader.readUnsignedShort());
+                long previousPower = -1L;
+                for (int id = 0; id < 102; id++) {
+                    assertEquals(id, reader.readShort());
+                    String name = reader.readUtf();
+                    long power = reader.readLong();
+                    assertTrue(power > previousPower);
+                    previousPower = power;
+                    if (id == 0 || id == 1) {
+                        assertEquals("Tân binh", name);
+                        assertEquals(id, power);
+                    } else if (id == 2) {
+                        assertEquals("Tân binh", name);
+                        assertEquals(100L, power);
+                    } else if (id == 101) {
+                        assertEquals("Thần # cấp 5", name);
+                        assertEquals(6_000_000_000_000_000L, power);
+                    }
+                }
+                assertEquals(0, reader.remaining());
+            }
+            waitForNoSessions(server);
+        } finally {
+            server.stop();
+            serverThread.join(1_000);
+        }
+        assertNull(serverFailure.get(),
+                "network server failed during level resource integration test");
+    }
+
+    @Test
     void javaClientVersionCacheSkipsSecondFrameRequest() throws Exception {
         ResourceService resources = ResourceService.fromFrameRoot(
                 Path.of("..", "client", "Assets", "Resources", "Jsons"));

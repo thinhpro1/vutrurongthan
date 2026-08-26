@@ -36,6 +36,7 @@ public final class ResourceService {
     private final List<FrameTemplate> frames;
     private final Map<Integer, List<LegacyPlayerSkill>> playerSkills;
     private final Map<Integer, LegacyMapTemplate> maps;
+    private final List<LegacyLevel> levels;
 
     private ResourceService(Path iconRoot, Path frameRoot, boolean requirePlayerSkills) {
         this.iconRoot = iconRoot == null ? null : iconRoot.toAbsolutePath().normalize();
@@ -46,6 +47,9 @@ public final class ResourceService {
         this.maps = frameRoot == null
                 ? Map.of()
                 : loadMaps(frameRoot, requirePlayerSkills);
+        this.levels = frameRoot == null
+                ? List.of()
+                : loadLevels(frameRoot, requirePlayerSkills);
     }
 
     public static ResourceService unavailable() {
@@ -89,6 +93,10 @@ public final class ResourceService {
 
     public Optional<LegacyMapTemplate> map(int mapId) {
         return Optional.ofNullable(maps.get(mapId));
+    }
+
+    public List<LegacyLevel> levels() {
+        return levels;
     }
 
     private static List<FrameTemplate> loadFrames(Path frameRoot) {
@@ -232,6 +240,69 @@ public final class ResourceService {
             throw new IllegalStateException("cannot read " + source, exception);
         } catch (JsonParseException exception) {
             throw new IllegalArgumentException("invalid MapBootstrap.json at " + source, exception);
+        }
+    }
+
+    private static List<LegacyLevel> loadLevels(Path frameRoot, boolean required) {
+        Path root = Objects.requireNonNull(frameRoot, "frameRoot").toAbsolutePath().normalize();
+        Path source = root.resolve("LevelBootstrap.json").normalize();
+        if (!source.startsWith(root) || !Files.isRegularFile(source) || !Files.isReadable(source)) {
+            if (required) {
+                throw new IllegalArgumentException(
+                        "LevelBootstrap.json is not readable below " + root);
+            }
+            return List.of();
+        }
+        try {
+            String json = Files.readString(source, StandardCharsets.UTF_8);
+            JsonElement parsed = JsonParser.parseString(json);
+            if (!parsed.isJsonObject()) {
+                throw new IllegalArgumentException("LevelBootstrap.json root must be an object");
+            }
+            JsonElement levelsValue = required(parsed.getAsJsonObject(), "levels");
+            if (!levelsValue.isJsonArray()) {
+                throw new IllegalArgumentException("LevelBootstrap.json field levels must be an array");
+            }
+            if (levelsValue.getAsJsonArray().size() != 102) {
+                throw new IllegalArgumentException("LevelBootstrap.json must contain exactly 102 levels");
+            }
+
+            List<LegacyLevel> loaded = new ArrayList<>(levelsValue.getAsJsonArray().size());
+            long previousPower = -1L;
+            for (int index = 0; index < levelsValue.getAsJsonArray().size(); index++) {
+                JsonElement element = levelsValue.getAsJsonArray().get(index);
+                if (!element.isJsonObject()) {
+                    throw new IllegalArgumentException("LevelBootstrap level " + index
+                            + " must be an object");
+                }
+                JsonObject levelObject = element.getAsJsonObject();
+                int id = readInt(levelObject, "id");
+                if (id != index) {
+                    throw new IllegalArgumentException("LevelBootstrap level " + index
+                            + " id must be " + index + " but was " + id);
+                }
+                String name = readString(levelObject, "name");
+                if (name.isBlank()) {
+                    throw new IllegalArgumentException("LevelBootstrap level " + index
+                            + " name must not be blank");
+                }
+                long power = readLong(levelObject, "power");
+                if (power < 0L) {
+                    throw new IllegalArgumentException("LevelBootstrap level " + index
+                            + " power must be non-negative");
+                }
+                if (index > 0 && power <= previousPower) {
+                    throw new IllegalArgumentException("LevelBootstrap level " + index
+                            + " power must be strictly increasing");
+                }
+                loaded.add(new LegacyLevel(id, name, power));
+                previousPower = power;
+            }
+            return List.copyOf(loaded);
+        } catch (IOException exception) {
+            throw new IllegalStateException("cannot read " + source, exception);
+        } catch (JsonParseException exception) {
+            throw new IllegalArgumentException("invalid LevelBootstrap.json at " + source, exception);
         }
     }
 
@@ -580,6 +651,12 @@ public final class ResourceService {
     public record LegacySkillPaint(String percent, int paintId) {
         public LegacySkillPaint {
             Objects.requireNonNull(percent, "percent");
+        }
+    }
+
+    public record LegacyLevel(int id, String name, long power) {
+        public LegacyLevel {
+            Objects.requireNonNull(name, "name");
         }
     }
 

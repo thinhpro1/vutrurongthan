@@ -1,0 +1,514 @@
+{
+  "levels": [
+    {
+      "id": 0,
+      "name": "Tân binh",
+      "power": 0
+    },
+    {
+      "id": 1,
+      "name": "Tân binh",
+      "power": 1
+    },
+    {
+      "id": 2,
+      "name": "Tân binh",
+      "power": 100
+    },
+    {
+      "id": 3,
+      "name": "Tân binh",
+      "power": 1000
+    },
+    {
+      "id": 4,
+      "name": "Tân binh",
+      "power": 6000
+    },
+    {
+      "id": 5,
+      "name": "Tân binh",
+      "power": 16000
+    },
+    {
+      "id": 6,
+      "name": "Tân binh",
+      "power": 36000
+    },
+    {
+      "id": 7,
+      "name": "Tân binh",
+      "power": 76000
+    },
+    {
+      "id": 8,
+      "name": "Tân binh",
+      "power": 156000
+    },
+    {
+      "id": 9,
+      "name": "Tân binh",
+      "power": 316000
+    },
+    {
+      "id": 10,
+      "name": "Vệ binh",
+      "power": 636000
+    },
+    {
+      "id": 11,
+      "name": "Vệ binh",
+      "power": 1276000
+    },
+    {
+      "id": 12,
+      "name": "Vệ binh",
+      "power": 2556000
+    },
+    {
+      "id": 13,
+      "name": "Vệ binh",
+      "power": 5116000
+    },
+    {
+      "id": 14,
+      "name": "Vệ binh",
+      "power": 10116000
+    },
+    {
+      "id": 15,
+      "name": "Vệ binh",
+      "power": 20116000
+    },
+    {
+      "id": 16,
+      "name": "Vệ binh",
+      "power": 35116000
+    },
+    {
+      "id": 17,
+      "name": "Vệ binh",
+      "power": 55116000
+    },
+    {
+      "id": 18,
+      "name": "Vệ binh",
+      "power": 80116000
+    },
+    {
+      "id": 19,
+      "name": "Vệ binh",
+      "power": 110116000
+    },
+    {
+      "id": 20,
+      "name": "Chiến binh",
+      "power": 150116000
+    },
+    {
+      "id": 21,
+      "name": "Chiến binh",
+      "power": 200116000
+    },
+    {
+      "id": 22,
+      "name": "Chiến binh",
+      "power": 260116000
+    },
+    {
+      "id": 23,
+      "name": "Chiến binh",
+      "power": 330116000
+    },
+    {
+      "id": 24,
+      "name": "Chiến binh",
+      "power": 410116000
+    },
+    {
+      "id": 25,
+      "name": "Chiến binh",
+      "power": 500116000
+    },
+    {
+      "id": 26,
+      "name": "Chiến binh",
+      "power": 600116000
+    },
+    {
+      "id": 27,
+      "name": "Chiến binh",
+      "power": 710116000
+    },
+    {
+      "id": 28,
+      "name": "Chiến binh",
+      "power": 830116000
+    },
+    {
+      "id": 29,
+      "name": "Chiến binh",
+      "power": 960116000
+    },
+    {
+      "id": 30,
+      "name": "Siêu chiến binh",
+      "power": 1760116000
+    },
+    {
+      "id": 31,
+      "name": "Siêu chiến binh",
+      "power": 3360116000
+    },
+    {
+      "id": 32,
+      "name": "Siêu chiến binh",
+      "power": 5760116000
+    },
+    {
+      "id": 33,
+      "name": "Siêu chiến binh",
+      "power": 8960116000
+    },
+    {
+      "id": 34,
+      "name": "Siêu chiến binh",
+      "power": 12960116000
+    },
+    {
+      "id": 35,
+      "name": "Siêu chiến binh",
+      "power": 17760116000
+    },
+    {
+      "id": 36,
+      "name": "Siêu chiến binh",
+      "power": 23360116000
+    },
+    {
+      "id": 37,
+      "name": "Siêu chiến binh",
+      "power": 29760116000
+    },
+    {
+      "id": 38,
+      "name": "Siêu chiến binh",
+      "power": 36960116000
+    },
+    {
+      "id": 39,
+      "name": "Siêu chiến binh",
+      "power": 44960116000
+    },
+    {
+      "id": 40,
+      "name": "Siêu # cấp 1",
+      "power": 57760116000
+    },
+    {
+      "id": 41,
+      "name": "Siêu # cấp 1",
+      "power": 65760116000
+    },
+    {
+      "id": 42,
+      "name": "Siêu # cấp 1",
+      "power": 77760116000
+    },
+    {
+      "id": 43,
+      "name": "Siêu # cấp 1",
+      "power": 93760116000
+    },
+    {
+      "id": 44,
+      "name": "Siêu # cấp 1",
+      "power": 113760116000
+    },
+    {
+      "id": 45,
+      "name": "Siêu # cấp 1",
+      "power": 137760116000
+    },
+    {
+      "id": 46,
+      "name": "Siêu # cấp 1",
+      "power": 165760116000
+    },
+    {
+      "id": 47,
+      "name": "Siêu # cấp 1",
+      "power": 197760116000
+    },
+    {
+      "id": 48,
+      "name": "Siêu # cấp 1",
+      "power": 233760116000
+    },
+    {
+      "id": 49,
+      "name": "Siêu # cấp 1",
+      "power": 273760116000
+    },
+    {
+      "id": 50,
+      "name": "Siêu # cấp 2",
+      "power": 342760116000
+    },
+    {
+      "id": 51,
+      "name": "Siêu # cấp 2",
+      "power": 392760116000
+    },
+    {
+      "id": 52,
+      "name": "Siêu # cấp 2",
+      "power": 467760116000
+    },
+    {
+      "id": 53,
+      "name": "Siêu # cấp 2",
+      "power": 567760116000
+    },
+    {
+      "id": 54,
+      "name": "Siêu # cấp 2",
+      "power": 692760116000
+    },
+    {
+      "id": 55,
+      "name": "Siêu # cấp 2",
+      "power": 842760116000
+    },
+    {
+      "id": 56,
+      "name": "Siêu # cấp 2",
+      "power": 1017760116000
+    },
+    {
+      "id": 57,
+      "name": "Siêu # cấp 2",
+      "power": 1217760116000
+    },
+    {
+      "id": 58,
+      "name": "Siêu # cấp 2",
+      "power": 1442760116000
+    },
+    {
+      "id": 59,
+      "name": "Siêu # cấp 2",
+      "power": 1692760116000
+    },
+    {
+      "id": 60,
+      "name": "Thần # cấp 1",
+      "power": 2192760116000
+    },
+    {
+      "id": 61,
+      "name": "Thần # cấp 1",
+      "power": 2792760116000
+    },
+    {
+      "id": 62,
+      "name": "Thần # cấp 1",
+      "power": 3492760116000
+    },
+    {
+      "id": 63,
+      "name": "Thần # cấp 1",
+      "power": 4292760116000
+    },
+    {
+      "id": 64,
+      "name": "Thần # cấp 1",
+      "power": 5192760116000
+    },
+    {
+      "id": 65,
+      "name": "Thần # cấp 1",
+      "power": 6192760116000
+    },
+    {
+      "id": 66,
+      "name": "Thần # cấp 1",
+      "power": 7292760116000
+    },
+    {
+      "id": 67,
+      "name": "Thần # cấp 1",
+      "power": 8492760116000
+    },
+    {
+      "id": 68,
+      "name": "Thần # cấp 1",
+      "power": 9792760116000
+    },
+    {
+      "id": 69,
+      "name": "Thần # cấp 1",
+      "power": 11192760116000
+    },
+    {
+      "id": 70,
+      "name": "Thần # cấp 2",
+      "power": 13192760116000
+    },
+    {
+      "id": 71,
+      "name": "Thần # cấp 2",
+      "power": 16000000000000
+    },
+    {
+      "id": 72,
+      "name": "Thần # cấp 2",
+      "power": 19500000000000
+    },
+    {
+      "id": 73,
+      "name": "Thần # cấp 2",
+      "power": 23500000000000
+    },
+    {
+      "id": 74,
+      "name": "Thần # cấp 2",
+      "power": 28000000000000
+    },
+    {
+      "id": 75,
+      "name": "Thần # cấp 2",
+      "power": 33000000000000
+    },
+    {
+      "id": 76,
+      "name": "Thần # cấp 2",
+      "power": 38500000000000
+    },
+    {
+      "id": 77,
+      "name": "Thần # cấp 2",
+      "power": 44500000000000
+    },
+    {
+      "id": 78,
+      "name": "Thần # cấp 2",
+      "power": 51000000000000
+    },
+    {
+      "id": 79,
+      "name": "Thần # cấp 2",
+      "power": 58000000000000
+    },
+    {
+      "id": 80,
+      "name": "Thần # cấp 3",
+      "power": 65500000000000
+    },
+    {
+      "id": 81,
+      "name": "Thần # cấp 3",
+      "power": 73500000000000
+    },
+    {
+      "id": 82,
+      "name": "Thần # cấp 3",
+      "power": 82000000000000
+    },
+    {
+      "id": 83,
+      "name": "Thần # cấp 3",
+      "power": 91000000000000
+    },
+    {
+      "id": 84,
+      "name": "Thần # cấp 3",
+      "power": 100500000000000
+    },
+    {
+      "id": 85,
+      "name": "Thần # cấp 3",
+      "power": 110500000000000
+    },
+    {
+      "id": 86,
+      "name": "Thần # cấp 3",
+      "power": 121000000000000
+    },
+    {
+      "id": 87,
+      "name": "Thần # cấp 3",
+      "power": 132000000000000
+    },
+    {
+      "id": 88,
+      "name": "Thần # cấp 3",
+      "power": 143500000000000
+    },
+    {
+      "id": 89,
+      "name": "Thần # cấp 3",
+      "power": 155500000000000
+    },
+    {
+      "id": 90,
+      "name": "Thần # cấp 3",
+      "power": 168000000000000
+    },
+    {
+      "id": 91,
+      "name": "Thần # cấp 4",
+      "power": 200000000000000
+    },
+    {
+      "id": 92,
+      "name": "Thần # cấp 4",
+      "power": 300000000000000
+    },
+    {
+      "id": 93,
+      "name": "Thần # cấp 4",
+      "power": 500000000000000
+    },
+    {
+      "id": 94,
+      "name": "Thần # cấp 4",
+      "power": 800000000000000
+    },
+    {
+      "id": 95,
+      "name": "Thần # cấp 4",
+      "power": 1200000000000000
+    },
+    {
+      "id": 96,
+      "name": "Thần # cấp 4",
+      "power": 1700000000000000
+    },
+    {
+      "id": 97,
+      "name": "Thần # cấp 4",
+      "power": 2300000000000000
+    },
+    {
+      "id": 98,
+      "name": "Thần # cấp 4",
+      "power": 3000000000000000
+    },
+    {
+      "id": 99,
+      "name": "Thần # cấp 4",
+      "power": 3800000000000000
+    },
+    {
+      "id": 100,
+      "name": "Thần # cấp 4",
+      "power": 4700000000000000
+    },
+    {
+      "id": 101,
+      "name": "Thần # cấp 5",
+      "power": 6000000000000000
+    }
+  ]
+}

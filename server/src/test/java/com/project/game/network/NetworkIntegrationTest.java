@@ -138,7 +138,9 @@ class NetworkIntegrationTest {
                 first.move(4464, 936);
                 assertEquals(MessageName.PLAYER_MOVE, second.readServerMessage().command());
                 first.requestChangeMap();
-                assertEquals(1, first.readMapInfo().mapId());
+                ParsedMapInfo firstMap1 = first.readMapInfo();
+                assertEquals(1, firstMap1.mapId());
+                assertEquals(canonicalMap1Monsters(), firstMap1.monsters());
                 assertEquals(MessageName.REMOVE_PLAYER, second.readServerMessage().command());
                 first.finishLoadMap();
 
@@ -149,7 +151,9 @@ class NetworkIntegrationTest {
 
                 second.move(4464, 936);
                 second.requestChangeMap();
-                assertEquals(1, second.readMapInfo().mapId());
+                ParsedMapInfo secondMap1 = second.readMapInfo();
+                assertEquals(1, secondMap1.mapId());
+                assertEquals(canonicalMap1Monsters(), secondMap1.monsters());
                 second.finishLoadMap();
                 assertAddPlayerId(first.readServerMessage(), second.playerInfo().id());
                 assertAddPlayerId(second.readServerMessage(), first.playerInfo().id());
@@ -384,7 +388,7 @@ class NetworkIntegrationTest {
                 assertEquals(-1, manifestReader.readByte()); // item option
                 assertEquals(-1, manifestReader.readByte()); // npc
                 assertEquals(0, manifestReader.readByte()); // effect
-                assertEquals(0, manifestReader.readByte()); // monster
+                assertEquals(1, manifestReader.readByte()); // monster
                 assertEquals(-1, manifestReader.readByte()); // medal
                 assertEquals(0, manifestReader.readByte()); // level
                 assertEquals(1, manifestReader.readByte()); // frame
@@ -477,7 +481,7 @@ class NetworkIntegrationTest {
                 assertEquals(-1, manifestReader.readByte()); // item option
                 assertEquals(-1, manifestReader.readByte()); // npc
                 assertEquals(0, manifestReader.readByte());  // effect
-                assertEquals(0, manifestReader.readByte());  // monster
+                assertEquals(1, manifestReader.readByte());  // monster
                 assertEquals(-1, manifestReader.readByte()); // medal
                 assertEquals(0, manifestReader.readByte());  // level
                 assertEquals(1, manifestReader.readByte());  // frame
@@ -770,7 +774,8 @@ class NetworkIntegrationTest {
         };
         NetworkServer server = new NetworkServer("127.0.0.1", 0, 2, 1024, 8, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
-                new ServerServices(new AuthService(), ResourceService.unavailable()),
+                new ServerServices(new AuthService(), ResourceService.fromFrameRoot(
+                        Path.of("resources", "json"))),
                 null, NetworkConfig.defaults(), observer);
         AtomicReference<Throwable> serverFailure = new AtomicReference<>();
         Thread serverThread = Thread.ofVirtual().start(() -> {
@@ -786,7 +791,7 @@ class NetworkIntegrationTest {
             assertTrue(firstUpdate.await(1, TimeUnit.SECONDS));
             assertTrue(firstMonsterUpdate.await(1, TimeUnit.SECONDS));
             waitForNoSessions(server);
-            // Model a restart after the client persisted monster version 0.
+            // Model a restart after the client persisted monster version 1.
             runBootstrap(server.localPort(), false);
             assertTrue(secondUpdate.await(1, TimeUnit.SECONDS));
             assertTrue(!secondMonsterUpdate.await(100, TimeUnit.MILLISECONDS));
@@ -815,19 +820,23 @@ class NetworkIntegrationTest {
             assertEquals(MessageName.UPDATE_DATA, manifest.command());
             assertEquals(14, manifest.payload().length);
             assertArrayEquals(new byte[]{
-                    -1, -1, -1, -1, -1, -1, 0, -1, -1, -1, -1, -1, -1, -1
+                    -1, -1, -1, -1, -1, 0, 1, -1, 0, 1, -1, -1, -1, -1
             }, manifest.payload());
+            int historicalEmptyMonsterVersion = 0;
+            int serverMonsterVersion = Byte.toUnsignedInt(manifest.payload()[6]);
+            assertEquals(1, serverMonsterVersion);
+            assertTrue(serverMonsterVersion != historicalEmptyMonsterVersion);
             var manifestReader = manifest.reader();
             assertEquals(-1, manifestReader.readByte());
             assertEquals(-1, manifestReader.readByte());
             assertEquals(-1, manifestReader.readByte());
             assertEquals(-1, manifestReader.readByte());
             assertEquals(-1, manifestReader.readByte());
+            assertEquals(0, manifestReader.readByte());
+            assertEquals(1, manifestReader.readByte());
             assertEquals(-1, manifestReader.readByte());
             assertEquals(0, manifestReader.readByte());
-            assertEquals(-1, manifestReader.readByte());
-            assertEquals(-1, manifestReader.readByte());
-            assertEquals(-1, manifestReader.readByte());
+            assertEquals(1, manifestReader.readByte());
             assertEquals(-1, manifestReader.readByte());
             assertEquals(-1, manifestReader.readByte());
             assertEquals(-1, manifestReader.readByte());
@@ -839,13 +848,54 @@ class NetworkIntegrationTest {
                         new Message(MessageName.UPDATE_DATA, new MessageWriter().writeByte(4).toByteArray()));
                 Message monster = codec.readServerResponse(transport.input(), cipher, true);
                 assertEquals(MessageName.UPDATE_DATA, monster.command());
-                assertArrayEquals(new byte[]{4, 0, 0, 0, 0, 0}, monster.payload());
-                assertEquals(6, monster.payload().length);
                 var monsterReader = monster.reader();
                 assertEquals(4, monsterReader.readByte());
+                assertEquals(1, monsterReader.readByte());
+                assertEquals(1, monsterReader.readUnsignedShort());
+                assertEquals(0, monsterReader.readShort());
+                assertFalse(monsterReader.readBoolean());
+                assertEquals(3, monsterReader.readUnsignedByte());
+                assertEquals(2198, monsterReader.readShort());
+                assertEquals(2199, monsterReader.readShort());
+                assertEquals(2200, monsterReader.readShort());
+                assertEquals(0, monsterReader.readShort());
+                assertEquals(0, monsterReader.readShort());
+                assertEquals(30, monsterReader.readShort());
+                assertEquals(3, monsterReader.readUnsignedByte());
+                assertEquals(2190, monsterReader.readShort());
+                assertEquals(2191, monsterReader.readShort());
+                assertEquals(2192, monsterReader.readShort());
+                assertEquals(0, monsterReader.readShort());
+                assertEquals(0, monsterReader.readShort());
+                assertEquals(30, monsterReader.readShort());
+                assertEquals(5, monsterReader.readUnsignedByte());
+                assertEquals(2193, monsterReader.readShort());
+                assertEquals(2194, monsterReader.readShort());
+                assertEquals(2195, monsterReader.readShort());
+                assertEquals(2196, monsterReader.readShort());
+                assertEquals(2197, monsterReader.readShort());
+                assertEquals(0, monsterReader.readShort());
+                assertEquals(0, monsterReader.readShort());
+                assertEquals(20, monsterReader.readShort());
+                assertEquals(1, monsterReader.readUnsignedShort());
+                assertEquals(1, monsterReader.readShort());
+                assertEquals("Hổ nanh kiếm", monsterReader.readUtf());
+                assertEquals(100, monsterReader.readShort());
+                assertEquals(1, monsterReader.readByte());
+                assertEquals(1, monsterReader.readByte());
                 assertEquals(0, monsterReader.readByte());
-                assertEquals(0, monsterReader.readUnsignedShort());
-                assertEquals(0, monsterReader.readUnsignedShort());
+                assertEquals(5, monsterReader.readUnsignedByte());
+                assertEquals(11818, monsterReader.readShort());
+                assertEquals(11819, monsterReader.readShort());
+                assertEquals(11820, monsterReader.readShort());
+                assertEquals(11821, monsterReader.readShort());
+                assertEquals(11822, monsterReader.readShort());
+                assertEquals(11824, monsterReader.readShort());
+                assertEquals(11823, monsterReader.readShort());
+                assertEquals(175, monsterReader.readShort());
+                assertEquals(95, monsterReader.readShort());
+                assertEquals(0, monsterReader.readByte());
+                assertEquals(0, monsterReader.readByte());
                 assertEquals(0, monsterReader.remaining());
             }
         }
@@ -919,7 +969,7 @@ class NetworkIntegrationTest {
                     new Message(MessageName.UPDATE_DATA, new MessageWriter().writeByte(-1).toByteArray()));
             Message manifest = codec.readServerResponse(transport.input(), cipher, true);
             assertArrayEquals(new byte[]{
-                    -1, -1, -1, -1, -1, -1, 0, -1, -1, 1, -1, -1, -1, -1
+                    -1, -1, -1, -1, -1, -1, -1, -1, -1, 1, -1, -1, -1, -1
             }, manifest.payload());
 
             if (requestFrame) {

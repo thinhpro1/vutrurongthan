@@ -20,7 +20,7 @@ public final class MessageHandler {
     // Development-only bootstrap values for the legacy client resource protocol.
     private static final int NOT_PROVIDED_VERSION = -1;
     private static final int DEV_MONSTER_VERSION = 0;
-    private static final int DEV_FRAME_VERSION = 0;
+    private static final int DEV_FRAME_VERSION = 1;
     private final Session session;
     private final AuthService authService;
     private final ResourceService resourceService;
@@ -239,8 +239,13 @@ public final class MessageHandler {
 
     private void handleCreatePlayer(Message message) throws IOException {
         var reader = message.reader();
+        String name = reader.readUtf();
+        int gender = reader.readUnsignedByte();
+        if (reader.remaining() != 0) {
+            throw new IOException("trailing CREATE_PLAYER payload bytes");
+        }
         AuthService.PlayerResult result = authService.createPlayer(
-                session.accountName(), reader.readUtf(), reader.readUnsignedByte());
+                session.accountName(), name, gender);
         if (!result.success()) {
             sendDialog(result.message());
             return;
@@ -252,9 +257,147 @@ public final class MessageHandler {
 
     private void sendPlayerInfo(PlayerProfile player) throws IOException {
         MessageWriter writer = new MessageWriter()
+                .writeByte(0)
+                .writeInt(player.id())
                 .writeUtf(player.name())
-                .writeByte(player.gender());
+                .writeByte(player.gender())
+                .writeLong(player.power())
+                .writeLong(player.potential())
+                .writeShort(player.level())
+                .writeShort(player.pointSkill())
+                .writeShort(player.head())
+                .writeShort(player.body())
+                .writeShort(player.mount())
+                .writeShort(player.bag())
+                .writeShort(player.medal())
+                .writeShort(player.aura())
+                .writeInt(player.baseDamage())
+                .writeInt(player.baseHp())
+                .writeInt(player.baseMp())
+                .writeInt(player.baseConstitution())
+                .writeLong(player.potentialUpDamage())
+                .writeLong(player.potentialUpHp())
+                .writeLong(player.potentialUpMp())
+                .writeLong(player.potentialUpConstitution())
+                .writeLong(player.maxHp())
+                .writeLong(player.maxMp())
+                .writeLong(player.hp())
+                .writeLong(player.mp())
+                .writeByte(player.speed())
+                .writeByte(player.pointPk())
+                .writeShort(player.pointActivity())
+                .writeByte(player.countBarrack())
+                .writeUtf(player.dodge())
+                .writeUtf(player.critical())
+                .writeUtf(player.reduceDamage())
+                .writeUtf(player.bloodsucking())
+                .writeUtf(player.manaSucking())
+                .writeUtf(player.strikeBack())
+                .writeLong(player.damage())
+                .writeLong(player.coin())
+                .writeLong(player.coinLock())
+                .writeInt(player.diamond())
+                .writeInt(player.ruby())
+                .writeByte(player.spaceship());
+        var skills = resourceService.playerSkills(player.gender());
+        if (skills.size() != 11) {
+            throw new IOException(
+                    "legacy player skill bootstrap unavailable for gender " + player.gender());
+        }
+        writer.writeByte(skills.size());
+        for (ResourceService.LegacyPlayerSkill skill : skills) {
+            writePlayerSkill(writer, skill);
+        }
+        writer.writeByte(6)
+                .writeByte(player.gender())
+                .writeByte(-1)
+                .writeByte(-1)
+                .writeByte(-1)
+                .writeByte(-1)
+                .writeByte(-1)
+                .writeByte(player.gender())
+                .writeByte(0);
         session.send(new Message(MessageName.PLAYER_INFO, writer.toByteArray()));
+    }
+
+    private void writePlayerSkill(MessageWriter writer, ResourceService.LegacyPlayerSkill skill)
+            throws IOException {
+        writer.writeByte(skill.id())
+                .writeByte(skill.names().size());
+        for (String name : skill.names()) {
+            writer.writeUtf(name);
+        }
+        writer.writeByte(skill.descriptions().size());
+        for (String description : skill.descriptions()) {
+            writer.writeUtf(description);
+        }
+        writer.writeByte(skill.type())
+                .writeBoolean(skill.proactive())
+                .writeByte(skill.icons().size());
+        for (int icon : skill.icons()) {
+            writer.writeShort(icon);
+        }
+        writer.writeByte(skill.dx().size());
+        for (var row : skill.dx()) {
+            writer.writeByte(row.size());
+            for (int value : row) {
+                writer.writeShort(value);
+            }
+        }
+        writer.writeByte(skill.dy().size());
+        for (var row : skill.dy()) {
+            writer.writeByte(row.size());
+            for (int value : row) {
+                writer.writeShort(value);
+            }
+        }
+        writer.writeShort(skill.levelRequire())
+                .writeByte(skill.maxLevel())
+                .writeByte(skill.maxUpgrade())
+                .writeByte(skill.pointUpgrade().size());
+        for (int point : skill.pointUpgrade()) {
+            writer.writeInt(point);
+        }
+        writer.writeByte(skill.coolDown().size());
+        for (var row : skill.coolDown()) {
+            writer.writeByte(row.size());
+            for (int value : row) {
+                writer.writeInt(value);
+            }
+        }
+        writer.writeByte(skill.typeMana())
+                .writeByte(skill.mana().size());
+        for (var row : skill.mana()) {
+            writer.writeByte(row.size());
+            for (int value : row) {
+                writer.writeInt(value);
+            }
+        }
+        writer.writeByte(skill.options().size());
+        for (ResourceService.LegacySkillOption option : skill.options()) {
+            writer.writeByte(option.id())
+                    .writeUtf(option.name())
+                    .writeByte(option.normal().size());
+            for (int value : option.normal()) {
+                writer.writeShort(value);
+            }
+            writer.writeByte(option.upgrade().size());
+            for (int value : option.upgrade()) {
+                writer.writeShort(value);
+            }
+        }
+        writer.writeByte(skill.level())
+                .writeByte(skill.upgrade())
+                .writeInt(skill.point())
+                .writeByte(skill.cooldownReduction());
+        if (skill.level() > 0 && skill.proactive()) {
+            writer.writeLong(skill.timeCanUse());
+        }
+        writer.writeByte(skill.paints().size());
+        for (ResourceService.LegacySkillPaint paint : skill.paints()) {
+            writer.writeUtf(paint.percent())
+                    .writeShort(paint.paintId());
+        }
     }
 
     private void sendDialog(String text) throws IOException {

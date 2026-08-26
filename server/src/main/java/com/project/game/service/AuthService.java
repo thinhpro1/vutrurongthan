@@ -9,6 +9,7 @@ import java.security.SecureRandom;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
 
 /**
@@ -24,6 +25,7 @@ public final class AuthService {
     private final SecureRandom random = new SecureRandom();
     private final Map<String, Credential> credentials = new ConcurrentHashMap<>();
     private final Map<String, PlayerProfile> players = new ConcurrentHashMap<>();
+    private final AtomicInteger nextPlayerId = new AtomicInteger(1);
 
     public AuthResult register(String username, String password) {
         String normalized = normalize(username);
@@ -52,7 +54,11 @@ public final class AuthService {
         if (!PLAYER_NAME.matcher(normalized).matches() || gender < 0 || gender > 2) {
             return PlayerResult.failure("Thông tin nhân vật không hợp lệ");
         }
-        PlayerProfile profile = new PlayerProfile(accountName, normalized, gender);
+        PlayerProfile profile = PlayerProfile.initial(
+                accountName,
+                nextPlayerId.getAndIncrement(),
+                normalized,
+                gender);
         return players.values().stream().anyMatch(player -> player.name().equals(normalized))
                 || players.putIfAbsent(accountName, profile) != null
                 ? PlayerResult.failure("Nhân vật đã tồn tại")

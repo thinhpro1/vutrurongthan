@@ -73,6 +73,24 @@ class MessageHandlerTest {
     }
 
     @Test
+    void closesWhenCreatePlayerContainsTrailingBytes() throws Exception {
+        AuthService auth = registeredAuth();
+        Session session = newSession(auth);
+        session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
+        session.bindAccount("user01");
+        session.transition(SessionState.HANDSHAKE_DONE, SessionState.AUTHENTICATED);
+        MessageHandler handler = newHandler(session, auth);
+        MessageWriter create = new MessageWriter()
+                .writeUtf("alpha1")
+                .writeByte(0)
+                .writeByte(99);
+
+        handler.onMessage(new Message(MessageName.CREATE_PLAYER, create.toByteArray()));
+
+        assertEquals(SessionState.CLOSED, session.state());
+    }
+
+    @Test
     void doesNotSendEmptyFrameDatasetWhenFrameResourcesAreUnavailable() {
         Session session = newSession(new AuthService());
         session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);

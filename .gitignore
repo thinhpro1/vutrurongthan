@@ -130,6 +130,7 @@ desktop.ini
 *.tmp
 *.temp
 *.bak
+/.legacy-rongthan/
 
 # Large local legacy icon datasets
 /server/resources/icon/

@@ -2,6 +2,7 @@ package com.project.game.map;
 
 import com.project.game.monster.MonsterSnapshot;
 import com.project.game.monster.MonsterDamageResult;
+import com.project.game.monster.MonsterRespawnResult;
 import com.project.game.monster.RuntimeMonster;
 import com.project.game.network.Session;
 import com.project.game.player.PlayerProfile;
@@ -108,6 +109,33 @@ public final class Zone {
             return Optional.empty();
         }
         return monster.applyDamage(damage);
+    }
+
+    public synchronized Optional<MonsterDamageResult> damageMonster(
+            int monsterId,
+            long damage,
+            long nowMillis) {
+        RuntimeMonster monster = monsters.get(monsterId);
+        if (monster == null) {
+            return Optional.empty();
+        }
+
+        long delay = respawnDelayMillis(members.size());
+        return monster.applyDamage(damage, nowMillis, delay);
+    }
+
+    public synchronized List<MonsterRespawnResult> respawnDueMonsters(long nowMillis) {
+        return monsters.values().stream()
+                .map(monster -> monster.respawnIfDue(nowMillis))
+                .flatMap(Optional::stream)
+                .toList();
+    }
+
+    static long respawnDelayMillis(int playerCount) {
+        if (playerCount < 0) {
+            throw new IllegalArgumentException("playerCount must be non-negative");
+        }
+        return Math.max(10_000L - 1_000L * playerCount, 5_000L);
     }
 
     private static PlayerProfile requirePlayer(Session session) {

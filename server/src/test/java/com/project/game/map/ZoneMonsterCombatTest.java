@@ -1,6 +1,7 @@
 package com.project.game.map;
 
 import com.project.game.monster.MonsterRuntimeFactory;
+import com.project.game.monster.MonsterRespawnResult;
 import com.project.game.monster.MonsterSnapshot;
 import com.project.game.network.NetworkConfig;
 import com.project.game.network.NetworkEventObserver;
@@ -23,9 +24,12 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ZoneMonsterCombatTest {
+    private static final long NOW = 1_000_000L;
+
     @Test
     void ownsLiveMonsterDamageAndDeathState() {
         Zone zone = map1Zone();
@@ -33,7 +37,7 @@ class ZoneMonsterCombatTest {
         assertTrue(zone.hasLiveMonster(0));
         assertFalse(zone.hasLiveMonster(99));
 
-        var nonLethal = zone.damageMonster(0, 10).orElseThrow();
+        var nonLethal = zone.damageMonster(0, 10, NOW).orElseThrow();
         assertEquals(0, nonLethal.monsterId());
         assertEquals(10L, nonLethal.damage());
         assertEquals(290L, nonLethal.hpAfter());
@@ -43,11 +47,11 @@ class ZoneMonsterCombatTest {
         assertEquals(List.of(0, 1, 2, 3, 4, 5),
                 zone.monsterSnapshots().stream().map(MonsterSnapshot::id).toList());
 
-        var lethal = zone.damageMonster(0, 300).orElseThrow();
+        var lethal = zone.damageMonster(0, 300, NOW + 1).orElseThrow();
         assertTrue(lethal.killed());
         assertEquals(0L, lethal.hpAfter());
         assertFalse(zone.hasLiveMonster(0));
-        assertTrue(zone.damageMonster(0, 10).isEmpty());
+        assertTrue(zone.damageMonster(0, 10, NOW + 2).isEmpty());
     }
 
     @Test
@@ -61,6 +65,92 @@ class ZoneMonsterCombatTest {
         assertTrue(zone.contains(first));
         assertFalse(zone.contains(equivalent));
         assertFalse(zone.contains(null));
+    }
+
+    @Test
+    void computesCanonicalRespawnDelayFromDeathTimeMembership() {
+        assertEquals(10_000L, Zone.respawnDelayMillis(0));
+        assertEquals(9_000L, Zone.respawnDelayMillis(1));
+        assertEquals(8_000L, Zone.respawnDelayMillis(2));
+        assertEquals(7_000L, Zone.respawnDelayMillis(3));
+        assertEquals(6_000L, Zone.respawnDelayMillis(4));
+        assertEquals(5_000L, Zone.respawnDelayMillis(5));
+        assertEquals(5_000L, Zone.respawnDelayMillis(6));
+        assertEquals(5_000L, Zone.respawnDelayMillis(Integer.MAX_VALUE));
+    }
+
+    @Test
+    void rejectsNegativeRespawnPlayerCount() {
+        assertThrows(IllegalArgumentException.class, () -> Zone.respawnDelayMillis(-1));
+    }
+
+    @Test
+    void oneMemberDeathRespawnsOnlyAfterNineSecondDeadline() {
+        Zone zone = map1Zone();
+        Session player = session(PlayerProfile.initial("respawn1", 1, "alpha1", 1));
+        zone.add(player);
+
+        zone.damageMonster(0, 500, NOW).orElseThrow();
+
+        assertTrue(zone.respawnDueMonsters(NOW + 8_999).isEmpty());
+        assertTrue(zone.respawnDueMonsters(NOW + 9_000).isEmpty());
+
+        var due = zone.respawnDueMonsters(NOW + 9_001);
+
+        assertEquals(List.of(new MonsterRespawnResult(0, 0, 300L)), due);
+        assertTrue(zone.hasLiveMonster(0));
+    }
+
+    @Test
+    void respawnDeadlineDoesNotChangeWhenMembershipChangesAfterDeath() {
+        Zone zone = map1Zone();
+        Session first = session(PlayerProfile.initial("freeze1", 1, "alpha1", 1));
+        Session second = session(PlayerProfile.initial("freeze2", 2, "beta22", 1));
+
+        zone.add(first);
+        zone.add(second);
+
+        zone.damageMonster(0, 500, NOW).orElseThrow();
+        zone.remove(second);
+
+        assertTrue(zone.respawnDueMonsters(NOW + 8_000).isEmpty());
+        assertEquals(List.of(new MonsterRespawnResult(0, 0, 300L)),
+                zone.respawnDueMonsters(NOW + 8_001));
+    }
+
+    @Test
+    void joinsAfterDeathDoNotShortenExistingRespawnDeadline() {
+        Zone zone = map1Zone();
+        Session first = session(PlayerProfile.initial("joinlater1", 1, "alpha1", 1));
+        zone.add(first);
+
+        zone.damageMonster(0, 500, NOW).orElseThrow();
+
+        for (int id = 2; id <= 6; id++) {
+            zone.add(session(PlayerProfile.initial(
+                    "joinlater" + id, id, "player" + id, 1)));
+        }
+
+        assertTrue(zone.respawnDueMonsters(NOW + 5_001).isEmpty());
+        assertTrue(zone.respawnDueMonsters(NOW + 9_000).isEmpty());
+        assertEquals(List.of(new MonsterRespawnResult(0, 0, 300L)),
+                zone.respawnDueMonsters(NOW + 9_001));
+    }
+
+    @Test
+    void returnsMultipleDueRespawnsOnceInRuntimeOrder() {
+        Zone zone = map1Zone();
+        Session first = session(PlayerProfile.initial("multi01", 1, "alpha1", 1));
+        zone.add(first);
+
+        zone.damageMonster(0, 500, NOW).orElseThrow();
+        zone.damageMonster(1, 500, NOW).orElseThrow();
+
+        assertEquals(List.of(
+                        new MonsterRespawnResult(0, 0, 300L),
+                        new MonsterRespawnResult(1, 0, 300L)),
+                zone.respawnDueMonsters(NOW + 9_001));
+        assertTrue(zone.respawnDueMonsters(NOW + 9_002).isEmpty());
     }
 
     private static Zone map1Zone() {

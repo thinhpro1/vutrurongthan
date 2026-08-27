@@ -18,6 +18,7 @@ import com.project.game.player.PlayerProfile;
 import com.project.game.service.AuthService;
 import com.project.game.service.ResourceService;
 import com.project.game.service.ServerServices;
+import com.project.game.test.MutableClock;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
@@ -27,6 +28,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.lang.reflect.Field;
 import java.nio.file.Path;
+import java.time.Clock;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
@@ -459,6 +461,166 @@ class MapServiceTest {
                 .filter(command -> command == MessageName.MONSTER_START_DIE).count());
     }
 
+    @Test
+    void respawnTickDoesNotCreateZones() {
+        MutableClock clock = new MutableClock(1_000_000L);
+        MapService maps = mapsWithMonsters(clock);
+
+        assertEquals(0, zoneRegistrySize(maps));
+        maps.tickMonsterRespawns();
+        assertEquals(0, zoneRegistrySize(maps));
+    }
+
+    @Test
+    void onePlayerMonsterRespawnsOnlyAfterNineSecondDeadline() throws Exception {
+        MutableClock clock = new MutableClock(1_000_000L);
+        MapService maps = mapsWithMonsters(clock);
+        Session attacker = session(player(1, 1, 0), maps);
+
+        maps.finishLoad(attacker);
+        drain(attacker);
+        assertTrue(maps.attackMonster(attacker, 0, 500));
+        assertEquals(List.of(MessageName.MONSTER_START_DIE), commands(drain(attacker)));
+
+        clock.advanceMillis(9_000L);
+        maps.tickMonsterRespawns();
+        assertEquals(List.of(), drain(attacker));
+        assertEquals(1, maps.monsterSnapshots(1, 0).getFirst().status());
+
+        clock.advanceMillis(1L);
+        maps.tickMonsterRespawns();
+        List<Message> messages = drain(attacker);
+        assertEquals(List.of(MessageName.MONSTER_RESPAWN), commands(messages));
+        var reader = messages.getFirst().reader();
+        assertEquals(0, reader.readInt());
+        assertEquals(0, reader.readByte());
+        assertEquals(300L, reader.readLong());
+        assertEquals(0, reader.remaining());
+        MonsterSnapshot snapshot = maps.monsterSnapshots(1, 0).getFirst();
+        assertEquals(300L, snapshot.hp());
+        assertEquals(0, snapshot.status());
+    }
+
+    @Test
+    void sameZoneMembersReceiveOneRespawnBroadcastEach() throws Exception {
+        MutableClock clock = new MutableClock(1_000_000L);
+        MapService maps = mapsWithMonsters(clock);
+        Session attacker = session(player(1, 1, 0), maps);
+        Session peer = session(player(2, 1, 0), maps);
+
+        maps.finishLoad(attacker);
+        maps.finishLoad(peer);
+        drain(attacker);
+        drain(peer);
+        assertTrue(maps.attackMonster(attacker, 0, 500));
+        drain(attacker);
+        drain(peer);
+
+        clock.advanceMillis(8_001L);
+        maps.tickMonsterRespawns();
+        List<Message> attackerMessages = drain(attacker);
+        List<Message> peerMessages = drain(peer);
+        assertEquals(List.of(MessageName.MONSTER_RESPAWN), commands(attackerMessages));
+        assertEquals(List.of(MessageName.MONSTER_RESPAWN), commands(peerMessages));
+        assertArrayEquals(attackerMessages.getFirst().payload(), peerMessages.getFirst().payload());
+
+        maps.tickMonsterRespawns();
+        assertEquals(List.of(), drain(attacker));
+        assertEquals(List.of(), drain(peer));
+    }
+
+    @Test
+    void crossZoneDoesNotReceiveRespawnBroadcast() throws Exception {
+        MutableClock clock = new MutableClock(1_000_000L);
+        MapService maps = mapsWithMonsters(clock);
+        Session attacker = session(player(1, 1, 0), maps);
+        Session other = session(player(2, 1, 1), maps);
+
+        maps.finishLoad(attacker);
+        maps.finishLoad(other);
+        drain(attacker);
+        drain(other);
+        assertTrue(maps.attackMonster(attacker, 0, 500));
+        drain(attacker);
+
+        clock.advanceMillis(9_001L);
+        maps.tickMonsterRespawns();
+        assertEquals(List.of(MessageName.MONSTER_RESPAWN), commands(drain(attacker)));
+        assertEquals(List.of(), drain(other));
+        assertEquals(300L, maps.monsterSnapshots(1, 1).getFirst().hp());
+    }
+
+    @Test
+    void closedMemberDoesNotReceiveRespawnPacket() throws Exception {
+        MutableClock clock = new MutableClock(1_000_000L);
+        MapService maps = mapsWithMonsters(clock);
+        Session attacker = session(player(1, 1, 0), maps);
+        Session peer = session(player(2, 1, 0), maps);
+
+        maps.finishLoad(attacker);
+        maps.finishLoad(peer);
+        drain(attacker);
+        drain(peer);
+        assertTrue(maps.attackMonster(attacker, 0, 500));
+        drain(attacker);
+        drain(peer);
+        peer.close();
+        drain(attacker);
+
+        clock.advanceMillis(8_001L);
+        maps.tickMonsterRespawns();
+        assertEquals(List.of(MessageName.MONSTER_RESPAWN), commands(drain(attacker)));
+        assertEquals(List.of(), drain(peer));
+    }
+
+    @Test
+    void emptyRetainedZoneContinuesRespawnLifecycle() throws Exception {
+        MutableClock clock = new MutableClock(1_000_000L);
+        MapService maps = mapsWithMonsters(clock);
+        Session attacker = session(player(1, 1, 0), maps);
+
+        maps.finishLoad(attacker);
+        drain(attacker);
+        assertTrue(maps.attackMonster(attacker, 0, 500));
+        drain(attacker);
+        maps.leave(attacker);
+
+        assertEquals(0, maps.memberCount(1, 0));
+        assertEquals(1, maps.monsterSnapshots(1, 0).getFirst().status());
+        clock.advanceMillis(9_001L);
+        maps.tickMonsterRespawns();
+        MonsterSnapshot respawned = maps.monsterSnapshots(1, 0).getFirst();
+        assertEquals(300L, respawned.hp());
+        assertEquals(0, respawned.status());
+        assertEquals(0, maps.memberCount(1, 0));
+    }
+
+    @Test
+    void respawnedMonsterReentersExistingCombatFlow() throws Exception {
+        MutableClock clock = new MutableClock(1_000_000L);
+        MapService maps = mapsWithMonsters(clock);
+        Session attacker = session(player(1, 1, 0), maps);
+
+        maps.finishLoad(attacker);
+        drain(attacker);
+        maps.attackMonster(attacker, 0, 500);
+        drain(attacker);
+        clock.advanceMillis(9_001L);
+        maps.tickMonsterRespawns();
+        drain(attacker);
+
+        assertTrue(maps.canTargetMonster(attacker, 0));
+        assertTrue(maps.attackMonster(attacker, 0, 10));
+        List<Message> messages = drain(attacker);
+        assertEquals(List.of(MessageName.MONSTER_INJURE), commands(messages));
+        var reader = messages.getFirst().reader();
+        assertEquals(0, reader.readInt());
+        assertEquals(10L, reader.readLong());
+        assertEquals(290L, reader.readLong());
+        assertFalse(reader.readBoolean());
+        assertEquals(0, reader.remaining());
+    }
+
     private static void joinAtBarrier(CyclicBarrier start, MapService maps,
                                       Session session, AtomicReference<Throwable> failure) {
         try {
@@ -507,6 +669,14 @@ class MapServiceTest {
                 new PlayerPacketWriter(),
                 new MonsterPacketWriter(),
                 monsterFactory());
+    }
+
+    private static MapService mapsWithMonsters(Clock clock) {
+        return new MapService(
+                new PlayerPacketWriter(),
+                new MonsterPacketWriter(),
+                monsterFactory(),
+                clock);
     }
 
     private static MapService mapsWithoutMonsters() {

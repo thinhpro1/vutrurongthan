@@ -2,6 +2,7 @@ package com.project.game.map;
 
 import com.project.game.monster.MonsterDamageResult;
 import com.project.game.monster.MonsterRuntimeFactory;
+import com.project.game.monster.MonsterRespawnResult;
 import com.project.game.monster.MonsterSnapshot;
 import com.project.game.network.Session;
 import com.project.game.network.SessionState;
@@ -13,6 +14,7 @@ import com.project.game.player.PlayerProfile;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.time.Clock;
 import java.util.concurrent.ConcurrentHashMap;
 
 /** Coordinates presence and movement within the current map/zone keys. */
@@ -23,14 +25,23 @@ public final class MapService {
     private final PlayerPacketWriter packets;
     private final MonsterPacketWriter monsterPackets;
     private final MonsterRuntimeFactory monsterFactory;
+    private final Clock clock;
     private final ConcurrentHashMap<ZoneKey, Zone> zones = new ConcurrentHashMap<>();
 
     public MapService(PlayerPacketWriter packets,
                       MonsterPacketWriter monsterPackets,
                       MonsterRuntimeFactory monsterFactory) {
+        this(packets, monsterPackets, monsterFactory, Clock.systemUTC());
+    }
+
+    public MapService(PlayerPacketWriter packets,
+                      MonsterPacketWriter monsterPackets,
+                      MonsterRuntimeFactory monsterFactory,
+                      Clock clock) {
         this.packets = Objects.requireNonNull(packets, "packets");
         this.monsterPackets = Objects.requireNonNull(monsterPackets, "monsterPackets");
         this.monsterFactory = Objects.requireNonNull(monsterFactory, "monsterFactory");
+        this.clock = Objects.requireNonNull(clock, "clock");
     }
 
     public boolean canTargetMonster(Session session, int monsterId) {
@@ -75,7 +86,7 @@ public final class MapService {
                 return false;
             }
 
-            Optional<MonsterDamageResult> result = zone.damageMonster(monsterId, damage);
+            Optional<MonsterDamageResult> result = zone.damageMonster(monsterId, damage, clock.millis());
             if (result.isEmpty()) {
                 return false;
             }
@@ -92,6 +103,27 @@ public final class MapService {
             }
 
             return true;
+        }
+    }
+
+    public void tickMonsterRespawns() {
+        long nowMillis = clock.millis();
+        for (Zone zone : zones.values()) {
+            synchronized (zone) {
+                List<MonsterRespawnResult> respawned = zone.respawnDueMonsters(nowMillis);
+                if (respawned.isEmpty()) {
+                    continue;
+                }
+                List<Session> members = zone.snapshot();
+                for (MonsterRespawnResult result : respawned) {
+                    Message packet = monsterPackets.respawn(result);
+                    for (Session member : members) {
+                        if (member.state() != SessionState.CLOSED) {
+                            member.send(packet);
+                        }
+                    }
+                }
+            }
         }
     }
 

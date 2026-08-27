@@ -73,19 +73,6 @@ public final class RuntimeMonster {
         return Optional.of(new MonsterDamageResult(id, damage, hp, killed));
     }
 
-    public Optional<MonsterDamageResult> applyDamage(long damage) {
-        if (damage <= 0 || !isAlive()) {
-            return Optional.empty();
-        }
-
-        hp = Math.max(0L, hp - damage);
-        boolean killed = hp == 0L;
-        if (killed) {
-            status = STATUS_DIE;
-        }
-        return Optional.of(new MonsterDamageResult(id, damage, hp, killed));
-    }
-
     public Optional<MonsterRespawnResult> respawnIfDue(long nowMillis) {
         if (status != STATUS_DIE
                 || respawnAtMillis == NO_RESPAWN

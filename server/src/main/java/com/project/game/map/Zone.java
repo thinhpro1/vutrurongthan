@@ -103,14 +103,6 @@ public final class Zone {
         return monster != null && monster.isAlive();
     }
 
-    public synchronized Optional<MonsterDamageResult> damageMonster(int monsterId, long damage) {
-        RuntimeMonster monster = monsters.get(monsterId);
-        if (monster == null) {
-            return Optional.empty();
-        }
-        return monster.applyDamage(damage);
-    }
-
     public synchronized Optional<MonsterDamageResult> damageMonster(
             int monsterId,
             long damage,

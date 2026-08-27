@@ -1,6 +1,7 @@
 package com.project.game.network.packet;
 
 import com.project.game.monster.MonsterDamageResult;
+import com.project.game.monster.MonsterRespawnResult;
 import com.project.game.network.message.Message;
 import com.project.game.network.message.MessageName;
 import org.junit.jupiter.api.Test;
@@ -45,5 +46,28 @@ class MonsterPacketWriterTest {
                 () -> writer.injure(new MonsterDamageResult(0, 10, 0, true)));
         assertThrows(IllegalArgumentException.class,
                 () -> writer.startDie(new MonsterDamageResult(0, 10, 290, false)));
+    }
+
+    @Test
+    void writesMonsterRespawnPacket() throws Exception {
+        MonsterRespawnResult result = new MonsterRespawnResult(3, 0, 300L);
+
+        Message message = new MonsterPacketWriter().respawn(result);
+
+        assertEquals(MessageName.MONSTER_RESPAWN, message.command());
+        assertEquals(13, message.payload().length);
+
+        var reader = message.reader();
+        assertEquals(3, reader.readInt());
+        assertEquals(0, reader.readByte());
+        assertEquals(300L, reader.readLong());
+        assertEquals(0, reader.remaining());
+    }
+
+    @Test
+    void rejectsNullMonsterRespawnResult() {
+        MonsterPacketWriter writer = new MonsterPacketWriter();
+
+        assertThrows(NullPointerException.class, () -> writer.respawn(null));
     }
 }

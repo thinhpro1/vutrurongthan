@@ -1,6 +1,7 @@
 package com.project.game.network.packet;
 
 import com.project.game.monster.MonsterDamageResult;
+import com.project.game.monster.MonsterRespawnResult;
 import com.project.game.network.message.Message;
 import com.project.game.network.message.MessageName;
 import com.project.game.network.message.MessageWriter;
@@ -34,6 +35,17 @@ public final class MonsterPacketWriter {
                         .writeInt(result.monsterId())
                         .writeLong(result.damage())
                         .writeBoolean(false)
+                        .toByteArray());
+    }
+
+    public Message respawn(MonsterRespawnResult result) {
+        Objects.requireNonNull(result, "result");
+        return new Message(
+                MessageName.MONSTER_RESPAWN,
+                new MessageWriter()
+                        .writeInt(result.monsterId())
+                        .writeByte(result.levelStatus())
+                        .writeLong(result.hp())
                         .toByteArray());
     }
 }

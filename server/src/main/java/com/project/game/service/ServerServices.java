@@ -1,6 +1,7 @@
 package com.project.game.service;
 
 import com.project.game.map.MapService;
+import com.project.game.monster.MonsterRuntimeFactory;
 import com.project.game.network.packet.PlayerPacketWriter;
 
 import java.util.Objects;
@@ -14,11 +15,17 @@ public record ServerServices(AuthService auth, ResourceService resources, MapSer
     }
 
     public ServerServices(AuthService auth, ResourceService resources) {
-        this(auth, resources, new MapService(new PlayerPacketWriter()));
+        this(
+                auth,
+                resources,
+                new MapService(
+                        new PlayerPacketWriter(),
+                        new MonsterRuntimeFactory(resources)));
     }
 
     public static ServerServices defaults() {
-        return new ServerServices(new AuthService(), ResourceService.unavailable(),
-                new MapService(new PlayerPacketWriter()));
+        return new ServerServices(
+                new AuthService(),
+                ResourceService.unavailable());
     }
 }

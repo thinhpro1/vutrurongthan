@@ -6,6 +6,7 @@ import com.project.game.network.transport.LegacyTcpTransport;
 import com.project.game.network.transport.TlsContextFactory;
 import com.project.game.network.transport.TlsTcpTransport;
 import com.project.game.map.MapService;
+import com.project.game.monster.MonsterRuntimeFactory;
 import com.project.game.network.packet.PlayerPacketWriter;
 import com.project.game.service.AuthService;
 import com.project.game.service.ResourceService;
@@ -84,6 +85,18 @@ public final class NetworkServer {
         } catch (IOException | java.security.GeneralSecurityException exception) {
             throw new IllegalStateException("cannot initialize TLS network transport", exception);
         }
+        ResourceService resources = resourceService(properties);
+        MonsterRuntimeFactory monsterFactory =
+                new MonsterRuntimeFactory(resources);
+        MapService maps =
+                new MapService(
+                        new PlayerPacketWriter(),
+                        monsterFactory);
+        ServerServices services =
+                new ServerServices(
+                        new AuthService(),
+                        resources,
+                        maps);
         return new NetworkServer(
                 properties.getProperty("game.network.host", "127.0.0.1"),
                 integer(properties, "game.network.port", 1707),
@@ -92,8 +105,7 @@ public final class NetworkServer {
                 integer(properties, "game.network.send-queue-size", 256),
                 integer(properties, "game.network.handshake-timeout-ms", 10000),
                 "abc".getBytes(java.nio.charset.StandardCharsets.US_ASCII),
-                new ServerServices(new AuthService(), resourceService(properties),
-                        new MapService(new PlayerPacketWriter())), tlsContext,
+                services, tlsContext,
                 NetworkConfig.fromProperties(properties), NetworkEventObserver.NO_OP);
     }
 

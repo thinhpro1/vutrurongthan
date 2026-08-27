@@ -1,10 +1,13 @@
 package com.project.game.map;
 
+import com.project.game.monster.MonsterRuntimeFactory;
+import com.project.game.monster.MonsterSnapshot;
 import com.project.game.network.Session;
 import com.project.game.network.SessionState;
 import com.project.game.network.packet.PlayerPacketWriter;
 import com.project.game.player.PlayerProfile;
 
+import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -14,10 +17,12 @@ public final class MapService {
     }
 
     private final PlayerPacketWriter packets;
+    private final MonsterRuntimeFactory monsterFactory;
     private final ConcurrentHashMap<ZoneKey, Zone> zones = new ConcurrentHashMap<>();
 
-    public MapService(PlayerPacketWriter packets) {
+    public MapService(PlayerPacketWriter packets, MonsterRuntimeFactory monsterFactory) {
         this.packets = Objects.requireNonNull(packets, "packets");
+        this.monsterFactory = Objects.requireNonNull(monsterFactory, "monsterFactory");
     }
 
     public void finishLoad(Session session) {
@@ -28,7 +33,7 @@ public final class MapService {
         if (joining == null) {
             return;
         }
-        Zone zone = zones.computeIfAbsent(keyOf(joining), key -> new Zone(key.mapId(), key.zoneId()));
+        Zone zone = getOrCreateZone(joining.mapId(), joining.zoneId());
         synchronized (zone) {
             var existing = zone.addAndSnapshot(session);
             if (existing == null) {
@@ -97,6 +102,19 @@ public final class MapService {
     public int memberCount(int mapId, int zoneId) {
         Zone zone = zones.get(new ZoneKey(mapId, zoneId));
         return zone == null ? 0 : zone.size();
+    }
+
+    public List<MonsterSnapshot> monsterSnapshots(int mapId, int zoneId) {
+        return getOrCreateZone(mapId, zoneId).monsterSnapshots();
+    }
+
+    private Zone getOrCreateZone(int mapId, int zoneId) {
+        return zones.computeIfAbsent(
+                new ZoneKey(mapId, zoneId),
+                key -> new Zone(
+                        key.mapId(),
+                        key.zoneId(),
+                        monsterFactory.createForMap(key.mapId())));
     }
 
     private static ZoneKey keyOf(PlayerProfile player) {

@@ -10,6 +10,9 @@ import com.project.game.network.message.Message;
 import com.project.game.network.message.MessageName;
 import com.project.game.network.transport.ClientTransport;
 import com.project.game.network.packet.PlayerPacketWriter;
+import com.project.game.monster.MonsterRuntimeFactory;
+import com.project.game.monster.MonsterSnapshot;
+import com.project.game.monster.RuntimeMonster;
 import com.project.game.player.PlayerProfile;
 import com.project.game.service.AuthService;
 import com.project.game.service.ResourceService;
@@ -22,6 +25,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.lang.reflect.Field;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
@@ -34,12 +38,13 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class MapServiceTest {
     @Test
     void finishLoadExchangesPresenceOnlyWithExistingSameZoneMembers() throws Exception {
-        MapService maps = new MapService(new PlayerPacketWriter());
+        MapService maps = mapsWithoutMonsters();
         Session first = session(player(1, 0, 0));
         Session second = session(player(2, 0, 0));
 
@@ -54,7 +59,7 @@ class MapServiceTest {
 
     @Test
     void differentZonesDoNotExchangePresence() throws Exception {
-        MapService maps = new MapService(new PlayerPacketWriter());
+        MapService maps = mapsWithoutMonsters();
         Session first = session(player(1, 0, 0));
         Session second = session(player(2, 0, 1));
 
@@ -69,7 +74,7 @@ class MapServiceTest {
 
     @Test
     void movementIsSentToOtherMembersWithoutMoverAck() throws Exception {
-        MapService maps = new MapService(new PlayerPacketWriter());
+        MapService maps = mapsWithoutMonsters();
         Session first = session(player(1, 0, 0));
         Session second = session(player(2, 0, 0));
         maps.finishLoad(first);
@@ -92,7 +97,7 @@ class MapServiceTest {
 
     @Test
     void leaveNotifiesOtherMembersOnce() throws Exception {
-        MapService maps = new MapService(new PlayerPacketWriter());
+        MapService maps = mapsWithoutMonsters();
         Session first = session(player(1, 0, 0));
         Session second = session(player(2, 0, 0));
         maps.finishLoad(first);
@@ -114,7 +119,7 @@ class MapServiceTest {
 
     @Test
     void repeatedFinishLoadDoesNotDuplicateMembershipOrPresence() throws Exception {
-        MapService maps = new MapService(new PlayerPacketWriter());
+        MapService maps = mapsWithoutMonsters();
         Session first = session(player(1, 0, 0));
 
         maps.finishLoad(first);
@@ -126,7 +131,7 @@ class MapServiceTest {
 
     @Test
     void closedMembersAreNotSentPackets() throws Exception {
-        MapService maps = new MapService(new PlayerPacketWriter());
+        MapService maps = mapsWithoutMonsters();
         Session first = session(player(1, 0, 0));
         Session second = session(player(2, 0, 0));
         maps.finishLoad(first);
@@ -142,7 +147,7 @@ class MapServiceTest {
 
     @Test
     void simultaneousSameZoneJoinsExchangeOnePresencePacketEach() throws Exception {
-        MapService maps = new MapService(new PlayerPacketWriter());
+        MapService maps = mapsWithoutMonsters();
         Session first = session(player(1, 0, 0));
         Session second = session(player(2, 0, 0));
         CyclicBarrier start = new CyclicBarrier(3);
@@ -170,7 +175,7 @@ class MapServiceTest {
 
     @Test
     void leaveLastThenRejoinUsesRetainedZoneAndRemainsDiscoverable() throws Exception {
-        MapService maps = new MapService(new PlayerPacketWriter());
+        MapService maps = mapsWithoutMonsters();
         Session first = session(player(1, 0, 0));
         Session second = session(player(2, 0, 0));
 
@@ -194,8 +199,123 @@ class MapServiceTest {
     }
 
     @Test
+    void zoneOwnsOrderedMonsterSnapshots() {
+        List<RuntimeMonster> runtimes =
+                monsterFactory().createForMap(1);
+
+        Zone zone = new Zone(1, 0, runtimes);
+
+        List<MonsterSnapshot> snapshots = zone.monsterSnapshots();
+        assertEquals(6, snapshots.size());
+        assertEquals(
+                List.of(0, 1, 2, 3, 4, 5),
+                snapshots.stream().map(MonsterSnapshot::id).toList());
+        assertEquals(
+                List.of(975, 1348, 1800, 2250, 2600, 2950),
+                snapshots.stream().map(MonsterSnapshot::x).toList());
+    }
+
+    @Test
+    void zoneRejectsDuplicateMonsterRuntimeIds() {
+        List<RuntimeMonster> runtimes =
+                monsterFactory().createForMap(1);
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new Zone(
+                        1,
+                        0,
+                        List.of(runtimes.getFirst(), runtimes.getFirst())));
+    }
+
+    @Test
+    void monsterSnapshotCreatesZoneWithoutJoiningPlayer() {
+        MapService maps = mapsWithMonsters();
+
+        List<MonsterSnapshot> monsters = maps.monsterSnapshots(1, 0);
+
+        assertEquals(6, monsters.size());
+        assertEquals(
+                List.of(0, 1, 2, 3, 4, 5),
+                monsters.stream().map(MonsterSnapshot::id).toList());
+        assertEquals(0, maps.memberCount(1, 0));
+    }
+
+    @Test
+    void mapZeroZoneStartsWithoutRuntimeMonsters() {
+        MapService maps = mapsWithMonsters();
+        assertTrue(maps.monsterSnapshots(0, 0).isEmpty());
+        assertEquals(0, maps.memberCount(0, 0));
+    }
+
+    @Test
+    void finishLoadReusesZoneCreatedForMonsterSnapshot() throws Exception {
+        MapService maps = mapsWithMonsters();
+        List<MonsterSnapshot> before = maps.monsterSnapshots(1, 0);
+        Session joining = session(player(1, 1, 0), maps);
+
+        assertEquals(0, maps.memberCount(1, 0));
+        maps.finishLoad(joining);
+
+        assertEquals(1, maps.memberCount(1, 0));
+        assertEquals(before, maps.monsterSnapshots(1, 0));
+    }
+
+    @Test
+    void differentMap1ZonesStartWithEquivalentSeeds() {
+        MapService maps = mapsWithMonsters();
+        List<MonsterSnapshot> zone0 = maps.monsterSnapshots(1, 0);
+        List<MonsterSnapshot> zone1 = maps.monsterSnapshots(1, 1);
+
+        assertEquals(zone0, zone1);
+        assertEquals(6, zone0.size());
+        assertEquals(6, zone1.size());
+    }
+
+    @Test
+    void concurrentMonsterSnapshotsRemainStableForSameZone() throws Exception {
+        MapService maps = mapsWithMonsters();
+        CyclicBarrier start = new CyclicBarrier(3);
+        AtomicReference<List<MonsterSnapshot>> first = new AtomicReference<>();
+        AtomicReference<List<MonsterSnapshot>> second = new AtomicReference<>();
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+
+        Thread one = Thread.ofVirtual().start(() -> {
+            try {
+                start.await();
+                first.set(maps.monsterSnapshots(1, 0));
+            } catch (Throwable exception) {
+                failure.compareAndSet(null, exception);
+            }
+        });
+
+        Thread two = Thread.ofVirtual().start(() -> {
+            try {
+                start.await();
+                second.set(maps.monsterSnapshots(1, 0));
+            } catch (Throwable exception) {
+                failure.compareAndSet(null, exception);
+            }
+        });
+
+        start.await();
+        one.join();
+        two.join();
+
+        if (failure.get() != null) {
+            throw new AssertionError(
+                    "concurrent monster snapshot failed",
+                    failure.get());
+        }
+
+        assertEquals(first.get(), second.get());
+        assertEquals(6, first.get().size());
+        assertEquals(0, maps.memberCount(1, 0));
+    }
+
+    @Test
     void disconnectCannotFinishWhileJoinPresenceEnqueueIsInProgress() throws Exception {
-        MapService maps = new MapService(new PlayerPacketWriter());
+        MapService maps = mapsWithoutMonsters();
         Session leaving = session(player(1, 0, 0), maps);
         Session joining = session(player(2, 0, 0), maps);
         maps.finishLoad(leaving);
@@ -244,6 +364,25 @@ class MapServiceTest {
 
     private static Session session(PlayerProfile player) {
         return session(player, ServerServices.defaults());
+    }
+
+    private static MonsterRuntimeFactory monsterFactory() {
+        return new MonsterRuntimeFactory(
+                ResourceService.fromFrameRoot(
+                        Path.of("resources", "json")));
+    }
+
+    private static MapService mapsWithMonsters() {
+        return new MapService(
+                new PlayerPacketWriter(),
+                monsterFactory());
+    }
+
+    private static MapService mapsWithoutMonsters() {
+        ResourceService resources = ResourceService.unavailable();
+        return new MapService(
+                new PlayerPacketWriter(),
+                new MonsterRuntimeFactory(resources));
     }
 
     private static Session session(PlayerProfile player, MapService maps) {

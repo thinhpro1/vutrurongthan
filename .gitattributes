@@ -1,3 +1,5 @@
 *.png filter=lfs diff=lfs merge=lfs -text
 *.jpg filter=lfs diff=lfs merge=lfs -text
 *.jpeg filter=lfs diff=lfs merge=lfs -text
+server/resources/json/EffectBootstrap.json text eol=lf
+server/resources/json/MonsterBootstrap.json text eol=lf

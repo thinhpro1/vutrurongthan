@@ -575,7 +575,9 @@ public final class MessageHandler {
         }
 
         writer.writeByte(0); // npc count
-        var monsters = resourceService.monstersForMap(map.id());
+        var monsters = mapService.monsterSnapshots(
+                map.id(),
+                player.zoneId());
         if (monsters.size() > Byte.MAX_VALUE) {
             throw new IOException("too many monsters for map " + map.id());
         }

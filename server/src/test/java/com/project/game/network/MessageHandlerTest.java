@@ -7,6 +7,7 @@ import com.project.game.network.message.Message;
 import com.project.game.network.message.MessageName;
 import com.project.game.network.message.MessageWriter;
 import com.project.game.network.packet.PlayerPacketWriter;
+import com.project.game.monster.MonsterRuntimeFactory;
 import com.project.game.service.AuthService;
 import com.project.game.service.ResourceService;
 import com.project.game.service.ServerServices;
@@ -45,7 +46,9 @@ class MessageHandlerTest {
     @Test
     void changesMapOnlyWhenInsideSupportedWaypoint() throws Exception {
         ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
-        MapService maps = new MapService(new PlayerPacketWriter());
+        MapService maps = new MapService(
+                new PlayerPacketWriter(),
+                new MonsterRuntimeFactory(resources));
         ServerServices services = new ServerServices(new AuthService(), resources, maps);
         PlayerProfile start = PlayerProfile.initial("user01", 7, "alpha1", 0)
                 .withLocation(0, 0, 4464, 936);
@@ -105,12 +108,18 @@ class MessageHandlerTest {
         assertEquals(0, reader.readUnsignedShort());
         assertFalse(reader.readBoolean());
         assertEquals(0, reader.remaining());
+        assertEquals(0, maps.memberCount(1, 0));
+
+        handler.onMessage(new Message(MessageName.FINISH_LOAD_MAP));
+        assertEquals(1, maps.memberCount(1, 0));
     }
 
     @Test
     void requestChangeMapOutsideWaypointIsNoOp() throws Exception {
         ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
-        MapService maps = new MapService(new PlayerPacketWriter());
+        MapService maps = new MapService(
+                new PlayerPacketWriter(),
+                new MonsterRuntimeFactory(resources));
         ServerServices services = new ServerServices(new AuthService(), resources, maps);
         PlayerProfile start = PlayerProfile.initial("user01", 7, "alpha1", 0)
                 .withLocation(0, 0, 1250, 648);
@@ -172,7 +181,9 @@ class MessageHandlerTest {
     @Test
     void finishLoadRegistersPresenceAndMovementDoesNotAckMover() throws Exception {
         AuthService auth = new AuthService();
-        MapService maps = new MapService(new PlayerPacketWriter());
+        MapService maps = new MapService(
+                new PlayerPacketWriter(),
+                new MonsterRuntimeFactory(ResourceService.unavailable()));
         ServerServices services = new ServerServices(auth, ResourceService.unavailable(), maps);
         Session first = inGameSession(services, PlayerProfile.initial("user01", 1, "alpha1", 0));
         Session second = inGameSession(services, PlayerProfile.initial("user02", 2, "beta22", 0));
@@ -231,7 +242,9 @@ class MessageHandlerTest {
 
     @Test
     void finishLoadMapRejectsTrailingBytes() {
-        MapService maps = new MapService(new PlayerPacketWriter());
+        MapService maps = new MapService(
+                new PlayerPacketWriter(),
+                new MonsterRuntimeFactory(ResourceService.unavailable()));
         ServerServices services = new ServerServices(new AuthService(), ResourceService.unavailable(), maps);
         Session session = inGameSession(services, PlayerProfile.initial("user01", 7, "alpha1", 0));
         MessageHandler handler = newHandler(session, services, NetworkConfig.defaults());

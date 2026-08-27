@@ -7,6 +7,8 @@ import com.project.game.network.message.MessageName;
 import com.project.game.network.message.MessageWriter;
 import com.project.game.network.transport.LegacyTcpTransport;
 import com.project.game.frame.FrameTemplate;
+import com.project.game.map.MapService;
+import com.project.game.monster.MonsterRuntimeFactory;
 import com.project.game.service.AuthService;
 import com.project.game.service.ResourceService;
 import com.project.game.service.ServerServices;
@@ -111,9 +113,12 @@ class NetworkIntegrationTest {
         AuthService auth = new AuthService();
         assertTrue(auth.register("mapzonea", "secret1").success());
         assertTrue(auth.register("mapzoneb", "secret1").success());
+        MapService maps = new MapService(
+                new com.project.game.network.packet.PlayerPacketWriter(),
+                new MonsterRuntimeFactory(resources));
         NetworkServer server = new NetworkServer("127.0.0.1", 0, 4, 262_144, 16, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
-                new ServerServices(auth, resources), null,
+                new ServerServices(auth, resources, maps), null,
                 NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
         AtomicReference<Throwable> serverFailure = new AtomicReference<>();
         Thread serverThread = Thread.ofVirtual().start(() -> {
@@ -141,6 +146,7 @@ class NetworkIntegrationTest {
                 ParsedMapInfo firstMap1 = first.readMapInfo();
                 assertEquals(1, firstMap1.mapId());
                 assertEquals(canonicalMap1Monsters(), firstMap1.monsters());
+                assertEquals(0, maps.memberCount(1, 0));
                 assertEquals(MessageName.REMOVE_PLAYER, second.readServerMessage().command());
                 first.finishLoadMap();
 
@@ -154,6 +160,7 @@ class NetworkIntegrationTest {
                 ParsedMapInfo secondMap1 = second.readMapInfo();
                 assertEquals(1, secondMap1.mapId());
                 assertEquals(canonicalMap1Monsters(), secondMap1.monsters());
+                assertEquals(1, maps.memberCount(1, 0));
                 second.finishLoadMap();
                 assertAddPlayerId(first.readServerMessage(), second.playerInfo().id());
                 assertAddPlayerId(second.readServerMessage(), first.playerInfo().id());
@@ -184,8 +191,9 @@ class NetworkIntegrationTest {
         AuthService auth = new AuthService();
         assertTrue(auth.register("zonea1", "secret1").success());
         assertTrue(auth.register("zoneb1", "secret1").success());
-        com.project.game.map.MapService maps = new com.project.game.map.MapService(
-                new com.project.game.network.packet.PlayerPacketWriter());
+        MapService maps = new MapService(
+                new com.project.game.network.packet.PlayerPacketWriter(),
+                new MonsterRuntimeFactory(resources));
         NetworkServer server = new NetworkServer(
                 "127.0.0.1", 0, 4, 262_144, 16, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),

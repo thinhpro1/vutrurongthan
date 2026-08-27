@@ -18,6 +18,9 @@ import java.util.logging.Logger;
 
 /** N8 bootstrap plus N11 LEGACY_DEV authentication and create-player flow. */
 public final class MessageHandler {
+    private record PendingMonsterAttack(int skillId, int mapId, int zoneId, int monsterId) {
+    }
+
     private static final Logger LOGGER = Logger.getLogger(MessageHandler.class.getName());
     // Development-only bootstrap values for the legacy client resource protocol.
     private static final int NOT_PROVIDED_VERSION = -1;
@@ -30,6 +33,7 @@ public final class MessageHandler {
     private final MapService mapService;
     private final NetworkConfig networkConfig;
     private final NetworkEventObserver eventObserver;
+    private PendingMonsterAttack pendingMonsterAttack;
 
     public MessageHandler(Session session, ServerServices services, NetworkConfig networkConfig,
                           NetworkEventObserver eventObserver) {
@@ -61,6 +65,8 @@ public final class MessageHandler {
                 case MessageName.FINISH_LOAD_MAP -> handleFinishLoadMap(message);
                 case MessageName.REQUEST_CHANGE_MAP -> handleRequestChangeMap(message);
                 case MessageName.PLAYER_MOVE -> handlePlayerMove(message);
+                case MessageName.PLAYER_START_USE_ULTIMATE -> handlePrepareMonsterAttack(message);
+                case MessageName.USE_SKILL -> handleMonsterAttackImpact(message);
                 default -> LOGGER.fine(() -> "RX cmd=" + message.command()
                         + " len=" + message.payload().length);
             }
@@ -398,6 +404,7 @@ public final class MessageHandler {
     }
 
     private void handleRequestChangeMap(Message message) throws IOException {
+        pendingMonsterAttack = null;
         if (message.payload().length != 0) {
             throw new IOException("trailing REQUEST_CHANGE_MAP payload bytes");
         }
@@ -451,6 +458,91 @@ public final class MessageHandler {
         mapService.playerMoved(session);
         LOGGER.fine(() -> "PLAYER_MOVE session=" + session.id()
                 + " x=" + x + " y=" + y);
+    }
+
+    private void handlePrepareMonsterAttack(Message message) throws IOException {
+        pendingMonsterAttack = null;
+
+        var reader = message.reader();
+        int skillId = reader.readByte();
+
+        if (reader.remaining() == 0) {
+            return;
+        }
+
+        if (reader.remaining() != 5) {
+            throw new IOException("invalid -72 target payload");
+        }
+
+        int targetType = reader.readByte();
+        int targetId = reader.readInt();
+
+        if (reader.remaining() != 0) {
+            throw new IOException("trailing -72 payload bytes");
+        }
+
+        if (targetType == 0) {
+            return;
+        }
+
+        if (targetType != 1) {
+            throw new IOException("unsupported -72 target type " + targetType);
+        }
+
+        PlayerProfile player = session.player();
+        if (player == null || !mapService.canTargetMonster(session, targetId)) {
+            return;
+        }
+
+        pendingMonsterAttack = new PendingMonsterAttack(
+                skillId,
+                player.mapId(),
+                player.zoneId(),
+                targetId);
+    }
+
+    private void handleMonsterAttackImpact(Message message) throws IOException {
+        var reader = message.reader();
+        int targetType = reader.readByte();
+        int targetId = -1;
+
+        switch (targetType) {
+            case -1 -> {
+                if (reader.remaining() != 0) {
+                    throw new IOException("trailing -108 no-target payload");
+                }
+            }
+            case 0, 1 -> {
+                if (reader.remaining() != 4) {
+                    throw new IOException("invalid -108 target payload");
+                }
+                targetId = reader.readInt();
+            }
+            default -> throw new IOException("unsupported -108 target type " + targetType);
+        }
+
+        if (reader.remaining() != 0) {
+            throw new IOException("trailing -108 payload bytes");
+        }
+
+        PendingMonsterAttack pending = pendingMonsterAttack;
+        pendingMonsterAttack = null;
+
+        if (targetType != 1
+                || pending == null
+                || pending.monsterId() != targetId) {
+            return;
+        }
+
+        PlayerProfile player = session.player();
+        if (player == null
+                || player.mapId() != pending.mapId()
+                || player.zoneId() != pending.zoneId()
+                || player.damage() <= 0) {
+            return;
+        }
+
+        mapService.attackMonster(session, targetId, player.damage());
     }
 
     private void enterGame(PlayerProfile player) throws IOException {
@@ -706,7 +798,9 @@ public final class MessageHandler {
             case IN_GAME -> command == MessageName.REQUEST_ICON
                     || command == MessageName.FINISH_LOAD_MAP
                     || command == MessageName.REQUEST_CHANGE_MAP
-                    || command == MessageName.PLAYER_MOVE;
+                    || command == MessageName.PLAYER_MOVE
+                    || command == MessageName.PLAYER_START_USE_ULTIMATE
+                    || command == MessageName.USE_SKILL;
             case CLOSED -> false;
         };
     }

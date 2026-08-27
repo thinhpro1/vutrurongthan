@@ -261,6 +261,145 @@ class MessageHandlerTest {
     }
 
     @Test
+    void impactWithoutPrepareDoesNotDamageMonster() {
+        CombatContext context = combatContext();
+
+        context.handler().onMessage(monsterImpact(0));
+
+        assertEquals(300L, context.maps().monsterSnapshots(1, 0).getFirst().hp());
+    }
+
+    @Test
+    void prepareThenImpactAppliesExactlyOneHit() {
+        CombatContext context = combatContext();
+
+        context.handler().onMessage(prepareMonster(7, 0));
+        context.handler().onMessage(monsterImpact(0));
+
+        assertEquals(290L, context.maps().monsterSnapshots(1, 0).getFirst().hp());
+    }
+
+    @Test
+    void replayImpactAfterPendingConsumedDoesNotDamageAgain() {
+        CombatContext context = combatContext();
+
+        context.handler().onMessage(prepareMonster(7, 0));
+        context.handler().onMessage(monsterImpact(0));
+        context.handler().onMessage(monsterImpact(0));
+
+        assertEquals(290L, context.maps().monsterSnapshots(1, 0).getFirst().hp());
+    }
+
+    @Test
+    void mismatchedImpactConsumesPendingAndDoesNotRetainIt() {
+        CombatContext context = combatContext();
+
+        context.handler().onMessage(prepareMonster(7, 0));
+        context.handler().onMessage(monsterImpact(1));
+        context.handler().onMessage(monsterImpact(0));
+
+        assertEquals(300L, context.maps().monsterSnapshots(1, 0).getFirst().hp());
+    }
+
+    @Test
+    void oneBytePrepareClearsPending() {
+        CombatContext context = combatContext();
+
+        context.handler().onMessage(prepareMonster(7, 0));
+        context.handler().onMessage(new Message(
+                MessageName.PLAYER_START_USE_ULTIMATE,
+                new MessageWriter().writeByte(7).toByteArray()));
+        context.handler().onMessage(monsterImpact(0));
+
+        assertEquals(300L, context.maps().monsterSnapshots(1, 0).getFirst().hp());
+    }
+
+    @Test
+    void playerTargetPrepareIsValidNoOp() {
+        CombatContext context = combatContext();
+
+        context.handler().onMessage(new Message(
+                MessageName.PLAYER_START_USE_ULTIMATE,
+                new MessageWriter().writeByte(7).writeByte(0).writeInt(99).toByteArray()));
+        context.handler().onMessage(monsterImpact(0));
+
+        assertEquals(300L, context.maps().monsterSnapshots(1, 0).getFirst().hp());
+    }
+
+    @Test
+    void noTargetAndPlayerImpactAreValidNoOps() {
+        CombatContext context = combatContext();
+
+        context.handler().onMessage(new Message(
+                MessageName.USE_SKILL,
+                new MessageWriter().writeByte(-1).toByteArray()));
+        context.handler().onMessage(new Message(
+                MessageName.USE_SKILL,
+                new MessageWriter().writeByte(0).writeInt(99).toByteArray()));
+
+        assertEquals(SessionState.IN_GAME, context.session().state());
+        assertEquals(300L, context.maps().monsterSnapshots(1, 0).getFirst().hp());
+    }
+
+    @Test
+    void malformedCombatTargetTypesAndTrailingBytesCloseSession() {
+        CombatContext prepareType = combatContext();
+        prepareType.handler().onMessage(new Message(
+                MessageName.PLAYER_START_USE_ULTIMATE,
+                new MessageWriter().writeByte(7).writeByte(2).writeInt(0).toByteArray()));
+        assertEquals(SessionState.CLOSED, prepareType.session().state());
+
+        CombatContext impactType = combatContext();
+        impactType.handler().onMessage(new Message(
+                MessageName.USE_SKILL,
+                new MessageWriter().writeByte(2).toByteArray()));
+        assertEquals(SessionState.CLOSED, impactType.session().state());
+
+        CombatContext prepareTrailing = combatContext();
+        prepareTrailing.handler().onMessage(new Message(
+                MessageName.PLAYER_START_USE_ULTIMATE,
+                new MessageWriter().writeByte(7).writeByte(1).writeInt(0).writeByte(1).toByteArray()));
+        assertEquals(SessionState.CLOSED, prepareTrailing.session().state());
+
+        CombatContext impactTrailing = combatContext();
+        impactTrailing.handler().onMessage(new Message(
+                MessageName.USE_SKILL,
+                new MessageWriter().writeByte(-1).writeByte(1).toByteArray()));
+        assertEquals(SessionState.CLOSED, impactTrailing.session().state());
+    }
+
+    @Test
+    void preFinishMapInfoZoneCannotBeTargeted() {
+        ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
+        MapService maps = new MapService(new PlayerPacketWriter(), new MonsterPacketWriter(),
+                new MonsterRuntimeFactory(resources));
+        ServerServices services = new ServerServices(new AuthService(), resources, maps);
+        Session session = inGameSession(services,
+                PlayerProfile.initial("user01", 7, "alpha1", 0).withLocation(1, 0, 90, 1008));
+        MessageHandler handler = newHandler(session, services, NetworkConfig.defaults());
+        maps.monsterSnapshots(1, 0);
+
+        handler.onMessage(prepareMonster(7, 0));
+        handler.onMessage(monsterImpact(0));
+
+        assertEquals(300L, maps.monsterSnapshots(1, 0).getFirst().hp());
+        assertEquals(0, maps.memberCount(1, 0));
+    }
+
+    @Test
+    void mapChangeClearsPendingMonsterAttack() {
+        CombatContext context = combatContext();
+
+        context.handler().onMessage(prepareMonster(7, 0));
+        context.session().bindPlayer(context.session().player().withLocation(1, 0, 0, 1008));
+        context.handler().onMessage(new Message(MessageName.REQUEST_CHANGE_MAP));
+        context.handler().onMessage(monsterImpact(0));
+
+        assertEquals(300L, context.maps().monsterSnapshots(1, 0).getFirst().hp());
+        assertEquals(0, context.session().player().mapId());
+    }
+
+    @Test
     void closesWhenLoginOmitsRequiredLoginVersion() throws Exception {
         AuthService auth = registeredAuth();
         Session session = newSession(auth);
@@ -710,6 +849,38 @@ class MessageHandlerTest {
         return new Message(
                 MessageName.PLAYER_MOVE,
                 new MessageWriter().writeShort(x).writeShort(y).toByteArray());
+    }
+
+    private static Message prepareMonster(int skillId, int monsterId) {
+        return new Message(
+                MessageName.PLAYER_START_USE_ULTIMATE,
+                new MessageWriter().writeByte(skillId).writeByte(1).writeInt(monsterId).toByteArray());
+    }
+
+    private static Message monsterImpact(int monsterId) {
+        return new Message(
+                MessageName.USE_SKILL,
+                new MessageWriter().writeByte(1).writeInt(monsterId).toByteArray());
+    }
+
+    private static CombatContext combatContext() {
+        ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
+        MapService maps = new MapService(new PlayerPacketWriter(), new MonsterPacketWriter(),
+                new MonsterRuntimeFactory(resources));
+        ServerServices services = new ServerServices(new AuthService(), resources, maps);
+        Session session = inGameSession(services,
+                PlayerProfile.initial("user01", 7, "alpha1", 0).withLocation(1, 0, 90, 1008));
+        MessageHandler handler = newHandler(session, services, NetworkConfig.defaults());
+        maps.finishLoad(session);
+        try {
+            drainMessages(session);
+        } catch (Exception exception) {
+            throw new AssertionError("unable to drain combat bootstrap", exception);
+        }
+        return new CombatContext(session, handler, maps);
+    }
+
+    private record CombatContext(Session session, MessageHandler handler, MapService maps) {
     }
 
     private static AuthService registeredAuth() {

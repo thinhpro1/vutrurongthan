@@ -17,6 +17,10 @@ public final class Zone {
     private final ConcurrentHashMap<Integer, Session> members = new ConcurrentHashMap<>();
     private final LinkedHashMap<Integer, RuntimeMonster> monsters = new LinkedHashMap<>();
 
+    public Zone(int mapId, int zoneId) {
+        this(mapId, zoneId, List.of());
+    }
+
     public Zone(int mapId, int zoneId, List<RuntimeMonster> monsters) {
         this.mapId = mapId;
         this.zoneId = zoneId;

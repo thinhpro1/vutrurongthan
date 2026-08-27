@@ -251,6 +251,110 @@ class NetworkIntegrationTest {
     }
 
     @Test
+    void twoClientsFightMap1MonsterAndObserveDeathPersistence() throws Exception {
+        ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
+        AuthService auth = new AuthService();
+        assertTrue(auth.register("combatza", "secret1").success());
+        assertTrue(auth.register("combatzb", "secret1").success());
+        MapService maps = new MapService(
+                new com.project.game.network.packet.PlayerPacketWriter(),
+                new MonsterPacketWriter(),
+                new MonsterRuntimeFactory(resources));
+        NetworkServer server = new NetworkServer(
+                "127.0.0.1", 0, 4, 262_144, 16, 1_000,
+                "abc".getBytes(StandardCharsets.US_ASCII),
+                new ServerServices(auth, resources, maps), null,
+                NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
+        AtomicReference<Throwable> serverFailure = new AtomicReference<>();
+        Thread serverThread = Thread.ofVirtual().start(() -> {
+            try {
+                server.start();
+            } catch (Throwable failure) {
+                serverFailure.set(failure);
+            }
+        });
+
+        try {
+            waitForPort(server);
+            try (LivePlayerClient first = LivePlayerClient.create(
+                    server.localPort(), "combatza", "alpha1", 0);
+                 LivePlayerClient second = LivePlayerClient.create(
+                         server.localPort(), "combatzb", "beta22", 1)) {
+                first.finishLoadMap();
+                second.finishLoadMap();
+                assertAddPlayer(second.readServerMessage(), first.playerInfo().id(), "alpha1", 0);
+                assertAddPlayer(first.readServerMessage(), second.playerInfo().id(), "beta22", 1);
+
+                first.move(4464, 936);
+                first.requestChangeMap();
+                ParsedMapInfo firstMap1 = first.readMapInfo();
+                assertEquals(canonicalMap1Monsters(), firstMap1.monsters());
+                first.finishLoadMap();
+                assertEquals(MessageName.PLAYER_MOVE, second.readServerMessage().command());
+                assertEquals(MessageName.REMOVE_PLAYER, second.readServerMessage().command());
+
+                second.move(4464, 936);
+                second.requestChangeMap();
+                ParsedMapInfo secondMap1 = second.readMapInfo();
+                assertEquals(canonicalMap1Monsters(), secondMap1.monsters());
+                second.finishLoadMap();
+                assertAddPlayerId(first.readServerMessage(), second.playerInfo().id());
+                assertAddPlayerId(second.readServerMessage(), first.playerInfo().id());
+
+                first.prepareMonsterAttack(0, 0);
+                first.impactMonster(0);
+                assertMonsterInjure(first.readServerMessage(), 0, 10, 290);
+                assertMonsterInjure(second.readServerMessage(), 0, 10, 290);
+                assertEquals(290L, maps.monsterSnapshots(1, 0).getFirst().hp());
+
+                for (int expectedHp = 280; expectedHp >= 10; expectedHp -= 10) {
+                    first.prepareMonsterAttack(0, 0);
+                    first.impactMonster(0);
+                    assertMonsterInjure(first.readServerMessage(), 0, 10, expectedHp);
+                    assertMonsterInjure(second.readServerMessage(), 0, 10, expectedHp);
+                }
+
+                first.prepareMonsterAttack(0, 0);
+                first.impactMonster(0);
+                assertMonsterDeath(first.readServerMessage(), 0, 10);
+                assertMonsterDeath(second.readServerMessage(), 0, 10);
+                assertEquals(0L, maps.monsterSnapshots(1, 0).getFirst().hp());
+                assertEquals(1, maps.monsterSnapshots(1, 0).getFirst().status());
+
+                first.prepareMonsterAttack(0, 0);
+                first.impactMonster(0);
+                assertNoServerMessage(first);
+                assertNoServerMessage(second);
+
+                second.close();
+                assertEquals(MessageName.REMOVE_PLAYER, first.readServerMessage().command());
+
+                first.move(0, 1008);
+                first.requestChangeMap();
+                ParsedMapInfo map0 = first.readMapInfo();
+                assertEquals(0, map0.mapId());
+                first.finishLoadMap();
+
+                first.move(4464, 936);
+                first.requestChangeMap();
+                ParsedMapInfo revisitedMap1 = first.readMapInfo();
+                assertEquals(1, revisitedMap1.mapId());
+                assertEquals(0L, revisitedMap1.monsters().getFirst().hp());
+                assertEquals(1, revisitedMap1.monsters().getFirst().status());
+                assertTrue(revisitedMap1.monsters().stream()
+                        .skip(1)
+                        .allMatch(monster -> monster.hp() == 300L && monster.status() == 0));
+                first.finishLoadMap();
+            }
+            waitForNoSessions(server);
+        } finally {
+            server.stop();
+            serverThread.join(1_000);
+        }
+        assertNull(serverFailure.get(), "network server failed during combat test");
+    }
+
+    @Test
     void javaClientCreatesFreshPlayerAndParsesLegacyMapZero() throws Exception {
         ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
         NetworkServer server = new NetworkServer("127.0.0.1", 0, 2, 262_144, 8, 1_000,
@@ -1537,6 +1641,27 @@ class NetworkIntegrationTest {
         assertEquals(expectedId, message.reader().readInt());
     }
 
+    private static void assertMonsterInjure(Message message, int expectedId,
+                                             long expectedDamage, long expectedHp) throws IOException {
+        assertEquals(MessageName.MONSTER_INJURE, message.command());
+        var reader = message.reader();
+        assertEquals(expectedId, reader.readInt());
+        assertEquals(expectedDamage, reader.readLong());
+        assertEquals(expectedHp, reader.readLong());
+        assertFalse(reader.readBoolean());
+        assertEquals(0, reader.remaining());
+    }
+
+    private static void assertMonsterDeath(Message message, int expectedId,
+                                            long expectedDamage) throws IOException {
+        assertEquals(MessageName.MONSTER_START_DIE, message.command());
+        var reader = message.reader();
+        assertEquals(expectedId, reader.readInt());
+        assertEquals(expectedDamage, reader.readLong());
+        assertFalse(reader.readBoolean());
+        assertEquals(0, reader.remaining());
+    }
+
     private static void assertNoServerMessage(LivePlayerClient client) throws Exception {
         client.transport.socket().setSoTimeout(250);
         try {
@@ -1617,6 +1742,27 @@ class NetworkIntegrationTest {
         private void finishLoadMap() throws IOException {
             codec.writeClient(transport.output(), cipher, true,
                     new Message(MessageName.FINISH_LOAD_MAP));
+        }
+
+        private void prepareMonsterAttack(int skillId, int monsterId) throws IOException {
+            codec.writeClient(transport.output(), cipher, true,
+                    new Message(
+                            MessageName.PLAYER_START_USE_ULTIMATE,
+                            new MessageWriter()
+                                    .writeByte(skillId)
+                                    .writeByte(1)
+                                    .writeInt(monsterId)
+                                    .toByteArray()));
+        }
+
+        private void impactMonster(int monsterId) throws IOException {
+            codec.writeClient(transport.output(), cipher, true,
+                    new Message(
+                            MessageName.USE_SKILL,
+                            new MessageWriter()
+                                    .writeByte(1)
+                                    .writeInt(monsterId)
+                                    .toByteArray()));
         }
 
         private void move(int x, int y) throws IOException {

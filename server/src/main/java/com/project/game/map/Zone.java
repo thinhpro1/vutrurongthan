@@ -1,6 +1,7 @@
 package com.project.game.map;
 
 import com.project.game.monster.MonsterSnapshot;
+import com.project.game.monster.MonsterDamageResult;
 import com.project.game.monster.RuntimeMonster;
 import com.project.game.network.Session;
 import com.project.game.player.PlayerProfile;
@@ -8,6 +9,7 @@ import com.project.game.player.PlayerProfile;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 /** Concurrent runtime membership for one map zone. */
@@ -70,6 +72,13 @@ public final class Zone {
         return existing;
     }
 
+    synchronized boolean contains(Session session) {
+        if (session == null || session.player() == null) {
+            return false;
+        }
+        return members.get(session.player().id()) == session;
+    }
+
     public synchronized boolean containsPlayer(int playerId) {
         return members.containsKey(playerId);
     }
@@ -86,6 +95,19 @@ public final class Zone {
         return monsters.values().stream()
                 .map(RuntimeMonster::snapshot)
                 .toList();
+    }
+
+    public synchronized boolean hasLiveMonster(int monsterId) {
+        RuntimeMonster monster = monsters.get(monsterId);
+        return monster != null && monster.isAlive();
+    }
+
+    public synchronized Optional<MonsterDamageResult> damageMonster(int monsterId, long damage) {
+        RuntimeMonster monster = monsters.get(monsterId);
+        if (monster == null) {
+            return Optional.empty();
+        }
+        return monster.applyDamage(damage);
     }
 
     private static PlayerProfile requirePlayer(Session session) {

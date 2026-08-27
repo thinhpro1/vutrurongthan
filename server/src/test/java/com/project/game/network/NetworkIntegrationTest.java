@@ -935,7 +935,7 @@ class NetworkIntegrationTest {
             assertEquals(MessageName.UPDATE_DATA, manifest.command());
             assertEquals(14, manifest.payload().length);
             assertArrayEquals(new byte[]{
-                    -1, -1, -1, -1, -1, 0, 1, -1, 0, 1, -1, -1, -1, -1
+                    -1, -1, -1, -1, -1, 1, 1, -1, 0, 1, -1, -1, -1, -1
             }, manifest.payload());
             int historicalEmptyMonsterVersion = 0;
             int serverMonsterVersion = Byte.toUnsignedInt(manifest.payload()[6]);
@@ -947,7 +947,7 @@ class NetworkIntegrationTest {
             assertEquals(-1, manifestReader.readByte());
             assertEquals(-1, manifestReader.readByte());
             assertEquals(-1, manifestReader.readByte());
-            assertEquals(0, manifestReader.readByte());
+            assertEquals(1, manifestReader.readByte());
             assertEquals(1, manifestReader.readByte());
             assertEquals(-1, manifestReader.readByte());
             assertEquals(0, manifestReader.readByte());

@@ -25,7 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class ZoneTest {
     @Test
     void startsEmptyAndTracksBoundPlayer() {
-        Zone zone = new Zone(0, 0);
+        Zone zone = new Zone(0, 0, List.of());
         Session session = session(PlayerProfile.initial("user01", 7, "alpha1", 0));
 
         assertEquals(0, zone.size());
@@ -39,7 +39,7 @@ class ZoneTest {
 
     @Test
     void duplicateSameSessionIsIdempotent() {
-        Zone zone = new Zone(0, 0);
+        Zone zone = new Zone(0, 0, List.of());
         Session session = session(PlayerProfile.initial("user01", 7, "alpha1", 0));
 
         assertTrue(zone.add(session));
@@ -49,7 +49,7 @@ class ZoneTest {
 
     @Test
     void differentSessionCannotReplaceSamePlayerId() {
-        Zone zone = new Zone(0, 0);
+        Zone zone = new Zone(0, 0, List.of());
         Session first = session(PlayerProfile.initial("user01", 7, "alpha1", 0));
         Session second = session(PlayerProfile.initial("user02", 7, "alpha2", 0));
 
@@ -60,7 +60,7 @@ class ZoneTest {
 
     @Test
     void snapshotIsImmutable() {
-        Zone zone = new Zone(0, 0);
+        Zone zone = new Zone(0, 0, List.of());
         zone.add(session(PlayerProfile.initial("user01", 7, "alpha1", 0)));
 
         List<Session> snapshot = zone.snapshot();
@@ -69,13 +69,20 @@ class ZoneTest {
 
     @Test
     void requiresBoundPlayer() {
-        Zone zone = new Zone(0, 0);
+        Zone zone = new Zone(0, 0, List.of());
         assertThrows(IllegalStateException.class, () -> zone.add(session(null)));
     }
 
     @Test
+    void requiresExplicitRuntimeMonsterSeed() {
+        assertThrows(
+                NoSuchMethodException.class,
+                () -> Zone.class.getConstructor(int.class, int.class));
+    }
+
+    @Test
     void atomicallyReturnsExistingMembersWhileAddingNewMember() {
-        Zone zone = new Zone(0, 0);
+        Zone zone = new Zone(0, 0, List.of());
         Session first = session(PlayerProfile.initial("user01", 1, "alpha1", 0));
         Session second = session(PlayerProfile.initial("user02", 2, "beta22", 0));
         zone.add(first);

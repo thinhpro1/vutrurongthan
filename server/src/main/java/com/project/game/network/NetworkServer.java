@@ -8,6 +8,7 @@ import com.project.game.network.transport.TlsTcpTransport;
 import com.project.game.map.MapService;
 import com.project.game.monster.MonsterRuntimeFactory;
 import com.project.game.network.packet.PlayerPacketWriter;
+import com.project.game.network.packet.MonsterPacketWriter;
 import com.project.game.service.AuthService;
 import com.project.game.service.ResourceService;
 import com.project.game.service.ServerServices;
@@ -91,6 +92,7 @@ public final class NetworkServer {
         MapService maps =
                 new MapService(
                         new PlayerPacketWriter(),
+                        new MonsterPacketWriter(),
                         monsterFactory);
         ServerServices services =
                 new ServerServices(

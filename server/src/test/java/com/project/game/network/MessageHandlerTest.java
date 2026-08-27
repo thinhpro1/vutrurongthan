@@ -7,6 +7,7 @@ import com.project.game.network.message.Message;
 import com.project.game.network.message.MessageName;
 import com.project.game.network.message.MessageWriter;
 import com.project.game.network.packet.PlayerPacketWriter;
+import com.project.game.network.packet.MonsterPacketWriter;
 import com.project.game.monster.MonsterRuntimeFactory;
 import com.project.game.service.AuthService;
 import com.project.game.service.ResourceService;
@@ -48,6 +49,7 @@ class MessageHandlerTest {
         ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
         MapService maps = new MapService(
                 new PlayerPacketWriter(),
+                new MonsterPacketWriter(),
                 new MonsterRuntimeFactory(resources));
         ServerServices services = new ServerServices(new AuthService(), resources, maps);
         PlayerProfile start = PlayerProfile.initial("user01", 7, "alpha1", 0)
@@ -119,6 +121,7 @@ class MessageHandlerTest {
         ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
         MapService maps = new MapService(
                 new PlayerPacketWriter(),
+                new MonsterPacketWriter(),
                 new MonsterRuntimeFactory(resources));
         ServerServices services = new ServerServices(new AuthService(), resources, maps);
         PlayerProfile start = PlayerProfile.initial("user01", 7, "alpha1", 0)
@@ -183,6 +186,7 @@ class MessageHandlerTest {
         AuthService auth = new AuthService();
         MapService maps = new MapService(
                 new PlayerPacketWriter(),
+                new MonsterPacketWriter(),
                 new MonsterRuntimeFactory(ResourceService.unavailable()));
         ServerServices services = new ServerServices(auth, ResourceService.unavailable(), maps);
         Session first = inGameSession(services, PlayerProfile.initial("user01", 1, "alpha1", 0));
@@ -244,6 +248,7 @@ class MessageHandlerTest {
     void finishLoadMapRejectsTrailingBytes() {
         MapService maps = new MapService(
                 new PlayerPacketWriter(),
+                new MonsterPacketWriter(),
                 new MonsterRuntimeFactory(ResourceService.unavailable()));
         ServerServices services = new ServerServices(new AuthService(), ResourceService.unavailable(), maps);
         Session session = inGameSession(services, PlayerProfile.initial("user01", 7, "alpha1", 0));

@@ -1,14 +1,18 @@
 package com.project.game.map;
 
+import com.project.game.monster.MonsterDamageResult;
 import com.project.game.monster.MonsterRuntimeFactory;
 import com.project.game.monster.MonsterSnapshot;
 import com.project.game.network.Session;
 import com.project.game.network.SessionState;
 import com.project.game.network.packet.PlayerPacketWriter;
+import com.project.game.network.packet.MonsterPacketWriter;
+import com.project.game.network.message.Message;
 import com.project.game.player.PlayerProfile;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 /** Coordinates presence and movement within the current map/zone keys. */
@@ -17,12 +21,78 @@ public final class MapService {
     }
 
     private final PlayerPacketWriter packets;
+    private final MonsterPacketWriter monsterPackets;
     private final MonsterRuntimeFactory monsterFactory;
     private final ConcurrentHashMap<ZoneKey, Zone> zones = new ConcurrentHashMap<>();
 
-    public MapService(PlayerPacketWriter packets, MonsterRuntimeFactory monsterFactory) {
+    public MapService(PlayerPacketWriter packets,
+                      MonsterPacketWriter monsterPackets,
+                      MonsterRuntimeFactory monsterFactory) {
         this.packets = Objects.requireNonNull(packets, "packets");
+        this.monsterPackets = Objects.requireNonNull(monsterPackets, "monsterPackets");
         this.monsterFactory = Objects.requireNonNull(monsterFactory, "monsterFactory");
+    }
+
+    public boolean canTargetMonster(Session session, int monsterId) {
+        if (session == null || session.state() == SessionState.CLOSED) {
+            return false;
+        }
+
+        PlayerProfile player = session.player();
+        if (player == null) {
+            return false;
+        }
+
+        Zone zone = zones.get(keyOf(player));
+        if (zone == null) {
+            return false;
+        }
+
+        synchronized (zone) {
+            return zone.contains(session) && zone.hasLiveMonster(monsterId);
+        }
+    }
+
+    public boolean attackMonster(Session session, int monsterId, long damage) {
+        if (session == null
+                || session.state() == SessionState.CLOSED
+                || damage <= 0) {
+            return false;
+        }
+
+        PlayerProfile player = session.player();
+        if (player == null) {
+            return false;
+        }
+
+        Zone zone = zones.get(keyOf(player));
+        if (zone == null) {
+            return false;
+        }
+
+        synchronized (zone) {
+            if (!zone.contains(session)) {
+                return false;
+            }
+
+            Optional<MonsterDamageResult> result = zone.damageMonster(monsterId, damage);
+            if (result.isEmpty()) {
+                return false;
+            }
+
+            MonsterDamageResult combat = result.orElseThrow();
+            Message packet = combat.killed()
+                    ? monsterPackets.startDie(combat)
+                    : monsterPackets.injure(combat);
+
+            for (Session member : zone.snapshot()) {
+                if (member.state() != SessionState.CLOSED) {
+                    member.send(packet);
+                }
+            }
+
+            return true;
+        }
     }
 
     public void finishLoad(Session session) {

@@ -2,6 +2,7 @@ package com.project.game.network;
 
 import com.project.game.network.codec.LegacyCipher;
 import com.project.game.network.codec.LegacyPacketCodec;
+import com.project.game.network.packet.MonsterPacketWriter;
 import com.project.game.network.message.Message;
 import com.project.game.network.message.MessageName;
 import com.project.game.network.message.MessageWriter;
@@ -115,6 +116,7 @@ class NetworkIntegrationTest {
         assertTrue(auth.register("mapzoneb", "secret1").success());
         MapService maps = new MapService(
                 new com.project.game.network.packet.PlayerPacketWriter(),
+                new MonsterPacketWriter(),
                 new MonsterRuntimeFactory(resources));
         NetworkServer server = new NetworkServer("127.0.0.1", 0, 4, 262_144, 16, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
@@ -193,6 +195,7 @@ class NetworkIntegrationTest {
         assertTrue(auth.register("zoneb1", "secret1").success());
         MapService maps = new MapService(
                 new com.project.game.network.packet.PlayerPacketWriter(),
+                new MonsterPacketWriter(),
                 new MonsterRuntimeFactory(resources));
         NetworkServer server = new NetworkServer(
                 "127.0.0.1", 0, 4, 262_144, 16, 1_000,
@@ -395,7 +398,7 @@ class NetworkIntegrationTest {
                 assertEquals(-1, manifestReader.readByte()); // item
                 assertEquals(-1, manifestReader.readByte()); // item option
                 assertEquals(-1, manifestReader.readByte()); // npc
-                assertEquals(0, manifestReader.readByte()); // effect
+                assertEquals(1, manifestReader.readByte()); // effect
                 assertEquals(1, manifestReader.readByte()); // monster
                 assertEquals(-1, manifestReader.readByte()); // medal
                 assertEquals(0, manifestReader.readByte()); // level
@@ -488,7 +491,7 @@ class NetworkIntegrationTest {
                 assertEquals(-1, manifestReader.readByte()); // item
                 assertEquals(-1, manifestReader.readByte()); // item option
                 assertEquals(-1, manifestReader.readByte()); // npc
-                assertEquals(0, manifestReader.readByte());  // effect
+                assertEquals(1, manifestReader.readByte());  // effect
                 assertEquals(1, manifestReader.readByte());  // monster
                 assertEquals(-1, manifestReader.readByte()); // medal
                 assertEquals(0, manifestReader.readByte());  // level
@@ -507,8 +510,8 @@ class NetworkIntegrationTest {
 
                 var reader = response.reader();
                 assertEquals(3, reader.readByte());
-                assertEquals(0, reader.readByte());
-                assertEquals(2, reader.readUnsignedShort());
+                assertEquals(1, reader.readByte());
+                assertEquals(3, reader.readUnsignedShort());
                 for (var expected : resources.effects()) {
                     assertEquals(expected.id(), reader.readShort());
                     assertEquals(expected.dx(), reader.readShort());

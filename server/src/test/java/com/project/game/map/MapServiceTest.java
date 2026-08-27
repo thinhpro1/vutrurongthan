@@ -10,6 +10,7 @@ import com.project.game.network.message.Message;
 import com.project.game.network.message.MessageName;
 import com.project.game.network.transport.ClientTransport;
 import com.project.game.network.packet.PlayerPacketWriter;
+import com.project.game.network.packet.MonsterPacketWriter;
 import com.project.game.monster.MonsterRuntimeFactory;
 import com.project.game.monster.MonsterSnapshot;
 import com.project.game.monster.RuntimeMonster;
@@ -37,6 +38,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -340,6 +342,123 @@ class MapServiceTest {
                 commands(drain(joining)));
     }
 
+    @Test
+    void combatCannotCreateZone() {
+        MapService maps = mapsWithMonsters();
+        Session session = session(player(1, 1, 0), maps);
+
+        assertEquals(0, zoneRegistrySize(maps));
+        assertFalse(maps.canTargetMonster(session, 0));
+        assertFalse(maps.attackMonster(session, 0, 10));
+        assertEquals(0, zoneRegistrySize(maps));
+    }
+
+    @Test
+    void mapInfoCreatedButPreFinishSessionCannotCombat() {
+        MapService maps = mapsWithMonsters();
+        assertEquals(300L, maps.monsterSnapshots(1, 0).getFirst().hp());
+        Session session = session(player(1, 1, 0), maps);
+
+        assertEquals(0, maps.memberCount(1, 0));
+        assertFalse(maps.canTargetMonster(session, 0));
+        assertFalse(maps.attackMonster(session, 0, 10));
+        assertEquals(300L, maps.monsterSnapshots(1, 0).getFirst().hp());
+    }
+
+    @Test
+    void postFinishAttackSendsAuthoritativeInjureToAttacker() throws Exception {
+        MapService maps = mapsWithMonsters();
+        Session attacker = session(player(1, 1, 0), maps);
+        maps.finishLoad(attacker);
+        drain(attacker);
+
+        assertTrue(maps.canTargetMonster(attacker, 0));
+        assertTrue(maps.attackMonster(attacker, 0, 10));
+        List<Message> messages = drain(attacker);
+        assertEquals(List.of(MessageName.MONSTER_INJURE), commands(messages));
+        var reader = messages.getFirst().reader();
+        assertEquals(0, reader.readInt());
+        assertEquals(10L, reader.readLong());
+        assertEquals(290L, reader.readLong());
+        assertFalse(reader.readBoolean());
+        assertEquals(0, reader.remaining());
+    }
+
+    @Test
+    void sameZoneReceivesIdenticalCombatBroadcast() throws Exception {
+        MapService maps = mapsWithMonsters();
+        Session attacker = session(player(1, 1, 0), maps);
+        Session peer = session(player(2, 1, 0), maps);
+        maps.finishLoad(attacker);
+        maps.finishLoad(peer);
+        drain(attacker);
+        drain(peer);
+
+        assertTrue(maps.attackMonster(attacker, 0, 10));
+        List<Message> attackerMessages = drain(attacker);
+        List<Message> peerMessages = drain(peer);
+        assertEquals(List.of(MessageName.MONSTER_INJURE), commands(attackerMessages));
+        assertEquals(List.of(MessageName.MONSTER_INJURE), commands(peerMessages));
+        assertArrayEquals(attackerMessages.getFirst().payload(), peerMessages.getFirst().payload());
+    }
+
+    @Test
+    void crossZoneDoesNotReceiveCombatBroadcast() throws Exception {
+        MapService maps = mapsWithMonsters();
+        Session attacker = session(player(1, 1, 0), maps);
+        Session otherZone = session(player(2, 1, 1), maps);
+        maps.finishLoad(attacker);
+        maps.finishLoad(otherZone);
+        drain(attacker);
+        drain(otherZone);
+
+        assertTrue(maps.attackMonster(attacker, 0, 10));
+        assertEquals(List.of(MessageName.MONSTER_INJURE), commands(drain(attacker)));
+        assertEquals(List.of(), drain(otherZone));
+        assertEquals(300L, maps.monsterSnapshots(1, 1).getFirst().hp());
+    }
+
+    @Test
+    void concurrentLethalAttacksProduceOneDeathBroadcast() throws Exception {
+        MapService maps = mapsWithMonsters();
+        Session first = session(player(1, 1, 0), maps);
+        Session second = session(player(2, 1, 0), maps);
+        maps.finishLoad(first);
+        maps.finishLoad(second);
+        drain(first);
+        drain(second);
+        for (int i = 0; i < 29; i++) {
+            assertTrue(maps.attackMonster(first, 0, 10));
+            drain(first);
+            drain(second);
+        }
+        drain(first);
+        drain(second);
+
+        CyclicBarrier start = new CyclicBarrier(3);
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+        AtomicBoolean firstResult = new AtomicBoolean();
+        AtomicBoolean secondResult = new AtomicBoolean();
+        Thread firstAttack = Thread.ofVirtual().start(() -> attackAtBarrier(
+                start, maps, first, firstResult, failure));
+        Thread secondAttack = Thread.ofVirtual().start(() -> attackAtBarrier(
+                start, maps, second, secondResult, failure));
+        start.await();
+        firstAttack.join();
+        secondAttack.join();
+
+        if (failure.get() != null) {
+            throw new AssertionError("concurrent combat failed", failure.get());
+        }
+        assertTrue(firstResult.get() ^ secondResult.get());
+        assertEquals(0L, maps.monsterSnapshots(1, 0).getFirst().hp());
+        assertEquals(1, maps.monsterSnapshots(1, 0).getFirst().status());
+        assertEquals(1, commands(drain(first)).stream()
+                .filter(command -> command == MessageName.MONSTER_START_DIE).count());
+        assertEquals(1, commands(drain(second)).stream()
+                .filter(command -> command == MessageName.MONSTER_START_DIE).count());
+    }
+
     private static void joinAtBarrier(CyclicBarrier start, MapService maps,
                                       Session session, AtomicReference<Throwable> failure) {
         try {
@@ -366,6 +485,17 @@ class MapServiceTest {
         return session(player, ServerServices.defaults());
     }
 
+    private static void attackAtBarrier(CyclicBarrier start, MapService maps,
+                                        Session session, AtomicBoolean result,
+                                        AtomicReference<Throwable> failure) {
+        try {
+            start.await();
+            result.set(maps.attackMonster(session, 0, 10));
+        } catch (Throwable exception) {
+            failure.compareAndSet(null, exception);
+        }
+    }
+
     private static MonsterRuntimeFactory monsterFactory() {
         return new MonsterRuntimeFactory(
                 ResourceService.fromFrameRoot(
@@ -375,6 +505,7 @@ class MapServiceTest {
     private static MapService mapsWithMonsters() {
         return new MapService(
                 new PlayerPacketWriter(),
+                new MonsterPacketWriter(),
                 monsterFactory());
     }
 
@@ -382,7 +513,18 @@ class MapServiceTest {
         ResourceService resources = ResourceService.unavailable();
         return new MapService(
                 new PlayerPacketWriter(),
+                new MonsterPacketWriter(),
                 new MonsterRuntimeFactory(resources));
+    }
+
+    private static int zoneRegistrySize(MapService maps) {
+        try {
+            Field field = MapService.class.getDeclaredField("zones");
+            field.setAccessible(true);
+            return ((java.util.Map<?, ?>) field.get(maps)).size();
+        } catch (ReflectiveOperationException exception) {
+            throw new AssertionError("unable to inspect zone registry", exception);
+        }
     }
 
     private static Session session(PlayerProfile player, MapService maps) {

@@ -3,6 +3,7 @@ package com.project.game.service;
 import com.project.game.map.MapService;
 import com.project.game.monster.MonsterRuntimeFactory;
 import com.project.game.network.packet.PlayerPacketWriter;
+import com.project.game.network.packet.MonsterPacketWriter;
 
 import java.util.Objects;
 
@@ -20,6 +21,7 @@ public record ServerServices(AuthService auth, ResourceService resources, MapSer
                 resources,
                 new MapService(
                         new PlayerPacketWriter(),
+                        new MonsterPacketWriter(),
                         new MonsterRuntimeFactory(resources)));
     }
 

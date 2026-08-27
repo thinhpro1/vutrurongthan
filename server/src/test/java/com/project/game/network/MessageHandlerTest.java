@@ -463,8 +463,8 @@ class MessageHandlerTest {
                 assertEquals(MessageName.UPDATE_DATA, response.command());
                 var reader = response.reader();
                 assertEquals(3, reader.readByte());
-                assertEquals(0, reader.readByte());
-                assertEquals(2, reader.readUnsignedShort());
+                assertEquals(1, reader.readByte());
+                assertEquals(3, reader.readUnsignedShort());
                 for (var expected : resources.effects()) {
                     assertEquals(expected.id(), reader.readShort());
                     assertEquals(expected.dx(), reader.readShort());

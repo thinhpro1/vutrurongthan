@@ -378,9 +378,9 @@ class ResourceServiceTest {
 
         var effects = resources.effects();
 
-        assertEquals(List.of(6, 7),
+        assertEquals(List.of(6, 7, 17),
                 effects.stream().map(ResourceService.LegacyEffectImage::id).toList());
-        assertEquals(2, effects.size());
+        assertEquals(3, effects.size());
         assertTrue(effects.stream().allMatch(effect -> !effect.icons().isEmpty()));
         assertTrue(effects.stream().allMatch(effect -> effect.icons().size() <= Byte.MAX_VALUE));
 
@@ -388,6 +388,8 @@ class ResourceServiceTest {
                 effects.get(0));
         assertEquals(new ResourceService.LegacyEffectImage(7, 0, 0, 100, List.of(68, 69, 70)),
                 effects.get(1));
+        assertEquals(new ResourceService.LegacyEffectImage(
+                17, 0, -10, 50, List.of(1911, 1912, 1913, 1914)), effects.get(2));
         for (var effect : effects) {
             assertTrue(effect.id() >= Short.MIN_VALUE && effect.id() <= Short.MAX_VALUE);
             assertTrue(effect.dx() >= Short.MIN_VALUE && effect.dx() <= Short.MAX_VALUE);
@@ -399,12 +401,56 @@ class ResourceServiceTest {
     }
 
     @Test
+    void rejectsEffectBootstrapVersionZero(@TempDir Path root) throws IOException {
+        var bootstrap = canonicalEffectBootstrap();
+        bootstrap.addProperty("version", 0);
+        assertEffectBootstrapRejected(root, bootstrap);
+    }
+
+    @Test
+    void rejectsEffectBootstrapMissingImage17(@TempDir Path root) throws IOException {
+        var bootstrap = canonicalEffectBootstrap();
+        bootstrap.getAsJsonArray("images").remove(2);
+        assertEffectBootstrapRejected(root, bootstrap);
+    }
+
+    @Test
+    void rejectsEffectBootstrapExtraImage(@TempDir Path root) throws IOException {
+        var bootstrap = canonicalEffectBootstrap();
+        var images = bootstrap.getAsJsonArray("images");
+        images.add(images.get(0).deepCopy());
+        assertEffectBootstrapRejected(root, bootstrap);
+    }
+
+    @Test
+    void rejectsEffectBootstrapWrongImage17Dy(@TempDir Path root) throws IOException {
+        var bootstrap = canonicalEffectBootstrap();
+        bootstrap.getAsJsonArray("images").get(2).getAsJsonObject().addProperty("dy", -9);
+        assertEffectBootstrapRejected(root, bootstrap);
+    }
+
+    @Test
+    void rejectsEffectBootstrapWrongImage17Delay(@TempDir Path root) throws IOException {
+        var bootstrap = canonicalEffectBootstrap();
+        bootstrap.getAsJsonArray("images").get(2).getAsJsonObject().addProperty("delay", 100);
+        assertEffectBootstrapRejected(root, bootstrap);
+    }
+
+    @Test
+    void rejectsEffectBootstrapWrongImage17Icons(@TempDir Path root) throws IOException {
+        var bootstrap = canonicalEffectBootstrap();
+        bootstrap.getAsJsonArray("images").get(2).getAsJsonObject().add(
+                "icons", JsonParser.parseString("[1911,1912,1913,1915]"));
+        assertEffectBootstrapRejected(root, bootstrap);
+    }
+
+    @Test
     void pinsCanonicalMovementEffectBootstrapHash() throws Exception {
         byte[] bytes = Files.readAllBytes(Path.of("resources", "json", "EffectBootstrap.json"));
         String hash = HexFormat.of().formatHex(
                 MessageDigest.getInstance("SHA-256").digest(bytes));
 
-        assertEquals("0eedf588888a3461c370fd5dcaada81e29dc16dd21aa0b2bc444712026b21091", hash);
+        assertEquals("0ed4587763079cf07a1c2c004ebef6f786e8034baf80a201d16c8b5ac40c6e99", hash);
     }
 
     @Test
@@ -564,11 +610,29 @@ class ResourceServiceTest {
                 .getAsJsonObject();
     }
 
+    private static com.google.gson.JsonObject canonicalEffectBootstrap() {
+        return JsonParser.parseString("{\"version\":1,\"images\":["
+                + "{\"id\":6,\"dx\":0,\"dy\":0,\"delay\":100,\"icons\":[71,72]},"
+                + "{\"id\":7,\"dx\":0,\"dy\":0,\"delay\":100,\"icons\":[68,69,70]},"
+                + "{\"id\":17,\"dx\":0,\"dy\":-10,\"delay\":50,\"icons\":[1911,1912,1913,1914]}"
+                + "]}").getAsJsonObject();
+    }
+
     private static void assertMonsterBootstrapRejected(Path root,
                                                          com.google.gson.JsonObject bootstrap)
             throws IOException {
         Files.copy(Path.of("resources", "json", "Frame.json"), root.resolve("Frame.json"));
         Files.writeString(root.resolve("MonsterBootstrap.json"),
+                new GsonBuilder().serializeNulls().create().toJson(bootstrap));
+        assertThrows(IllegalArgumentException.class,
+                () -> ResourceService.fromFrameRoot(root));
+    }
+
+    private static void assertEffectBootstrapRejected(Path root,
+                                                        com.google.gson.JsonObject bootstrap)
+            throws IOException {
+        Files.copy(Path.of("resources", "json", "Frame.json"), root.resolve("Frame.json"));
+        Files.writeString(root.resolve("EffectBootstrap.json"),
                 new GsonBuilder().serializeNulls().create().toJson(bootstrap));
         assertThrows(IllegalArgumentException.class,
                 () -> ResourceService.fromFrameRoot(root));

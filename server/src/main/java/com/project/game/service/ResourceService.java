@@ -31,7 +31,7 @@ import java.util.Set;
 public final class ResourceService {
     private static final Set<Integer> SUPPORTED_MAP_IDS = Set.of(0, 1);
     private static final List<Integer> REQUIRED_FRAME_IDS = List.of(3, 4, 5, 6, 7, 8, 21, 22, 23);
-    private static final List<Integer> REQUIRED_MOVEMENT_EFFECT_IDS = List.of(6, 7);
+    private static final List<Integer> REQUIRED_EFFECT_IMAGE_IDS = List.of(6, 7, 17);
     private static final Set<Integer> REQUIRED_PLAYER_SKILL_IDS = Set.of(
             0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17,
             30, 31, 32, 33, 34, 35, 36);
@@ -374,15 +374,15 @@ public final class ResourceService {
             }
             JsonObject rootObject = parsed.getAsJsonObject();
             requireExactFields(rootObject, Set.of("version", "images"), "EffectBootstrap.json");
-            if (readShortValue(rootObject, "version") != 0) {
-                throw new IllegalArgumentException("EffectBootstrap.json version must be 0");
+            if (readShortValue(rootObject, "version") != 1) {
+                throw new IllegalArgumentException("EffectBootstrap.json version must be 1");
             }
             JsonElement imagesValue = required(rootObject, "images");
             if (!imagesValue.isJsonArray()) {
                 throw new IllegalArgumentException("EffectBootstrap.json field images must be an array");
             }
-            if (imagesValue.getAsJsonArray().size() != REQUIRED_MOVEMENT_EFFECT_IDS.size()) {
-                throw new IllegalArgumentException("EffectBootstrap.json must contain exactly 2 images");
+            if (imagesValue.getAsJsonArray().size() != REQUIRED_EFFECT_IMAGE_IDS.size()) {
+                throw new IllegalArgumentException("EffectBootstrap.json must contain exactly 3 images");
             }
 
             List<LegacyEffectImage> loaded = new ArrayList<>(imagesValue.getAsJsonArray().size());
@@ -397,7 +397,7 @@ public final class ResourceService {
                 requireExactFields(image, Set.of("id", "dx", "dy", "delay", "icons"),
                         "EffectBootstrap image " + index);
                 int id = readShortValue(image, "id");
-                int expectedId = REQUIRED_MOVEMENT_EFFECT_IDS.get(index);
+                int expectedId = REQUIRED_EFFECT_IMAGE_IDS.get(index);
                 if (id != expectedId) {
                     throw new IllegalArgumentException("EffectBootstrap image " + index
                             + " id must be " + expectedId + " but was " + id);
@@ -413,11 +413,22 @@ public final class ResourceService {
                 if (icons.size() > Byte.MAX_VALUE) {
                     throw new IllegalArgumentException("too many icons for EffectBootstrap image " + id);
                 }
+                int dx = readShortValue(image, "dx");
+                int dy = readShortValue(image, "dy");
+                int delay = readShortValue(image, "delay");
+                if (id == 17
+                        && (dx != 0
+                        || dy != -10
+                        || delay != 50
+                        || !icons.equals(List.of(1911, 1912, 1913, 1914)))) {
+                    throw new IllegalArgumentException(
+                            "EffectBootstrap image 17 does not match canonical death effect");
+                }
                 loaded.add(new LegacyEffectImage(
                         id,
-                        readShortValue(image, "dx"),
-                        readShortValue(image, "dy"),
-                        readShortValue(image, "delay"),
+                        dx,
+                        dy,
+                        delay,
                         icons));
             }
             return List.copyOf(loaded);

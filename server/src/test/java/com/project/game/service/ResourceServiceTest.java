@@ -378,9 +378,9 @@ class ResourceServiceTest {
 
         var effects = resources.effects();
 
-        assertEquals(List.of(6, 7, 17),
+        assertEquals(List.of(6, 7, 13, 17),
                 effects.stream().map(ResourceService.LegacyEffectImage::id).toList());
-        assertEquals(3, effects.size());
+        assertEquals(4, effects.size());
         assertTrue(effects.stream().allMatch(effect -> !effect.icons().isEmpty()));
         assertTrue(effects.stream().allMatch(effect -> effect.icons().size() <= Byte.MAX_VALUE));
 
@@ -389,7 +389,9 @@ class ResourceServiceTest {
         assertEquals(new ResourceService.LegacyEffectImage(7, 0, 0, 100, List.of(68, 69, 70)),
                 effects.get(1));
         assertEquals(new ResourceService.LegacyEffectImage(
-                17, 0, -10, 50, List.of(1911, 1912, 1913, 1914)), effects.get(2));
+                13, 0, 0, 100, List.of(971, 972, 973)), effects.get(2));
+        assertEquals(new ResourceService.LegacyEffectImage(
+                17, 0, -10, 50, List.of(1911, 1912, 1913, 1914)), effects.get(3));
         for (var effect : effects) {
             assertTrue(effect.id() >= Short.MIN_VALUE && effect.id() <= Short.MAX_VALUE);
             assertTrue(effect.dx() >= Short.MIN_VALUE && effect.dx() <= Short.MAX_VALUE);
@@ -401,14 +403,14 @@ class ResourceServiceTest {
     }
 
     @Test
-    void rejectsEffectBootstrapVersionZero(@TempDir Path root) throws IOException {
+    void rejectsEffectBootstrapVersionOne(@TempDir Path root) throws IOException {
         var bootstrap = canonicalEffectBootstrap();
-        bootstrap.addProperty("version", 0);
+        bootstrap.addProperty("version", 1);
         assertEffectBootstrapRejected(root, bootstrap);
     }
 
     @Test
-    void rejectsEffectBootstrapMissingImage17(@TempDir Path root) throws IOException {
+    void rejectsEffectBootstrapMissingImage13(@TempDir Path root) throws IOException {
         var bootstrap = canonicalEffectBootstrap();
         bootstrap.getAsJsonArray("images").remove(2);
         assertEffectBootstrapRejected(root, bootstrap);
@@ -423,23 +425,62 @@ class ResourceServiceTest {
     }
 
     @Test
+    void rejectsEffectBootstrapWrongImageOrder(@TempDir Path root) throws IOException {
+        var bootstrap = canonicalEffectBootstrap();
+        var images = bootstrap.getAsJsonArray("images");
+        var first = images.get(0);
+        images.set(0, images.get(1));
+        images.set(1, first);
+        assertEffectBootstrapRejected(root, bootstrap);
+    }
+
+    @Test
+    void rejectsEffectBootstrapWrongImage13Dx(@TempDir Path root) throws IOException {
+        var bootstrap = canonicalEffectBootstrap();
+        bootstrap.getAsJsonArray("images").get(2).getAsJsonObject().addProperty("dx", 1);
+        assertEffectBootstrapRejected(root, bootstrap);
+    }
+
+    @Test
+    void rejectsEffectBootstrapWrongImage13Dy(@TempDir Path root) throws IOException {
+        var bootstrap = canonicalEffectBootstrap();
+        bootstrap.getAsJsonArray("images").get(2).getAsJsonObject().addProperty("dy", 1);
+        assertEffectBootstrapRejected(root, bootstrap);
+    }
+
+    @Test
+    void rejectsEffectBootstrapWrongImage13Delay(@TempDir Path root) throws IOException {
+        var bootstrap = canonicalEffectBootstrap();
+        bootstrap.getAsJsonArray("images").get(2).getAsJsonObject().addProperty("delay", 50);
+        assertEffectBootstrapRejected(root, bootstrap);
+    }
+
+    @Test
+    void rejectsEffectBootstrapWrongImage13Icons(@TempDir Path root) throws IOException {
+        var bootstrap = canonicalEffectBootstrap();
+        bootstrap.getAsJsonArray("images").get(2).getAsJsonObject().add(
+                "icons", JsonParser.parseString("[971,972,974]"));
+        assertEffectBootstrapRejected(root, bootstrap);
+    }
+
+    @Test
     void rejectsEffectBootstrapWrongImage17Dy(@TempDir Path root) throws IOException {
         var bootstrap = canonicalEffectBootstrap();
-        bootstrap.getAsJsonArray("images").get(2).getAsJsonObject().addProperty("dy", -9);
+        bootstrap.getAsJsonArray("images").get(3).getAsJsonObject().addProperty("dy", -9);
         assertEffectBootstrapRejected(root, bootstrap);
     }
 
     @Test
     void rejectsEffectBootstrapWrongImage17Delay(@TempDir Path root) throws IOException {
         var bootstrap = canonicalEffectBootstrap();
-        bootstrap.getAsJsonArray("images").get(2).getAsJsonObject().addProperty("delay", 100);
+        bootstrap.getAsJsonArray("images").get(3).getAsJsonObject().addProperty("delay", 100);
         assertEffectBootstrapRejected(root, bootstrap);
     }
 
     @Test
     void rejectsEffectBootstrapWrongImage17Icons(@TempDir Path root) throws IOException {
         var bootstrap = canonicalEffectBootstrap();
-        bootstrap.getAsJsonArray("images").get(2).getAsJsonObject().add(
+        bootstrap.getAsJsonArray("images").get(3).getAsJsonObject().add(
                 "icons", JsonParser.parseString("[1911,1912,1913,1915]"));
         assertEffectBootstrapRejected(root, bootstrap);
     }
@@ -450,7 +491,7 @@ class ResourceServiceTest {
         String hash = HexFormat.of().formatHex(
                 MessageDigest.getInstance("SHA-256").digest(bytes));
 
-        assertEquals("0ed4587763079cf07a1c2c004ebef6f786e8034baf80a201d16c8b5ac40c6e99", hash);
+        assertEquals("229a7b3bf4ce5f9339ba597335e6e813a841edb8fc034d048db1bb6a65815bd1", hash);
     }
 
     @Test
@@ -611,9 +652,10 @@ class ResourceServiceTest {
     }
 
     private static com.google.gson.JsonObject canonicalEffectBootstrap() {
-        return JsonParser.parseString("{\"version\":1,\"images\":["
+        return JsonParser.parseString("{\"version\":2,\"images\":["
                 + "{\"id\":6,\"dx\":0,\"dy\":0,\"delay\":100,\"icons\":[71,72]},"
                 + "{\"id\":7,\"dx\":0,\"dy\":0,\"delay\":100,\"icons\":[68,69,70]},"
+                + "{\"id\":13,\"dx\":0,\"dy\":0,\"delay\":100,\"icons\":[971,972,973]},"
                 + "{\"id\":17,\"dx\":0,\"dy\":-10,\"delay\":50,\"icons\":[1911,1912,1913,1914]}"
                 + "]}").getAsJsonObject();
     }

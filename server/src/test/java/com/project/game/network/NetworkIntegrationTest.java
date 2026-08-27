@@ -502,7 +502,7 @@ class NetworkIntegrationTest {
                 assertEquals(-1, manifestReader.readByte()); // item
                 assertEquals(-1, manifestReader.readByte()); // item option
                 assertEquals(-1, manifestReader.readByte()); // npc
-                assertEquals(1, manifestReader.readByte()); // effect
+                assertEquals(2, manifestReader.readByte()); // effect
                 assertEquals(1, manifestReader.readByte()); // monster
                 assertEquals(-1, manifestReader.readByte()); // medal
                 assertEquals(0, manifestReader.readByte()); // level
@@ -595,7 +595,7 @@ class NetworkIntegrationTest {
                 assertEquals(-1, manifestReader.readByte()); // item
                 assertEquals(-1, manifestReader.readByte()); // item option
                 assertEquals(-1, manifestReader.readByte()); // npc
-                assertEquals(1, manifestReader.readByte());  // effect
+                assertEquals(2, manifestReader.readByte());  // effect
                 assertEquals(1, manifestReader.readByte());  // monster
                 assertEquals(-1, manifestReader.readByte()); // medal
                 assertEquals(0, manifestReader.readByte());  // level
@@ -614,8 +614,8 @@ class NetworkIntegrationTest {
 
                 var reader = response.reader();
                 assertEquals(3, reader.readByte());
-                assertEquals(1, reader.readByte());
-                assertEquals(3, reader.readUnsignedShort());
+                assertEquals(2, reader.readByte());
+                assertEquals(4, reader.readUnsignedShort());
                 for (var expected : resources.effects()) {
                     assertEquals(expected.id(), reader.readShort());
                     assertEquals(expected.dx(), reader.readShort());
@@ -935,7 +935,7 @@ class NetworkIntegrationTest {
             assertEquals(MessageName.UPDATE_DATA, manifest.command());
             assertEquals(14, manifest.payload().length);
             assertArrayEquals(new byte[]{
-                    -1, -1, -1, -1, -1, 1, 1, -1, 0, 1, -1, -1, -1, -1
+                    -1, -1, -1, -1, -1, 2, 1, -1, 0, 1, -1, -1, -1, -1
             }, manifest.payload());
             int historicalEmptyMonsterVersion = 0;
             int serverMonsterVersion = Byte.toUnsignedInt(manifest.payload()[6]);
@@ -947,7 +947,7 @@ class NetworkIntegrationTest {
             assertEquals(-1, manifestReader.readByte());
             assertEquals(-1, manifestReader.readByte());
             assertEquals(-1, manifestReader.readByte());
-            assertEquals(1, manifestReader.readByte());
+            assertEquals(2, manifestReader.readByte());
             assertEquals(1, manifestReader.readByte());
             assertEquals(-1, manifestReader.readByte());
             assertEquals(0, manifestReader.readByte());

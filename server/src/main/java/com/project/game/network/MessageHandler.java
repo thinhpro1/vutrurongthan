@@ -24,7 +24,7 @@ public final class MessageHandler {
     private static final Logger LOGGER = Logger.getLogger(MessageHandler.class.getName());
     // Development-only bootstrap values for the legacy client resource protocol.
     private static final int NOT_PROVIDED_VERSION = -1;
-    private static final int DEV_EFFECT_VERSION = 1;
+    private static final int DEV_EFFECT_VERSION = 2;
     private static final int DEV_LEVEL_VERSION = 0;
     private static final int DEV_FRAME_VERSION = 1;
     private final Session session;

@@ -607,8 +607,8 @@ class MessageHandlerTest {
                 assertEquals(MessageName.UPDATE_DATA, response.command());
                 var reader = response.reader();
                 assertEquals(3, reader.readByte());
-                assertEquals(1, reader.readByte());
-                assertEquals(3, reader.readUnsignedShort());
+                assertEquals(2, reader.readByte());
+                assertEquals(4, reader.readUnsignedShort());
                 for (var expected : resources.effects()) {
                     assertEquals(expected.id(), reader.readShort());
                     assertEquals(expected.dx(), reader.readShort());
@@ -715,6 +715,12 @@ class MessageHandlerTest {
 
         assertEquals(0, session.queuedMessages());
         assertEquals(SessionState.HANDSHAKE_DONE, session.state());
+    }
+
+    @Test
+    void manifestAdvertisesLoadedEffectVersionTwo() throws Exception {
+        assertEquals(2, readManifestEffectVersion(ResourceService.fromFrameRoot(
+                Path.of("resources", "json"))));
     }
 
     @Test
@@ -984,6 +990,42 @@ class MessageHandlerTest {
                 }
                 assertEquals(0, reader.remaining());
                 return monsterVersion;
+            } finally {
+                session.close();
+            }
+        }
+    }
+
+    private static int readManifestEffectVersion(ResourceService resources) throws Exception {
+        PipedInputStream input = new PipedInputStream();
+        try (PipedOutputStream inputWriter = new PipedOutputStream(input)) {
+            ByteArrayOutputStream output = new ByteArrayOutputStream();
+            SessionManager manager = new SessionManager();
+            byte[] key = "abc".getBytes(StandardCharsets.US_ASCII);
+            Session session = new Session(manager.nextId(), new TestTransport(input, output, "127.0.0.1"),
+                    manager, new LegacyPacketCodec(262_144), key, 4,
+                    new ServerServices(new AuthService(), resources), NetworkConfig.defaults(),
+                    NetworkEventObserver.NO_OP);
+            try {
+                session.start();
+                session.completeHandshake();
+                output.reset();
+                newHandler(session, resources).onMessage(new Message(
+                        MessageName.UPDATE_DATA, new MessageWriter().writeByte(-1).toByteArray()));
+                waitForOutput(output);
+                Message response = new LegacyPacketCodec(262_144).readServerResponse(
+                        new ByteArrayInputStream(output.toByteArray()), new LegacyCipher(key), true);
+                var reader = response.reader();
+                assertEquals(-1, reader.readByte());
+                for (int index = 0; index < 4; index++) {
+                    reader.readByte();
+                }
+                int effectVersion = reader.readByte();
+                for (int index = 0; index < 8; index++) {
+                    reader.readByte();
+                }
+                assertEquals(0, reader.remaining());
+                return effectVersion;
             } finally {
                 session.close();
             }

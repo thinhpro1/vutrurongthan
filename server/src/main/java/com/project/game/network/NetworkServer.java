@@ -26,6 +26,7 @@ import java.util.logging.Logger;
 /** Legacy TCP accept loop for the new project; the old server is not referenced. */
 public final class NetworkServer {
     private static final Logger LOGGER = Logger.getLogger(NetworkServer.class.getName());
+    private static final long MONSTER_LIFECYCLE_PERIOD_MILLIS = 100L;
     private final String host;
     private final int port;
     private final int maxSessionsPerIp;
@@ -34,6 +35,7 @@ public final class NetworkServer {
     private final int handshakeTimeoutMillis;
     private final byte[] handshakeKey;
     private final ServerServices services;
+    private final MonsterLifecycleScheduler monsterLifecycleScheduler;
     private final SSLContext tlsContext;
     private final NetworkConfig networkConfig;
     private final NetworkEventObserver eventObserver;
@@ -60,6 +62,9 @@ public final class NetworkServer {
             throw new IllegalArgumentException("handshakeKey must not be empty");
         }
         this.services = Objects.requireNonNull(services, "services");
+        this.monsterLifecycleScheduler = new MonsterLifecycleScheduler(
+                this.services.maps()::tickMonsterRespawns,
+                MONSTER_LIFECYCLE_PERIOD_MILLIS);
         this.tlsContext = tlsContext;
         this.networkConfig = Objects.requireNonNull(networkConfig, "networkConfig");
         this.eventObserver = Objects.requireNonNull(eventObserver, "eventObserver");
@@ -124,6 +129,18 @@ public final class NetworkServer {
         listener.bind(new InetSocketAddress(host, port));
         serverSocket = listener;
         running = true;
+        try {
+            monsterLifecycleScheduler.start();
+        } catch (RuntimeException exception) {
+            running = false;
+            serverSocket = null;
+            try {
+                listener.close();
+            } catch (IOException closeException) {
+                exception.addSuppressed(closeException);
+            }
+            throw exception;
+        }
         LOGGER.info(() -> "Network server listening on " + host + ':' + port
                 + " transport=" + (tlsContext == null ? "LEGACY_TCP" : "TLS"));
         while (running) {
@@ -165,6 +182,7 @@ public final class NetworkServer {
             }
         } catch (IOException ignored) {
         }
+        monsterLifecycleScheduler.stop();
         sessions.closeAll();
     }
 

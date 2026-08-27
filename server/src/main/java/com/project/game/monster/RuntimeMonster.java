@@ -1,6 +1,7 @@
 package com.project.game.monster;
 
 import java.util.Objects;
+import java.util.Optional;
 
 public final class RuntimeMonster {
     private final int id;
@@ -35,6 +36,25 @@ public final class RuntimeMonster {
 
     public int id() {
         return id;
+    }
+
+    public boolean isAlive() {
+        return status == 0 && hp > 0;
+    }
+
+    public Optional<MonsterDamageResult> applyDamage(long damage) {
+        if (damage <= 0 || !isAlive()) {
+            return Optional.empty();
+        }
+
+        hp = Math.max(0L, hp - damage);
+        boolean killed = hp == 0;
+
+        if (killed) {
+            status = 1;
+        }
+
+        return Optional.of(new MonsterDamageResult(id, damage, hp, killed));
     }
 
     public MonsterSnapshot snapshot() {

@@ -13,6 +13,7 @@ import com.project.game.monster.MonsterRuntimeFactory;
 import com.project.game.service.AuthService;
 import com.project.game.service.ResourceService;
 import com.project.game.service.ServerServices;
+import com.project.game.test.MutableClock;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -251,15 +252,17 @@ class NetworkIntegrationTest {
     }
 
     @Test
-    void twoClientsFightMap1MonsterAndObserveDeathPersistence() throws Exception {
+    void twoClientsFightMap1MonsterObserveRespawnAndFightAgain() throws Exception {
         ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
         AuthService auth = new AuthService();
+        MutableClock clock = new MutableClock(1_000_000L);
         assertTrue(auth.register("combatza", "secret1").success());
         assertTrue(auth.register("combatzb", "secret1").success());
         MapService maps = new MapService(
                 new com.project.game.network.packet.PlayerPacketWriter(),
                 new MonsterPacketWriter(),
-                new MonsterRuntimeFactory(resources));
+                new MonsterRuntimeFactory(resources),
+                clock);
         NetworkServer server = new NetworkServer(
                 "127.0.0.1", 0, 4, 262_144, 16, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
@@ -326,6 +329,27 @@ class NetworkIntegrationTest {
                 assertNoServerMessage(first);
                 assertNoServerMessage(second);
 
+                clock.advanceMillis(8_000L);
+                assertNoServerMessage(first);
+                assertNoServerMessage(second);
+
+                clock.advanceMillis(1L);
+                assertMonsterRespawn(first.readServerMessage(), 0, 0, 300L);
+                assertMonsterRespawn(second.readServerMessage(), 0, 0, 300L);
+                var respawned = maps.monsterSnapshots(1, 0).getFirst();
+                assertEquals(0, respawned.id());
+                assertEquals(300L, respawned.hp());
+                assertEquals(300L, respawned.maxHp());
+                assertEquals(0, respawned.status());
+                assertEquals(975, respawned.x());
+                assertEquals(936, respawned.y());
+
+                first.prepareMonsterAttack(0, 0);
+                first.impactMonster(0);
+                assertMonsterInjure(first.readServerMessage(), 0, 10, 290);
+                assertMonsterInjure(second.readServerMessage(), 0, 10, 290);
+                assertEquals(290L, maps.monsterSnapshots(1, 0).getFirst().hp());
+
                 second.close();
                 assertEquals(MessageName.REMOVE_PLAYER, first.readServerMessage().command());
 
@@ -339,8 +363,8 @@ class NetworkIntegrationTest {
                 first.requestChangeMap();
                 ParsedMapInfo revisitedMap1 = first.readMapInfo();
                 assertEquals(1, revisitedMap1.mapId());
-                assertEquals(0L, revisitedMap1.monsters().getFirst().hp());
-                assertEquals(1, revisitedMap1.monsters().getFirst().status());
+                assertEquals(290L, revisitedMap1.monsters().getFirst().hp());
+                assertEquals(0, revisitedMap1.monsters().getFirst().status());
                 assertTrue(revisitedMap1.monsters().stream()
                         .skip(1)
                         .allMatch(monster -> monster.hp() == 300L && monster.status() == 0));
@@ -1659,6 +1683,17 @@ class NetworkIntegrationTest {
         assertEquals(expectedId, reader.readInt());
         assertEquals(expectedDamage, reader.readLong());
         assertFalse(reader.readBoolean());
+        assertEquals(0, reader.remaining());
+    }
+
+    private static void assertMonsterRespawn(Message message, int expectedId,
+                                              int expectedLevelStatus, long expectedHp)
+            throws IOException {
+        assertEquals(MessageName.MONSTER_RESPAWN, message.command());
+        var reader = message.reader();
+        assertEquals(expectedId, reader.readInt());
+        assertEquals(expectedLevelStatus, reader.readByte());
+        assertEquals(expectedHp, reader.readLong());
         assertEquals(0, reader.remaining());
     }
 

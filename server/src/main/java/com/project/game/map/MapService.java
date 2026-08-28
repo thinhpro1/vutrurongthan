@@ -20,6 +20,11 @@ import java.util.random.RandomGenerator;
 
 /** Coordinates presence and movement within the current map/zone keys. */
 public final class MapService {
+    private static final int DEATH_RETURN_MAP_ID = 0;
+    private static final int DEATH_RETURN_ZONE_ID = 0;
+    private static final int DEATH_RETURN_X = 1250;
+    private static final int DEATH_RETURN_Y = 648;
+
     private record ZoneKey(int mapId, int zoneId) {
     }
 
@@ -240,6 +245,64 @@ public final class MapService {
                     member.send(packets.removePlayer(leaving.id()));
                 }
             }
+        }
+    }
+
+    public Optional<PlayerProfile> returnTownFromDeath(Session session) {
+        if (session == null || session.state() == SessionState.CLOSED) {
+            return Optional.empty();
+        }
+
+        PlayerProfile observed = session.player();
+        if (observed == null || observed.hp() > 0L) {
+            return Optional.empty();
+        }
+
+        ZoneKey sourceKey = keyOf(observed);
+        Zone sourceZone = zones.get(sourceKey);
+
+        if (sourceZone == null) {
+            PlayerProfile current = session.player();
+            if (current == null
+                    || current.hp() > 0L
+                    || !sourceKey.equals(keyOf(current))) {
+                return Optional.empty();
+            }
+            PlayerProfile revived = current.revivedAt(
+                    DEATH_RETURN_MAP_ID,
+                    DEATH_RETURN_ZONE_ID,
+                    DEATH_RETURN_X,
+                    DEATH_RETURN_Y);
+            session.bindPlayer(revived);
+            return Optional.of(revived);
+        }
+
+        synchronized (sourceZone) {
+            PlayerProfile current = session.player();
+            if (current == null
+                    || current.hp() > 0L
+                    || !sourceKey.equals(keyOf(current))) {
+                return Optional.empty();
+            }
+
+            boolean removed = sourceZone.remove(session);
+            PlayerProfile revived = current.revivedAt(
+                    DEATH_RETURN_MAP_ID,
+                    DEATH_RETURN_ZONE_ID,
+                    DEATH_RETURN_X,
+                    DEATH_RETURN_Y);
+            session.bindPlayer(revived);
+
+            if (removed) {
+                Message packet = packets.removePlayer(current.id());
+                for (Session member : sourceZone.snapshot()) {
+                    if (member != session && member.state() != SessionState.CLOSED) {
+                        member.send(packet);
+                    }
+                }
+            }
+
+            return Optional.of(revived);
         }
     }
 

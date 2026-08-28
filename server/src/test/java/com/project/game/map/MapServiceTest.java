@@ -448,6 +448,86 @@ class MapServiceTest {
     }
 
     @Test
+    void returnTownFromDeathRemovesSourcePresenceAndRevivesAtDefaultSpawn() throws Exception {
+        MapService maps = mapsWithMonsters();
+        Session dead = session(player(1, 1, 0).withHp(0L), maps);
+        Session observer = session(player(2, 1, 0), maps);
+        maps.finishLoad(dead);
+        maps.finishLoad(observer);
+        drain(dead);
+        drain(observer);
+
+        PlayerProfile revived = maps.returnTownFromDeath(dead).orElseThrow();
+
+        assertEquals(0, revived.mapId());
+        assertEquals(0, revived.zoneId());
+        assertEquals(1250, revived.x());
+        assertEquals(648, revived.y());
+        assertEquals(revived.maxHp(), revived.hp());
+        assertEquals(revived.maxMp(), revived.mp());
+        assertEquals(revived, dead.player());
+        assertEquals(1, maps.memberCount(1, 0));
+        assertEquals(0, maps.memberCount(0, 0));
+
+        List<Message> observerMessages = drain(observer);
+        assertEquals(List.of(MessageName.REMOVE_PLAYER), commands(observerMessages));
+        var reader = observerMessages.getFirst().reader();
+        assertEquals(dead.player().id(), reader.readInt());
+        assertEquals(0, reader.remaining());
+    }
+
+    @Test
+    void returnTownFromDeathIgnoresLivingPlayer() {
+        MapService maps = mapsWithoutMonsters();
+        Session alive = session(player(1, 0, 0), maps);
+        PlayerProfile original = alive.player();
+
+        assertTrue(maps.returnTownFromDeath(alive).isEmpty());
+        assertEquals(original, alive.player());
+    }
+
+    @Test
+    void duplicateReturnTownFromDeathIsHarmless() {
+        MapService maps = mapsWithoutMonsters();
+        Session dead = session(player(1, 1, 0).withHp(0L), maps);
+
+        assertTrue(maps.returnTownFromDeath(dead).isPresent());
+        PlayerProfile once = dead.player();
+        assertTrue(maps.returnTownFromDeath(dead).isEmpty());
+        assertEquals(once, dead.player());
+    }
+
+    @Test
+    void returnTownFromDeathSerializesWithConcurrentJoin() throws Exception {
+        MapService maps = mapsWithoutMonsters();
+        Session dead = session(player(1, 1, 0).withHp(0L), maps);
+        Session observer = session(player(2, 1, 0), maps);
+        Session joining = session(player(3, 1, 0), maps);
+        maps.finishLoad(dead);
+        maps.finishLoad(observer);
+        drain(dead);
+        drain(observer);
+
+        BlockingOfferQueue observerQueue = new BlockingOfferQueue();
+        replaceSendQueue(observer, observerQueue);
+        Thread revive = Thread.ofVirtual().start(() -> maps.returnTownFromDeath(dead));
+        assertTrue(observerQueue.offerEntered.await(5, TimeUnit.SECONDS));
+
+        Thread join = Thread.ofVirtual().start(() -> maps.finishLoad(joining));
+        awaitBlocked(join);
+
+        observerQueue.releaseOffer.countDown();
+        revive.join();
+        join.join();
+
+        assertEquals(2, maps.memberCount(1, 0));
+        assertEquals(0, maps.memberCount(0, 0));
+        assertEquals(List.of(MessageName.REMOVE_PLAYER, MessageName.ADD_PLAYER),
+                commands(drain(observer)));
+        assertEquals(List.of(MessageName.ADD_PLAYER), commands(drain(joining)));
+    }
+
+    @Test
     void postFinishAttackSendsAuthoritativeInjureToAttacker() throws Exception {
         MapService maps = mapsWithMonsters();
         Session attacker = session(player(1, 1, 0), maps);

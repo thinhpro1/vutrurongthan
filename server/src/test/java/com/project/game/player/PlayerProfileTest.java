@@ -85,4 +85,31 @@ class PlayerProfileTest {
         assertEquals(before.x(), after.x());
         assertEquals(before.y(), after.y());
     }
+
+    @Test
+    void revivedAtRestoresVitalsAndChangesOnlyLocation() {
+        PlayerProfile original = PlayerProfile.initial("revive", 7, "reviver", 0)
+                .withHp(0L)
+                .withPotential(123L);
+
+        PlayerProfile revived = original.revivedAt(0, 0, 1250, 648);
+
+        assertEquals(0, revived.mapId());
+        assertEquals(0, revived.zoneId());
+        assertEquals(1250, revived.x());
+        assertEquals(648, revived.y());
+        assertEquals(revived.maxHp(), revived.hp());
+        assertEquals(revived.maxMp(), revived.mp());
+        assertEquals(original.power(), revived.power());
+        assertEquals(original.potential(), revived.potential());
+        assertEquals(original.coin(), revived.coin());
+        assertEquals(original.coinLock(), revived.coinLock());
+        assertEquals(original.diamond(), revived.diamond());
+        assertEquals(original.ruby(), revived.ruby());
+        assertEquals(original.head(), revived.head());
+        assertEquals(original.body(), revived.body());
+        assertEquals(original.baseDamage(), revived.baseDamage());
+        assertEquals(original.baseHp(), revived.baseHp());
+        assertEquals(original.damage(), revived.damage());
+    }
 }

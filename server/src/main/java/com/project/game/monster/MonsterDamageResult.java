@@ -4,5 +4,6 @@ public record MonsterDamageResult(
         int monsterId,
         long damage,
         long hpAfter,
-        boolean killed
+        boolean killed,
+        long potentialReward
 ) {}

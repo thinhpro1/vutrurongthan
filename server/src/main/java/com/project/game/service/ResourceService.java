@@ -576,8 +576,15 @@ public final class ResourceService {
                             "MonsterCombatBootstrap template " + index + " must be an object");
                 }
                 JsonObject template = element.getAsJsonObject();
-                requireExactFields(template, Set.of("templateId", "damage"),
-                        "MonsterCombatBootstrap template " + index);
+                Set<String> fields = template.keySet();
+                Set<String> legacyFields = Set.of("templateId", "damage");
+                Set<String> rewardFields = Set.of("templateId", "damage", "potentialReward");
+                if (!fields.equals(legacyFields) && !fields.equals(rewardFields)) {
+                    throw new IllegalArgumentException(
+                            "MonsterCombatBootstrap template " + index
+                                    + " must contain fields " + legacyFields
+                                    + " or " + rewardFields + " but found " + fields);
+                }
                 int templateId = readStrictInt(template, "templateId");
                 if (!ids.add(templateId)
                         || !REQUIRED_MONSTER_COMBAT_TEMPLATE_IDS.contains(templateId)) {
@@ -590,7 +597,16 @@ public final class ResourceService {
                             "MonsterCombatBootstrap template " + templateId
                                     + " damage must be positive");
                 }
-                loaded.put(templateId, new LegacyMonsterCombatTemplate(templateId, damage));
+                long potentialReward = template.has("potentialReward")
+                        ? readStrictLong(template, "potentialReward")
+                        : 0L;
+                if (potentialReward < 0L) {
+                    throw new IllegalArgumentException(
+                            "MonsterCombatBootstrap template " + templateId
+                                    + " potentialReward must be non-negative");
+                }
+                loaded.put(templateId,
+                        new LegacyMonsterCombatTemplate(templateId, damage, potentialReward));
             }
             if (!ids.equals(REQUIRED_MONSTER_COMBAT_TEMPLATE_IDS)) {
                 throw new IllegalArgumentException(

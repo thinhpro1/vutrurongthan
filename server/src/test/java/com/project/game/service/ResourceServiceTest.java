@@ -35,6 +35,7 @@ class ResourceServiceTest {
         var combat = resources.monsterCombatTemplate(1).orElseThrow();
         assertEquals(1, combat.templateId());
         assertEquals(10L, combat.damage());
+        assertEquals(10L, combat.potentialReward());
         assertTrue(resources.monsterCombatTemplate(999).isEmpty());
     }
 

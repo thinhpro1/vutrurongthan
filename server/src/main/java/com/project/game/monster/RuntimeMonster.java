@@ -25,6 +25,7 @@ public final class RuntimeMonster {
     private int status;
     private long respawnAtMillis = NO_RESPAWN;
     private final long damage;
+    private final long potentialReward;
     private final LinkedHashMap<Integer, Long> enemies = new LinkedHashMap<>();
     private long lastAttackAtMillis;
 
@@ -50,6 +51,7 @@ public final class RuntimeMonster {
         hp = spawn.hp();
         status = spawn.status();
         damage = combat.damage();
+        potentialReward = combat.potentialReward();
     }
 
     public int id() {
@@ -118,7 +120,12 @@ public final class RuntimeMonster {
             respawnAtMillis = deadline;
         }
 
-        return Optional.of(new MonsterDamageResult(id, damage, hp, killed));
+        return Optional.of(new MonsterDamageResult(
+                id,
+                damage,
+                hp,
+                killed,
+                killed ? potentialReward : 0L));
     }
 
     public Optional<MonsterRespawnResult> respawnIfDue(long nowMillis) {

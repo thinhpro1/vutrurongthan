@@ -3,7 +3,8 @@
   "templates": [
     {
       "templateId": 1,
-      "damage": 10
+      "damage": 10,
+      "potentialReward": 10
     }
   ]
 }

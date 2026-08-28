@@ -21,7 +21,9 @@ class RuntimeMonsterTest {
 
         MonsterDamageResult result = monster.applyDamage(7, 10, NOW, RESPAWN_DELAY).orElseThrow();
 
-        assertEquals(new MonsterDamageResult(0, 10, 290, false), result);
+        assertEquals(new MonsterDamageResult(0, 10, 290, false, 0L), result);
+        assertFalse(result.killed());
+        assertEquals(0L, result.potentialReward());
         assertTrue(monster.isAlive());
         assertEquals(290, monster.snapshot().hp());
         assertEquals(0, monster.snapshot().status());
@@ -35,6 +37,7 @@ class RuntimeMonsterTest {
 
         assertEquals(0, result.hpAfter());
         assertTrue(result.killed());
+        assertEquals(10L, result.potentialReward());
         assertFalse(monster.isAlive());
         assertEquals(0, monster.snapshot().hp());
         assertEquals(1, monster.snapshot().status());
@@ -66,7 +69,9 @@ class RuntimeMonsterTest {
         MonsterDamageResult result =
                 monster.applyDamage(7, 10, NOW, RESPAWN_DELAY).orElseThrow();
 
-        assertEquals(new MonsterDamageResult(0, 10, 290, false), result);
+        assertEquals(new MonsterDamageResult(0, 10, 290, false, 0L), result);
+        assertFalse(result.killed());
+        assertEquals(0L, result.potentialReward());
         assertTrue(monster.respawnIfDue(Long.MAX_VALUE).isEmpty());
         assertTrue(monster.isAlive());
         assertEquals(290L, monster.snapshot().hp());
@@ -81,6 +86,7 @@ class RuntimeMonsterTest {
                 monster.applyDamage(7, 500, NOW, RESPAWN_DELAY).orElseThrow();
 
         assertTrue(death.killed());
+        assertEquals(10L, death.potentialReward());
         assertEquals(0L, death.hpAfter());
         assertFalse(monster.isAlive());
 
@@ -217,9 +223,11 @@ class RuntimeMonsterTest {
                 1, 2, 300, 300, 0);
 
         assertThrows(IllegalArgumentException.class,
-                () -> new RuntimeMonster(spawn, new LegacyMonsterCombatTemplate(2, 10)));
+                () -> new RuntimeMonster(spawn, new LegacyMonsterCombatTemplate(2, 10, 0)));
         assertThrows(IllegalArgumentException.class,
-                () -> new RuntimeMonster(spawn, new LegacyMonsterCombatTemplate(1, 0)));
+                () -> new RuntimeMonster(spawn, new LegacyMonsterCombatTemplate(1, 0, 0)));
+        assertThrows(IllegalArgumentException.class,
+                () -> new LegacyMonsterCombatTemplate(1, 10L, -1L));
     }
 
     private static void setIntField(RuntimeMonster monster, String fieldName, int value)

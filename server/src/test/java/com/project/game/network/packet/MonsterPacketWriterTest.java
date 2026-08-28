@@ -15,7 +15,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 class MonsterPacketWriterTest {
     @Test
     void writesMonsterInjurePacket() throws Exception {
-        MonsterDamageResult result = new MonsterDamageResult(3, 10, 290, false);
+        MonsterDamageResult result = new MonsterDamageResult(3, 10, 290, false, 0L);
         Message message = new MonsterPacketWriter().injure(result);
 
         assertEquals(MessageName.MONSTER_INJURE, message.command());
@@ -29,7 +29,7 @@ class MonsterPacketWriterTest {
 
     @Test
     void writesMonsterStartDiePacket() throws Exception {
-        MonsterDamageResult result = new MonsterDamageResult(3, 10, 0, true);
+        MonsterDamageResult result = new MonsterDamageResult(3, 10, 0, true, 10L);
         Message message = new MonsterPacketWriter().startDie(result);
 
         assertEquals(MessageName.MONSTER_START_DIE, message.command());
@@ -45,9 +45,9 @@ class MonsterPacketWriterTest {
         MonsterPacketWriter writer = new MonsterPacketWriter();
 
         assertThrows(IllegalArgumentException.class,
-                () -> writer.injure(new MonsterDamageResult(0, 10, 0, true)));
+                () -> writer.injure(new MonsterDamageResult(0, 10, 0, true, 10L)));
         assertThrows(IllegalArgumentException.class,
-                () -> writer.startDie(new MonsterDamageResult(0, 10, 290, false)));
+                () -> writer.startDie(new MonsterDamageResult(0, 10, 290, false, 0L)));
     }
 
     @Test

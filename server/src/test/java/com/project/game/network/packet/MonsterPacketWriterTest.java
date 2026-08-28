@@ -1,12 +1,14 @@
 package com.project.game.network.packet;
 
 import com.project.game.monster.MonsterDamageResult;
+import com.project.game.monster.MonsterAttackResult;
 import com.project.game.monster.MonsterRespawnResult;
 import com.project.game.network.message.Message;
 import com.project.game.network.message.MessageName;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -69,5 +71,36 @@ class MonsterPacketWriterTest {
         MonsterPacketWriter writer = new MonsterPacketWriter();
 
         assertThrows(NullPointerException.class, () -> writer.respawn(null));
+    }
+
+    @Test
+    void writesExactPlayerTargetMonsterAttackPayload() throws Exception {
+        Message message = new MonsterPacketWriter().attackPlayer(
+                new MonsterAttackResult(17, 42, 10L, 90L));
+
+        assertEquals(MessageName.MONSTER_ATTACK, message.command());
+        assertEquals(17, message.payload().length);
+        var reader = message.reader();
+        assertEquals(17, reader.readInt());
+        assertEquals(0, reader.readByte());
+        assertEquals(42, reader.readInt());
+        assertEquals(10L, reader.readLong());
+        assertEquals(0, reader.remaining());
+    }
+
+    @Test
+    void monsterAttackPacketDoesNotEncodeHpAfter() {
+        MonsterPacketWriter writer = new MonsterPacketWriter();
+
+        Message first = writer.attackPlayer(new MonsterAttackResult(1, 2, 10L, 90L));
+        Message second = writer.attackPlayer(new MonsterAttackResult(1, 2, 10L, 80L));
+
+        assertArrayEquals(first.payload(), second.payload());
+    }
+
+    @Test
+    void rejectsNullMonsterAttackResult() {
+        assertThrows(NullPointerException.class,
+                () -> new MonsterPacketWriter().attackPlayer(null));
     }
 }

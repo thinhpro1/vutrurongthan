@@ -72,7 +72,11 @@ public final class MapService {
         }
 
         synchronized (zone) {
-            return zone.contains(session) && zone.hasLiveMonster(monsterId);
+            PlayerProfile current = session.player();
+            return current != null
+                    && current.hp() > 0L
+                    && zone.contains(session)
+                    && zone.hasLiveMonster(monsterId);
         }
     }
 
@@ -94,12 +98,13 @@ public final class MapService {
         }
 
         synchronized (zone) {
-            if (!zone.contains(session)) {
+            PlayerProfile current = session.player();
+            if (current == null || current.hp() <= 0L || !zone.contains(session)) {
                 return false;
             }
 
             Optional<MonsterDamageResult> result = zone.damageMonster(
-                    monsterId, player.id(), damage, clock.millis());
+                    monsterId, current.id(), damage, clock.millis());
             if (result.isEmpty()) {
                 return false;
             }
@@ -107,14 +112,14 @@ public final class MapService {
             MonsterDamageResult combat = result.orElseThrow();
             PlayerProfile rewarded = null;
             if (combat.killed() && combat.potentialReward() > 0L) {
-                PlayerProfile current = session.player();
-                if (current == null || !zone.contains(session)) {
+                PlayerProfile rewardCurrent = session.player();
+                if (rewardCurrent == null || !zone.contains(session)) {
                     throw new IllegalStateException(
                             "killer left authoritative zone during serialized attack");
                 }
                 long potentialAfter = saturatingAddNonNegative(
-                        current.potential(), combat.potentialReward());
-                rewarded = current.withPotential(potentialAfter);
+                        rewardCurrent.potential(), combat.potentialReward());
+                rewarded = rewardCurrent.withPotential(potentialAfter);
                 session.bindPlayer(rewarded);
             }
 
@@ -254,7 +259,7 @@ public final class MapService {
         Zone sourceZone = zones.get(sourceKey);
         if (sourceZone == null) {
             PlayerProfile current = session.player();
-            if (current == null || !sourceKey.equals(keyOf(current))) {
+            if (current == null || current.hp() <= 0L || !sourceKey.equals(keyOf(current))) {
                 return Optional.empty();
             }
 
@@ -266,7 +271,7 @@ public final class MapService {
 
         synchronized (sourceZone) {
             PlayerProfile current = session.player();
-            if (current == null || !sourceKey.equals(keyOf(current))) {
+            if (current == null || current.hp() <= 0L || !sourceKey.equals(keyOf(current))) {
                 return Optional.empty();
             }
 
@@ -299,7 +304,7 @@ public final class MapService {
         Zone zone = zones.get(expectedKey);
         if (zone == null) {
             PlayerProfile current = session.player();
-            if (current == null || !expectedKey.equals(keyOf(current))) {
+            if (current == null || current.hp() <= 0L || !expectedKey.equals(keyOf(current))) {
                 return false;
             }
             session.bindPlayer(current.withPosition(x, y));
@@ -308,7 +313,7 @@ public final class MapService {
 
         synchronized (zone) {
             PlayerProfile current = session.player();
-            if (current == null || !expectedKey.equals(keyOf(current))) {
+            if (current == null || current.hp() <= 0L || !expectedKey.equals(keyOf(current))) {
                 return false;
             }
 

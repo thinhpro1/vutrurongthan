@@ -403,6 +403,51 @@ class MapServiceTest {
     }
 
     @Test
+    void deadPlayerCannotMove() throws Exception {
+        MapService maps = mapsWithoutMonsters();
+        Session dead = session(player(1, 0, 0).withHp(0L), maps);
+        maps.finishLoad(dead);
+        drain(dead);
+
+        int xBefore = dead.player().x();
+        int yBefore = dead.player().y();
+        assertFalse(maps.movePlayer(dead, xBefore + 100, yBefore + 100));
+        assertEquals(xBefore, dead.player().x());
+        assertEquals(yBefore, dead.player().y());
+        assertEquals(List.of(), drain(dead));
+    }
+
+    @Test
+    void deadPlayerCannotTargetOrAttackMonster() throws Exception {
+        MapService maps = mapsWithMonsters();
+        Session dead = session(player(1, 1, 0).withHp(0L), maps);
+        maps.finishLoad(dead);
+        drain(dead);
+
+        assertFalse(maps.canTargetMonster(dead, 0));
+        assertFalse(maps.attackMonster(dead, 0, 10L));
+        assertEquals(300L, maps.monsterSnapshots(1, 0).getFirst().hp());
+        assertEquals(List.of(), drain(dead));
+    }
+
+    @Test
+    void deadPlayerCannotUseNormalMapChange() throws Exception {
+        MapService maps = mapsWithoutMonsters();
+        Session dead = session(player(1, 0, 0).withHp(0L), maps);
+        Session observer = session(player(2, 0, 0), maps);
+        maps.finishLoad(dead);
+        maps.finishLoad(observer);
+        drain(dead);
+        drain(observer);
+
+        PlayerProfile before = dead.player();
+        assertTrue(maps.changeMap(dead, 0, 0, 1, 0, 975, 648).isEmpty());
+        assertEquals(before, dead.player());
+        assertEquals(2, maps.memberCount(0, 0));
+        assertEquals(List.of(), drain(observer));
+    }
+
+    @Test
     void postFinishAttackSendsAuthoritativeInjureToAttacker() throws Exception {
         MapService maps = mapsWithMonsters();
         Session attacker = session(player(1, 1, 0), maps);

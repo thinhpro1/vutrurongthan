@@ -187,7 +187,7 @@ class ZoneMonsterCombatTest {
     }
 
     @Test
-    void attackRequiresHpGreaterThanMonsterDamage() {
+    void attackAllowsExactLethalMonsterDamage() {
         Zone allowed = map1Zone();
         Session twenty = playerAt(20, 975, 936);
         twenty.bindPlayer(twenty.player().withHp(20));
@@ -196,13 +196,14 @@ class ZoneMonsterCombatTest {
         assertEquals(10L, allowed.attackDueMonsters(NOW + 1, new Random(1L))
                 .getFirst().hpAfter());
 
-        Zone blocked = map1Zone();
+        Zone lethal = map1Zone();
         Session ten = playerAt(10, 975, 936);
         ten.bindPlayer(ten.player().withHp(10));
-        blocked.add(ten);
-        blocked.damageMonster(0, 10, 10, NOW).orElseThrow();
-        assertTrue(blocked.attackDueMonsters(NOW + 1, new Random(1L)).isEmpty());
-        assertEquals(10L, ten.player().hp());
+        lethal.add(ten);
+        lethal.damageMonster(0, 10, 10, NOW).orElseThrow();
+        assertEquals(List.of(new MonsterAttackResult(0, 10, 10L, 0L, true)),
+                lethal.attackDueMonsters(NOW + 1, new Random(1L)));
+        assertEquals(0L, ten.player().hp());
     }
 
     @Test

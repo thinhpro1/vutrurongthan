@@ -105,6 +105,19 @@ public final class MapService {
             }
 
             MonsterDamageResult combat = result.orElseThrow();
+            PlayerProfile rewarded = null;
+            if (combat.killed() && combat.potentialReward() > 0L) {
+                PlayerProfile current = session.player();
+                if (current == null || !zone.contains(session)) {
+                    throw new IllegalStateException(
+                            "killer left authoritative zone during serialized attack");
+                }
+                long potentialAfter = saturatingAddNonNegative(
+                        current.potential(), combat.potentialReward());
+                rewarded = current.withPotential(potentialAfter);
+                session.bindPlayer(rewarded);
+            }
+
             Message packet = combat.killed()
                     ? monsterPackets.startDie(combat)
                     : monsterPackets.injure(combat);
@@ -113,6 +126,10 @@ public final class MapService {
                 if (member.state() != SessionState.CLOSED) {
                     member.send(packet);
                 }
+            }
+
+            if (rewarded != null && session.state() != SessionState.CLOSED) {
+                session.send(packets.potentialUpdate(rewarded.potential()));
             }
 
             return true;
@@ -309,5 +326,15 @@ public final class MapService {
 
     private static ZoneKey keyOf(PlayerProfile player) {
         return new ZoneKey(player.mapId(), player.zoneId());
+    }
+
+    private static long saturatingAddNonNegative(long current, long delta) {
+        if (current < 0L || delta < 0L) {
+            throw new IllegalArgumentException("values must be non-negative");
+        }
+        if (current > Long.MAX_VALUE - delta) {
+            return Long.MAX_VALUE;
+        }
+        return current + delta;
     }
 }

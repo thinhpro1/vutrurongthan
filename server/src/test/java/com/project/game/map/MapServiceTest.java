@@ -422,6 +422,143 @@ class MapServiceTest {
     }
 
     @Test
+    void nonKillingHitDoesNotAwardPotential() throws Exception {
+        MapService maps = mapsWithMonsters();
+        Session attacker = session(player(1, 1, 0), maps);
+        maps.finishLoad(attacker);
+        drain(attacker);
+
+        long powerBefore = attacker.player().power();
+        long potentialBefore = attacker.player().potential();
+
+        assertTrue(maps.attackMonster(attacker, 0, 10L));
+
+        assertEquals(powerBefore, attacker.player().power());
+        assertEquals(potentialBefore, attacker.player().potential());
+        assertEquals(List.of(MessageName.MONSTER_INJURE), commands(drain(attacker)));
+    }
+
+    @Test
+    void killingHitAwardsConfiguredPotentialOnlyToKiller() throws Exception {
+        MapService maps = mapsWithMonsters();
+        Session attacker = session(player(1, 1, 0), maps);
+        maps.finishLoad(attacker);
+        drain(attacker);
+
+        long powerBefore = attacker.player().power();
+        long potentialBefore = attacker.player().potential();
+
+        assertTrue(maps.attackMonster(attacker, 0, 500L));
+
+        assertEquals(powerBefore, attacker.player().power());
+        assertEquals(potentialBefore + 10L, attacker.player().potential());
+
+        List<Message> messages = drain(attacker);
+        assertEquals(
+                List.of(MessageName.MONSTER_START_DIE, MessageName.PLAYER_INFO),
+                commands(messages));
+
+        var reward = messages.get(1).reader();
+        assertEquals(62, reward.readByte());
+        assertEquals(potentialBefore + 10L, reward.readLong());
+        assertEquals(0, reward.remaining());
+    }
+
+    @Test
+    void deathBroadcastReachesObserverButRewardPacketDoesNot() throws Exception {
+        MapService maps = mapsWithMonsters();
+        Session killer = session(player(1, 1, 0), maps);
+        Session observer = session(player(2, 1, 0), maps);
+        maps.finishLoad(killer);
+        maps.finishLoad(observer);
+        drain(killer);
+        drain(observer);
+
+        long observerPotential = observer.player().potential();
+
+        assertTrue(maps.attackMonster(killer, 0, 500L));
+
+        assertEquals(
+                List.of(MessageName.MONSTER_START_DIE, MessageName.PLAYER_INFO),
+                commands(drain(killer)));
+        assertEquals(
+                List.of(MessageName.MONSTER_START_DIE),
+                commands(drain(observer)));
+        assertEquals(observerPotential, observer.player().potential());
+    }
+
+    @Test
+    void deadMonsterCannotAwardDuplicatePotential() throws Exception {
+        MapService maps = mapsWithMonsters();
+        Session attacker = session(player(1, 1, 0), maps);
+        maps.finishLoad(attacker);
+        drain(attacker);
+
+        assertTrue(maps.attackMonster(attacker, 0, 500L));
+        drain(attacker);
+        long afterKill = attacker.player().potential();
+
+        assertFalse(maps.attackMonster(attacker, 0, 500L));
+
+        assertEquals(afterKill, attacker.player().potential());
+        assertEquals(List.of(), drain(attacker));
+    }
+
+    @Test
+    void respawnedMonsterCanAwardPotentialOnANewKill() throws Exception {
+        MutableClock clock = new MutableClock(1_000_000L);
+        MapService maps = mapsWithMonsters(clock);
+        Session attacker = session(player(1, 1, 0), maps);
+        maps.finishLoad(attacker);
+        drain(attacker);
+
+        long before = attacker.player().potential();
+
+        assertTrue(maps.attackMonster(attacker, 0, 500L));
+        drain(attacker);
+        assertEquals(before + 10L, attacker.player().potential());
+
+        clock.advanceMillis(9_001L);
+        maps.tickMonsterLifecycle();
+        assertEquals(List.of(MessageName.MONSTER_RESPAWN), commands(drain(attacker)));
+
+        assertTrue(maps.attackMonster(attacker, 0, 500L));
+        assertEquals(before + 20L, attacker.player().potential());
+        assertEquals(
+                List.of(MessageName.MONSTER_START_DIE, MessageName.PLAYER_INFO),
+                commands(drain(attacker)));
+    }
+
+    @Test
+    void movementAndMapChangePreserveRewardedPotential() throws Exception {
+        MapService maps = mapsWithMonsters();
+        Session attacker = session(player(1, 1, 0), maps);
+        maps.finishLoad(attacker);
+        drain(attacker);
+
+        assertTrue(maps.attackMonster(attacker, 0, 500L));
+        drain(attacker);
+        long rewarded = attacker.player().potential();
+
+        assertTrue(maps.movePlayer(attacker, 1260, 640));
+        assertEquals(rewarded, attacker.player().potential());
+
+        PlayerProfile moved = attacker.player();
+        var changed = maps.changeMap(
+                attacker,
+                moved.mapId(),
+                moved.zoneId(),
+                0,
+                0,
+                1250,
+                648);
+
+        assertTrue(changed.isPresent());
+        assertEquals(rewarded, changed.orElseThrow().potential());
+        assertEquals(rewarded, attacker.player().potential());
+    }
+
+    @Test
     void sameZoneReceivesIdenticalCombatBroadcast() throws Exception {
         MapService maps = mapsWithMonsters();
         Session attacker = session(player(1, 1, 0), maps);
@@ -488,12 +625,24 @@ class MapServiceTest {
             throw new AssertionError("concurrent combat failed", failure.get());
         }
         assertTrue(firstResult.get() ^ secondResult.get());
+        Session winner = firstResult.get() ? first : second;
+        Session loser = firstResult.get() ? second : first;
+        assertEquals(11L, winner.player().potential());
+        assertEquals(1L, loser.player().potential());
         assertEquals(0L, maps.monsterSnapshots(1, 0).getFirst().hp());
         assertEquals(1, maps.monsterSnapshots(1, 0).getFirst().status());
-        assertEquals(1, commands(drain(first)).stream()
+        List<Message> firstMessages = drain(first);
+        List<Message> secondMessages = drain(second);
+        assertEquals(1, commands(firstMessages).stream()
                 .filter(command -> command == MessageName.MONSTER_START_DIE).count());
-        assertEquals(1, commands(drain(second)).stream()
+        assertEquals(1, commands(secondMessages).stream()
                 .filter(command -> command == MessageName.MONSTER_START_DIE).count());
+        long rewardPackets = java.util.stream.Stream.concat(
+                        firstMessages.stream(),
+                        secondMessages.stream())
+                .filter(message -> message.command() == MessageName.PLAYER_INFO)
+                .count();
+        assertEquals(1L, rewardPackets);
     }
 
     @Test
@@ -515,7 +664,8 @@ class MapServiceTest {
         maps.finishLoad(attacker);
         drain(attacker);
         assertTrue(maps.attackMonster(attacker, 0, 500));
-        assertEquals(List.of(MessageName.MONSTER_START_DIE), commands(drain(attacker)));
+        assertEquals(List.of(MessageName.MONSTER_START_DIE, MessageName.PLAYER_INFO),
+                commands(drain(attacker)));
 
         clock.advanceMillis(9_000L);
         maps.tickMonsterLifecycle();

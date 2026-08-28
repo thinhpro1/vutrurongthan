@@ -1,6 +1,7 @@
 package com.project.game.network;
 
 import com.project.game.map.MapService;
+import com.project.game.map.Zone;
 import com.project.game.network.codec.LegacyPacketCodec;
 import com.project.game.network.codec.LegacyCipher;
 import com.project.game.network.message.Message;
@@ -25,6 +26,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.charset.StandardCharsets;
 import java.lang.reflect.Field;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
@@ -135,6 +137,37 @@ class MessageHandlerTest {
         assertEquals(start, session.player());
         assertEquals(0, session.queuedMessages());
         assertEquals(0, maps.memberCount(0, 0));
+    }
+
+    @Test
+    void requestChangeMapPreservesAuthoritativeHpChangedBeforeZoneTransition() throws Exception {
+        ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
+        MapService maps = new MapService(
+                new PlayerPacketWriter(),
+                new MonsterPacketWriter(),
+                new MonsterRuntimeFactory(resources));
+        ServerServices services = new ServerServices(new AuthService(), resources, maps);
+        PlayerProfile start = PlayerProfile.initial("user01", 7, "alpha1", 0)
+                .withLocation(0, 0, 4464, 936);
+        Session session = inGameSession(services, start);
+        MessageHandler handler = newHandler(session, services, NetworkConfig.defaults());
+        maps.finishLoad(session);
+        drainMessages(session);
+        Zone sourceZone = zoneFor(maps, 0, 0);
+
+        Thread transition;
+        synchronized (sourceZone) {
+            transition = Thread.ofVirtual().start(() ->
+                    handler.onMessage(new Message(MessageName.REQUEST_CHANGE_MAP)));
+            awaitBlocked(transition);
+            session.bindPlayer(session.player().withHp(90));
+        }
+        transition.join();
+
+        assertEquals(90L, session.player().hp());
+        assertEquals(1, session.player().mapId());
+        assertEquals(90, session.player().x());
+        assertEquals(1008, session.player().y());
     }
 
     @Test
@@ -936,6 +969,27 @@ class MessageHandlerTest {
         List<Message> messages = new ArrayList<>();
         queue.drainTo(messages);
         return messages;
+    }
+
+    private static Zone zoneFor(MapService maps, int mapId, int zoneId) throws Exception {
+        Field field = MapService.class.getDeclaredField("zones");
+        field.setAccessible(true);
+        for (Object candidate : ((java.util.Map<?, ?>) field.get(maps)).values()) {
+            Zone zone = (Zone) candidate;
+            if (zone.mapId() == mapId && zone.zoneId() == zoneId) {
+                return zone;
+            }
+        }
+        throw new AssertionError("zone not found map=" + mapId + " zone=" + zoneId);
+    }
+
+    private static void awaitBlocked(Thread thread) throws InterruptedException {
+        long deadline = System.nanoTime() + Duration.ofSeconds(5).toNanos();
+        while (thread.getState() != Thread.State.BLOCKED && System.nanoTime() < deadline) {
+            Thread.onSpinWait();
+        }
+        assertEquals(Thread.State.BLOCKED, thread.getState(),
+                "map transition did not block on source zone");
     }
 
     private static void waitForOutput(ByteArrayOutputStream output) throws InterruptedException {

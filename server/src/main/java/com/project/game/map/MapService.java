@@ -198,6 +198,55 @@ public final class MapService {
         }
     }
 
+    public Optional<PlayerProfile> changeMap(
+            Session session,
+            int expectedMapId,
+            int expectedZoneId,
+            int destinationMapId,
+            int destinationZoneId,
+            int destinationX,
+            int destinationY) {
+        if (session == null || session.state() == SessionState.CLOSED) {
+            return Optional.empty();
+        }
+
+        ZoneKey sourceKey = new ZoneKey(expectedMapId, expectedZoneId);
+        Zone sourceZone = zones.get(sourceKey);
+        if (sourceZone == null) {
+            PlayerProfile current = session.player();
+            if (current == null || !sourceKey.equals(keyOf(current))) {
+                return Optional.empty();
+            }
+
+            PlayerProfile changed = current.withLocation(
+                    destinationMapId, destinationZoneId, destinationX, destinationY);
+            session.bindPlayer(changed);
+            return Optional.of(changed);
+        }
+
+        synchronized (sourceZone) {
+            PlayerProfile current = session.player();
+            if (current == null || !sourceKey.equals(keyOf(current))) {
+                return Optional.empty();
+            }
+
+            boolean removed = sourceZone.remove(session);
+            PlayerProfile changed = current.withLocation(
+                    destinationMapId, destinationZoneId, destinationX, destinationY);
+            session.bindPlayer(changed);
+
+            if (removed) {
+                Message packet = packets.removePlayer(current.id());
+                for (Session member : sourceZone.snapshot()) {
+                    if (member != session && member.state() != SessionState.CLOSED) {
+                        member.send(packet);
+                    }
+                }
+            }
+            return Optional.of(changed);
+        }
+    }
+
     public boolean movePlayer(Session session, int x, int y) {
         if (session == null || session.state() == SessionState.CLOSED) {
             return false;

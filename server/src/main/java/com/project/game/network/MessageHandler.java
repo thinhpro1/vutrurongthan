@@ -13,6 +13,7 @@ import com.project.game.service.ServerServices;
 
 import java.io.IOException;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -432,13 +433,20 @@ public final class MessageHandler {
             return;
         }
 
-        mapService.leave(session);
-        PlayerProfile changed = player.withLocation(
-                waypoint.goMap(), 0, waypoint.goX(), waypoint.goY());
-        session.bindPlayer(changed);
-        sendMapInfo(changed);
+        Optional<PlayerProfile> changed = mapService.changeMap(
+                session,
+                player.mapId(),
+                player.zoneId(),
+                waypoint.goMap(),
+                0,
+                waypoint.goX(),
+                waypoint.goY());
+        if (changed.isEmpty()) {
+            return;
+        }
+        sendMapInfo(changed.orElseThrow());
         LOGGER.info(() -> "REQUEST_CHANGE_MAP_TX from=" + player.mapId()
-                + " to=" + changed.mapId() + " session=" + session.id());
+                + " to=" + changed.orElseThrow().mapId() + " session=" + session.id());
     }
 
     private void handlePlayerMove(Message message) throws IOException {

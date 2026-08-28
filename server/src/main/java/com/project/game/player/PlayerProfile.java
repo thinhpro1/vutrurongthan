@@ -105,6 +105,59 @@ public record PlayerProfile(
                 y);
     }
 
+    public PlayerProfile withPotential(long potential) {
+        if (potential < 0L) {
+            throw new IllegalArgumentException("potential must be non-negative");
+        }
+        return new PlayerProfile(
+                accountName,
+                id,
+                name,
+                gender,
+                power,
+                potential,
+                level,
+                pointSkill,
+                head,
+                body,
+                mount,
+                bag,
+                medal,
+                aura,
+                baseDamage,
+                baseHp,
+                baseMp,
+                baseConstitution,
+                potentialUpDamage,
+                potentialUpHp,
+                potentialUpMp,
+                potentialUpConstitution,
+                maxHp,
+                maxMp,
+                hp,
+                mp,
+                speed,
+                pointPk,
+                pointActivity,
+                countBarrack,
+                dodge,
+                critical,
+                reduceDamage,
+                bloodsucking,
+                manaSucking,
+                strikeBack,
+                damage,
+                coin,
+                coinLock,
+                diamond,
+                ruby,
+                spaceship,
+                mapId,
+                zoneId,
+                x,
+                y);
+    }
+
     public PlayerProfile withLocation(int mapId, int zoneId, int x, int y) {
         return new PlayerProfile(
                 accountName,

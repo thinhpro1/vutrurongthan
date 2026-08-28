@@ -63,4 +63,26 @@ class PlayerProfileTest {
         assertThrows(IllegalArgumentException.class, () -> player.withHp(player.maxHp() + 1));
         assertEquals(0, player.withHp(0).hp());
     }
+
+    @Test
+    void withPotentialChangesOnlyPotential() {
+        PlayerProfile before = PlayerProfile.initial("user01", 7, "alpha1", 0);
+
+        PlayerProfile after = before.withPotential(11L);
+
+        assertEquals(11L, after.potential());
+        assertEquals(before.accountName(), after.accountName());
+        assertEquals(before.id(), after.id());
+        assertEquals(before.name(), after.name());
+        assertEquals(before.gender(), after.gender());
+        assertEquals(before.power(), after.power());
+        assertEquals(before.level(), after.level());
+        assertEquals(before.hp(), after.hp());
+        assertEquals(before.mp(), after.mp());
+        assertEquals(before.coin(), after.coin());
+        assertEquals(before.mapId(), after.mapId());
+        assertEquals(before.zoneId(), after.zoneId());
+        assertEquals(before.x(), after.x());
+        assertEquals(before.y(), after.y());
+    }
 }

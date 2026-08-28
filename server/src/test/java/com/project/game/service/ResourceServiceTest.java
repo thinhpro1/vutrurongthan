@@ -80,6 +80,46 @@ class ResourceServiceTest {
     }
 
     @Test
+    void monsterCombatBootstrapWithoutPotentialRewardDefaultsToZero(@TempDir Path root)
+            throws IOException {
+        Path resourceRoot = Path.of("resources", "json");
+        for (String name : List.of(
+                "Frame.json",
+                "PlayerSkillBootstrap.json",
+                "LevelBootstrap.json",
+                "EffectBootstrap.json",
+                "MapBootstrap.json",
+                "MonsterBootstrap.json")) {
+            Files.copy(
+                    resourceRoot.resolve(name),
+                    root.resolve(name),
+                    StandardCopyOption.REPLACE_EXISTING);
+        }
+
+        Files.writeString(
+                root.resolve("MonsterCombatBootstrap.json"),
+                new Gson().toJson(canonicalMonsterCombatBootstrap()));
+
+        ResourceService resources = ResourceService.fromRoots(null, root);
+
+        var combat = resources.monsterCombatTemplate(1).orElseThrow();
+        assertEquals(10L, combat.damage());
+        assertEquals(0L, combat.potentialReward());
+    }
+
+    @Test
+    void rejectsMonsterCombatBootstrapNegativePotentialReward(@TempDir Path root)
+            throws IOException {
+        var bootstrap = canonicalMonsterCombatBootstrap();
+        bootstrap.getAsJsonArray("templates")
+                .get(0)
+                .getAsJsonObject()
+                .addProperty("potentialReward", -1L);
+
+        assertMonsterCombatBootstrapRejected(root, bootstrap);
+    }
+
+    @Test
     void loadsCanonicalStaticMap1MonsterBootstrap() throws Exception {
         ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
 

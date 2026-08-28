@@ -29,7 +29,6 @@ import java.io.OutputStream;
 import java.lang.reflect.Field;
 import java.nio.file.Path;
 import java.time.Clock;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
@@ -122,7 +121,7 @@ class MapServiceTest {
         AtomicBoolean moved = new AtomicBoolean();
         Thread movement = Thread.ofVirtual().start(() ->
                 moved.set(maps.movePlayer(player, 1260, 640)));
-        assertFalse(movement.join(Duration.ofMillis(100)));
+        awaitBlocked(movement);
         assertFalse(moved.get());
 
         random.release.countDown();
@@ -891,6 +890,15 @@ class MapServiceTest {
 
     private static List<Integer> commands(List<Message> messages) {
         return messages.stream().map(Message::command).toList();
+    }
+
+    private static void awaitBlocked(Thread thread) throws InterruptedException {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        while (thread.getState() != Thread.State.BLOCKED && System.nanoTime() < deadline) {
+            Thread.onSpinWait();
+        }
+        assertEquals(Thread.State.BLOCKED, thread.getState(),
+                "movement did not block on zone monitor");
     }
 
     private static void replaceSendQueue(Session session, BlockingQueue<Message> replacement)

@@ -29,6 +29,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.Random;
+import java.util.random.RandomGenerator;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -41,6 +42,134 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class NetworkIntegrationTest {
+    @Test
+    void javaClientDiesToMonsterAndReturnsTown() throws Exception {
+        String victimAccount = "deathrevivea";
+        String observerAccount = "deathreviveb";
+        ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
+        AuthService auth = new AuthService();
+        MutableClock clock = new MutableClock(1_000_000L);
+        BlockingLifecycleRandom random = new BlockingLifecycleRandom();
+        assertTrue(auth.register(victimAccount, "secret1").success());
+        assertTrue(auth.register(observerAccount, "secret1").success());
+        MapService maps = new MapService(
+                new com.project.game.network.packet.PlayerPacketWriter(),
+                new MonsterPacketWriter(),
+                new MonsterRuntimeFactory(resources),
+                clock,
+                random);
+        NetworkServer server = new NetworkServer(
+                "127.0.0.1", 0, 4, 262_144, 16, 1_000,
+                "abc".getBytes(StandardCharsets.US_ASCII),
+                new ServerServices(auth, resources, maps), null,
+                NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
+        AtomicReference<Throwable> serverFailure = new AtomicReference<>();
+        Thread serverThread = Thread.ofVirtual().start(() -> {
+            try {
+                server.start();
+            } catch (Throwable failure) {
+                serverFailure.set(failure);
+            }
+        });
+
+        try {
+            waitForPort(server);
+            try (LivePlayerClient victim = LivePlayerClient.create(
+                    server.localPort(), victimAccount, "victim1", 0);
+                 LivePlayerClient observer = LivePlayerClient.create(
+                         server.localPort(), observerAccount, "observer1", 1)) {
+                victim.finishLoadMap();
+                observer.finishLoadMap();
+                assertAddPlayer(observer.readServerMessage(), victim.playerInfo().id(), "victim1", 0);
+                assertAddPlayer(victim.readServerMessage(), observer.playerInfo().id(), "observer1", 1);
+
+                victim.move(4464, 936);
+                assertEquals(MessageName.PLAYER_MOVE, observer.readServerMessage().command());
+                victim.requestChangeMap();
+                ParsedMapInfo victimMap1 = victim.readMapInfo();
+                assertEquals(1, victimMap1.mapId());
+                victim.finishLoadMap();
+                assertEquals(MessageName.REMOVE_PLAYER, observer.readServerMessage().command());
+
+                observer.move(4464, 936);
+                observer.requestChangeMap();
+                ParsedMapInfo observerMap1 = observer.readMapInfo();
+                assertEquals(1, observerMap1.mapId());
+                observer.finishLoadMap();
+                assertAddPlayerId(victim.readServerMessage(), observer.playerInfo().id());
+                assertAddPlayerId(observer.readServerMessage(), victim.playerInfo().id());
+
+                victim.prepareMonsterAttack(0, 0);
+                victim.impactMonster(0);
+                assertMonsterInjure(victim.readServerMessage(), 0, 10, 290);
+                assertMonsterInjure(observer.readServerMessage(), 0, 10, 290);
+
+                assertTrue(random.entered.await(5, TimeUnit.SECONDS),
+                        "monster lifecycle scheduler did not reach target selection");
+                Session dead = server.sessions().findByAccount(victimAccount);
+                assertTrue(dead != null);
+                long expectedMaxHp = dead.player().maxHp();
+                long expectedMaxMp = dead.player().maxMp();
+                dead.bindPlayer(dead.player().withHp(10L));
+                random.release.countDown();
+
+                assertMonsterAttack(victim.readServerMessage(), 0, victim.playerInfo().id(), 10L);
+                assertMeDie(victim.readServerMessage(), 90, 1008);
+                assertMonsterAttack(observer.readServerMessage(), 0, victim.playerInfo().id(), 10L);
+                assertPlayerDie(observer.readServerMessage(), victim.playerInfo().id(), 90, 1008);
+                assertEquals(0L, server.sessions().findByAccount(victimAccount).player().hp());
+
+                clock.advanceMillis(2_000L);
+                assertNoServerMessage(victim);
+                assertNoServerMessage(observer);
+
+                victim.returnTownFromDie();
+                ParsedMapInfo town = victim.readMapInfo();
+                assertEquals(0, town.mapId());
+                assertEquals(0, town.zoneId());
+                assertEquals(1250, town.x());
+                assertEquals(648, town.y());
+
+                Message wake = victim.readServerMessage();
+                assertEquals(MessageName.WAKE_UP_FROM_DIE, wake.command());
+                var wakeReader = wake.reader();
+                assertEquals(victim.playerInfo().id(), wakeReader.readInt());
+                assertEquals(1250, wakeReader.readShort());
+                assertEquals(648, wakeReader.readShort());
+                assertEquals(expectedMaxHp, wakeReader.readLong());
+                assertEquals(expectedMaxMp, wakeReader.readLong());
+                assertEquals(0, wakeReader.remaining());
+
+                Message removed = observer.readServerMessage();
+                assertEquals(MessageName.REMOVE_PLAYER, removed.command());
+                var removeReader = removed.reader();
+                assertEquals(victim.playerInfo().id(), removeReader.readInt());
+                assertEquals(0, removeReader.remaining());
+
+                victim.finishLoadMap();
+                Session revived = server.sessions().findByAccount(victimAccount);
+                assertTrue(revived != null);
+                assertEquals(0, revived.player().mapId());
+                assertEquals(0, revived.player().zoneId());
+                assertEquals(1250, revived.player().x());
+                assertEquals(648, revived.player().y());
+                assertEquals(revived.player().maxHp(), revived.player().hp());
+                assertEquals(revived.player().maxMp(), revived.player().mp());
+                awaitMemberCount(maps, 0, 0, 1);
+                assertEquals(1, maps.memberCount(0, 0));
+
+                victim.move(1260, 648);
+                awaitPlayerPosition(server, victimAccount, 1260, 648);
+            }
+            waitForNoSessions(server);
+        } finally {
+            random.release.countDown();
+            server.stop();
+            serverThread.join(1_000);
+        }
+        assertNull(serverFailure.get(), "network server failed during death/revive lifecycle test");
+    }
+
     @Test
     void livingPlayerReturnTownRequestIsIgnored() throws Exception {
         String accountName = "livingreturn";
@@ -2079,6 +2208,30 @@ class NetworkIntegrationTest {
         }
     }
 
+    private static final class BlockingLifecycleRandom implements RandomGenerator {
+        private final CountDownLatch entered = new CountDownLatch(1);
+        private final CountDownLatch release = new CountDownLatch(1);
+
+        @Override
+        public int nextInt(int bound) {
+            entered.countDown();
+            try {
+                if (!release.await(5, TimeUnit.SECONDS)) {
+                    throw new AssertionError("monster lifecycle selection was not released");
+                }
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                throw new AssertionError(exception);
+            }
+            return 0;
+        }
+
+        @Override
+        public long nextLong() {
+            return 0L;
+        }
+    }
+
     private static final class LivePlayerClient implements AutoCloseable {
         private final LegacyPacketCodec codec;
         private final LegacyTcpTransport transport;
@@ -2244,6 +2397,18 @@ class NetworkIntegrationTest {
                 "player session disappeared while awaiting movement");
         assertEquals(x, session.player().x());
         assertEquals(y, session.player().y());
+    }
+
+    private static void awaitMemberCount(MapService maps, int mapId, int zoneId, int expected)
+            throws InterruptedException {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        while (System.nanoTime() < deadline) {
+            if (maps.memberCount(mapId, zoneId) == expected) {
+                return;
+            }
+            Thread.sleep(1);
+        }
+        assertEquals(expected, maps.memberCount(mapId, zoneId));
     }
 
     private static void waitForNoSessions(NetworkServer server) throws InterruptedException {

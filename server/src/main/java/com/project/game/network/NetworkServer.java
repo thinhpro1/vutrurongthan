@@ -63,7 +63,7 @@ public final class NetworkServer {
         }
         this.services = Objects.requireNonNull(services, "services");
         this.monsterLifecycleScheduler = new MonsterLifecycleScheduler(
-                this.services.maps()::tickMonsterRespawns,
+                this.services.maps()::tickMonsterLifecycle,
                 MONSTER_LIFECYCLE_PERIOD_MILLIS);
         this.tlsContext = tlsContext;
         this.networkConfig = Objects.requireNonNull(networkConfig, "networkConfig");

@@ -16,6 +16,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.time.Clock;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.random.RandomGenerator;
 
 /** Coordinates presence and movement within the current map/zone keys. */
 public final class MapService {
@@ -26,22 +27,33 @@ public final class MapService {
     private final MonsterPacketWriter monsterPackets;
     private final MonsterRuntimeFactory monsterFactory;
     private final Clock clock;
+    private final RandomGenerator random;
     private final ConcurrentHashMap<ZoneKey, Zone> zones = new ConcurrentHashMap<>();
 
     public MapService(PlayerPacketWriter packets,
                       MonsterPacketWriter monsterPackets,
                       MonsterRuntimeFactory monsterFactory) {
-        this(packets, monsterPackets, monsterFactory, Clock.systemUTC());
+        this(packets, monsterPackets, monsterFactory, Clock.systemUTC(),
+                RandomGenerator.getDefault());
     }
 
     public MapService(PlayerPacketWriter packets,
                       MonsterPacketWriter monsterPackets,
                       MonsterRuntimeFactory monsterFactory,
                       Clock clock) {
+        this(packets, monsterPackets, monsterFactory, clock, RandomGenerator.getDefault());
+    }
+
+    public MapService(PlayerPacketWriter packets,
+                      MonsterPacketWriter monsterPackets,
+                      MonsterRuntimeFactory monsterFactory,
+                      Clock clock,
+                      RandomGenerator random) {
         this.packets = Objects.requireNonNull(packets, "packets");
         this.monsterPackets = Objects.requireNonNull(monsterPackets, "monsterPackets");
         this.monsterFactory = Objects.requireNonNull(monsterFactory, "monsterFactory");
         this.clock = Objects.requireNonNull(clock, "clock");
+        this.random = Objects.requireNonNull(random, "random");
     }
 
     public boolean canTargetMonster(Session session, int monsterId) {
@@ -86,7 +98,8 @@ public final class MapService {
                 return false;
             }
 
-            Optional<MonsterDamageResult> result = zone.damageMonster(monsterId, damage, clock.millis());
+            Optional<MonsterDamageResult> result = zone.damageMonster(
+                    monsterId, player.id(), damage, clock.millis());
             if (result.isEmpty()) {
                 return false;
             }
@@ -106,17 +119,24 @@ public final class MapService {
         }
     }
 
-    public void tickMonsterRespawns() {
+    public void tickMonsterLifecycle() {
         long nowMillis = clock.millis();
         for (Zone zone : zones.values()) {
             synchronized (zone) {
                 List<MonsterRespawnResult> respawned = zone.respawnDueMonsters(nowMillis);
-                if (respawned.isEmpty()) {
-                    continue;
-                }
+                List<com.project.game.monster.MonsterAttackResult> attacks =
+                        zone.attackDueMonsters(nowMillis, random);
                 List<Session> members = zone.snapshot();
                 for (MonsterRespawnResult result : respawned) {
                     Message packet = monsterPackets.respawn(result);
+                    for (Session member : members) {
+                        if (member.state() != SessionState.CLOSED) {
+                            member.send(packet);
+                        }
+                    }
+                }
+                for (var result : attacks) {
+                    Message packet = monsterPackets.attackPlayer(result);
                     for (Session member : members) {
                         if (member.state() != SessionState.CLOSED) {
                             member.send(packet);

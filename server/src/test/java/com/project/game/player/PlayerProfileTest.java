@@ -3,6 +3,7 @@ package com.project.game.player;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class PlayerProfileTest {
     @Test
@@ -32,5 +33,34 @@ class PlayerProfileTest {
         assertEquals(original.hp(), moved.hp());
         assertEquals(original.mp(), moved.mp());
         assertEquals(original, moved.withPosition(original.x(), original.y()));
+    }
+
+    @Test
+    void withHpChangesOnlyHp() {
+        PlayerProfile original = PlayerProfile.initial("user01", 7, "alpha1", 0);
+
+        PlayerProfile injured = original.withHp(90);
+
+        assertEquals(90, injured.hp());
+        assertEquals(original.accountName(), injured.accountName());
+        assertEquals(original.id(), injured.id());
+        assertEquals(original.name(), injured.name());
+        assertEquals(original.mapId(), injured.mapId());
+        assertEquals(original.zoneId(), injured.zoneId());
+        assertEquals(original.x(), injured.x());
+        assertEquals(original.y(), injured.y());
+        assertEquals(original.maxHp(), injured.maxHp());
+        assertEquals(original.maxMp(), injured.maxMp());
+        assertEquals(original.mp(), injured.mp());
+        assertEquals(original, injured.withHp(original.hp()));
+    }
+
+    @Test
+    void withHpValidatesBoundsAndAllowsZero() {
+        PlayerProfile player = PlayerProfile.initial("user01", 1, "alpha1", 0);
+
+        assertThrows(IllegalArgumentException.class, () -> player.withHp(-1));
+        assertThrows(IllegalArgumentException.class, () -> player.withHp(player.maxHp() + 1));
+        assertEquals(0, player.withHp(0).hp());
     }
 }

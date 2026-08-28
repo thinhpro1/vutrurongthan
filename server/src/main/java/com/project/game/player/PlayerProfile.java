@@ -52,6 +52,59 @@ public record PlayerProfile(
         return withLocation(mapId, zoneId, x, y);
     }
 
+    public PlayerProfile withHp(long hp) {
+        if (hp < 0L || hp > maxHp) {
+            throw new IllegalArgumentException("hp must be between 0 and maxHp");
+        }
+        return new PlayerProfile(
+                accountName,
+                id,
+                name,
+                gender,
+                power,
+                potential,
+                level,
+                pointSkill,
+                head,
+                body,
+                mount,
+                bag,
+                medal,
+                aura,
+                baseDamage,
+                baseHp,
+                baseMp,
+                baseConstitution,
+                potentialUpDamage,
+                potentialUpHp,
+                potentialUpMp,
+                potentialUpConstitution,
+                maxHp,
+                maxMp,
+                hp,
+                mp,
+                speed,
+                pointPk,
+                pointActivity,
+                countBarrack,
+                dodge,
+                critical,
+                reduceDamage,
+                bloodsucking,
+                manaSucking,
+                strikeBack,
+                damage,
+                coin,
+                coinLock,
+                diamond,
+                ruby,
+                spaceship,
+                mapId,
+                zoneId,
+                x,
+                y);
+    }
+
     public PlayerProfile withLocation(int mapId, int zoneId, int x, int y) {
         return new PlayerProfile(
                 accountName,

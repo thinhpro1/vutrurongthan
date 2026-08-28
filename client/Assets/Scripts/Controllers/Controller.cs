@@ -4202,6 +4202,21 @@ namespace Assets.Scripts.Controllers
                     case 61:
                         Player.me.ruby = message.ReadInt();
                         break;
+
+                    case 62:
+                        {
+                            long oldPotential = Player.me.potential;
+                            long potentialAfter = message.ReadLong();
+
+                            Player.me.potential = potentialAfter;
+
+                            long gained = potentialAfter - oldPotential;
+                            if (gained > 0)
+                            {
+                                screenManager.gameScreen.StartFlyText(MyFont.text_fly_green, "+" + Utils.GetMoneys(gained), Player.me.x, Player.me.y - Player.me.h, 0, -2);
+                            }
+                            break;
+                        }
                 }
             }
             catch (Exception e)

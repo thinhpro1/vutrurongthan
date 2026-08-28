@@ -326,6 +326,7 @@ class NetworkIntegrationTest {
                 first.prepareMonsterAttack(0, 0);
                 first.impactMonster(0);
                 assertMonsterDeath(first.readServerMessage(), 0, 10);
+                assertPotentialReward(first.readServerMessage(), 11L);
                 assertMonsterDeath(second.readServerMessage(), 0, 10);
                 assertEquals(0L, maps.monsterSnapshots(1, 0).getFirst().hp());
                 assertEquals(1, maps.monsterSnapshots(1, 0).getFirst().status());
@@ -382,6 +383,78 @@ class NetworkIntegrationTest {
             serverThread.join(1_000);
         }
         assertNull(serverFailure.get(), "network server failed during combat test");
+    }
+
+    @Test
+    void javaClientReceivesPotentialRewardAfterKillingMonster() throws Exception {
+        String accountName = "rewardtcp";
+        ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
+        AuthService auth = new AuthService();
+        assertTrue(auth.register(accountName, "secret1").success());
+        MapService maps = new MapService(
+                new com.project.game.network.packet.PlayerPacketWriter(),
+                new MonsterPacketWriter(),
+                new MonsterRuntimeFactory(resources));
+        NetworkServer server = new NetworkServer(
+                "127.0.0.1", 0, 4, 262_144, 16, 1_000,
+                "abc".getBytes(StandardCharsets.US_ASCII),
+                new ServerServices(auth, resources, maps), null,
+                NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
+        AtomicReference<Throwable> serverFailure = new AtomicReference<>();
+        Thread serverThread = Thread.ofVirtual().start(() -> {
+            try {
+                server.start();
+            } catch (Throwable failure) {
+                serverFailure.set(failure);
+            }
+        });
+
+        try {
+            waitForPort(server);
+            try (LivePlayerClient client = LivePlayerClient.create(
+                    server.localPort(), accountName, "rewarder", 0)) {
+                client.finishLoadMap();
+                client.move(4464, 936);
+                client.requestChangeMap();
+                ParsedMapInfo map1 = client.readMapInfo();
+                assertEquals(1, map1.mapId());
+                client.finishLoadMap();
+
+                Session live = server.sessions().findByAccount(accountName);
+                assertTrue(live != null);
+                assertEquals(1L, live.player().potential());
+                assertEquals(1L, live.player().power());
+
+                for (int expectedHp = 290; expectedHp >= 10; expectedHp -= 10) {
+                    client.prepareMonsterAttack(0, 0);
+                    client.impactMonster(0);
+                    assertMonsterInjure(client.readServerMessage(), 0, 10, expectedHp);
+                }
+
+                client.prepareMonsterAttack(0, 0);
+                client.impactMonster(0);
+                assertMonsterDeath(client.readServerMessage(), 0, 10);
+                assertPotentialReward(client.readServerMessage(), 11L);
+
+                live = server.sessions().findByAccount(accountName);
+                assertTrue(live != null);
+                assertEquals(11L, live.player().potential());
+                assertEquals(1L, live.player().power());
+
+                sendMove(client.codec, client.transport, client.cipher, 1260, 640);
+                awaitPlayerPosition(server, accountName, 1260, 640);
+                live = server.sessions().findByAccount(accountName);
+                assertTrue(live != null);
+                assertEquals(11L, live.player().potential());
+                assertEquals(1L, live.player().power());
+            }
+            waitForNoSessions(server);
+        } finally {
+            server.stop();
+            serverThread.join(1_000);
+        }
+        assertNull(serverFailure.get(),
+                "network server failed during monster reward integration test");
     }
 
     @Test
@@ -475,6 +548,7 @@ class NetworkIntegrationTest {
                 first.prepareMonsterAttack(0, 0);
                 first.impactMonster(0);
                 assertMonsterDeath(first.readServerMessage(), 0, 10);
+                assertPotentialReward(first.readServerMessage(), 11L);
                 assertMonsterDeath(second.readServerMessage(), 0, 10);
                 assertEquals(1, maps.monsterSnapshots(1, 0).getFirst().status());
                 clock.advanceMillis(8_000L);
@@ -1881,6 +1955,15 @@ class NetworkIntegrationTest {
         assertEquals(expectedId, reader.readInt());
         assertEquals(expectedDamage, reader.readLong());
         assertFalse(reader.readBoolean());
+        assertEquals(0, reader.remaining());
+    }
+
+    private static void assertPotentialReward(Message message, long expectedPotential)
+            throws IOException {
+        assertEquals(MessageName.PLAYER_INFO, message.command());
+        var reader = message.reader();
+        assertEquals(62, reader.readByte());
+        assertEquals(expectedPotential, reader.readLong());
         assertEquals(0, reader.remaining());
     }
 

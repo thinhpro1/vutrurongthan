@@ -119,6 +119,31 @@ class NetworkIntegrationTest {
                 assertPlayerDie(observer.readServerMessage(), victim.playerInfo().id(), 90, 1008);
                 assertEquals(0L, server.sessions().findByAccount(victimAccount).player().hp());
 
+                Session beforePaidRevive = server.sessions().findByAccount(victimAccount);
+                assertTrue(beforePaidRevive != null);
+                int deadMapId = beforePaidRevive.player().mapId();
+                int deadZoneId = beforePaidRevive.player().zoneId();
+                int deadX = beforePaidRevive.player().x();
+                int deadY = beforePaidRevive.player().y();
+                int rubyBefore = beforePaidRevive.player().ruby();
+                int diamondBefore = beforePaidRevive.player().diamond();
+
+                victim.wakeUpFromDieRequest();
+                victim.wakeUpFromDieRequest();
+                victim.wakeUpFromDieRequest();
+                assertNoServerMessage(victim);
+
+                Session afterPaidRevive = server.sessions().findByAccount(victimAccount);
+                assertTrue(afterPaidRevive != null);
+                assertEquals(SessionState.IN_GAME, afterPaidRevive.state());
+                assertEquals(0L, afterPaidRevive.player().hp());
+                assertEquals(deadMapId, afterPaidRevive.player().mapId());
+                assertEquals(deadZoneId, afterPaidRevive.player().zoneId());
+                assertEquals(deadX, afterPaidRevive.player().x());
+                assertEquals(deadY, afterPaidRevive.player().y());
+                assertEquals(rubyBefore, afterPaidRevive.player().ruby());
+                assertEquals(diamondBefore, afterPaidRevive.player().diamond());
+
                 clock.advanceMillis(2_000L);
                 assertNoServerMessage(victim);
                 assertNoServerMessage(observer);
@@ -2305,6 +2330,11 @@ class NetworkIntegrationTest {
         private void returnTownFromDie() throws IOException {
             codec.writeClient(transport.output(), cipher, true,
                     new Message(MessageName.RETURN_TOWN_FROM_DIE));
+        }
+
+        private void wakeUpFromDieRequest() throws IOException {
+            codec.writeClient(transport.output(), cipher, true,
+                    new Message(MessageName.WAKE_UP_FROM_DIE));
         }
 
         private void prepareMonsterAttack(int skillId, int monsterId) throws IOException {

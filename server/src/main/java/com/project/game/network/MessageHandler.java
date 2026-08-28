@@ -67,6 +67,7 @@ public final class MessageHandler {
                 case MessageName.CREATE_PLAYER -> handleCreatePlayer(message);
                 case MessageName.FINISH_LOAD_MAP -> handleFinishLoadMap(message);
                 case MessageName.RETURN_TOWN_FROM_DIE -> handleReturnTownFromDie(message);
+                case MessageName.WAKE_UP_FROM_DIE -> handleUnsupportedWakeUpFromDie(message);
                 case MessageName.REQUEST_CHANGE_MAP -> handleRequestChangeMap(message);
                 case MessageName.PLAYER_MOVE -> handlePlayerMove(message);
                 case MessageName.PLAYER_START_USE_ULTIMATE -> handlePrepareMonsterAttack(message);
@@ -422,6 +423,17 @@ public final class MessageHandler {
         if (session.state() != SessionState.CLOSED) {
             session.send(playerPackets.wakeUpFromDie(player));
         }
+    }
+
+    private void handleUnsupportedWakeUpFromDie(Message message) throws IOException {
+        if (message.payload().length != 0) {
+            throw new IOException("trailing WAKE_UP_FROM_DIE request payload bytes");
+        }
+
+        pendingMonsterAttack = null;
+
+        LOGGER.fine(() -> "WAKE_UP_FROM_DIE request ignored in V1 session="
+                + session.id());
     }
 
     private void handleRequestChangeMap(Message message) throws IOException {
@@ -825,6 +837,7 @@ public final class MessageHandler {
             case IN_GAME -> command == MessageName.REQUEST_ICON
                     || command == MessageName.FINISH_LOAD_MAP
                     || command == MessageName.RETURN_TOWN_FROM_DIE
+                    || command == MessageName.WAKE_UP_FROM_DIE
                     || command == MessageName.REQUEST_CHANGE_MAP
                     || command == MessageName.PLAYER_MOVE
                     || command == MessageName.PLAYER_START_USE_ULTIMATE

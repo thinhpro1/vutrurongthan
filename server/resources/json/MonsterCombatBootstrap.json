@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "templates": [
+    {
+      "templateId": 1,
+      "damage": 10
+    }
+  ]
+}

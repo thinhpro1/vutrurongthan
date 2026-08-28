@@ -9,6 +9,7 @@ import com.project.game.map.LegacyWaypoint;
 import com.project.game.map.LegacyMapTemplate;
 import com.project.game.monster.LegacyMonsterDart;
 import com.project.game.monster.LegacyMonsterDartPhase;
+import com.project.game.monster.LegacyMonsterCombatTemplate;
 import com.project.game.monster.LegacyMonsterSpawn;
 import com.project.game.monster.LegacyMonsterTemplate;
 
@@ -32,6 +33,8 @@ public final class ResourceService {
     private static final Set<Integer> SUPPORTED_MAP_IDS = Set.of(0, 1);
     private static final List<Integer> REQUIRED_FRAME_IDS = List.of(3, 4, 5, 6, 7, 8, 21, 22, 23);
     private static final List<Integer> REQUIRED_EFFECT_IMAGE_IDS = List.of(6, 7, 13, 17);
+    private static final int MONSTER_COMBAT_VERSION = 1;
+    private static final Set<Integer> REQUIRED_MONSTER_COMBAT_TEMPLATE_IDS = Set.of(1);
     private static final Set<Integer> REQUIRED_PLAYER_SKILL_IDS = Set.of(
             0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17,
             30, 31, 32, 33, 34, 35, 36);
@@ -50,6 +53,7 @@ public final class ResourceService {
     private final List<LegacyMonsterDart> monsterDarts;
     private final List<LegacyMonsterTemplate> monsterTemplates;
     private final Map<Integer, List<LegacyMonsterSpawn>> monsterSpawns;
+    private final Map<Integer, LegacyMonsterCombatTemplate> monsterCombatTemplates;
 
     private ResourceService(Path iconRoot, Path frameRoot, boolean requirePlayerSkills) {
         this.iconRoot = iconRoot == null ? null : iconRoot.toAbsolutePath().normalize();
@@ -71,12 +75,14 @@ public final class ResourceService {
             this.monsterDarts = List.of();
             this.monsterTemplates = List.of();
             this.monsterSpawns = Map.of();
+            this.monsterCombatTemplates = Map.of();
         } else {
             MonsterResources monsters = loadMonsters(frameRoot, requirePlayerSkills);
             this.monsterVersion = monsters.version();
             this.monsterDarts = monsters.darts();
             this.monsterTemplates = monsters.templates();
             this.monsterSpawns = monsters.spawns();
+            this.monsterCombatTemplates = loadMonsterCombatTemplates(frameRoot, requirePlayerSkills);
         }
     }
 
@@ -145,6 +151,10 @@ public final class ResourceService {
 
     public List<LegacyMonsterSpawn> monstersForMap(int mapId) {
         return monsterSpawns.getOrDefault(mapId, List.of());
+    }
+
+    public Optional<LegacyMonsterCombatTemplate> monsterCombatTemplate(int templateId) {
+        return Optional.ofNullable(monsterCombatTemplates.get(templateId));
     }
 
     private static List<FrameTemplate> loadFrames(Path frameRoot) {
@@ -525,6 +535,73 @@ public final class ResourceService {
             throw new IllegalStateException("cannot read " + source, exception);
         } catch (JsonParseException exception) {
             throw new IllegalArgumentException("invalid MonsterBootstrap.json at " + source, exception);
+        }
+    }
+
+    private static Map<Integer, LegacyMonsterCombatTemplate> loadMonsterCombatTemplates(
+            Path frameRoot, boolean required) {
+        Path root = Objects.requireNonNull(frameRoot, "frameRoot").toAbsolutePath().normalize();
+        Path source = root.resolve("MonsterCombatBootstrap.json").normalize();
+        if (!source.startsWith(root) || !Files.isRegularFile(source) || !Files.isReadable(source)) {
+            if (required) {
+                throw new IllegalArgumentException(
+                        "MonsterCombatBootstrap.json is not readable below " + root);
+            }
+            return Map.of();
+        }
+        try {
+            String json = Files.readString(source, StandardCharsets.UTF_8);
+            JsonElement parsed = JsonParser.parseString(json);
+            if (!parsed.isJsonObject()) {
+                throw new IllegalArgumentException("MonsterCombatBootstrap.json root must be an object");
+            }
+            JsonObject rootObject = parsed.getAsJsonObject();
+            requireExactFields(rootObject, Set.of("version", "templates"),
+                    "MonsterCombatBootstrap.json");
+            if (readStrictInt(rootObject, "version") != MONSTER_COMBAT_VERSION) {
+                throw new IllegalArgumentException("MonsterCombatBootstrap.json version must be 1");
+            }
+            JsonElement templatesValue = required(rootObject, "templates");
+            if (!templatesValue.isJsonArray()) {
+                throw new IllegalArgumentException(
+                        "MonsterCombatBootstrap.json field templates must be an array");
+            }
+
+            Set<Integer> ids = new HashSet<>();
+            Map<Integer, LegacyMonsterCombatTemplate> loaded = new HashMap<>();
+            for (int index = 0; index < templatesValue.getAsJsonArray().size(); index++) {
+                JsonElement element = templatesValue.getAsJsonArray().get(index);
+                if (!element.isJsonObject()) {
+                    throw new IllegalArgumentException(
+                            "MonsterCombatBootstrap template " + index + " must be an object");
+                }
+                JsonObject template = element.getAsJsonObject();
+                requireExactFields(template, Set.of("templateId", "damage"),
+                        "MonsterCombatBootstrap template " + index);
+                int templateId = readStrictInt(template, "templateId");
+                if (!ids.add(templateId)
+                        || !REQUIRED_MONSTER_COMBAT_TEMPLATE_IDS.contains(templateId)) {
+                    throw new IllegalArgumentException(
+                            "unexpected or duplicate monster combat template " + templateId);
+                }
+                long damage = readStrictLong(template, "damage");
+                if (damage <= 0L) {
+                    throw new IllegalArgumentException(
+                            "MonsterCombatBootstrap template " + templateId
+                                    + " damage must be positive");
+                }
+                loaded.put(templateId, new LegacyMonsterCombatTemplate(templateId, damage));
+            }
+            if (!ids.equals(REQUIRED_MONSTER_COMBAT_TEMPLATE_IDS)) {
+                throw new IllegalArgumentException(
+                        "MonsterCombatBootstrap.json must contain exactly template 1");
+            }
+            return Map.copyOf(loaded);
+        } catch (IOException exception) {
+            throw new IllegalStateException("cannot read " + source, exception);
+        } catch (JsonParseException exception) {
+            throw new IllegalArgumentException(
+                    "invalid MonsterCombatBootstrap.json at " + source, exception);
         }
     }
 
@@ -1024,6 +1101,19 @@ public final class ResourceService {
             throw new IllegalArgumentException("resource field " + field + " must be numeric");
         }
         return value.getAsLong();
+    }
+
+    private static long readStrictLong(JsonObject object, String field) {
+        JsonElement value = required(object, field);
+        if (!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isNumber()) {
+            throw new IllegalArgumentException("resource field " + field + " must be numeric");
+        }
+        try {
+            return new BigDecimal(value.getAsString()).longValueExact();
+        } catch (NumberFormatException | ArithmeticException exception) {
+            throw new IllegalArgumentException(
+                    "resource field " + field + " must be an integer", exception);
+        }
     }
 
     private static boolean readBoolean(JsonObject object, String field) {

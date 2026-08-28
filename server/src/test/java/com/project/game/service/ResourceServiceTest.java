@@ -12,6 +12,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
 import java.util.HexFormat;
 import java.util.ArrayList;
@@ -27,6 +28,56 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ResourceServiceTest {
+    @Test
+    void loadsCanonicalMonsterCombatTemplate() {
+        ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
+
+        var combat = resources.monsterCombatTemplate(1).orElseThrow();
+        assertEquals(1, combat.templateId());
+        assertEquals(10L, combat.damage());
+        assertTrue(resources.monsterCombatTemplate(999).isEmpty());
+    }
+
+    @Test
+    void rejectsMonsterCombatBootstrapVersionTwo(@TempDir Path root) throws IOException {
+        var bootstrap = canonicalMonsterCombatBootstrap();
+        bootstrap.addProperty("version", 2);
+        assertMonsterCombatBootstrapRejected(root, bootstrap);
+    }
+
+    @Test
+    void rejectsMonsterCombatBootstrapMissingTemplateOne(@TempDir Path root) throws IOException {
+        var bootstrap = canonicalMonsterCombatBootstrap();
+        bootstrap.getAsJsonArray("templates").remove(0);
+        assertMonsterCombatBootstrapRejected(root, bootstrap);
+    }
+
+    @Test
+    void rejectsMonsterCombatBootstrapDuplicateTemplate(@TempDir Path root) throws IOException {
+        var bootstrap = canonicalMonsterCombatBootstrap();
+        bootstrap.getAsJsonArray("templates")
+                .add(bootstrap.getAsJsonArray("templates").get(0).deepCopy());
+        assertMonsterCombatBootstrapRejected(root, bootstrap);
+    }
+
+    @Test
+    void rejectsMonsterCombatBootstrapNonPositiveDamage(@TempDir Path root) throws IOException {
+        var bootstrap = canonicalMonsterCombatBootstrap();
+        bootstrap.getAsJsonArray("templates").get(0).getAsJsonObject().addProperty("damage", 0);
+        assertMonsterCombatBootstrapRejected(root, bootstrap);
+
+        bootstrap.getAsJsonArray("templates").get(0).getAsJsonObject().addProperty("damage", -1);
+        assertMonsterCombatBootstrapRejected(root, bootstrap);
+    }
+
+    @Test
+    void rejectsMonsterCombatBootstrapUnexpectedTemplate(@TempDir Path root) throws IOException {
+        var bootstrap = canonicalMonsterCombatBootstrap();
+        bootstrap.getAsJsonArray("templates").add(
+                JsonParser.parseString("{\"templateId\":2,\"damage\":10}"));
+        assertMonsterCombatBootstrapRejected(root, bootstrap);
+    }
+
     @Test
     void loadsCanonicalStaticMap1MonsterBootstrap() throws Exception {
         ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
@@ -651,6 +702,11 @@ class ResourceServiceTest {
                 .getAsJsonObject();
     }
 
+    private static com.google.gson.JsonObject canonicalMonsterCombatBootstrap() {
+        return JsonParser.parseString("{\"version\":1,\"templates\":["
+                + "{\"templateId\":1,\"damage\":10}]}" ).getAsJsonObject();
+    }
+
     private static com.google.gson.JsonObject canonicalEffectBootstrap() {
         return JsonParser.parseString("{\"version\":2,\"images\":["
                 + "{\"id\":6,\"dx\":0,\"dy\":0,\"delay\":100,\"icons\":[71,72]},"
@@ -668,6 +724,19 @@ class ResourceServiceTest {
                 new GsonBuilder().serializeNulls().create().toJson(bootstrap));
         assertThrows(IllegalArgumentException.class,
                 () -> ResourceService.fromFrameRoot(root));
+    }
+
+    private static void assertMonsterCombatBootstrapRejected(
+            Path root, com.google.gson.JsonObject bootstrap) throws IOException {
+        Path resourceRoot = Path.of("resources", "json");
+        for (String name : List.of("Frame.json", "PlayerSkillBootstrap.json", "LevelBootstrap.json",
+                "EffectBootstrap.json", "MapBootstrap.json", "MonsterBootstrap.json")) {
+            Files.copy(resourceRoot.resolve(name), root.resolve(name), StandardCopyOption.REPLACE_EXISTING);
+        }
+        Files.writeString(root.resolve("MonsterCombatBootstrap.json"),
+                new GsonBuilder().serializeNulls().create().toJson(bootstrap));
+        assertThrows(IllegalArgumentException.class,
+                () -> ResourceService.fromRoots(null, root));
     }
 
     private static void assertEffectBootstrapRejected(Path root,

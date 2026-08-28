@@ -41,6 +41,46 @@ class PlayerPacketWriterTest {
     }
 
     @Test
+    void writesMeDiePacketExactly() throws Exception {
+        Message packet = new PlayerPacketWriter().meDie(321, 654);
+
+        assertEquals(MessageName.ME_DIE, packet.command());
+        var reader = packet.reader();
+        assertEquals(321, reader.readShort());
+        assertEquals(654, reader.readShort());
+        assertEquals(0, reader.remaining());
+    }
+
+    @Test
+    void writesPlayerDiePacketExactly() throws Exception {
+        Message packet = new PlayerPacketWriter().playerDie(77, 321, 654);
+
+        assertEquals(MessageName.PLAYER_DIE, packet.command());
+        var reader = packet.reader();
+        assertEquals(77, reader.readInt());
+        assertEquals(321, reader.readShort());
+        assertEquals(654, reader.readShort());
+        assertEquals(0, reader.remaining());
+    }
+
+    @Test
+    void writesWakeUpFromDiePacketExactly() throws Exception {
+        PlayerProfile player = PlayerProfile.initial("wake", 77, "wake", 0)
+                .revivedAt(0, 0, 1250, 648);
+
+        Message packet = new PlayerPacketWriter().wakeUpFromDie(player);
+
+        assertEquals(MessageName.WAKE_UP_FROM_DIE, packet.command());
+        var reader = packet.reader();
+        assertEquals(77, reader.readInt());
+        assertEquals(1250, reader.readShort());
+        assertEquals(648, reader.readShort());
+        assertEquals(player.maxHp(), reader.readLong());
+        assertEquals(player.maxMp(), reader.readLong());
+        assertEquals(0, reader.remaining());
+    }
+
+    @Test
     void serializesOtherPlayerMovement() throws Exception {
         Message message = new PlayerPacketWriter().movePlayer(0x01020304, 1260, 640);
         var reader = message.reader();

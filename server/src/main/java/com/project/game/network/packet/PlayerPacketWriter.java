@@ -51,6 +51,41 @@ public final class PlayerPacketWriter {
                 new MessageWriter().writeInt(playerId).writeShort(x).writeShort(y).toByteArray());
     }
 
+    public Message meDie(int x, int y) {
+        return new Message(
+                MessageName.ME_DIE,
+                new MessageWriter()
+                        .writeShort(x)
+                        .writeShort(y)
+                        .toByteArray());
+    }
+
+    public Message playerDie(int playerId, int x, int y) {
+        return new Message(
+                MessageName.PLAYER_DIE,
+                new MessageWriter()
+                        .writeInt(playerId)
+                        .writeShort(x)
+                        .writeShort(y)
+                        .toByteArray());
+    }
+
+    public Message wakeUpFromDie(PlayerProfile player) {
+        Objects.requireNonNull(player, "player");
+        if (player.hp() <= 0L) {
+            throw new IllegalArgumentException("wake-up player must be alive");
+        }
+        return new Message(
+                MessageName.WAKE_UP_FROM_DIE,
+                new MessageWriter()
+                        .writeInt(player.id())
+                        .writeShort(player.x())
+                        .writeShort(player.y())
+                        .writeLong(player.hp())
+                        .writeLong(player.mp())
+                        .toByteArray());
+    }
+
     public Message potentialUpdate(long potentialAfter) {
         if (potentialAfter < 0L) {
             throw new IllegalArgumentException("potentialAfter must be non-negative");

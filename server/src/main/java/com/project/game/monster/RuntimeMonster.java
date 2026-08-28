@@ -78,6 +78,10 @@ public final class RuntimeMonster {
         return enemies.containsKey(playerId);
     }
 
+    public boolean removeEnemy(int playerId) {
+        return enemies.remove(playerId) != null;
+    }
+
     public long attackDelayMillis() {
         return Math.max(2_000L - 400L * enemies.size(), 500L);
     }

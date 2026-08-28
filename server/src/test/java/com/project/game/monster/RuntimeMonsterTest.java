@@ -164,6 +164,30 @@ class RuntimeMonsterTest {
     }
 
     @Test
+    void removeEnemyRemovesOnlyRequestedPlayer() {
+        RuntimeMonster monster = map1Monster();
+        monster.applyDamage(7, 10, NOW, RESPAWN_DELAY).orElseThrow();
+        monster.applyDamage(8, 10, NOW + 1, RESPAWN_DELAY).orElseThrow();
+
+        assertTrue(monster.removeEnemy(7));
+
+        assertFalse(monster.hasEnemy(7));
+        assertTrue(monster.hasEnemy(8));
+        assertEquals(1, monster.enemyCount());
+        assertEquals(List.of(8), monster.enemyPlayerIds());
+    }
+
+    @Test
+    void removeMissingEnemyIsHarmless() {
+        RuntimeMonster monster = map1Monster();
+        monster.applyDamage(8, 10, NOW, RESPAWN_DELAY).orElseThrow();
+
+        assertFalse(monster.removeEnemy(7));
+
+        assertEquals(List.of(8), monster.enemyPlayerIds());
+    }
+
+    @Test
     void rejectedOrDeadDamageDoesNotRegisterNewEnemy() {
         RuntimeMonster monster = map1Monster();
 

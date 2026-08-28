@@ -465,6 +465,33 @@ class MapServiceTest {
     }
 
     @Test
+    void killingRewardSaturatesPotentialInsteadOfOverflowing() throws Exception {
+        MapService maps = mapsWithMonsters();
+
+        PlayerProfile nearMax = player(1, 1, 0)
+                .withPotential(Long.MAX_VALUE - 5L);
+        Session attacker = session(nearMax, maps);
+
+        maps.finishLoad(attacker);
+        drain(attacker);
+
+        assertTrue(maps.attackMonster(attacker, 0, 500L));
+
+        assertEquals(Long.MAX_VALUE, attacker.player().potential());
+        assertEquals(nearMax.power(), attacker.player().power());
+
+        List<Message> messages = drain(attacker);
+        assertEquals(
+                List.of(MessageName.MONSTER_START_DIE, MessageName.PLAYER_INFO),
+                commands(messages));
+
+        var reward = messages.get(1).reader();
+        assertEquals(62, reward.readByte());
+        assertEquals(Long.MAX_VALUE, reward.readLong());
+        assertEquals(0, reward.remaining());
+    }
+
+    @Test
     void deathBroadcastReachesObserverButRewardPacketDoesNot() throws Exception {
         MapService maps = mapsWithMonsters();
         Session killer = session(player(1, 1, 0), maps);

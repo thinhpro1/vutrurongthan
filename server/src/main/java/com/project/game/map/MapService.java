@@ -198,26 +198,45 @@ public final class MapService {
         }
     }
 
-    public void playerMoved(Session session) {
+    public boolean movePlayer(Session session, int x, int y) {
         if (session == null || session.state() == SessionState.CLOSED) {
-            return;
+            return false;
         }
-        PlayerProfile moved = session.player();
-        if (moved == null) {
-            return;
+        PlayerProfile observed = session.player();
+        if (observed == null) {
+            return false;
         }
-        Zone zone = zones.get(keyOf(moved));
+        ZoneKey expectedKey = keyOf(observed);
+        Zone zone = zones.get(expectedKey);
         if (zone == null) {
-            return;
-        }
-        var members = zone.snapshot();
-        if (members.stream().noneMatch(member -> member == session)) {
-            return;
-        }
-        for (Session member : members) {
-            if (member != session && member.state() != SessionState.CLOSED) {
-                member.send(packets.movePlayer(moved.id(), moved.x(), moved.y()));
+            PlayerProfile current = session.player();
+            if (current == null || !expectedKey.equals(keyOf(current))) {
+                return false;
             }
+            session.bindPlayer(current.withPosition(x, y));
+            return true;
+        }
+
+        synchronized (zone) {
+            PlayerProfile current = session.player();
+            if (current == null || !expectedKey.equals(keyOf(current))) {
+                return false;
+            }
+
+            boolean currentMember = zone.contains(session);
+            PlayerProfile moved = current.withPosition(x, y);
+            session.bindPlayer(moved);
+            if (!currentMember) {
+                return true;
+            }
+
+            Message packet = packets.movePlayer(moved.id(), moved.x(), moved.y());
+            for (Session member : zone.snapshot()) {
+                if (member != session && member.state() != SessionState.CLOSED) {
+                    member.send(packet);
+                }
+            }
+            return true;
         }
     }
 

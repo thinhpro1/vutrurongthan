@@ -29,6 +29,7 @@ import java.io.OutputStream;
 import java.lang.reflect.Field;
 import java.nio.file.Path;
 import java.time.Clock;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
@@ -39,6 +40,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.Random;
+import java.util.random.RandomGenerator;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -87,8 +89,9 @@ class MapServiceTest {
         drain(first);
         drain(second);
 
-        second.bindPlayer(second.player().withPosition(1260, 640));
-        maps.playerMoved(second);
+        assertTrue(maps.movePlayer(second, 1260, 640));
+        assertEquals(1260, second.player().x());
+        assertEquals(640, second.player().y());
 
         List<Message> firstMessages = drain(first);
         assertEquals(List.of(MessageName.PLAYER_MOVE), commands(firstMessages));
@@ -98,6 +101,39 @@ class MapServiceTest {
         assertEquals(640, reader.readShort());
         assertEquals(0, reader.remaining());
         assertEquals(List.of(), drain(second));
+    }
+
+    @Test
+    void movePlayerSerializesWithMonsterHpMutation() throws Exception {
+        MutableClock clock = new MutableClock(1_000_000L);
+        BlockingRandom random = new BlockingRandom();
+        MapService maps = mapsWithMonsters(clock, random);
+        Session player = session(player(1, 1, 0), maps);
+        maps.finishLoad(player);
+        drain(player);
+
+        assertTrue(maps.attackMonster(player, 0, 10));
+        assertEquals(List.of(MessageName.MONSTER_INJURE), commands(drain(player)));
+        clock.advanceMillis(1L);
+
+        Thread lifecycle = Thread.ofVirtual().start(maps::tickMonsterLifecycle);
+        assertTrue(random.entered.await(5, TimeUnit.SECONDS));
+
+        AtomicBoolean moved = new AtomicBoolean();
+        Thread movement = Thread.ofVirtual().start(() ->
+                moved.set(maps.movePlayer(player, 1260, 640)));
+        assertFalse(movement.join(Duration.ofMillis(100)));
+        assertFalse(moved.get());
+
+        random.release.countDown();
+        lifecycle.join();
+        movement.join();
+
+        assertTrue(moved.get());
+        assertEquals(90L, player.player().hp());
+        assertEquals(1260, player.player().x());
+        assertEquals(640, player.player().y());
+        assertEquals(List.of(MessageName.MONSTER_ATTACK), commands(drain(player)));
     }
 
     @Test
@@ -145,8 +181,7 @@ class MapServiceTest {
         drain(second);
         second.close();
 
-        first.bindPlayer(first.player().withPosition(1260, 640));
-        maps.playerMoved(first);
+        assertTrue(maps.movePlayer(first, 1260, 640));
         assertEquals(List.of(), drain(first));
     }
 
@@ -908,6 +943,30 @@ class MapServiceTest {
                 }
             }
             return super.offer(message);
+        }
+    }
+
+    private static final class BlockingRandom implements RandomGenerator {
+        private final CountDownLatch entered = new CountDownLatch(1);
+        private final CountDownLatch release = new CountDownLatch(1);
+
+        @Override
+        public int nextInt(int bound) {
+            entered.countDown();
+            try {
+                if (!release.await(5, TimeUnit.SECONDS)) {
+                    throw new AssertionError("random selection was not released");
+                }
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                throw new AssertionError(exception);
+            }
+            return 0;
+        }
+
+        @Override
+        public long nextLong() {
+            return 0L;
         }
     }
 

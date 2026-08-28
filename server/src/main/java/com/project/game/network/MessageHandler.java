@@ -454,8 +454,7 @@ public final class MessageHandler {
             throw new IOException("trailing PLAYER_MOVE payload bytes");
         }
 
-        session.bindPlayer(player.withPosition(x, y));
-        mapService.playerMoved(session);
+        mapService.movePlayer(session, x, y);
         LOGGER.fine(() -> "PLAYER_MOVE session=" + session.id()
                 + " x=" + x + " y=" + y);
     }

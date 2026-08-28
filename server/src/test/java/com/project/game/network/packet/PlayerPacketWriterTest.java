@@ -16,6 +16,7 @@ class PlayerPacketWriterTest {
         assertEquals(MessageName.ADD_PLAYER, writer.addPlayer(player).command());
         assertEquals(MessageName.REMOVE_PLAYER, writer.removePlayer(player.id()).command());
         assertEquals(MessageName.PLAYER_MOVE, writer.movePlayer(player.id(), 1260, 640).command());
+        assertEquals(MessageName.PLAYER_INFO, writer.potentialUpdate(11L).command());
     }
 
     @Test
@@ -24,6 +25,18 @@ class PlayerPacketWriterTest {
         var reader = message.reader();
 
         assertEquals(0x01020304, reader.readInt());
+        assertEquals(0, reader.remaining());
+    }
+
+    @Test
+    void serializesAuthoritativePotentialUpdate() throws Exception {
+        Message message = new PlayerPacketWriter().potentialUpdate(0x0102030405060708L);
+
+        assertEquals(MessageName.PLAYER_INFO, message.command());
+
+        var reader = message.reader();
+        assertEquals(62, reader.readByte());
+        assertEquals(0x0102030405060708L, reader.readLong());
         assertEquals(0, reader.remaining());
     }
 

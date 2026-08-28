@@ -50,4 +50,16 @@ public final class PlayerPacketWriter {
         return new Message(MessageName.PLAYER_MOVE,
                 new MessageWriter().writeInt(playerId).writeShort(x).writeShort(y).toByteArray());
     }
+
+    public Message potentialUpdate(long potentialAfter) {
+        if (potentialAfter < 0L) {
+            throw new IllegalArgumentException("potentialAfter must be non-negative");
+        }
+        return new Message(
+                MessageName.PLAYER_INFO,
+                new MessageWriter()
+                        .writeByte(62)
+                        .writeLong(potentialAfter)
+                        .toByteArray());
+    }
 }

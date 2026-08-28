@@ -2,12 +2,16 @@ package com.project.game.monster;
 
 import com.project.game.service.ResourceService;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
+import java.io.IOException;
 import java.nio.file.Path;
+import java.nio.file.Files;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class MonsterRuntimeFactoryTest {
@@ -44,6 +48,7 @@ class MonsterRuntimeFactoryTest {
                         && monster.maxHp() == 300L
                         && monster.hp() == 300L
                         && monster.status() == 0));
+        assertTrue(map1.stream().allMatch(monster -> monster.damage() == 10L));
     }
 
     @Test
@@ -61,5 +66,17 @@ class MonsterRuntimeFactoryTest {
         for (int i = 0; i < first.size(); i++) {
             assertNotSame(first.get(i), second.get(i));
         }
+    }
+
+    @Test
+    void missingCombatStatFailsClearly(@TempDir Path root) throws IOException {
+        Files.copy(Path.of("resources", "json", "Frame.json"), root.resolve("Frame.json"));
+        Files.copy(Path.of("resources", "json", "MonsterBootstrap.json"),
+                root.resolve("MonsterBootstrap.json"));
+
+        ResourceService resources = ResourceService.fromFrameRoot(root);
+        IllegalStateException failure = assertThrows(IllegalStateException.class,
+                () -> new MonsterRuntimeFactory(resources).createForMap(1));
+        assertTrue(failure.getMessage().contains("missing monster combat template 1"));
     }
 }

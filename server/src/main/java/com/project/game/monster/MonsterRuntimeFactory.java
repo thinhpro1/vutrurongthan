@@ -14,7 +14,13 @@ public final class MonsterRuntimeFactory {
 
     public List<RuntimeMonster> createForMap(int mapId) {
         return resources.monstersForMap(mapId).stream()
-                .map(RuntimeMonster::new)
+                .map(spawn -> {
+                    LegacyMonsterCombatTemplate combat = resources
+                            .monsterCombatTemplate(spawn.templateId())
+                            .orElseThrow(() -> new IllegalStateException(
+                                    "missing monster combat template " + spawn.templateId()));
+                    return new RuntimeMonster(spawn, combat);
+                })
                 .toList();
     }
 }

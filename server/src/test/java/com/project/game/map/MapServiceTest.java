@@ -865,6 +865,43 @@ class MapServiceTest {
     }
 
     @Test
+    void lethalMonsterAttackBroadcastsSelfAndObserverDeathAfterAttack() throws Exception {
+        MutableClock clock = new MutableClock(1_000_000L);
+        MapService maps = mapsWithMonsters(clock, new Random(0));
+        Session victim = session(player(1, 1, 0).withHp(10L), maps);
+        Session observer = session(player(2, 1, 0), maps);
+        maps.finishLoad(victim);
+        maps.finishLoad(observer);
+        drain(victim);
+        drain(observer);
+
+        assertTrue(maps.attackMonster(victim, 0, 10L));
+        drain(victim);
+        drain(observer);
+        clock.advanceMillis(1L);
+        maps.tickMonsterLifecycle();
+
+        List<Message> victimMessages = drain(victim);
+        assertEquals(
+                List.of(MessageName.MONSTER_ATTACK, MessageName.ME_DIE),
+                commands(victimMessages));
+        var selfDeath = victimMessages.get(1).reader();
+        assertEquals(victim.player().x(), selfDeath.readShort());
+        assertEquals(victim.player().y(), selfDeath.readShort());
+        assertEquals(0, selfDeath.remaining());
+
+        List<Message> observerMessages = drain(observer);
+        assertEquals(
+                List.of(MessageName.MONSTER_ATTACK, MessageName.PLAYER_DIE),
+                commands(observerMessages));
+        var observedDeath = observerMessages.get(1).reader();
+        assertEquals(victim.player().id(), observedDeath.readInt());
+        assertEquals(victim.player().x(), observedDeath.readShort());
+        assertEquals(victim.player().y(), observedDeath.readShort());
+        assertEquals(0, observedDeath.remaining());
+    }
+
+    @Test
     void retaliationDoesNotCrossZones() throws Exception {
         MutableClock clock = new MutableClock(1_000_000L);
         MapService maps = mapsWithMonsters(clock, new Random(12345L));
@@ -928,7 +965,8 @@ class MapServiceTest {
 
         clock.advanceMillis(1_601L);
         maps.tickMonsterLifecycle();
-        assertEquals(List.of(MessageName.MONSTER_ATTACK), commands(drain(attacker)));
+        assertEquals(List.of(MessageName.MONSTER_ATTACK, MessageName.ME_DIE),
+                commands(drain(attacker)));
         assertEquals(0L, attacker.player().hp());
 
         clock.advanceMillis(1_601L);

@@ -159,6 +159,29 @@ public final class MapService {
                             member.send(packet);
                         }
                     }
+
+                    if (!result.killed()) {
+                        continue;
+                    }
+
+                    Session victim = members.stream()
+                            .filter(member -> member.player() != null)
+                            .filter(member -> member.player().id() == result.playerId())
+                            .findFirst()
+                            .orElse(null);
+                    if (victim == null || victim.player() == null) {
+                        continue;
+                    }
+
+                    PlayerProfile dead = victim.player();
+                    Message selfDeath = packets.meDie(dead.x(), dead.y());
+                    Message observerDeath = packets.playerDie(dead.id(), dead.x(), dead.y());
+                    for (Session member : members) {
+                        if (member.state() == SessionState.CLOSED) {
+                            continue;
+                        }
+                        member.send(member == victim ? selfDeath : observerDeath);
+                    }
                 }
             }
         }

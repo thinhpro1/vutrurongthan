@@ -42,6 +42,51 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class NetworkIntegrationTest {
     @Test
+    void livingPlayerReturnTownRequestIsIgnored() throws Exception {
+        String accountName = "livingreturn";
+        ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
+        AuthService auth = new AuthService();
+        assertTrue(auth.register(accountName, "secret1").success());
+        NetworkServer server = new NetworkServer(
+                "127.0.0.1", 0, 2, 262_144, 8, 1_000,
+                "abc".getBytes(StandardCharsets.US_ASCII),
+                new ServerServices(auth, resources), null,
+                NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
+        AtomicReference<Throwable> serverFailure = new AtomicReference<>();
+        Thread serverThread = Thread.ofVirtual().start(() -> {
+            try {
+                server.start();
+            } catch (Throwable failure) {
+                serverFailure.set(failure);
+            }
+        });
+
+        try {
+            waitForPort(server);
+            try (LivePlayerClient client = LivePlayerClient.create(
+                    server.localPort(), accountName, "returner", 0)) {
+                client.finishLoadMap();
+                Session live = server.sessions().findByAccount(accountName);
+                assertTrue(live != null);
+                var original = live.player();
+
+                client.returnTownFromDie();
+                assertNoServerMessage(client);
+
+                Session unchanged = server.sessions().findByAccount(accountName);
+                assertTrue(unchanged != null);
+                assertEquals(original, unchanged.player());
+                assertTrue(unchanged.state() != SessionState.CLOSED);
+            }
+            waitForNoSessions(server);
+        } finally {
+            server.stop();
+            serverThread.join(1_000);
+        }
+        assertNull(serverFailure.get(), "network server failed during living return-town test");
+    }
+
+    @Test
     void javaClientRoundTripsMap0AndMap1WithCachedTemplates() throws Exception {
         ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
         AuthService auth = new AuthService();
@@ -544,20 +589,23 @@ class NetworkIntegrationTest {
                             server.sessions().findByAccount("retaliatea").player().hp());
                 }
                 clock.advanceMillis(1_601L);
-                assertNoServerMessage(first);
-                assertNoServerMessage(second);
+                assertMonsterAttack(first.readServerMessage(), 0, first.playerInfo().id(), 10L);
+                assertMeDie(first.readServerMessage(), 90, 1008);
+                assertMonsterAttack(second.readServerMessage(), 0, first.playerInfo().id(), 10L);
+                assertPlayerDie(second.readServerMessage(), first.playerInfo().id(), 90, 1008);
+                assertEquals(0L, server.sessions().findByAccount("retaliatea").player().hp());
 
                 for (int expectedHp = 280; expectedHp >= 10; expectedHp -= 10) {
-                    first.prepareMonsterAttack(0, 0);
-                    first.impactMonster(0);
+                    second.prepareMonsterAttack(0, 0);
+                    second.impactMonster(0);
                     assertMonsterInjure(first.readServerMessage(), 0, 10, expectedHp);
                     assertMonsterInjure(second.readServerMessage(), 0, 10, expectedHp);
                 }
-                first.prepareMonsterAttack(0, 0);
-                first.impactMonster(0);
+                second.prepareMonsterAttack(0, 0);
+                second.impactMonster(0);
                 assertMonsterDeath(first.readServerMessage(), 0, 10);
-                assertPotentialReward(first.readServerMessage(), 11L);
                 assertMonsterDeath(second.readServerMessage(), 0, 10);
+                assertPotentialReward(second.readServerMessage(), 11L);
                 assertEquals(1, maps.monsterSnapshots(1, 0).getFirst().status());
                 clock.advanceMillis(8_000L);
                 assertNoServerMessage(first);
@@ -575,7 +623,8 @@ class NetworkIntegrationTest {
                 clock.advanceMillis(1L);
                 assertMonsterAttack(first.readServerMessage(), 0, second.playerInfo().id(), 10L);
                 assertMonsterAttack(second.readServerMessage(), 0, second.playerInfo().id(), 10L);
-                assertEquals(10L, server.sessions().findByAccount("retaliatea").player().hp());
+                assertNoServerMessage(first);
+                assertEquals(0L, server.sessions().findByAccount("retaliatea").player().hp());
                 assertEquals(90L, server.sessions().findByAccount("retaliateb").player().hp());
             }
             waitForNoSessions(server);
@@ -1999,6 +2048,25 @@ class NetworkIntegrationTest {
         assertEquals(0, reader.remaining());
     }
 
+    private static void assertMeDie(Message message, int expectedX, int expectedY)
+            throws IOException {
+        assertEquals(MessageName.ME_DIE, message.command());
+        var reader = message.reader();
+        assertEquals(expectedX, reader.readShort());
+        assertEquals(expectedY, reader.readShort());
+        assertEquals(0, reader.remaining());
+    }
+
+    private static void assertPlayerDie(Message message, int expectedPlayerId,
+                                         int expectedX, int expectedY) throws IOException {
+        assertEquals(MessageName.PLAYER_DIE, message.command());
+        var reader = message.reader();
+        assertEquals(expectedPlayerId, reader.readInt());
+        assertEquals(expectedX, reader.readShort());
+        assertEquals(expectedY, reader.readShort());
+        assertEquals(0, reader.remaining());
+    }
+
     private static void assertNoServerMessage(LivePlayerClient client) throws Exception {
         client.transport.socket().setSoTimeout(250);
         try {
@@ -2079,6 +2147,11 @@ class NetworkIntegrationTest {
         private void finishLoadMap() throws IOException {
             codec.writeClient(transport.output(), cipher, true,
                     new Message(MessageName.FINISH_LOAD_MAP));
+        }
+
+        private void returnTownFromDie() throws IOException {
+            codec.writeClient(transport.output(), cipher, true,
+                    new Message(MessageName.RETURN_TOWN_FROM_DIE));
         }
 
         private void prepareMonsterAttack(int skillId, int monsterId) throws IOException {

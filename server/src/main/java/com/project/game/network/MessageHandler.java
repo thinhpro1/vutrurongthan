@@ -6,6 +6,7 @@ import com.project.game.monster.LegacyMonsterDartPhase;
 import com.project.game.network.message.Message;
 import com.project.game.network.message.MessageName;
 import com.project.game.network.message.MessageWriter;
+import com.project.game.network.packet.PlayerPacketWriter;
 import com.project.game.player.PlayerProfile;
 import com.project.game.service.AuthService;
 import com.project.game.service.ResourceService;
@@ -34,6 +35,7 @@ public final class MessageHandler {
     private final MapService mapService;
     private final NetworkConfig networkConfig;
     private final NetworkEventObserver eventObserver;
+    private final PlayerPacketWriter playerPackets = new PlayerPacketWriter();
     private PendingMonsterAttack pendingMonsterAttack;
 
     public MessageHandler(Session session, ServerServices services, NetworkConfig networkConfig,
@@ -64,6 +66,7 @@ public final class MessageHandler {
                 case MessageName.REGISTER_USER -> handleRegister(message);
                 case MessageName.CREATE_PLAYER -> handleCreatePlayer(message);
                 case MessageName.FINISH_LOAD_MAP -> handleFinishLoadMap(message);
+                case MessageName.RETURN_TOWN_FROM_DIE -> handleReturnTownFromDie(message);
                 case MessageName.REQUEST_CHANGE_MAP -> handleRequestChangeMap(message);
                 case MessageName.PLAYER_MOVE -> handlePlayerMove(message);
                 case MessageName.PLAYER_START_USE_ULTIMATE -> handlePrepareMonsterAttack(message);
@@ -402,6 +405,23 @@ public final class MessageHandler {
         }
         LOGGER.fine(() -> "FINISH_LOAD_MAP session=" + session.id());
         mapService.finishLoad(session);
+    }
+
+    private void handleReturnTownFromDie(Message message) throws IOException {
+        if (message.payload().length != 0) {
+            throw new IOException("trailing RETURN_TOWN_FROM_DIE payload bytes");
+        }
+        pendingMonsterAttack = null;
+        Optional<PlayerProfile> revived = mapService.returnTownFromDeath(session);
+        if (revived.isEmpty()) {
+            return;
+        }
+
+        PlayerProfile player = revived.orElseThrow();
+        sendMapInfo(player);
+        if (session.state() != SessionState.CLOSED) {
+            session.send(playerPackets.wakeUpFromDie(player));
+        }
     }
 
     private void handleRequestChangeMap(Message message) throws IOException {
@@ -804,6 +824,7 @@ public final class MessageHandler {
                     || command == MessageName.REQUEST_ICON;
             case IN_GAME -> command == MessageName.REQUEST_ICON
                     || command == MessageName.FINISH_LOAD_MAP
+                    || command == MessageName.RETURN_TOWN_FROM_DIE
                     || command == MessageName.REQUEST_CHANGE_MAP
                     || command == MessageName.PLAYER_MOVE
                     || command == MessageName.PLAYER_START_USE_ULTIMATE

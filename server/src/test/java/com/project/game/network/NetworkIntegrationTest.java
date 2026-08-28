@@ -28,6 +28,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.Random;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -304,6 +305,11 @@ class NetworkIntegrationTest {
                 assertAddPlayerId(first.readServerMessage(), second.playerInfo().id());
                 assertAddPlayerId(second.readServerMessage(), first.playerInfo().id());
 
+                // Keep this respawn-wire regression focused on monster lifecycle packets;
+                // the retaliation suite below covers the in-range attack path.
+                first.move(3_000, 3_000);
+                assertEquals(MessageName.PLAYER_MOVE, second.readServerMessage().command());
+
                 first.prepareMonsterAttack(0, 0);
                 first.impactMonster(0);
                 assertMonsterInjure(first.readServerMessage(), 0, 10, 290);
@@ -376,6 +382,126 @@ class NetworkIntegrationTest {
             serverThread.join(1_000);
         }
         assertNull(serverFailure.get(), "network server failed during combat test");
+    }
+
+    @Test
+    void monsterRetaliatesAfterHitWithoutLethalPlayerDamage() throws Exception {
+        ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
+        AuthService auth = new AuthService();
+        MutableClock clock = new MutableClock(1_000_000L);
+        assertTrue(auth.register("retaliatea", "secret1").success());
+        assertTrue(auth.register("retaliateb", "secret1").success());
+        MapService maps = new MapService(
+                new com.project.game.network.packet.PlayerPacketWriter(),
+                new MonsterPacketWriter(),
+                new MonsterRuntimeFactory(resources),
+                clock,
+                new Random(12345L));
+        NetworkServer server = new NetworkServer(
+                "127.0.0.1", 0, 4, 262_144, 16, 1_000,
+                "abc".getBytes(StandardCharsets.US_ASCII),
+                new ServerServices(auth, resources, maps), null,
+                NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
+        AtomicReference<Throwable> serverFailure = new AtomicReference<>();
+        Thread serverThread = Thread.ofVirtual().start(() -> {
+            try {
+                server.start();
+            } catch (Throwable failure) {
+                serverFailure.set(failure);
+            }
+        });
+
+        try {
+            waitForPort(server);
+            try (LivePlayerClient first = LivePlayerClient.create(
+                    server.localPort(), "retaliatea", "alpha1", 0);
+                 LivePlayerClient second = LivePlayerClient.create(
+                         server.localPort(), "retaliateb", "beta22", 1)) {
+                first.finishLoadMap();
+                second.finishLoadMap();
+                assertAddPlayer(second.readServerMessage(), first.playerInfo().id(), "alpha1", 0);
+                assertAddPlayer(first.readServerMessage(), second.playerInfo().id(), "beta22", 1);
+
+                first.move(4464, 936);
+                first.requestChangeMap();
+                assertEquals(1, first.readMapInfo().mapId());
+                first.finishLoadMap();
+                assertEquals(MessageName.PLAYER_MOVE, second.readServerMessage().command());
+                assertEquals(MessageName.REMOVE_PLAYER, second.readServerMessage().command());
+
+                second.move(4464, 936);
+                second.requestChangeMap();
+                assertEquals(1, second.readMapInfo().mapId());
+                second.finishLoadMap();
+                assertAddPlayerId(first.readServerMessage(), second.playerInfo().id());
+                assertAddPlayerId(second.readServerMessage(), first.playerInfo().id());
+                assertNoServerMessage(first);
+                assertNoServerMessage(second);
+
+                first.prepareMonsterAttack(0, 0);
+                first.impactMonster(0);
+                assertMonsterInjure(first.readServerMessage(), 0, 10, 290);
+                assertMonsterInjure(second.readServerMessage(), 0, 10, 290);
+                clock.advanceMillis(1L);
+                assertMonsterAttack(first.readServerMessage(), 0, first.playerInfo().id(), 10L);
+                assertMonsterAttack(second.readServerMessage(), 0, first.playerInfo().id(), 10L);
+                assertEquals(90L, server.sessions().findByAccount("retaliatea").player().hp());
+
+                clock.advanceMillis(1_600L);
+                assertNoServerMessage(first);
+                assertNoServerMessage(second);
+                clock.advanceMillis(1L);
+                assertMonsterAttack(first.readServerMessage(), 0, first.playerInfo().id(), 10L);
+                assertMonsterAttack(second.readServerMessage(), 0, first.playerInfo().id(), 10L);
+                assertEquals(80L, server.sessions().findByAccount("retaliatea").player().hp());
+
+                for (int expectedHp = 70; expectedHp >= 10; expectedHp -= 10) {
+                    clock.advanceMillis(1_601L);
+                    assertMonsterAttack(first.readServerMessage(), 0, first.playerInfo().id(), 10L);
+                    assertMonsterAttack(second.readServerMessage(), 0, first.playerInfo().id(), 10L);
+                    assertEquals(expectedHp,
+                            server.sessions().findByAccount("retaliatea").player().hp());
+                }
+                clock.advanceMillis(1_601L);
+                assertNoServerMessage(first);
+                assertNoServerMessage(second);
+
+                for (int expectedHp = 280; expectedHp >= 10; expectedHp -= 10) {
+                    first.prepareMonsterAttack(0, 0);
+                    first.impactMonster(0);
+                    assertMonsterInjure(first.readServerMessage(), 0, 10, expectedHp);
+                    assertMonsterInjure(second.readServerMessage(), 0, 10, expectedHp);
+                }
+                first.prepareMonsterAttack(0, 0);
+                first.impactMonster(0);
+                assertMonsterDeath(first.readServerMessage(), 0, 10);
+                assertMonsterDeath(second.readServerMessage(), 0, 10);
+                assertEquals(1, maps.monsterSnapshots(1, 0).getFirst().status());
+                clock.advanceMillis(8_000L);
+                assertNoServerMessage(first);
+                assertNoServerMessage(second);
+                clock.advanceMillis(1L);
+                assertMonsterRespawn(first.readServerMessage(), 0, 0, 300L);
+                assertMonsterRespawn(second.readServerMessage(), 0, 0, 300L);
+                assertNoServerMessage(first);
+                assertNoServerMessage(second);
+
+                second.prepareMonsterAttack(0, 0);
+                second.impactMonster(0);
+                assertMonsterInjure(first.readServerMessage(), 0, 10, 290);
+                assertMonsterInjure(second.readServerMessage(), 0, 10, 290);
+                clock.advanceMillis(1L);
+                assertMonsterAttack(first.readServerMessage(), 0, second.playerInfo().id(), 10L);
+                assertMonsterAttack(second.readServerMessage(), 0, second.playerInfo().id(), 10L);
+                assertEquals(10L, server.sessions().findByAccount("retaliatea").player().hp());
+                assertEquals(90L, server.sessions().findByAccount("retaliateb").player().hp());
+            }
+            waitForNoSessions(server);
+        } finally {
+            server.stop();
+            serverThread.join(1_000);
+        }
+        assertNull(serverFailure.get(), "network server failed during retaliation test");
     }
 
     @Test
@@ -1694,6 +1820,19 @@ class NetworkIntegrationTest {
         assertEquals(expectedId, reader.readInt());
         assertEquals(expectedLevelStatus, reader.readByte());
         assertEquals(expectedHp, reader.readLong());
+        assertEquals(0, reader.remaining());
+    }
+
+    private static void assertMonsterAttack(Message message, int expectedMonsterId,
+                                             int expectedPlayerId, long expectedDamage)
+            throws IOException {
+        assertEquals(MessageName.MONSTER_ATTACK, message.command());
+        assertEquals(17, message.payload().length);
+        var reader = message.reader();
+        assertEquals(expectedMonsterId, reader.readInt());
+        assertEquals(0, reader.readByte());
+        assertEquals(expectedPlayerId, reader.readInt());
+        assertEquals(expectedDamage, reader.readLong());
         assertEquals(0, reader.remaining());
     }
 

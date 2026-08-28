@@ -505,6 +505,78 @@ class NetworkIntegrationTest {
     }
 
     @Test
+    void retaliationPlayerStateSurvivesMoveAndMapChangeOverTcp() throws Exception {
+        ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
+        AuthService auth = new AuthService();
+        MutableClock clock = new MutableClock(1_000_000L);
+        assertTrue(auth.register("retaliaterace", "secret1").success());
+        MapService maps = new MapService(
+                new com.project.game.network.packet.PlayerPacketWriter(),
+                new MonsterPacketWriter(),
+                new MonsterRuntimeFactory(resources),
+                clock,
+                new Random(12345L));
+        NetworkServer server = new NetworkServer(
+                "127.0.0.1", 0, 2, 262_144, 8, 1_000,
+                "abc".getBytes(StandardCharsets.US_ASCII),
+                new ServerServices(auth, resources, maps), null,
+                NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
+        AtomicReference<Throwable> serverFailure = new AtomicReference<>();
+        Thread serverThread = Thread.ofVirtual().start(() -> {
+            try {
+                server.start();
+            } catch (Throwable failure) {
+                serverFailure.set(failure);
+            }
+        });
+
+        try {
+            waitForPort(server);
+            try (LivePlayerClient client = LivePlayerClient.create(
+                    server.localPort(), "retaliaterace", "alpha1", 0)) {
+                client.finishLoadMap();
+                client.move(4464, 936);
+                client.requestChangeMap();
+                ParsedMapInfo map1 = client.readMapInfo();
+                assertEquals(1, map1.mapId());
+                assertEquals(90, map1.x());
+                assertEquals(1008, map1.y());
+                client.finishLoadMap();
+
+                client.prepareMonsterAttack(0, 0);
+                client.impactMonster(0);
+                assertMonsterInjure(client.readServerMessage(), 0, 10, 290);
+                clock.advanceMillis(1L);
+                assertMonsterAttack(client.readServerMessage(), 0, client.playerInfo().id(), 10L);
+                assertEquals(90L, server.sessions().findByAccount("retaliaterace").player().hp());
+
+                client.move(1260, 640);
+                awaitPlayerPosition(server, "retaliaterace", 1260, 640);
+                assertEquals(90L, server.sessions().findByAccount("retaliaterace").player().hp());
+                assertEquals(1260, server.sessions().findByAccount("retaliaterace").player().x());
+                assertEquals(640, server.sessions().findByAccount("retaliaterace").player().y());
+                assertNoServerMessage(client);
+
+                client.move(0, 1008);
+                client.requestChangeMap();
+                ParsedMapInfo map0 = client.readMapInfo();
+                assertEquals(0, map0.mapId());
+                assertEquals(4374, map0.x());
+                assertEquals(936, map0.y());
+                assertTrue(map0.monsters().isEmpty());
+                assertEquals(90L, server.sessions().findByAccount("retaliaterace").player().hp());
+                assertEquals(0, server.sessions().findByAccount("retaliaterace").player().mapId());
+                assertNoServerMessage(client);
+            }
+            waitForNoSessions(server);
+        } finally {
+            server.stop();
+            serverThread.join(1_000);
+        }
+        assertNull(serverFailure.get(), "network server failed during player-state race regression");
+    }
+
+    @Test
     void javaClientCreatesFreshPlayerAndParsesLegacyMapZero() throws Exception {
         ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
         NetworkServer server = new NetworkServer("127.0.0.1", 0, 2, 262_144, 8, 1_000,
@@ -1990,6 +2062,24 @@ class NetworkIntegrationTest {
             Thread.sleep(10);
         }
         throw new AssertionError("server did not bind a port");
+    }
+
+    private static void awaitPlayerPosition(NetworkServer server, String account,
+                                             int x, int y) throws InterruptedException {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        while (System.nanoTime() < deadline) {
+            Session session = server.sessions().findByAccount(account);
+            if (session != null && session.player() != null
+                    && session.player().x() == x && session.player().y() == y) {
+                return;
+            }
+            Thread.sleep(1);
+        }
+        Session session = server.sessions().findByAccount(account);
+        assertTrue(session != null && session.player() != null,
+                "player session disappeared while awaiting movement");
+        assertEquals(x, session.player().x());
+        assertEquals(y, session.player().y());
     }
 
     private static void waitForNoSessions(NetworkServer server) throws InterruptedException {

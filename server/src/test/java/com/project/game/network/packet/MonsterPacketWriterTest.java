@@ -76,7 +76,7 @@ class MonsterPacketWriterTest {
     @Test
     void writesExactPlayerTargetMonsterAttackPayload() throws Exception {
         Message message = new MonsterPacketWriter().attackPlayer(
-                new MonsterAttackResult(17, 42, 10L, 90L));
+                new MonsterAttackResult(17, 42, 10L, 90L, false));
 
         assertEquals(MessageName.MONSTER_ATTACK, message.command());
         assertEquals(17, message.payload().length);
@@ -92,8 +92,8 @@ class MonsterPacketWriterTest {
     void monsterAttackPacketDoesNotEncodeHpAfter() {
         MonsterPacketWriter writer = new MonsterPacketWriter();
 
-        Message first = writer.attackPlayer(new MonsterAttackResult(1, 2, 10L, 90L));
-        Message second = writer.attackPlayer(new MonsterAttackResult(1, 2, 10L, 80L));
+        Message first = writer.attackPlayer(new MonsterAttackResult(1, 2, 10L, 90L, false));
+        Message second = writer.attackPlayer(new MonsterAttackResult(1, 2, 10L, 80L, false));
 
         assertArrayEquals(first.payload(), second.payload());
     }

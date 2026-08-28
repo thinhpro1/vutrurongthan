@@ -138,7 +138,7 @@ public final class Zone {
                         PlayerProfile player = member.player();
                         return player.mapId() == mapId
                                 && player.zoneId() == zoneId
-                                && player.hp() > monster.damage()
+                                && player.hp() > 0L
                                 && isWithinMonsterAttackRange(monster.snapshot(), player);
                     })
                     .toList();
@@ -147,9 +147,16 @@ public final class Zone {
             }
             Session target = eligible.get(random.nextInt(eligible.size()));
             PlayerProfile player = target.player();
-            long hpAfter = player.hp() - monster.damage();
+            long hpAfter = Math.max(0L, player.hp() - monster.damage());
+            boolean killed = hpAfter == 0L;
             target.bindPlayer(player.withHp(hpAfter));
-            attacks.add(new MonsterAttackResult(monster.id(), player.id(), monster.damage(), hpAfter));
+            if (killed) {
+                for (RuntimeMonster runtime : monsters.values()) {
+                    runtime.removeEnemy(player.id());
+                }
+            }
+            attacks.add(new MonsterAttackResult(
+                    monster.id(), player.id(), monster.damage(), hpAfter, killed));
         }
         return List.copyOf(attacks);
     }

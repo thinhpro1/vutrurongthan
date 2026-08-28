@@ -804,6 +804,67 @@ class MapServiceTest {
     }
 
     @Test
+    void monsterRetaliationCanKillPlayerAtExactDamage() throws Exception {
+        MutableClock clock = new MutableClock(1_000_000L);
+        MapService maps = mapsWithMonsters(clock, new Random(0));
+        Session target = session(player(1, 1, 0).withHp(10L), maps);
+        maps.finishLoad(target);
+        drain(target);
+
+        assertTrue(maps.attackMonster(target, 0, 10L));
+        drain(target);
+
+        clock.advanceMillis(1L);
+        maps.tickMonsterLifecycle();
+
+        assertEquals(0L, target.player().hp());
+    }
+
+    @Test
+    void monsterRetaliationClampsOverkillToZero() throws Exception {
+        MutableClock clock = new MutableClock(1_000_000L);
+        MapService maps = mapsWithMonsters(clock, new Random(0));
+        PlayerProfile lowHp = player(1, 1, 0).withHp(5L);
+        Session target = session(lowHp, maps);
+        maps.finishLoad(target);
+        drain(target);
+
+        assertTrue(maps.attackMonster(target, 0, 10L));
+        drain(target);
+
+        clock.advanceMillis(1L);
+        maps.tickMonsterLifecycle();
+
+        assertEquals(0L, target.player().hp());
+    }
+
+    @Test
+    void lethalRetaliationClearsVictimHostilityFromEveryMonster() throws Exception {
+        MutableClock clock = new MutableClock(1_000_000L);
+        MapService maps = mapsWithMonsters(clock, new Random(0));
+        Session target = session(player(1, 1, 0).withHp(10L), maps);
+        maps.finishLoad(target);
+        drain(target);
+
+        for (int monsterId = 0; monsterId < 6; monsterId++) {
+            assertTrue(maps.attackMonster(target, monsterId, 1L));
+            drain(target);
+        }
+
+        clock.advanceMillis(1L);
+        maps.tickMonsterLifecycle();
+
+        assertEquals(0L, target.player().hp());
+        assertTrue(runtimeMonsters(maps, 1, 0).stream()
+                .noneMatch(monster -> monster.hasEnemy(target.player().id())));
+
+        drain(target);
+        clock.advanceMillis(10_000L);
+        maps.tickMonsterLifecycle();
+        assertEquals(List.of(), drain(target));
+    }
+
+    @Test
     void retaliationDoesNotCrossZones() throws Exception {
         MutableClock clock = new MutableClock(1_000_000L);
         MapService maps = mapsWithMonsters(clock, new Random(12345L));
@@ -850,7 +911,7 @@ class MapServiceTest {
     }
 
     @Test
-    void retaliationStopsAtTenHpAndRespawnRequiresNewHit() throws Exception {
+    void retaliationKillsAtZeroAndRespawnRequiresNewHit() throws Exception {
         MutableClock clock = new MutableClock(1_000_000L);
         MapService maps = mapsWithMonsters(clock, new Random(12345L));
         Session attacker = session(player(1, 1, 0), maps);
@@ -867,20 +928,30 @@ class MapServiceTest {
 
         clock.advanceMillis(1_601L);
         maps.tickMonsterLifecycle();
-        assertEquals(List.of(), drain(attacker));
-        assertEquals(10L, attacker.player().hp());
+        assertEquals(List.of(MessageName.MONSTER_ATTACK), commands(drain(attacker)));
+        assertEquals(0L, attacker.player().hp());
 
-        assertTrue(maps.attackMonster(attacker, 0, 500));
-        drain(attacker);
+        clock.advanceMillis(1_601L);
+        maps.tickMonsterLifecycle();
+        assertEquals(List.of(), drain(attacker));
+        assertEquals(0L, attacker.player().hp());
+
+        maps.leave(attacker);
+        Session survivor = session(player(2, 1, 0), maps);
+        maps.finishLoad(survivor);
+        drain(survivor);
+
+        assertTrue(maps.attackMonster(survivor, 0, 500));
+        drain(survivor);
         clock.advanceMillis(9_000L);
         maps.tickMonsterLifecycle();
-        assertEquals(List.of(), drain(attacker));
+        assertEquals(List.of(), drain(survivor));
         clock.advanceMillis(1L);
         maps.tickMonsterLifecycle();
-        assertEquals(List.of(MessageName.MONSTER_RESPAWN), commands(drain(attacker)));
+        assertEquals(List.of(MessageName.MONSTER_RESPAWN), commands(drain(survivor)));
         clock.advanceMillis(1L);
         maps.tickMonsterLifecycle();
-        assertEquals(List.of(), drain(attacker));
+        assertEquals(List.of(), drain(survivor));
     }
 
     @Test
@@ -1152,6 +1223,25 @@ class MapServiceTest {
         @Override
         public long nextLong() {
             return 0L;
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<RuntimeMonster> runtimeMonsters(MapService maps, int mapId, int zoneId) {
+        try {
+            Field zonesField = MapService.class.getDeclaredField("zones");
+            zonesField.setAccessible(true);
+            for (Zone zone : ((java.util.Map<?, Zone>) zonesField.get(maps)).values()) {
+                if (zone.mapId() != mapId || zone.zoneId() != zoneId) {
+                    continue;
+                }
+                Field monstersField = Zone.class.getDeclaredField("monsters");
+                monstersField.setAccessible(true);
+                return List.copyOf(((java.util.Map<Integer, RuntimeMonster>) monstersField.get(zone)).values());
+            }
+            throw new AssertionError("zone not found: " + mapId + "/" + zoneId);
+        } catch (ReflectiveOperationException exception) {
+            throw new AssertionError("unable to inspect zone monsters", exception);
         }
     }
 

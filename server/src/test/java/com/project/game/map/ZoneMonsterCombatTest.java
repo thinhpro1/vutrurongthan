@@ -174,7 +174,7 @@ class ZoneMonsterCombatTest {
 
         zone.damageMonster(0, 7, 10, NOW).orElseThrow();
 
-        assertEquals(List.of(new MonsterAttackResult(0, 7, 10L, 90L)),
+        assertEquals(List.of(new MonsterAttackResult(0, 7, 10L, 90L, false)),
                 zone.attackDueMonsters(NOW + 1, new Random(12345L)));
         assertEquals(90L, player.player().hp());
     }

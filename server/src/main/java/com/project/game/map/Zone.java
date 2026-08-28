@@ -2,14 +2,17 @@ package com.project.game.map;
 
 import com.project.game.monster.MonsterSnapshot;
 import com.project.game.monster.MonsterDamageResult;
+import com.project.game.monster.MonsterAttackResult;
 import com.project.game.monster.MonsterRespawnResult;
 import com.project.game.monster.RuntimeMonster;
 import com.project.game.network.Session;
+import com.project.game.network.SessionState;
 import com.project.game.player.PlayerProfile;
 
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Objects;
+import java.util.random.RandomGenerator;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -105,6 +108,7 @@ public final class Zone {
 
     public synchronized Optional<MonsterDamageResult> damageMonster(
             int monsterId,
+            int attackerPlayerId,
             long damage,
             long nowMillis) {
         RuntimeMonster monster = monsters.get(monsterId);
@@ -113,7 +117,41 @@ public final class Zone {
         }
 
         long delay = respawnDelayMillis(members.size());
-        return monster.applyDamage(damage, nowMillis, delay);
+        return monster.applyDamage(attackerPlayerId, damage, nowMillis, delay);
+    }
+
+    public synchronized List<MonsterAttackResult> attackDueMonsters(
+            long nowMillis,
+            RandomGenerator random) {
+        Objects.requireNonNull(random, "random");
+        List<MonsterAttackResult> attacks = new java.util.ArrayList<>();
+        for (RuntimeMonster monster : monsters.values()) {
+            if (!monster.beginAttackAttemptIfDue(nowMillis)) {
+                continue;
+            }
+            List<Session> eligible = monster.enemyPlayerIds().stream()
+                    .map(members::get)
+                    .filter(Objects::nonNull)
+                    .filter(member -> member.state() != SessionState.CLOSED)
+                    .filter(member -> member.player() != null)
+                    .filter(member -> {
+                        PlayerProfile player = member.player();
+                        return player.mapId() == mapId
+                                && player.zoneId() == zoneId
+                                && player.hp() > monster.damage()
+                                && isWithinMonsterAttackRange(monster.snapshot(), player);
+                    })
+                    .toList();
+            if (eligible.isEmpty()) {
+                continue;
+            }
+            Session target = eligible.get(random.nextInt(eligible.size()));
+            PlayerProfile player = target.player();
+            long hpAfter = player.hp() - monster.damage();
+            target.bindPlayer(player.withHp(hpAfter));
+            attacks.add(new MonsterAttackResult(monster.id(), player.id(), monster.damage(), hpAfter));
+        }
+        return List.copyOf(attacks);
     }
 
     public synchronized List<MonsterRespawnResult> respawnDueMonsters(long nowMillis) {
@@ -128,6 +166,14 @@ public final class Zone {
             throw new IllegalArgumentException("playerCount must be non-negative");
         }
         return Math.max(10_000L - 1_000L * playerCount, 5_000L);
+    }
+
+    private static boolean isWithinMonsterAttackRange(
+            MonsterSnapshot monster,
+            PlayerProfile player) {
+        long dx = (long) monster.x() - player.x();
+        long dy = (long) monster.y() - player.y();
+        return dx * dx + dy * dy < 900L * 900L;
     }
 
     private static PlayerProfile requirePlayer(Session session) {

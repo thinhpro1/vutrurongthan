@@ -419,6 +419,8 @@ class NetworkIntegrationTest {
                 ParsedMapInfo map1 = client.readMapInfo();
                 assertEquals(1, map1.mapId());
                 client.finishLoadMap();
+                client.move(2_000, 1_008);
+                awaitPlayerPosition(server, accountName, 2_000, 1_008);
 
                 Session live = server.sessions().findByAccount(accountName);
                 assertTrue(live != null);
@@ -430,6 +432,12 @@ class NetworkIntegrationTest {
                     client.impactMonster(0);
                     assertMonsterInjure(client.readServerMessage(), 0, 10, expectedHp);
                 }
+
+                live = server.sessions().findByAccount(accountName);
+                assertTrue(live != null);
+                assertEquals(100L, live.player().hp());
+                assertEquals(1L, live.player().potential());
+                assertEquals(1L, live.player().power());
 
                 client.prepareMonsterAttack(0, 0);
                 client.impactMonster(0);

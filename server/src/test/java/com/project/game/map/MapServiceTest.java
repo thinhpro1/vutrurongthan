@@ -516,6 +516,34 @@ class MapServiceTest {
     }
 
     @Test
+    void hostilePlayerJustOutsideLeashDoesNotPinReturningMonster() throws Exception {
+        MapService maps = mapsWithMonsters();
+        Session player = session(
+                player(1, 1, 0).withPosition(2176, 936),
+                maps);
+        maps.finishLoad(player);
+        drain(player);
+
+        assertTrue(maps.attackMonster(player, 0, 10));
+        drain(player);
+
+        RuntimeMonster monster = runtimeMonsters(maps, 1, 0).getFirst();
+        setIntField(monster, "x", 1300);
+        setIntField(monster, "moveDir", 1);
+
+        Zone zone = zoneFor(maps, 1, 0);
+        MonsterMoveResult move = zone.moveMonsters().stream()
+                .filter(result -> result.monsterId() == 0)
+                .findFirst()
+                .orElseThrow();
+
+        assertEquals(1296, move.x());
+        assertEquals(936, move.y());
+        assertEquals(-1, move.dir());
+        assertTrue(monster.hasEnemy(player.player().id()));
+    }
+
+    @Test
     void concurrentMonsterSnapshotsRemainStableForSameZone() throws Exception {
         MapService maps = mapsWithMonsters();
         CyclicBarrier start = new CyclicBarrier(3);

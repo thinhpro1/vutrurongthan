@@ -172,13 +172,13 @@ public final class Zone {
                 continue;
             }
 
-            List<Session> hostile = hostileLivingMembers(monster);
-            if (hostile.stream().anyMatch(member ->
+            List<Session> chaseEligible = chaseEligibleMembers(monster);
+            if (chaseEligible.stream().anyMatch(member ->
                     isWithinMonsterAttackRange(monster.snapshot(), member.player()))) {
                 continue;
             }
 
-            Session target = nearestChaseTarget(monster);
+            Session target = nearestChaseTarget(monster, chaseEligible);
             Optional<MonsterMoveResult> moved = target == null
                     ? monster.patrolOrReturn()
                     : monster.moveToward(target.player().x());
@@ -207,16 +207,24 @@ public final class Zone {
         return squaredDistance(monster, player) < 900L * 900L;
     }
 
-    private Session nearestChaseTarget(RuntimeMonster monster) {
+    private Session nearestChaseTarget(
+            RuntimeMonster monster,
+            List<Session> chaseEligible) {
         MonsterSnapshot snapshot = monster.snapshot();
-        return hostileLivingMembers(monster).stream()
-                .filter(member -> Math.abs((long) member.player().x() - monster.xFirst())
-                        <= MONSTER_CHASE_LEASH)
+        return chaseEligible.stream()
                 .min(Comparator
                         .comparingLong((Session member) ->
                                 squaredDistance(snapshot, member.player()))
                         .thenComparingInt(member -> member.player().id()))
                 .orElse(null);
+    }
+
+    private List<Session> chaseEligibleMembers(RuntimeMonster monster) {
+        return hostileLivingMembers(monster).stream()
+                .filter(member -> Math.abs(
+                        (long) member.player().x() - monster.xFirst())
+                        <= MONSTER_CHASE_LEASH)
+                .toList();
     }
 
     private List<Session> hostileLivingMembers(RuntimeMonster monster) {

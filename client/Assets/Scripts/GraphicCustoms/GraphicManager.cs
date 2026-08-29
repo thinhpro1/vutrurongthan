@@ -68,6 +68,21 @@ namespace Assets.Scripts.GraphicCustoms
                     return;
                 }
 
+                long now = Utils.CurrentTimeMillis();
+                long time = 0;
+                if (timeRequestIcons.ContainsKey(id))
+                {
+                    time = timeRequestIcons[id];
+                }
+                else
+                {
+                    timeRequestIcons.Add(id, 0);
+                }
+                if (now - time < 5000)
+                {
+                    return;
+                }
+
                 sbyte[] cachedData = LoadCachedIconData(id);
                 if (cachedData != null && cachedData.Length > 0)
                 {
@@ -90,20 +105,6 @@ namespace Assets.Scripts.GraphicCustoms
                     }
                 }
 
-                long now = Utils.CurrentTimeMillis();
-                long time = 0;
-                if (timeRequestIcons.ContainsKey(id))
-                {
-                    time = timeRequestIcons[id];
-                }
-                else
-                {
-                    timeRequestIcons.Add(id, 0);
-                }
-                if (now - time < 5000)
-                {
-                    return;
-                }
                 timeRequestIcons[id] = now;
                 if (!ServerManager.instance.session.iconRequest.Contains(id))
                 {

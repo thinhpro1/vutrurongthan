@@ -67,6 +67,29 @@ namespace Assets.Scripts.GraphicCustoms
                     }
                     return;
                 }
+
+                sbyte[] cachedData = LoadCachedIconData(id);
+                if (cachedData != null && cachedData.Length > 0)
+                {
+                    Image cachedImage = null;
+                    try
+                    {
+                        cachedImage = Image.createImage(
+                            cachedData,
+                            0,
+                            cachedData.Length);
+                    }
+                    catch
+                    {
+                    }
+
+                    if (cachedImage != null)
+                    {
+                        images.Add(id, cachedImage);
+                        return;
+                    }
+                }
+
                 long now = Utils.CurrentTimeMillis();
                 long time = 0;
                 if (timeRequestIcons.ContainsKey(id))
@@ -90,59 +113,34 @@ namespace Assets.Scripts.GraphicCustoms
             catch
             {
             }
-            /* try
-             {
-                 *//*#if UNITY_EDITOR
-                                 Image icon = GameCanvas.LoadImage("SmallImages/" + id);
-                                 if (icon != null)
-                                 {
-                                     images.Add(id, icon);
-                                     return;
-                                 }
-                 #endif*//*
-                 long now = Utils.CurrentTimeMillis();
-                 long time = 0;
-                 if (timeRequestIcons.ContainsKey(id))
-                 {
-                     time = timeRequestIcons[id];
-                 }
-                 else
-                 {
-                     timeRequestIcons.Add(id, 0);
-                 }
-                 if (now - time < 5000)
-                 {
-                     return;
-                 }
-                 timeRequestIcons[id] = now;
-                 sbyte[] array = null;
-                 try
-                 {
-                     if (datas.ContainsKey(id))
-                     {
-                         array = datas[id];
-                     }
-                     //array = Utils.Cast(Convert.FromBase64String(Decrypt(HexToString(Rms.LoadString("icon_" + versionImage + "_" + id)), versionImage + "" + versionImage)));
-                 }
-                 catch
-                 {
-                 }
-                 if (array != null)
-                 {
-                     Image image = Image.createImage(array, 0, array.Length);
-                     if (image != null)
-                     {
-                         images.Add(id, image);
-                     }
-                 }
-                 else
-                 {
-                     Service.instance.RequestIcon(id);
-                 }
-             }
-             catch
-             {
-             }*/
+        }
+
+        private sbyte[] LoadCachedIconData(int id)
+        {
+            try
+            {
+                string stored = Rms.LoadString("icon_" + versionImage + "_" + id);
+                if (string.IsNullOrEmpty(stored))
+                {
+                    return null;
+                }
+
+                string encrypted = HexToString(stored);
+                string base64 = Decrypt(
+                    encrypted,
+                    versionImage + "" + versionImage);
+
+                if (string.IsNullOrEmpty(base64))
+                {
+                    return null;
+                }
+
+                return Utils.Cast(Convert.FromBase64String(base64));
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         public void Draw(MyGraphics g, int id, int x, int y, int transform, int anchor)

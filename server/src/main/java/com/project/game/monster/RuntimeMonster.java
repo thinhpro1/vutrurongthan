@@ -244,10 +244,10 @@ public final class RuntimeMonster {
         }
 
         long candidate = (long) x + (long) moveDir * step;
-        if (candidate > maxX) {
+        if (candidate >= maxX) {
             x = maxX;
             moveDir = -1;
-        } else if (candidate < minX) {
+        } else if (candidate <= minX) {
             x = minX;
             moveDir = 1;
         } else {

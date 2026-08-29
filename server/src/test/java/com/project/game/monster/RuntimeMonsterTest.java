@@ -176,6 +176,35 @@ class RuntimeMonsterTest {
     }
 
     @Test
+    void patrolFlipsDirectionWhenStepLandsExactlyOnBoundary() throws Exception {
+        RuntimeMonster monster = map1Monster();
+
+        setIntField(monster, "x", 1071);
+        setIntField(monster, "moveDir", 1);
+
+        MonsterMoveResult right = monster.patrolOrReturn().orElseThrow();
+
+        assertEquals(1075, right.x());
+        assertEquals(-1, right.dir());
+
+        MonsterMoveResult afterRight = monster.patrolOrReturn().orElseThrow();
+        assertEquals(1071, afterRight.x());
+        assertEquals(-1, afterRight.dir());
+
+        setIntField(monster, "x", 879);
+        setIntField(monster, "moveDir", -1);
+
+        MonsterMoveResult left = monster.patrolOrReturn().orElseThrow();
+
+        assertEquals(875, left.x());
+        assertEquals(1, left.dir());
+
+        MonsterMoveResult afterLeft = monster.patrolOrReturn().orElseThrow();
+        assertEquals(879, afterLeft.x());
+        assertEquals(1, afterLeft.dir());
+    }
+
+    @Test
     void deadMonsterDoesNotMoveAndRespawnResetsDirection() throws Exception {
         RuntimeMonster monster = map1Monster();
 

@@ -3,6 +3,7 @@ package com.project.game.map;
 import com.project.game.monster.MonsterSnapshot;
 import com.project.game.monster.MonsterDamageResult;
 import com.project.game.monster.MonsterAttackResult;
+import com.project.game.monster.MonsterMoveResult;
 import com.project.game.monster.MonsterRespawnResult;
 import com.project.game.monster.RuntimeMonster;
 import com.project.game.network.Session;
@@ -10,6 +11,8 @@ import com.project.game.network.SessionState;
 import com.project.game.player.PlayerProfile;
 
 import java.util.LinkedHashMap;
+import java.util.Comparator;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.random.RandomGenerator;
@@ -18,6 +21,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /** Concurrent runtime membership for one map zone. */
 public final class Zone {
+    private static final int MONSTER_CHASE_LEASH = 1200;
     private final int mapId;
     private final int zoneId;
     private final ConcurrentHashMap<Integer, Session> members = new ConcurrentHashMap<>();
@@ -161,6 +165,28 @@ public final class Zone {
         return List.copyOf(attacks);
     }
 
+    public synchronized List<MonsterMoveResult> moveMonsters() {
+        List<MonsterMoveResult> moves = new ArrayList<>();
+        for (RuntimeMonster monster : monsters.values()) {
+            if (!monster.isAlive()) {
+                continue;
+            }
+
+            List<Session> hostile = hostileLivingMembers(monster);
+            if (hostile.stream().anyMatch(member ->
+                    isWithinMonsterAttackRange(monster.snapshot(), member.player()))) {
+                continue;
+            }
+
+            Session target = nearestChaseTarget(monster);
+            Optional<MonsterMoveResult> moved = target == null
+                    ? monster.patrolOrReturn()
+                    : monster.moveToward(target.player().x());
+            moved.ifPresent(moves::add);
+        }
+        return List.copyOf(moves);
+    }
+
     public synchronized List<MonsterRespawnResult> respawnDueMonsters(long nowMillis) {
         return monsters.values().stream()
                 .map(monster -> monster.respawnIfDue(nowMillis))
@@ -178,9 +204,42 @@ public final class Zone {
     private static boolean isWithinMonsterAttackRange(
             MonsterSnapshot monster,
             PlayerProfile player) {
+        return squaredDistance(monster, player) < 900L * 900L;
+    }
+
+    private Session nearestChaseTarget(RuntimeMonster monster) {
+        MonsterSnapshot snapshot = monster.snapshot();
+        return hostileLivingMembers(monster).stream()
+                .filter(member -> Math.abs((long) member.player().x() - monster.xFirst())
+                        <= MONSTER_CHASE_LEASH)
+                .min(Comparator
+                        .comparingLong((Session member) ->
+                                squaredDistance(snapshot, member.player()))
+                        .thenComparingInt(member -> member.player().id()))
+                .orElse(null);
+    }
+
+    private List<Session> hostileLivingMembers(RuntimeMonster monster) {
+        return monster.enemyPlayerIds().stream()
+                .map(members::get)
+                .filter(Objects::nonNull)
+                .filter(member -> member.state() != SessionState.CLOSED)
+                .filter(member -> member.player() != null)
+                .filter(member -> {
+                    PlayerProfile player = member.player();
+                    return player.mapId() == mapId
+                            && player.zoneId() == zoneId
+                            && player.hp() > 0L;
+                })
+                .toList();
+    }
+
+    private static long squaredDistance(
+            MonsterSnapshot monster,
+            PlayerProfile player) {
         long dx = (long) monster.x() - player.x();
         long dy = (long) monster.y() - player.y();
-        return dx * dx + dy * dy < 900L * 900L;
+        return dx * dx + dy * dy;
     }
 
     private static PlayerProfile requirePlayer(Session session) {

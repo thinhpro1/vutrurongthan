@@ -13,6 +13,7 @@ import com.project.game.network.packet.PlayerPacketWriter;
 import com.project.game.network.packet.MonsterPacketWriter;
 import com.project.game.monster.MonsterRuntimeFactory;
 import com.project.game.monster.MonsterSnapshot;
+import com.project.game.monster.MonsterMoveResult;
 import com.project.game.monster.RuntimeMonster;
 import com.project.game.player.PlayerProfile;
 import com.project.game.service.AuthService;
@@ -309,6 +310,168 @@ class MapServiceTest {
         assertEquals(zone0, zone1);
         assertEquals(6, zone0.size());
         assertEquals(6, zone1.size());
+    }
+
+    @Test
+    void idleMonsterPatrolIsServerAuthoritative() {
+        MapService maps = mapsWithMonsters();
+        maps.monsterSnapshots(1, 0);
+        Zone zone = zoneFor(maps, 1, 0);
+
+        MonsterSnapshot before = zone.monsterSnapshots().getFirst();
+        List<MonsterMoveResult> moves = zone.moveMonsters();
+        MonsterSnapshot after = zone.monsterSnapshots().getFirst();
+
+        assertEquals(975, before.x());
+        assertEquals(979, after.x());
+        assertEquals(936, after.y());
+        assertTrue(moves.stream().anyMatch(result ->
+                result.monsterId() == 0
+                        && result.x() == 979
+                        && result.y() == 936
+                        && result.dir() == 1));
+    }
+
+    @Test
+    void nearbyUnhostilePlayerDoesNotRedirectIdlePatrol() throws Exception {
+        MapService maps = mapsWithMonsters();
+        Session player = session(player(1, 1, 0).withPosition(100, 936), maps);
+        maps.finishLoad(player);
+        drain(player);
+
+        Zone zone = zoneFor(maps, 1, 0);
+        zone.moveMonsters();
+
+        assertEquals(979, zone.monsterSnapshots().getFirst().x());
+    }
+
+    @Test
+    void successfulDamageMakesMonsterChaseHostilePlayer() throws Exception {
+        MapService maps = mapsWithMonsters();
+        Session player = session(player(1, 1, 0).withPosition(1900, 936), maps);
+        maps.finishLoad(player);
+        drain(player);
+
+        Zone zone = zoneFor(maps, 1, 0);
+        zone.moveMonsters();
+
+        assertTrue(maps.attackMonster(player, 0, 10));
+        drain(player);
+
+        MonsterSnapshot before = zone.monsterSnapshots().getFirst();
+        List<MonsterMoveResult> moves = zone.moveMonsters();
+        MonsterSnapshot after = zone.monsterSnapshots().getFirst();
+
+        assertEquals(979, before.x());
+        assertEquals(983, after.x());
+        assertEquals(1, moves.stream()
+                .filter(result -> result.monsterId() == 0)
+                .findFirst()
+                .orElseThrow()
+                .dir());
+    }
+
+    @Test
+    void nearestHostilePlayerWinsAndLowerIdBreaksEqualDistance() throws Exception {
+        MapService maps = mapsWithMonsters();
+        Session lowerId = session(player(7, 1, 0).withPosition(25, 936), maps);
+        Session higherId = session(player(8, 1, 0).withPosition(1925, 936), maps);
+        maps.finishLoad(lowerId);
+        maps.finishLoad(higherId);
+        drain(lowerId);
+        drain(higherId);
+
+        assertTrue(maps.attackMonster(lowerId, 0, 10));
+        assertTrue(maps.attackMonster(higherId, 0, 10));
+        drain(lowerId);
+        drain(higherId);
+
+        Zone zone = zoneFor(maps, 1, 0);
+        MonsterMoveResult move = zone.moveMonsters().stream()
+                .filter(result -> result.monsterId() == 0)
+                .findFirst()
+                .orElseThrow();
+
+        assertEquals(971, move.x());
+        assertEquals(-1, move.dir());
+    }
+
+    @Test
+    void hostileMonsterStopsInsideAttackRangeButChasesAtExactNineHundred() throws Exception {
+        MapService insideRangeMaps = mapsWithMonsters();
+        Session insideRange = session(player(1, 1, 0).withPosition(1874, 936), insideRangeMaps);
+        insideRangeMaps.finishLoad(insideRange);
+        drain(insideRange);
+        assertTrue(insideRangeMaps.attackMonster(insideRange, 0, 10));
+        drain(insideRange);
+
+        Zone insideRangeZone = zoneFor(insideRangeMaps, 1, 0);
+        assertTrue(insideRangeZone.moveMonsters().stream()
+                .noneMatch(result -> result.monsterId() == 0));
+        assertEquals(975, insideRangeZone.monsterSnapshots().getFirst().x());
+
+        MapService exactRangeMaps = mapsWithMonsters();
+        Session exactRange = session(player(1, 1, 0).withPosition(1875, 936), exactRangeMaps);
+        exactRangeMaps.finishLoad(exactRange);
+        drain(exactRange);
+        assertTrue(exactRangeMaps.attackMonster(exactRange, 0, 10));
+        drain(exactRange);
+
+        Zone exactRangeZone = zoneFor(exactRangeMaps, 1, 0);
+        MonsterMoveResult move = exactRangeZone.moveMonsters().stream()
+                .filter(result -> result.monsterId() == 0)
+                .findFirst()
+                .orElseThrow();
+        assertEquals(979, move.x());
+    }
+
+    @Test
+    void leashDoesNotClearHostilityAndReentryResumesChase() throws Exception {
+        MapService maps = mapsWithMonsters();
+        Session player = session(player(1, 1, 0).withPosition(-300, 936), maps);
+        maps.finishLoad(player);
+        drain(player);
+        assertTrue(maps.attackMonster(player, 0, 10));
+        drain(player);
+
+        Zone zone = zoneFor(maps, 1, 0);
+        RuntimeMonster monster = runtimeMonsters(maps, 1, 0).getFirst();
+        assertTrue(monster.hasEnemy(player.player().id()));
+        zone.moveMonsters();
+        assertEquals(979, monster.snapshot().x());
+        assertTrue(monster.hasEnemy(player.player().id()));
+
+        assertTrue(maps.movePlayer(player, 1975, 936));
+        drain(player);
+        MonsterMoveResult resumed = zone.moveMonsters().stream()
+                .filter(result -> result.monsterId() == 0)
+                .findFirst()
+                .orElseThrow();
+        assertEquals(983, resumed.x());
+        assertEquals(1, resumed.dir());
+    }
+
+    @Test
+    void unavailableHostileTargetWalksMonsterBackToPatrolCorridor() throws Exception {
+        MapService maps = mapsWithMonsters();
+        Session player = session(player(1, 1, 0).withPosition(2200, 936), maps);
+        maps.finishLoad(player);
+        drain(player);
+        assertTrue(maps.attackMonster(player, 0, 10));
+        drain(player);
+
+        RuntimeMonster monster = runtimeMonsters(maps, 1, 0).getFirst();
+        setIntField(monster, "x", 1200);
+        setIntField(monster, "moveDir", 1);
+        Zone zone = zoneFor(maps, 1, 0);
+
+        MonsterMoveResult returning = zone.moveMonsters().stream()
+                .filter(result -> result.monsterId() == 0)
+                .findFirst()
+                .orElseThrow();
+        assertEquals(1196, returning.x());
+        assertEquals(-1, returning.dir());
+        assertTrue(monster.hasEnemy(player.player().id()));
     }
 
     @Test
@@ -1289,6 +1452,13 @@ class MapServiceTest {
         return session;
     }
 
+    private static void setIntField(RuntimeMonster monster, String fieldName, int value)
+            throws Exception {
+        Field field = RuntimeMonster.class.getDeclaredField(fieldName);
+        field.setAccessible(true);
+        field.setInt(monster, value);
+    }
+
     @SuppressWarnings("unchecked")
     private static List<Message> drain(Session session) throws Exception {
         Field field = Session.class.getDeclaredField("sendQueue");
@@ -1386,6 +1556,22 @@ class MapServiceTest {
         @Override
         public long nextLong() {
             return 0L;
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Zone zoneFor(MapService maps, int mapId, int zoneId) {
+        try {
+            Field zonesField = MapService.class.getDeclaredField("zones");
+            zonesField.setAccessible(true);
+            for (Zone zone : ((java.util.Map<?, Zone>) zonesField.get(maps)).values()) {
+                if (zone.mapId() == mapId && zone.zoneId() == zoneId) {
+                    return zone;
+                }
+            }
+            throw new AssertionError("zone not found: " + mapId + "/" + zoneId);
+        } catch (ReflectiveOperationException exception) {
+            throw new AssertionError("unable to inspect zone registry", exception);
         }
     }
 

@@ -49,6 +49,10 @@ class MonsterRuntimeFactoryTest {
                         && monster.hp() == 300L
                         && monster.status() == 0));
         assertTrue(map1.stream().allMatch(monster -> monster.damage() == 10L));
+        assertTrue(map1.stream().allMatch(monster -> monster.rangeMove() == 100));
+        assertTrue(map1.stream().allMatch(monster -> monster.speed() == 1));
+        assertTrue(map1.stream().allMatch(monster -> monster.moveType() == 1));
+        assertTrue(map1.stream().allMatch(monster -> monster.moveDir() == 1));
     }
 
     @Test

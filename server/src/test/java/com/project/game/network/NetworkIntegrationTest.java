@@ -272,7 +272,7 @@ class NetworkIntegrationTest {
                 assertEquals(List.of(new ParsedWaypoint(0, 1008, 0, "Núi Paozu")),
                         map1.waypoints());
                 assertEquals(0, map1.npcCount());
-                assertEquals(canonicalMap1Monsters(), map1.monsters());
+                assertMap1MonsterShape(map1.monsters());
                 assertEquals(0, map1.itemMapCount());
                 assertFalse(map1.dragonActive());
                 client.finishLoadMap();
@@ -298,7 +298,7 @@ class NetworkIntegrationTest {
                         "cached Map1 packet must omit static template");
                 assertEquals(90, secondMap1.x());
                 assertEquals(1008, secondMap1.y());
-                assertEquals(canonicalMap1Monsters(), secondMap1.monsters());
+                assertMap1MonsterShape(secondMap1.monsters());
                 assertEquals(0, secondMap1.remaining());
             }
             waitForNoSessions(server);
@@ -348,7 +348,7 @@ class NetworkIntegrationTest {
                 first.requestChangeMap();
                 ParsedMapInfo firstMap1 = first.readMapInfo();
                 assertEquals(1, firstMap1.mapId());
-                assertEquals(canonicalMap1Monsters(), firstMap1.monsters());
+                assertMap1MonsterShape(firstMap1.monsters());
                 assertEquals(0, maps.memberCount(1, 0));
                 assertEquals(MessageName.REMOVE_PLAYER, second.readServerMessage().command());
                 first.finishLoadMap();
@@ -362,7 +362,7 @@ class NetworkIntegrationTest {
                 second.requestChangeMap();
                 ParsedMapInfo secondMap1 = second.readMapInfo();
                 assertEquals(1, secondMap1.mapId());
-                assertEquals(canonicalMap1Monsters(), secondMap1.monsters());
+                assertMap1MonsterShape(secondMap1.monsters());
                 assertEquals(1, maps.memberCount(1, 0));
                 second.finishLoadMap();
                 assertAddPlayerId(first.readServerMessage(), second.playerInfo().id());
@@ -386,6 +386,106 @@ class NetworkIntegrationTest {
             serverThread.join(1_000);
         }
         assertNull(serverFailure.get(), "network server failed during cross-map test");
+    }
+
+    @Test
+    void javaClientsObserveAuthoritativeMonsterMovementAndChase() throws Exception {
+        ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
+        AuthService auth = new AuthService();
+        MutableClock clock = new MutableClock(1_000_000L);
+        assertTrue(auth.register("chasetcp1", "secret1").success());
+        assertTrue(auth.register("chasetcp2", "secret1").success());
+        assertTrue(auth.register("chasetcp3", "secret1").success());
+        MapService maps = new MapService(
+                new com.project.game.network.packet.PlayerPacketWriter(),
+                new MonsterPacketWriter(),
+                new MonsterRuntimeFactory(resources),
+                clock,
+                new Random(12345L));
+        NetworkServer server = new NetworkServer(
+                "127.0.0.1", 0, 4, 262_144, 16, 1_000,
+                "abc".getBytes(StandardCharsets.US_ASCII),
+                new ServerServices(auth, resources, maps), null,
+                NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
+        AtomicReference<Throwable> serverFailure = new AtomicReference<>();
+        Thread serverThread = Thread.ofVirtual().start(() -> {
+            try {
+                server.start();
+            } catch (Throwable failure) {
+                serverFailure.set(failure);
+            }
+        });
+
+        try {
+            waitForPort(server);
+            try (LivePlayerClient attacker = LivePlayerClient.create(
+                    server.localPort(), "chasetcp1", "chaser1", 0);
+                 LivePlayerClient observer = LivePlayerClient.create(
+                         server.localPort(), "chasetcp2", "chaser2", 1)) {
+                attacker.finishLoadMap();
+                observer.finishLoadMap();
+                assertAddPlayer(observer.readServerMessage(), attacker.playerInfo().id(), "chaser1", 0);
+                assertAddPlayer(attacker.readServerMessage(), observer.playerInfo().id(), "chaser2", 1);
+
+                attacker.move(4464, 936);
+                attacker.requestChangeMap();
+                assertEquals(1, attacker.readMapInfo().mapId());
+                attacker.finishLoadMap();
+                assertEquals(MessageName.PLAYER_MOVE, observer.readServerMessage().command());
+                assertEquals(MessageName.REMOVE_PLAYER, observer.readServerMessage().command());
+
+                observer.move(4464, 936);
+                observer.requestChangeMap();
+                assertEquals(1, observer.readMapInfo().mapId());
+                observer.finishLoadMap();
+                assertAddPlayerId(attacker.readServerMessage(), observer.playerInfo().id());
+                assertAddPlayerId(observer.readServerMessage(), attacker.playerInfo().id());
+
+                attacker.move(2_100, 936);
+                assertEquals(MessageName.PLAYER_MOVE, observer.readServerMessage().command());
+
+                attacker.prepareMonsterAttack(0, 0);
+                attacker.impactMonster(0);
+                assertMonsterInjure(attacker.readServerMessage(), 0, 10, 290);
+                assertMonsterInjure(observer.readServerMessage(), 0, 10, 290);
+
+                MonsterMoveView attackerMove = readMonsterMove(attacker, 0);
+                MonsterMoveView observerMove = readMonsterMove(observer, 0);
+                assertEquals(attackerMove, observerMove);
+                assertEquals(0, attackerMove.monsterId());
+                assertEquals(1, attackerMove.dir());
+                assertTrue(attackerMove.x() > 975);
+                assertTrue(maps.monsterSnapshots(1, 0).getFirst().x() >= attackerMove.x());
+
+                MonsterMoveView stopped = attackerMove;
+                while (stopped.x() < 1_203) {
+                    stopped = readMonsterMove(attacker, 0);
+                }
+                assertEquals(1_203, stopped.x());
+                int authoritativeX = maps.monsterSnapshots(1, 0).getFirst().x();
+                assertEquals(stopped.x(), authoritativeX);
+
+                try (LivePlayerClient late = LivePlayerClient.create(
+                        server.localPort(), "chasetcp3", "chaser3", 0)) {
+                    late.move(4464, 936);
+                    late.requestChangeMap();
+                    ParsedMapInfo lateMap = late.readMapInfo();
+                    assertEquals(1, lateMap.mapId());
+                    assertEquals(stopped.x(), lateMap.monsters().getFirst().x());
+                    assertEquals(stopped.y(), lateMap.monsters().getFirst().y());
+                    late.finishLoadMap();
+                    assertAddPlayerId(attacker.readServerMessage(), late.playerInfo().id());
+                    assertAddPlayerId(observer.readServerMessage(), late.playerInfo().id());
+                    assertAddPlayerId(late.readServerMessage(), attacker.playerInfo().id());
+                    assertAddPlayerId(late.readServerMessage(), observer.playerInfo().id());
+                }
+            }
+            waitForNoSessions(server);
+        } finally {
+            server.stop();
+            serverThread.join(1_000);
+        }
+        assertNull(serverFailure.get(), "network server failed during TCP movement/chase test");
     }
 
     @Test
@@ -491,7 +591,7 @@ class NetworkIntegrationTest {
                 first.move(4464, 936);
                 first.requestChangeMap();
                 ParsedMapInfo firstMap1 = first.readMapInfo();
-                assertEquals(canonicalMap1Monsters(), firstMap1.monsters());
+                assertMap1MonsterShape(firstMap1.monsters());
                 first.finishLoadMap();
                 assertEquals(MessageName.PLAYER_MOVE, second.readServerMessage().command());
                 assertEquals(MessageName.REMOVE_PLAYER, second.readServerMessage().command());
@@ -499,7 +599,7 @@ class NetworkIntegrationTest {
                 second.move(4464, 936);
                 second.requestChangeMap();
                 ParsedMapInfo secondMap1 = second.readMapInfo();
-                assertEquals(canonicalMap1Monsters(), secondMap1.monsters());
+                assertMap1MonsterShape(secondMap1.monsters());
                 second.finishLoadMap();
                 assertAddPlayerId(first.readServerMessage(), second.playerInfo().id());
                 assertAddPlayerId(second.readServerMessage(), first.playerInfo().id());
@@ -1974,6 +2074,25 @@ class NetworkIntegrationTest {
                 new ParsedMonsterSpawn(0, 1, 5, 2, 0, 2950, 936, 300L, 300L, 0));
     }
 
+    private static void assertMap1MonsterShape(List<ParsedMonsterSpawn> actual) {
+        List<ParsedMonsterSpawn> expected = canonicalMap1Monsters();
+        assertEquals(expected.size(), actual.size());
+        for (int index = 0; index < expected.size(); index++) {
+            ParsedMonsterSpawn expectedMonster = expected.get(index);
+            ParsedMonsterSpawn actualMonster = actual.get(index);
+            assertEquals(expectedMonster.type(), actualMonster.type());
+            assertEquals(expectedMonster.templateId(), actualMonster.templateId());
+            assertEquals(expectedMonster.id(), actualMonster.id());
+            assertEquals(expectedMonster.level(), actualMonster.level());
+            assertEquals(expectedMonster.levelStatus(), actualMonster.levelStatus());
+            assertTrue(Math.abs(actualMonster.x() - expectedMonster.x()) <= 100);
+            assertEquals(expectedMonster.y(), actualMonster.y());
+            assertEquals(expectedMonster.maxHp(), actualMonster.maxHp());
+            assertEquals(expectedMonster.hp(), actualMonster.hp());
+            assertEquals(expectedMonster.status(), actualMonster.status());
+        }
+    }
+
     private static void skipUtfList(com.project.game.network.message.MessageReader reader)
             throws IOException {
         int count = reader.readUnsignedByte();
@@ -2079,6 +2198,8 @@ class NetworkIntegrationTest {
             long hp,
             int status
     ) {}
+
+    private record MonsterMoveView(int monsterId, int x, int y, int dir) {}
 
     private record ParsedWaypoint(int x, int y, int type, String name) {}
 
@@ -2202,6 +2323,23 @@ class NetworkIntegrationTest {
         assertEquals(0, reader.remaining());
     }
 
+    private static MonsterMoveView readMonsterMove(LivePlayerClient client, int expectedMonsterId)
+            throws IOException {
+        while (true) {
+            Message message = client.readRawServerMessage();
+            if (message.command() != MessageName.MONSTER_MOVE) {
+                continue;
+            }
+            var reader = message.reader();
+            MonsterMoveView move = new MonsterMoveView(
+                    reader.readInt(), reader.readShort(), reader.readShort(), reader.readByte());
+            assertEquals(0, reader.remaining());
+            if (move.monsterId() == expectedMonsterId) {
+                return move;
+            }
+        }
+    }
+
     private static void assertMeDie(Message message, int expectedX, int expectedY)
             throws IOException {
         assertEquals(MessageName.ME_DIE, message.command());
@@ -2222,12 +2360,20 @@ class NetworkIntegrationTest {
     }
 
     private static void assertNoServerMessage(LivePlayerClient client) throws Exception {
-        client.transport.socket().setSoTimeout(250);
+        client.transport.socket().setSoTimeout(50);
+        long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(250);
         try {
-            client.readServerMessage();
-            throw new AssertionError("mover received an unexpected server packet");
-        } catch (SocketTimeoutException expected) {
-            // No movement ACK is part of the inbound PLAYER_MOVE contract.
+            while (System.nanoTime() < deadline) {
+                try {
+                    Message message = client.readRawServerMessage();
+                    if (message.command() != MessageName.MONSTER_MOVE) {
+                        throw new AssertionError("received an unexpected server packet: "
+                                + message.command());
+                    }
+                } catch (SocketTimeoutException expected) {
+                    return;
+                }
+            }
         } finally {
             client.transport.socket().setSoTimeout(5_000);
         }
@@ -2365,6 +2511,14 @@ class NetworkIntegrationTest {
         }
 
         private Message readServerMessage() throws IOException {
+            Message message;
+            do {
+                message = readRawServerMessage();
+            } while (message.command() == MessageName.MONSTER_MOVE);
+            return message;
+        }
+
+        private Message readRawServerMessage() throws IOException {
             return codec.readServerResponse(transport.input(), cipher, true);
         }
 

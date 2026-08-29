@@ -520,6 +520,40 @@ class MapServiceTest {
     }
 
     @Test
+    void chaseBoundaryTransitionReturnsInwardImmediatelyWhenLeashEnds() throws Exception {
+        MapService maps = mapsWithMonsters();
+        Session player = session(player(1, 1, 0).withPosition(1971, 936), maps);
+        maps.finishLoad(player);
+        drain(player);
+
+        assertTrue(maps.attackMonster(player, 0, 10));
+        drain(player);
+
+        RuntimeMonster monster = runtimeMonsters(maps, 1, 0).getFirst();
+        setIntField(monster, "x", 1071);
+        setIntField(monster, "moveDir", 1);
+        Zone zone = zoneFor(maps, 1, 0);
+
+        MonsterMoveResult chase = zone.moveMonsters().stream()
+                .filter(result -> result.monsterId() == 0)
+                .findFirst()
+                .orElseThrow();
+        assertEquals(1075, chase.x());
+        assertEquals(1, chase.dir());
+
+        assertTrue(maps.movePlayer(player, 2176, 936));
+        drain(player);
+
+        MonsterMoveResult returning = zone.moveMonsters().stream()
+                .filter(result -> result.monsterId() == 0)
+                .findFirst()
+                .orElseThrow();
+        assertEquals(1071, returning.x());
+        assertEquals(-1, returning.dir());
+        assertTrue(monster.hasEnemy(player.player().id()));
+    }
+
+    @Test
     void hostilePlayerJustOutsideLeashDoesNotPinReturningMonster() throws Exception {
         MapService maps = mapsWithMonsters();
         Session player = session(

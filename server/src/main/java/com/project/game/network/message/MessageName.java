@@ -32,6 +32,7 @@ public final class MessageName {
     public static final int MONSTER_INJURE = -106;
     public static final int MONSTER_RESPAWN = -105;
     public static final int SELECT_SKILL = -103;
+    public static final int MONSTER_MOVE = -102;
     public static final int MONSTER_ATTACK = -101;
     public static final int MONSTER_START_DIE = -100;
     public static final int MONSTER_ADD_EFFECT = -99;

@@ -2,6 +2,7 @@ package com.project.game.network.packet;
 
 import com.project.game.monster.MonsterDamageResult;
 import com.project.game.monster.MonsterAttackResult;
+import com.project.game.monster.MonsterMoveResult;
 import com.project.game.monster.MonsterRespawnResult;
 import com.project.game.network.message.Message;
 import com.project.game.network.message.MessageName;
@@ -102,5 +103,27 @@ class MonsterPacketWriterTest {
     void rejectsNullMonsterAttackResult() {
         assertThrows(NullPointerException.class,
                 () -> new MonsterPacketWriter().attackPlayer(null));
+    }
+
+    @Test
+    void writesExactMonsterMovePayload() throws Exception {
+        Message message = new MonsterPacketWriter().move(
+                new MonsterMoveResult(17, 1234, 936, -1));
+
+        assertEquals(MessageName.MONSTER_MOVE, message.command());
+        assertEquals(9, message.payload().length);
+
+        var reader = message.reader();
+        assertEquals(17, reader.readInt());
+        assertEquals(1234, reader.readShort());
+        assertEquals(936, reader.readShort());
+        assertEquals(-1, reader.readByte());
+        assertEquals(0, reader.remaining());
+    }
+
+    @Test
+    void rejectsNullMonsterMoveResult() {
+        assertThrows(NullPointerException.class,
+                () -> new MonsterPacketWriter().move(null));
     }
 }

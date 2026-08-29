@@ -2,6 +2,7 @@ package com.project.game.network.packet;
 
 import com.project.game.monster.MonsterDamageResult;
 import com.project.game.monster.MonsterAttackResult;
+import com.project.game.monster.MonsterMoveResult;
 import com.project.game.monster.MonsterRespawnResult;
 import com.project.game.network.message.Message;
 import com.project.game.network.message.MessageName;
@@ -59,6 +60,21 @@ public final class MonsterPacketWriter {
                         .writeByte(0)
                         .writeInt(result.playerId())
                         .writeLong(result.damage())
+                        .toByteArray());
+    }
+
+    public Message move(MonsterMoveResult result) {
+        Objects.requireNonNull(result, "result");
+        if (result.dir() != -1 && result.dir() != 1) {
+            throw new IllegalArgumentException("monster move dir must be -1 or 1");
+        }
+        return new Message(
+                MessageName.MONSTER_MOVE,
+                new MessageWriter()
+                        .writeInt(result.monsterId())
+                        .writeShort(result.x())
+                        .writeShort(result.y())
+                        .writeByte(result.dir())
                         .toByteArray());
     }
 }

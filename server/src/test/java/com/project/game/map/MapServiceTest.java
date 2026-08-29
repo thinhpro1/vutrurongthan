@@ -137,6 +137,47 @@ class MapServiceTest {
     }
 
     @Test
+    void serializedLifecycleThenMovementChasesLatestPlayerPosition() throws Exception {
+        MutableClock clock = new MutableClock(1_000_000L);
+        BlockingRandom random = new BlockingRandom();
+        MapService maps = mapsWithMonsters(clock, random);
+        Session player = session(player(1, 1, 0), maps);
+        maps.finishLoad(player);
+        drain(player);
+
+        assertTrue(maps.attackMonster(player, 0, 10));
+        drain(player);
+        clock.advanceMillis(1L);
+
+        Thread lifecycle = Thread.ofVirtual().start(maps::tickMonsterLifecycle);
+        assertTrue(random.entered.await(5, TimeUnit.SECONDS));
+
+        AtomicBoolean moved = new AtomicBoolean();
+        Thread movement = Thread.ofVirtual().start(() ->
+                moved.set(maps.movePlayer(player, 2_100, 936)));
+        awaitBlocked(movement);
+        assertFalse(moved.get());
+
+        random.release.countDown();
+        lifecycle.join();
+        movement.join();
+
+        assertTrue(moved.get());
+        assertEquals(2_100, player.player().x());
+        assertEquals(936, player.player().y());
+        withoutMonsterMoves(drain(player));
+
+        clock.advanceMillis(1L);
+        maps.tickMonsterLifecycle();
+        List<Message> monsterMoves = drain(player).stream()
+                .filter(message -> message.command() == MessageName.MONSTER_MOVE)
+                .filter(message -> monsterMoveId(message) == 0)
+                .toList();
+        assertEquals(1, monsterMoves.size());
+        assertMonsterMove(monsterMoves.getFirst(), 0, 979, 936, 1);
+    }
+
+    @Test
     void leaveNotifiesOtherMembersOnce() throws Exception {
         MapService maps = mapsWithoutMonsters();
         Session first = session(player(1, 0, 0));
@@ -984,12 +1025,12 @@ class MapServiceTest {
 
         clock.advanceMillis(9_000L);
         maps.tickMonsterLifecycle();
-        assertEquals(List.of(), drain(attacker));
+        assertEquals(List.of(), withoutMonsterMoves(drain(attacker)));
         assertEquals(1, maps.monsterSnapshots(1, 0).getFirst().status());
 
         clock.advanceMillis(1L);
         maps.tickMonsterLifecycle();
-        List<Message> messages = drain(attacker);
+        List<Message> messages = withoutMonsterMoves(drain(attacker));
         assertEquals(List.of(MessageName.MONSTER_RESPAWN), commands(messages));
         var reader = messages.getFirst().reader();
         assertEquals(0, reader.readInt());
@@ -1018,15 +1059,15 @@ class MapServiceTest {
 
         clock.advanceMillis(8_001L);
         maps.tickMonsterLifecycle();
-        List<Message> attackerMessages = drain(attacker);
-        List<Message> peerMessages = drain(peer);
+        List<Message> attackerMessages = withoutMonsterMoves(drain(attacker));
+        List<Message> peerMessages = withoutMonsterMoves(drain(peer));
         assertEquals(List.of(MessageName.MONSTER_RESPAWN), commands(attackerMessages));
         assertEquals(List.of(MessageName.MONSTER_RESPAWN), commands(peerMessages));
         assertArrayEquals(attackerMessages.getFirst().payload(), peerMessages.getFirst().payload());
 
         maps.tickMonsterLifecycle();
-        assertEquals(List.of(), drain(attacker));
-        assertEquals(List.of(), drain(peer));
+        assertEquals(List.of(), withoutMonsterMoves(drain(attacker)));
+        assertEquals(List.of(), withoutMonsterMoves(drain(peer)));
     }
 
     @Test
@@ -1046,7 +1087,7 @@ class MapServiceTest {
         clock.advanceMillis(9_001L);
         maps.tickMonsterLifecycle();
         assertEquals(List.of(MessageName.MONSTER_RESPAWN), commands(drain(attacker)));
-        assertEquals(List.of(), drain(other));
+        assertEquals(List.of(), withoutMonsterMoves(drain(other)));
         assertEquals(300L, maps.monsterSnapshots(1, 1).getFirst().hp());
     }
 
@@ -1061,8 +1102,84 @@ class MapServiceTest {
         clock.advanceMillis(5_000L);
         maps.tickMonsterLifecycle();
 
-        assertEquals(List.of(), drain(player));
+        assertEquals(List.of(), withoutMonsterMoves(drain(player)));
         assertEquals(100L, player.player().hp());
+    }
+
+    @Test
+    void monsterLifecycleBroadcastsIdenticalMovementToZoneMembers() throws Exception {
+        MutableClock clock = new MutableClock(1_000_000L);
+        MapService maps = mapsWithMonsters(clock, new Random(12345L));
+        Session first = session(player(1, 1, 0), maps);
+        Session second = session(player(2, 1, 0), maps);
+        maps.finishLoad(first);
+        maps.finishLoad(second);
+        drain(first);
+        drain(second);
+
+        maps.tickMonsterLifecycle();
+
+        List<Message> firstMessages = drain(first);
+        List<Message> secondMessages = drain(second);
+        assertEquals(6, firstMessages.stream()
+                .filter(message -> message.command() == MessageName.MONSTER_MOVE)
+                .count());
+        assertEquals(6, secondMessages.stream()
+                .filter(message -> message.command() == MessageName.MONSTER_MOVE)
+                .count());
+        List<Message> firstMoves = firstMessages.stream()
+                .filter(message -> message.command() == MessageName.MONSTER_MOVE)
+                .toList();
+        List<Message> secondMoves = secondMessages.stream()
+                .filter(message -> message.command() == MessageName.MONSTER_MOVE)
+                .toList();
+        for (int i = 0; i < firstMoves.size(); i++) {
+            assertArrayEquals(firstMoves.get(i).payload(), secondMoves.get(i).payload());
+        }
+
+        assertMonsterMove(firstMessages.getFirst(), 0, 979, 936, 1);
+        assertMonsterMove(secondMessages.getFirst(), 0, 979, 936, 1);
+    }
+
+    @Test
+    void monsterMovementIsBroadcastBeforeSameTickAttack() throws Exception {
+        MutableClock clock = new MutableClock(1_000_000L);
+        MapService maps = mapsWithMonsters(clock, new Random(0));
+        Session target = session(player(1, 1, 0).withPosition(1875, 936), maps);
+        maps.finishLoad(target);
+        drain(target);
+        assertTrue(maps.attackMonster(target, 0, 10));
+        drain(target);
+
+        clock.advanceMillis(1L);
+        maps.tickMonsterLifecycle();
+
+        List<Message> messages = drain(target);
+        assertEquals(MessageName.MONSTER_MOVE, messages.getFirst().command());
+        assertMonsterMove(messages.getFirst(), 0, 979, 936, 1);
+        assertEquals(MessageName.MONSTER_ATTACK, messages.get(6).command());
+        assertEquals(90L, target.player().hp());
+    }
+
+    @Test
+    void hostileMonsterAlreadyInsideAttackRangeDoesNotMoveThatTick() throws Exception {
+        MutableClock clock = new MutableClock(1_000_000L);
+        MapService maps = mapsWithMonsters(clock, new Random(0));
+        Session target = session(player(1, 1, 0).withPosition(1874, 936), maps);
+        maps.finishLoad(target);
+        drain(target);
+        assertTrue(maps.attackMonster(target, 0, 10));
+        drain(target);
+
+        clock.advanceMillis(1L);
+        maps.tickMonsterLifecycle();
+
+        List<Message> messages = drain(target);
+        assertTrue(messages.stream()
+                .filter(message -> message.command() == MessageName.MONSTER_MOVE)
+                .noneMatch(message -> monsterMoveId(message) == 0));
+        assertTrue(messages.stream()
+                .anyMatch(message -> message.command() == MessageName.MONSTER_ATTACK));
     }
 
     @Test
@@ -1082,8 +1199,8 @@ class MapServiceTest {
         clock.advanceMillis(1L);
         maps.tickMonsterLifecycle();
 
-        List<Message> attackerMessages = drain(attacker);
-        List<Message> observerMessages = drain(observer);
+        List<Message> attackerMessages = withoutMonsterMoves(drain(attacker));
+        List<Message> observerMessages = withoutMonsterMoves(drain(observer));
         assertEquals(List.of(MessageName.MONSTER_ATTACK), commands(attackerMessages));
         assertEquals(List.of(MessageName.MONSTER_ATTACK), commands(observerMessages));
         assertArrayEquals(attackerMessages.getFirst().payload(), observerMessages.getFirst().payload());
@@ -1146,10 +1263,10 @@ class MapServiceTest {
         assertTrue(runtimeMonsters(maps, 1, 0).stream()
                 .noneMatch(monster -> monster.hasEnemy(target.player().id())));
 
-        drain(target);
+        withoutMonsterMoves(drain(target));
         clock.advanceMillis(10_000L);
         maps.tickMonsterLifecycle();
-        assertEquals(List.of(), drain(target));
+        assertEquals(List.of(), withoutMonsterMoves(drain(target)));
     }
 
     @Test
@@ -1169,7 +1286,7 @@ class MapServiceTest {
         clock.advanceMillis(1L);
         maps.tickMonsterLifecycle();
 
-        List<Message> victimMessages = drain(victim);
+        List<Message> victimMessages = withoutMonsterMoves(drain(victim));
         assertEquals(
                 List.of(MessageName.MONSTER_ATTACK, MessageName.ME_DIE),
                 commands(victimMessages));
@@ -1178,7 +1295,7 @@ class MapServiceTest {
         assertEquals(victim.player().y(), selfDeath.readShort());
         assertEquals(0, selfDeath.remaining());
 
-        List<Message> observerMessages = drain(observer);
+        List<Message> observerMessages = withoutMonsterMoves(drain(observer));
         assertEquals(
                 List.of(MessageName.MONSTER_ATTACK, MessageName.PLAYER_DIE),
                 commands(observerMessages));
@@ -1206,7 +1323,7 @@ class MapServiceTest {
         maps.tickMonsterLifecycle();
 
         assertEquals(List.of(MessageName.MONSTER_ATTACK), commands(drain(attacker)));
-        assertEquals(List.of(), drain(otherZone));
+        assertEquals(List.of(), withoutMonsterMoves(drain(otherZone)));
         assertEquals(100L, otherZone.player().hp());
     }
 
@@ -1223,16 +1340,17 @@ class MapServiceTest {
         attacker.bindPlayer(attacker.player().withPosition(975 + 901, 936));
         clock.advanceMillis(1L);
         maps.tickMonsterLifecycle();
-        assertEquals(List.of(), drain(attacker));
+        assertEquals(List.of(MessageName.MONSTER_ATTACK),
+                commands(drain(attacker)));
 
         attacker.bindPlayer(attacker.player().withPosition(975, 936));
         clock.advanceMillis(1_600L);
         maps.tickMonsterLifecycle();
-        assertEquals(List.of(), drain(attacker));
+        assertEquals(List.of(), withoutMonsterMoves(drain(attacker)));
         clock.advanceMillis(1L);
         maps.tickMonsterLifecycle();
         assertEquals(List.of(MessageName.MONSTER_ATTACK), commands(drain(attacker)));
-        assertEquals(90L, attacker.player().hp());
+        assertEquals(80L, attacker.player().hp());
     }
 
     @Test
@@ -1259,7 +1377,7 @@ class MapServiceTest {
 
         clock.advanceMillis(1_601L);
         maps.tickMonsterLifecycle();
-        assertEquals(List.of(), drain(attacker));
+        assertEquals(List.of(), withoutMonsterMoves(drain(attacker)));
         assertEquals(0L, attacker.player().hp());
 
         maps.leave(attacker);
@@ -1271,13 +1389,13 @@ class MapServiceTest {
         drain(survivor);
         clock.advanceMillis(9_000L);
         maps.tickMonsterLifecycle();
-        assertEquals(List.of(), drain(survivor));
+        assertEquals(List.of(), withoutMonsterMoves(drain(survivor)));
         clock.advanceMillis(1L);
         maps.tickMonsterLifecycle();
         assertEquals(List.of(MessageName.MONSTER_RESPAWN), commands(drain(survivor)));
         clock.advanceMillis(1L);
         maps.tickMonsterLifecycle();
-        assertEquals(List.of(), drain(survivor));
+        assertEquals(List.of(), withoutMonsterMoves(drain(survivor)));
     }
 
     @Test
@@ -1300,7 +1418,7 @@ class MapServiceTest {
         clock.advanceMillis(8_001L);
         maps.tickMonsterLifecycle();
         assertEquals(List.of(MessageName.MONSTER_RESPAWN), commands(drain(attacker)));
-        assertEquals(List.of(), drain(peer));
+        assertEquals(List.of(), withoutMonsterMoves(drain(peer)));
     }
 
     @Test
@@ -1470,7 +1588,36 @@ class MapServiceTest {
     }
 
     private static List<Integer> commands(List<Message> messages) {
-        return messages.stream().map(Message::command).toList();
+        return messages.stream()
+                .filter(message -> message.command() != MessageName.MONSTER_MOVE)
+                .map(Message::command)
+                .toList();
+    }
+
+    private static List<Message> withoutMonsterMoves(List<Message> messages) {
+        return messages.stream()
+                .filter(message -> message.command() != MessageName.MONSTER_MOVE)
+                .toList();
+    }
+
+    private static void assertMonsterMove(Message message, int expectedId,
+                                          int expectedX, int expectedY, int expectedDir)
+            throws IOException {
+        assertEquals(MessageName.MONSTER_MOVE, message.command());
+        var reader = message.reader();
+        assertEquals(expectedId, reader.readInt());
+        assertEquals(expectedX, reader.readShort());
+        assertEquals(expectedY, reader.readShort());
+        assertEquals(expectedDir, reader.readByte());
+        assertEquals(0, reader.remaining());
+    }
+
+    private static int monsterMoveId(Message message) {
+        try {
+            return message.reader().readInt();
+        } catch (IOException exception) {
+            throw new AssertionError("invalid monster movement packet", exception);
+        }
     }
 
     private static void awaitBlocked(Thread thread) throws InterruptedException {

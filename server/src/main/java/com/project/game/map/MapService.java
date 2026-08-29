@@ -4,6 +4,7 @@ import com.project.game.monster.MonsterDamageResult;
 import com.project.game.monster.MonsterRuntimeFactory;
 import com.project.game.monster.MonsterRespawnResult;
 import com.project.game.monster.MonsterSnapshot;
+import com.project.game.monster.MonsterMoveResult;
 import com.project.game.network.Session;
 import com.project.game.network.SessionState;
 import com.project.game.network.packet.PlayerPacketWriter;
@@ -150,10 +151,19 @@ public final class MapService {
         long nowMillis = clock.millis();
         for (Zone zone : zones.values()) {
             synchronized (zone) {
+                List<MonsterMoveResult> moved = zone.moveMonsters();
                 List<MonsterRespawnResult> respawned = zone.respawnDueMonsters(nowMillis);
                 List<com.project.game.monster.MonsterAttackResult> attacks =
                         zone.attackDueMonsters(nowMillis, random);
                 List<Session> members = zone.snapshot();
+                for (MonsterMoveResult result : moved) {
+                    Message packet = monsterPackets.move(result);
+                    for (Session member : members) {
+                        if (member.state() != SessionState.CLOSED) {
+                            member.send(packet);
+                        }
+                    }
+                }
                 for (MonsterRespawnResult result : respawned) {
                     Message packet = monsterPackets.respawn(result);
                     for (Session member : members) {

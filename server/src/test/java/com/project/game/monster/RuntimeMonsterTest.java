@@ -205,6 +205,36 @@ class RuntimeMonsterTest {
     }
 
     @Test
+    void patrolMovesInwardImmediatelyAfterChaseEndsAtBoundary() throws Exception {
+        RuntimeMonster monster = map1Monster();
+
+        setIntField(monster, "x", 1071);
+        setIntField(monster, "moveDir", 1);
+
+        MonsterMoveResult chase = monster.moveToward(1971).orElseThrow();
+
+        assertEquals(1075, chase.x());
+        assertEquals(1, chase.dir());
+
+        MonsterMoveResult patrol = monster.patrolOrReturn().orElseThrow();
+
+        assertEquals(1071, patrol.x());
+        assertEquals(936, patrol.y());
+        assertEquals(-1, patrol.dir());
+
+        setIntField(monster, "x", 879);
+        setIntField(monster, "moveDir", -1);
+
+        MonsterMoveResult chaseLeft = monster.moveToward(-21).orElseThrow();
+        assertEquals(875, chaseLeft.x());
+        assertEquals(-1, chaseLeft.dir());
+
+        MonsterMoveResult patrolRight = monster.patrolOrReturn().orElseThrow();
+        assertEquals(879, patrolRight.x());
+        assertEquals(1, patrolRight.dir());
+    }
+
+    @Test
     void deadMonsterDoesNotMoveAndRespawnResetsDirection() throws Exception {
         RuntimeMonster monster = map1Monster();
 

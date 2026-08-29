@@ -226,35 +226,40 @@ public final class RuntimeMonster {
 
         int minX = Math.subtractExact(xFirst, rangeMove);
         int maxX = Math.addExact(xFirst, rangeMove);
+        int beforeX = x;
+        int beforeY = y;
 
         if (x < minX) {
             int target = Math.min(minX, Math.addExact(x, step));
             x = target;
-            y = yFirst;
             moveDir = 1;
-            return Optional.of(new MonsterMoveResult(id, x, y, moveDir));
-        }
-
-        if (x > maxX) {
+        } else if (x > maxX) {
             int target = Math.max(maxX, Math.subtractExact(x, step));
             x = target;
-            y = yFirst;
             moveDir = -1;
-            return Optional.of(new MonsterMoveResult(id, x, y, moveDir));
-        }
-
-        long candidate = (long) x + (long) moveDir * step;
-        if (candidate >= maxX) {
-            x = maxX;
-            moveDir = -1;
-        } else if (candidate <= minX) {
-            x = minX;
-            moveDir = 1;
         } else {
-            x = (int) candidate;
+            if (x == maxX && moveDir > 0) {
+                moveDir = -1;
+            } else if (x == minX && moveDir < 0) {
+                moveDir = 1;
+            }
+
+            long candidate = (long) x + (long) moveDir * step;
+            if (candidate >= maxX) {
+                x = maxX;
+                moveDir = -1;
+            } else if (candidate <= minX) {
+                x = minX;
+                moveDir = 1;
+            } else {
+                x = (int) candidate;
+            }
         }
         y = yFirst;
 
+        if (x == beforeX && y == beforeY) {
+            return Optional.empty();
+        }
         return Optional.of(new MonsterMoveResult(id, x, y, moveDir));
     }
 

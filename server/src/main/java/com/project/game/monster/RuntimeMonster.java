@@ -8,6 +8,9 @@ import java.util.Optional;
 public final class RuntimeMonster {
     private static final int STATUS_LIVE = 0;
     private static final int STATUS_DIE = 1;
+    private static final int MOVE_TYPE_RUN = 1;
+    private static final int INITIAL_MOVE_DIR = 1;
+    private static final int MOVEMENT_STEP_MULTIPLIER = 4;
     private static final long NO_RESPAWN = -1L;
 
     private final int id;
@@ -26,17 +29,33 @@ public final class RuntimeMonster {
     private long respawnAtMillis = NO_RESPAWN;
     private final long damage;
     private final long potentialReward;
+    private final int rangeMove;
+    private final int speed;
+    private final int moveType;
+    private int moveDir = INITIAL_MOVE_DIR;
     private final LinkedHashMap<Integer, Long> enemies = new LinkedHashMap<>();
     private long lastAttackAtMillis;
 
-    RuntimeMonster(LegacyMonsterSpawn spawn, LegacyMonsterCombatTemplate combat) {
+    RuntimeMonster(LegacyMonsterSpawn spawn,
+                   LegacyMonsterCombatTemplate combat,
+                   LegacyMonsterTemplate movement) {
         Objects.requireNonNull(spawn, "spawn");
         Objects.requireNonNull(combat, "combat");
+        Objects.requireNonNull(movement, "movement");
         if (combat.templateId() != spawn.templateId()) {
             throw new IllegalArgumentException("monster combat template does not match spawn");
         }
         if (combat.damage() <= 0L) {
             throw new IllegalArgumentException("monster combat damage must be positive");
+        }
+        if (movement.id() != spawn.templateId()) {
+            throw new IllegalArgumentException("monster movement template does not match spawn");
+        }
+        if (movement.rangeMove() < 0) {
+            throw new IllegalArgumentException("monster movement range must be non-negative");
+        }
+        if (movement.speed() < 0) {
+            throw new IllegalArgumentException("monster movement speed must be non-negative");
         }
         id = spawn.id();
         templateId = spawn.templateId();
@@ -52,6 +71,9 @@ public final class RuntimeMonster {
         status = spawn.status();
         damage = combat.damage();
         potentialReward = combat.potentialReward();
+        rangeMove = movement.rangeMove();
+        speed = movement.speed();
+        moveType = movement.type();
     }
 
     public int id() {
@@ -64,6 +86,26 @@ public final class RuntimeMonster {
 
     public long damage() {
         return damage;
+    }
+
+    int rangeMove() {
+        return rangeMove;
+    }
+
+    int speed() {
+        return speed;
+    }
+
+    int moveType() {
+        return moveType;
+    }
+
+    int moveDir() {
+        return moveDir;
+    }
+
+    public int xFirst() {
+        return xFirst;
     }
 
     public List<Integer> enemyPlayerIds() {
@@ -146,8 +188,74 @@ public final class RuntimeMonster {
         respawnAtMillis = NO_RESPAWN;
         enemies.clear();
         lastAttackAtMillis = 0L;
+        moveDir = INITIAL_MOVE_DIR;
 
         return Optional.of(new MonsterRespawnResult(id, levelStatus, hp));
+    }
+
+    public Optional<MonsterMoveResult> moveToward(int targetX) {
+        if (!isAlive() || moveType != MOVE_TYPE_RUN) {
+            return Optional.empty();
+        }
+
+        int step = movementStep();
+        if (step <= 0 || targetX == x) {
+            return Optional.empty();
+        }
+
+        int direction = targetX > x ? 1 : -1;
+        long distance = Math.abs((long) targetX - x);
+        int actualStep = (int) Math.min(distance, step);
+
+        x = Math.addExact(x, direction * actualStep);
+        y = yFirst;
+        moveDir = direction;
+
+        return Optional.of(new MonsterMoveResult(id, x, y, moveDir));
+    }
+
+    public Optional<MonsterMoveResult> patrolOrReturn() {
+        if (!isAlive() || moveType != MOVE_TYPE_RUN) {
+            return Optional.empty();
+        }
+
+        int step = movementStep();
+        if (step <= 0) {
+            return Optional.empty();
+        }
+
+        int minX = Math.subtractExact(xFirst, rangeMove);
+        int maxX = Math.addExact(xFirst, rangeMove);
+
+        if (x < minX) {
+            int target = Math.min(minX, Math.addExact(x, step));
+            x = target;
+            y = yFirst;
+            moveDir = 1;
+            return Optional.of(new MonsterMoveResult(id, x, y, moveDir));
+        }
+
+        if (x > maxX) {
+            int target = Math.max(maxX, Math.subtractExact(x, step));
+            x = target;
+            y = yFirst;
+            moveDir = -1;
+            return Optional.of(new MonsterMoveResult(id, x, y, moveDir));
+        }
+
+        long candidate = (long) x + (long) moveDir * step;
+        if (candidate > maxX) {
+            x = maxX;
+            moveDir = -1;
+        } else if (candidate < minX) {
+            x = minX;
+            moveDir = 1;
+        } else {
+            x = (int) candidate;
+        }
+        y = yFirst;
+
+        return Optional.of(new MonsterMoveResult(id, x, y, moveDir));
     }
 
     public MonsterSnapshot snapshot() {
@@ -170,6 +278,10 @@ public final class RuntimeMonster {
         } catch (ArithmeticException ignored) {
             return Long.MAX_VALUE;
         }
+    }
+
+    private int movementStep() {
+        return Math.multiplyExact(speed, MOVEMENT_STEP_MULTIPLIER);
     }
 
     private static long deadlineAfter(long start, long delay) {

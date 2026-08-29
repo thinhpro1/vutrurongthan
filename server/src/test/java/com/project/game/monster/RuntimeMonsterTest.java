@@ -134,6 +134,65 @@ class RuntimeMonsterTest {
     }
 
     @Test
+    void storesCanonicalRunMovementMetadata() {
+        RuntimeMonster monster = map1Monster();
+
+        assertEquals(100, monster.rangeMove());
+        assertEquals(1, monster.speed());
+        assertEquals(1, monster.moveType());
+        assertEquals(1, monster.moveDir());
+        assertEquals(975, monster.xFirst());
+        assertEquals(975, monster.snapshot().x());
+        assertEquals(936, monster.snapshot().y());
+    }
+
+    @Test
+    void patrolMovesByExactServerStepAndKeepsSpawnY() {
+        RuntimeMonster monster = map1Monster();
+
+        MonsterMoveResult move = monster.patrolOrReturn().orElseThrow();
+
+        assertEquals(new MonsterMoveResult(0, 979, 936, 1), move);
+        assertEquals(979, monster.snapshot().x());
+        assertEquals(936, monster.snapshot().y());
+    }
+
+    @Test
+    void patrolClampsAtRightBoundaryAndWalksBackTowardCorridor() throws Exception {
+        RuntimeMonster monster = map1Monster();
+
+        setIntField(monster, "x", 1073);
+        setIntField(monster, "moveDir", 1);
+
+        MonsterMoveResult boundary = monster.patrolOrReturn().orElseThrow();
+
+        assertEquals(1075, boundary.x());
+        assertEquals(-1, boundary.dir());
+
+        setIntField(monster, "x", 1200);
+        MonsterMoveResult returning = monster.patrolOrReturn().orElseThrow();
+        assertEquals(1196, returning.x());
+        assertEquals(-1, returning.dir());
+    }
+
+    @Test
+    void deadMonsterDoesNotMoveAndRespawnResetsDirection() throws Exception {
+        RuntimeMonster monster = map1Monster();
+
+        setIntField(monster, "x", 900);
+        setIntField(monster, "moveDir", -1);
+        monster.applyDamage(7, 500, NOW, RESPAWN_DELAY).orElseThrow();
+
+        assertTrue(monster.patrolOrReturn().isEmpty());
+
+        monster.respawnIfDue(NOW + RESPAWN_DELAY + 1).orElseThrow();
+
+        assertEquals(975, monster.snapshot().x());
+        assertEquals(936, monster.snapshot().y());
+        assertEquals(1, monster.moveDir());
+    }
+
+    @Test
     void lethalDamageRejectsRespawnDeadlineOverflow() {
         RuntimeMonster monster = map1Monster();
 
@@ -245,11 +304,20 @@ class RuntimeMonsterTest {
     void constructorRequiresMatchingPositiveCombatTemplate() {
         LegacyMonsterSpawn spawn = new LegacyMonsterSpawn(0, 1, 9, 2, 0,
                 1, 2, 300, 300, 0);
+        LegacyMonsterTemplate movement = map1Movement();
 
         assertThrows(IllegalArgumentException.class,
-                () -> new RuntimeMonster(spawn, new LegacyMonsterCombatTemplate(2, 10, 0)));
+                () -> new RuntimeMonster(spawn,
+                        new LegacyMonsterCombatTemplate(2, 10, 0), movement));
         assertThrows(IllegalArgumentException.class,
-                () -> new RuntimeMonster(spawn, new LegacyMonsterCombatTemplate(1, 0, 0)));
+                () -> new RuntimeMonster(spawn,
+                        new LegacyMonsterCombatTemplate(1, 0, 0), movement));
+        LegacyMonsterTemplate wrongMovement = new LegacyMonsterTemplate(
+                2, "wrong", 100, 1, 1, 0,
+                List.of(1), 2, 3, 10, 10, 0, 0);
+        assertThrows(IllegalArgumentException.class,
+                () -> new RuntimeMonster(spawn,
+                        new LegacyMonsterCombatTemplate(1, 10, 0), wrongMovement));
         assertThrows(IllegalArgumentException.class,
                 () -> new LegacyMonsterCombatTemplate(1, 10L, -1L));
     }
@@ -264,5 +332,10 @@ class RuntimeMonsterTest {
     private static RuntimeMonster map1Monster() {
         ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
         return new MonsterRuntimeFactory(resources).createForMap(1).getFirst();
+    }
+
+    private static LegacyMonsterTemplate map1Movement() {
+        ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
+        return resources.monsterTemplates().getFirst();
     }
 }

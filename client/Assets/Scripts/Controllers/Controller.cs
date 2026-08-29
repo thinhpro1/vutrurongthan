@@ -1086,16 +1086,21 @@ namespace Assets.Scripts.Controllers
                             }
                             break;
                         }
-                    /* case -102:
-                         {
-                             Monster monster = screenManager.gameScreen.FindMonsterInMap(message.ReadSByte());
-                             if (monster != null)
-                             {
-                                 monster.damage = message.ReadLong();
-                                 monster.SetAttack(Player.me);
-                             }
-                             break;
-                         }*/
+                    case -102:
+                        {
+                            int monsterId = message.ReadInt();
+                            short x = message.ReadShort();
+                            short y = message.ReadShort();
+                            sbyte dir = message.ReadSByte();
+                            Monster monster = screenManager.gameScreen.FindMonsterInMap(monsterId);
+                            if (monster != null)
+                            {
+                                monster.x = x;
+                                monster.y = y;
+                                monster.dir = dir;
+                            }
+                            break;
+                        }
                     case -101:
                         {
                             Monster monster = screenManager.gameScreen.FindMonsterInMap(message.ReadInt());

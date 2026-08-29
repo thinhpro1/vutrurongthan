@@ -274,20 +274,6 @@ namespace Assets.Scripts.Entites.Monsters
 
                     case MonsterMoveType.RUN:
                         {
-                            if (now - lastTimeFrame > 40)
-                            {
-                                lastTimeFrame = now;
-                                return;
-                            }
-                            x += template.speed * dir;
-                            if (x > xFirst + template.rangeMove)
-                            {
-                                dir = -1;
-                            }
-                            else if (x < xFirst - template.rangeMove)
-                            {
-                                dir = 1;
-                            }
                             break;
                         }
 

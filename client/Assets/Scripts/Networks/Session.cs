@@ -366,9 +366,9 @@ namespace Assets.Scripts.Networks
                             sbyte[] array = null;
                             try
                             {
-                                string hex = Rms.LoadString("icon_" + GraphicManager.instance.versionImage + "_" + id);
-                                string key = GraphicManager.instance.versionImage + "" + GraphicManager.instance.versionImage;
-                                array = Utils.Cast(Convert.FromBase64String(GraphicManager.instance.Decrypt(GraphicManager.instance.HexToString(hex), key)));
+                                array = IconCache.Load(
+                                    GraphicManager.instance.versionImage,
+                                    id);
                             }
                             catch
                             {

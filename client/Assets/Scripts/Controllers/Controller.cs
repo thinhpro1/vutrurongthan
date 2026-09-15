@@ -2753,8 +2753,10 @@ namespace Assets.Scripts.Controllers
                                     GraphicManager.instance.datas.Remove(iconId);
                                 }
                                 GraphicManager.instance.datas.Add(iconId, data);
-                                Rms.SaveString("icon_" + GraphicManager.instance.versionImage + "_" + iconId,
-                                    GraphicManager.instance.StringToHex(GraphicManager.instance.Encrypt(Convert.ToBase64String(Utils.Cast(data)), GraphicManager.instance.versionImage + "" + GraphicManager.instance.versionImage)));
+                                IconCache.Save(
+                                    GraphicManager.instance.versionImage,
+                                    iconId,
+                                    data);
                             }
                             break;
                         }

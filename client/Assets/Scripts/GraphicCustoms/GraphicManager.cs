@@ -118,30 +118,7 @@ namespace Assets.Scripts.GraphicCustoms
 
         private sbyte[] LoadCachedIconData(int id)
         {
-            try
-            {
-                string stored = Rms.LoadString("icon_" + versionImage + "_" + id);
-                if (string.IsNullOrEmpty(stored))
-                {
-                    return null;
-                }
-
-                string encrypted = HexToString(stored);
-                string base64 = Decrypt(
-                    encrypted,
-                    versionImage + "" + versionImage);
-
-                if (string.IsNullOrEmpty(base64))
-                {
-                    return null;
-                }
-
-                return Utils.Cast(Convert.FromBase64String(base64));
-            }
-            catch
-            {
-                return null;
-            }
+            return IconCache.Load(versionImage, id);
         }
 
         public void Draw(MyGraphics g, int id, int x, int y, int transform, int anchor)

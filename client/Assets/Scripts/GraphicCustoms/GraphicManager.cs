@@ -58,6 +58,8 @@ namespace Assets.Scripts.GraphicCustoms
         {
             try
             {
+                EnsureImageVersionApplied();
+
                 if (images.ContainsKey(id))
                 {
                     return;

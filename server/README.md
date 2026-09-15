@@ -51,6 +51,15 @@ For example, to publish the next icon namespace:
 java '-Dgame.resource.icon-dir=../client/Assets/Resources/SmallImages' '-Dgame.resource.image-version=2' -cp target/classes com.project.game.GameApplication
 ```
 
+Icon Resource V2:
+
+- `image-version=2` means per-icon manifest capability.
+- Do not increment `image-version` for normal PNG changes.
+- Restart the server after changing PNGs.
+- New clients request `UPDATE_DATA` type `12` for the per-icon manifest.
+- Only changed icon fingerprints create cache misses.
+- `REQUEST_ICON` `-22` remains unchanged.
+
 ## Chạy server
 
 ```powershell

@@ -11,6 +11,7 @@ import com.project.game.network.packet.PlayerPacketWriter;
 import com.project.game.network.packet.MonsterPacketWriter;
 import com.project.game.monster.MonsterRuntimeFactory;
 import com.project.game.service.AuthService;
+import com.project.game.service.IconFingerprint;
 import com.project.game.service.ResourceService;
 import com.project.game.service.ServerServices;
 import com.project.game.player.PlayerProfile;
@@ -1083,6 +1084,65 @@ class MessageHandlerTest {
             } finally {
                 session.close();
             }
+        }
+    }
+
+    @Test
+    void serializesSortedPerIconManifest() throws Exception {
+        Path iconRoot = Files.createTempDirectory("icon-manifest-test");
+        try {
+            byte[] icon2 = new byte[]{4, 5, 6};
+            byte[] icon10 = new byte[]{1, 2, 3};
+            Files.write(iconRoot.resolve("10.png"), icon10);
+            Files.write(iconRoot.resolve("2.png"), icon2);
+            ResourceService resources = ResourceService.fromIconRoot(iconRoot, 2);
+
+            PipedInputStream input = new PipedInputStream();
+            try (PipedOutputStream inputWriter = new PipedOutputStream(input)) {
+                ByteArrayOutputStream output = new ByteArrayOutputStream();
+                SessionManager manager = new SessionManager();
+                byte[] key = "abc".getBytes(StandardCharsets.US_ASCII);
+                Session session = new Session(
+                        manager.nextId(),
+                        new TestTransport(input, output, "127.0.0.1"),
+                        manager,
+                        new LegacyPacketCodec(262_144),
+                        key,
+                        4,
+                        new ServerServices(new AuthService(), resources),
+                        NetworkConfig.defaults(),
+                        NetworkEventObserver.NO_OP);
+                try {
+                    session.start();
+                    session.completeHandshake();
+                    output.reset();
+
+                    newHandler(session, resources).onMessage(new Message(
+                            MessageName.UPDATE_DATA,
+                            new MessageWriter().writeByte(12).toByteArray()));
+
+                    waitForOutput(output);
+                    Message response = new LegacyPacketCodec(262_144).readServerResponse(
+                            new ByteArrayInputStream(output.toByteArray()),
+                            new LegacyCipher(key),
+                            true);
+                    assertEquals(MessageName.UPDATE_DATA, response.command());
+                    var reader = response.reader();
+                    assertEquals(12, reader.readByte());
+                    assertEquals(2, reader.readUnsignedShort());
+                    assertEquals(2, reader.readShort());
+                    assertEquals(IconFingerprint.fingerprint64(icon2), reader.readLong());
+                    assertEquals(10, reader.readShort());
+                    assertEquals(IconFingerprint.fingerprint64(icon10), reader.readLong());
+                    assertEquals(0, reader.remaining());
+                } finally {
+                    session.close();
+                }
+            }
+        } finally {
+            Files.deleteIfExists(iconRoot.resolve("2.png"));
+            Files.deleteIfExists(iconRoot.resolve("10.png"));
+            Files.deleteIfExists(iconRoot);
         }
     }
 }

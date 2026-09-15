@@ -9,6 +9,7 @@ import com.project.game.network.message.MessageWriter;
 import com.project.game.network.packet.PlayerPacketWriter;
 import com.project.game.player.PlayerProfile;
 import com.project.game.service.AuthService;
+import com.project.game.service.IconFingerprint;
 import com.project.game.service.ResourceService;
 import com.project.game.service.ServerServices;
 
@@ -98,6 +99,7 @@ public final class MessageHandler {
         eventObserver.onUpdateData(session, type);
         switch (type) {
             case -1 -> sendResourceManifest();
+            case 12 -> sendIconManifest();
             case 3 -> sendEffectResource();
             case 4 -> sendMonsterResource();
             case 6 -> sendLevelResource();
@@ -136,6 +138,31 @@ public final class MessageHandler {
                 + " effectVersion=" + effectVersion
                 + " monsterVersion=" + monsterVersion
                 + " levelVersion=" + levelVersion);
+    }
+
+    private void sendIconManifest() throws IOException {
+        var manifest = resourceService.iconManifest();
+        if (manifest.size() > Short.MAX_VALUE) {
+            throw new IOException("too many icon manifest entries: " + manifest.size());
+        }
+
+        MessageWriter writer = new MessageWriter()
+                .writeByte(12)
+                .writeShort(manifest.size());
+        for (IconFingerprint icon : manifest) {
+            writer.writeShort(icon.iconId())
+                    .writeLong(icon.fingerprint());
+        }
+
+        byte[] payload = writer.toByteArray();
+        if (payload.length > session.maxPacketSize()) {
+            throw new IOException("icon manifest exceeds max packet size: " + payload.length);
+        }
+
+        session.send(new Message(MessageName.UPDATE_DATA, payload));
+        LOGGER.fine(() -> "UPDATE_DATA_TX type=12 session=" + session.id()
+                + " iconCount=" + manifest.size()
+                + " bytes=" + payload.length);
     }
 
     private void sendEffectResource() throws IOException {

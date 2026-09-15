@@ -44,6 +44,7 @@ public final class ResourceService {
             List.of(2, 5, 8, 11, 14, 17, 30, 31, 32, 35, 36));
     private static final ResourceService UNAVAILABLE = new ResourceService(null, null, false, -1);
     private final Path iconRoot;
+    private final IconResourceCatalog iconCatalog;
     private final int imageVersion;
     private final List<FrameTemplate> frames;
     private final Map<Integer, List<LegacyPlayerSkill>> playerSkills;
@@ -62,6 +63,9 @@ public final class ResourceService {
             boolean requirePlayerSkills,
             int imageVersion) {
         this.iconRoot = iconRoot == null ? null : iconRoot.toAbsolutePath().normalize();
+        this.iconCatalog = this.iconRoot == null
+                ? null
+                : IconResourceCatalog.fromRoot(this.iconRoot);
         this.imageVersion = this.iconRoot == null
                 ? -1
                 : requireLegacyImageVersion(imageVersion);
@@ -137,6 +141,12 @@ public final class ResourceService {
         return imageVersion;
     }
 
+    public List<IconFingerprint> iconManifest() {
+        return iconCatalog == null
+                ? List.of()
+                : iconCatalog.manifest();
+    }
+
     private static int requireLegacyImageVersion(int imageVersion) {
         if (imageVersion < 1 || imageVersion > Byte.MAX_VALUE) {
             throw new IllegalArgumentException(
@@ -146,18 +156,10 @@ public final class ResourceService {
     }
 
     public Optional<byte[]> loadIcon(int iconId) {
-        if (iconRoot == null) {
+        if (iconCatalog == null) {
             return Optional.empty();
         }
-        Path icon = iconRoot.resolve(Integer.toString(iconId) + ".png").normalize();
-        if (!icon.startsWith(iconRoot) || !Files.isRegularFile(icon) || !Files.isReadable(icon)) {
-            return Optional.empty();
-        }
-        try {
-            return Optional.of(Files.readAllBytes(icon));
-        } catch (IOException exception) {
-            return Optional.empty();
-        }
+        return iconCatalog.loadIcon(iconId);
     }
 
     public List<FrameTemplate> frames() {

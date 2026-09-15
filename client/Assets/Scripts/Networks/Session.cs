@@ -409,9 +409,24 @@ namespace Assets.Scripts.Networks
 
         private void ProcessIconRequest(int id)
         {
-            sbyte[] data = IconCache.Load(
-                GraphicManager.instance.ImageVersion,
-                id);
+            sbyte[] data;
+            if (GraphicManager.instance.ImageVersion >= 2)
+            {
+                long fingerprint;
+                if (!IconManifest.instance.IsReady
+                    || !IconManifest.instance.TryGetFingerprint(id, out fingerprint))
+                {
+                    return;
+                }
+
+                data = IconCache.LoadV2(id, fingerprint);
+            }
+            else
+            {
+                data = IconCache.Load(
+                    GraphicManager.instance.ImageVersion,
+                    id);
+            }
 
             if (data != null && data.Length > 0)
             {

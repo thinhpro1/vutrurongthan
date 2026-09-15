@@ -29,6 +29,8 @@ namespace Assets.Scripts.GraphicCustoms
 
         private int appliedImageVersion = -1;
 
+        private int appliedIconManifestGeneration = -1;
+
         public int ImageVersion
         {
             get { return versionImage; }
@@ -136,7 +138,11 @@ namespace Assets.Scripts.GraphicCustoms
         private void EnsureImageVersionApplied()
         {
             int currentVersion = versionImage;
-            if (appliedImageVersion == currentVersion)
+            int currentManifestGeneration = currentVersion >= 2
+                ? IconManifest.instance.Generation
+                : -1;
+            if (appliedImageVersion == currentVersion
+                && appliedIconManifestGeneration == currentManifestGeneration)
             {
                 return;
             }
@@ -148,6 +154,7 @@ namespace Assets.Scripts.GraphicCustoms
             }
             timeRequestIcons.Clear();
             appliedImageVersion = currentVersion;
+            appliedIconManifestGeneration = currentManifestGeneration;
         }
 
         public void Draw(MyGraphics g, int id, int x, int y, int transform, int anchor)

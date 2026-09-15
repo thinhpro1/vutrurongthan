@@ -153,6 +153,12 @@ namespace Assets.Scripts.Controllers
                                 {
                                     ServerManager.instance.isUpdateCompleted[11] = true;
                                 }
+
+                                if (GraphicManager.instance.ImageVersion >= 2)
+                                {
+                                    IconManifest.instance.BeginRefresh();
+                                    Service.instance.UpdateData(12);
+                                }
                             }
                             else if (type == 0)
                             {
@@ -558,7 +564,36 @@ namespace Assets.Scripts.Controllers
                                 }
                                 FrameManager.instance.SaveAura();
                             }
-                            if (type >= 0)
+                            else if (type == 12)
+                            {
+                                int count = message.ReadShort();
+                                if (count < 0)
+                                {
+                                    return;
+                                }
+
+                                Dictionary<int, long> entries =
+                                    new Dictionary<int, long>(count);
+                                for (int i = 0; i < count; i++)
+                                {
+                                    int iconId = message.ReadShort();
+                                    long fingerprint = message.ReadLong();
+                                    if (iconId < 0 || entries.ContainsKey(iconId))
+                                    {
+                                        return;
+                                    }
+
+                                    entries.Add(iconId, fingerprint);
+                                }
+
+                                if (message.reader().Available() != 0)
+                                {
+                                    return;
+                                }
+
+                                IconManifest.instance.Replace(entries);
+                            }
+                            if (type >= 0 && type < ServerManager.instance.isUpdateCompleted.Length)
                             {
                                 ServerManager.instance.isUpdateCompleted[type] = true;
                             }
@@ -2748,11 +2783,32 @@ namespace Assets.Scripts.Controllers
                             message.reader().Read(ref data);
                             if (data != null)
                             {
-                                GraphicManager.instance.PublishRawIconData(iconId, data);
-                                IconCache.Save(
-                                    GraphicManager.instance.ImageVersion,
-                                    iconId,
-                                    data);
+                                if (GraphicManager.instance.ImageVersion >= 2)
+                                {
+                                    long expectedFingerprint;
+                                    if (!IconManifest.instance.TryGetFingerprint(
+                                            iconId,
+                                            out expectedFingerprint)
+                                        || IconCache.ComputeFingerprint64(data)
+                                            != expectedFingerprint)
+                                    {
+                                        return;
+                                    }
+
+                                    GraphicManager.instance.PublishRawIconData(iconId, data);
+                                    IconCache.SaveV2(
+                                        iconId,
+                                        expectedFingerprint,
+                                        data);
+                                }
+                                else
+                                {
+                                    GraphicManager.instance.PublishRawIconData(iconId, data);
+                                    IconCache.Save(
+                                        GraphicManager.instance.ImageVersion,
+                                        iconId,
+                                        data);
+                                }
                             }
                             break;
                         }

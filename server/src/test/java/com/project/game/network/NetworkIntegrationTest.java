@@ -11,6 +11,7 @@ import com.project.game.frame.FrameTemplate;
 import com.project.game.map.MapService;
 import com.project.game.monster.MonsterRuntimeFactory;
 import com.project.game.service.AuthService;
+import com.project.game.service.IconFingerprint;
 import com.project.game.service.ResourceService;
 import com.project.game.service.ServerServices;
 import com.project.game.test.MutableClock;
@@ -1418,6 +1419,77 @@ class NetworkIntegrationTest {
             serverThread.join(1_000);
         }
         assertNull(serverFailure.get(), "network server failed during icon integration test");
+    }
+
+    @Test
+    void javaClientNegotiatesPerIconManifestAndRequestsIcon(@TempDir Path iconRoot) throws Exception {
+        byte[] iconData = new byte[]{1, 2, 3, 4};
+        byte[] otherIconData = new byte[]{5, 6, 7};
+        Files.write(iconRoot.resolve("5.png"), iconData);
+        Files.write(iconRoot.resolve("10.png"), otherIconData);
+        ResourceService resources = ResourceService.fromIconRoot(iconRoot, 2);
+        NetworkServer server = new NetworkServer("127.0.0.1", 0, 2, 1024, 8, 1_000,
+                "abc".getBytes(StandardCharsets.US_ASCII),
+                new ServerServices(new AuthService(), resources),
+                null, NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
+        AtomicReference<Throwable> serverFailure = new AtomicReference<>();
+        Thread serverThread = Thread.ofVirtual().start(() -> {
+            try {
+                server.start();
+            } catch (Throwable failure) {
+                serverFailure.set(failure);
+            }
+        });
+        try {
+            waitForPort(server);
+            LegacyPacketCodec codec = new LegacyPacketCodec(1024);
+            try (LegacyTcpTransport transport = LegacyTcpTransport.connect(
+                    "127.0.0.1", server.localPort(), 1_000)) {
+                transport.socket().setSoTimeout(2_000);
+                codec.writeClient(transport.output(), null, false,
+                        new Message(MessageName.CONNECT_SERVER));
+                Message handshake = codec.read(transport.input(), null, false);
+                assertEquals(MessageName.SEND_SESSION_KEY, handshake.command());
+                LegacyCipher cipher = new LegacyCipher(reconstructKey(handshake.payload()));
+                assertEquals(MessageName.VERSION_SOURCE,
+                        codec.readServerResponse(transport.input(), cipher, true).command());
+
+                codec.writeClient(transport.output(), cipher, true,
+                        new Message(MessageName.UPDATE_DATA,
+                                new MessageWriter().writeByte(-1).toByteArray()));
+                Message resourceManifest = codec.readServerResponse(transport.input(), cipher, true);
+                assertEquals(2, resourceManifest.payload()[1]);
+
+                codec.writeClient(transport.output(), cipher, true,
+                        new Message(MessageName.UPDATE_DATA,
+                                new MessageWriter().writeByte(12).toByteArray()));
+                Message iconManifest = codec.readServerResponse(transport.input(), cipher, true);
+                var manifestReader = iconManifest.reader();
+                assertEquals(12, manifestReader.readByte());
+                assertEquals(2, manifestReader.readUnsignedShort());
+                assertEquals(5, manifestReader.readShort());
+                assertEquals(IconFingerprint.fingerprint64(iconData), manifestReader.readLong());
+                assertEquals(10, manifestReader.readShort());
+                assertEquals(IconFingerprint.fingerprint64(otherIconData), manifestReader.readLong());
+                assertEquals(0, manifestReader.remaining());
+
+                codec.writeClient(transport.output(), cipher, true,
+                        new Message(MessageName.REQUEST_ICON,
+                                new MessageWriter().writeShort(5).toByteArray()));
+                Message response = codec.readServerResponse(transport.input(), cipher, true);
+                assertEquals(MessageName.REQUEST_ICON, response.command());
+                var iconReader = response.reader();
+                assertEquals(5, iconReader.readShort());
+                assertEquals(iconData.length, iconReader.readInt());
+                assertArrayEquals(iconData, iconReader.readBytes(iconData.length));
+                assertEquals(0, iconReader.remaining());
+            }
+            waitForNoSessions(server);
+        } finally {
+            server.stop();
+            serverThread.join(1_000);
+        }
+        assertNull(serverFailure.get(), "network server failed during per-icon manifest test");
     }
 
     @Test

@@ -272,6 +272,24 @@ class ResourceServiceTest {
     }
 
     @Test
+    void exposesSortedIconManifestAndCatalogBytes(@TempDir Path root) throws IOException {
+        Files.write(root.resolve("10.png"), new byte[]{1, 2, 3});
+        Files.write(root.resolve("2.png"), new byte[]{4, 5, 6});
+
+        ResourceService resources = ResourceService.fromIconRoot(root, 2);
+
+        assertEquals(List.of(2, 10), resources.iconManifest().stream()
+                .map(IconFingerprint::iconId)
+                .toList());
+        assertArrayEquals(new byte[]{4, 5, 6}, resources.loadIcon(2).orElseThrow());
+    }
+
+    @Test
+    void unavailableServiceHasEmptyIconManifest() {
+        assertTrue(ResourceService.unavailable().iconManifest().isEmpty());
+    }
+
+    @Test
     void iconRootExposesConfiguredImageVersion(@TempDir Path root) {
         ResourceService resources = ResourceService.fromIconRoot(root, 7);
 

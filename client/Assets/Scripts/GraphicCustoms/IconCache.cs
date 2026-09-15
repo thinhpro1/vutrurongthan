@@ -52,6 +52,77 @@ namespace Assets.Scripts.GraphicCustoms
             }
         }
 
+        public static void SaveV2(int iconId, long fingerprint, sbyte[] pngData)
+        {
+            try
+            {
+                if (pngData == null || pngData.Length == 0)
+                {
+                    return;
+                }
+
+                byte[] encrypted = EncryptBytes(
+                    Utils.Cast(pngData),
+                    GetV2CryptoKey(iconId, fingerprint));
+                Rms.Save(
+                    GetV2StorageKey(iconId, fingerprint),
+                    Utils.Cast(encrypted));
+            }
+            catch
+            {
+            }
+        }
+
+        public static sbyte[] LoadV2(int iconId, long fingerprint)
+        {
+            try
+            {
+                sbyte[] stored = Rms.Load(GetV2StorageKey(iconId, fingerprint));
+                if (stored == null || stored.Length == 0)
+                {
+                    return null;
+                }
+
+                byte[] decrypted = DecryptBytes(
+                    Utils.Cast(stored),
+                    GetV2CryptoKey(iconId, fingerprint));
+                if (!IsPng(decrypted))
+                {
+                    return null;
+                }
+
+                sbyte[] result = Utils.Cast(decrypted);
+                if (ComputeFingerprint64(result) != fingerprint)
+                {
+                    return null;
+                }
+
+                return result;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        public static long ComputeFingerprint64(sbyte[] data)
+        {
+            byte[] bytes = Utils.Cast(data);
+            byte[] hash;
+            using (SHA256 sha = SHA256.Create())
+            {
+                hash = sha.ComputeHash(bytes);
+            }
+
+            ulong value = 0;
+            for (int i = 0; i < 8; i++)
+            {
+                value = (value << 8) | hash[i];
+            }
+
+            return unchecked((long)value);
+        }
+
         private static string GetStorageKey(int version, int iconId)
         {
             return "icon_" + version + "_" + iconId;
@@ -60,6 +131,21 @@ namespace Assets.Scripts.GraphicCustoms
         private static string GetCryptoKey(int version)
         {
             return version + "" + version;
+        }
+
+        private static string FingerprintHex(long fingerprint)
+        {
+            return unchecked((ulong)fingerprint).ToString("x16");
+        }
+
+        private static string GetV2StorageKey(int iconId, long fingerprint)
+        {
+            return "icon_v2_" + iconId + "_" + FingerprintHex(fingerprint);
+        }
+
+        private static string GetV2CryptoKey(int iconId, long fingerprint)
+        {
+            return "v2:" + iconId + ":" + FingerprintHex(fingerprint);
         }
 
         private static byte[] EncryptBytes(byte[] data, string key)

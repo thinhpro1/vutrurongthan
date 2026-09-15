@@ -1159,8 +1159,11 @@ class NetworkIntegrationTest {
     }
 
     @Test
-    void javaClientLoadsMovementEffectResource() throws Exception {
-        ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
+    void javaClientLoadsMovementEffectResource(@TempDir Path iconRoot) throws Exception {
+        ResourceService resources = ResourceService.fromRoots(
+                iconRoot,
+                Path.of("resources", "json"),
+                7);
         NetworkServer server = new NetworkServer(
                 "127.0.0.1", 0, 2, 262_144, 8, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
@@ -1198,7 +1201,7 @@ class NetworkIntegrationTest {
                 Message manifest = codec.readServerResponse(transport.input(), cipher, true);
                 var manifestReader = manifest.reader();
                 assertEquals(-1, manifestReader.readByte());
-                assertEquals(-1, manifestReader.readByte()); // image
+                assertEquals(7, manifestReader.readByte()); // image
                 assertEquals(-1, manifestReader.readByte()); // item
                 assertEquals(-1, manifestReader.readByte()); // item option
                 assertEquals(-1, manifestReader.readByte()); // npc

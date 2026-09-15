@@ -37,6 +37,7 @@ class NetworkConfigTest {
         }
 
         assertEquals("resources/icon", properties.getProperty("game.resource.icon-dir"));
+        assertEquals("1", properties.getProperty("game.resource.image-version"));
         assertEquals("resources/json", properties.getProperty("game.resource.json-dir"));
         assertEquals("262144", properties.getProperty("game.network.max-packet-size"));
     }

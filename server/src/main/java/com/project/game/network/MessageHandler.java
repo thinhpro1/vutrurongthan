@@ -117,7 +117,7 @@ public final class MessageHandler {
         int monsterVersion = resourceService.monsterVersion();
         MessageWriter writer = new MessageWriter()
                 .writeByte(-1)
-                .writeByte(NOT_PROVIDED_VERSION) // image
+                .writeByte(resourceService.imageVersion()) // image
                 .writeByte(NOT_PROVIDED_VERSION) // item template
                 .writeByte(NOT_PROVIDED_VERSION) // item option template
                 .writeByte(NOT_PROVIDED_VERSION) // npc
@@ -132,6 +132,7 @@ public final class MessageHandler {
                 .writeByte(NOT_PROVIDED_VERSION); // aura (client 0.9.5)
         session.send(new Message(MessageName.UPDATE_DATA, writer.toByteArray()));
         LOGGER.fine(() -> "UPDATE_DATA_TX type=-1 session=" + session.id()
+                + " imageVersion=" + resourceService.imageVersion()
                 + " effectVersion=" + effectVersion
                 + " monsterVersion=" + monsterVersion
                 + " levelVersion=" + levelVersion);

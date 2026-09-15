@@ -38,6 +38,19 @@ mvn test
 java '-Dgame.resource.icon-dir=../client/Assets/Resources/SmallImages' -cp target/classes com.project.game.GameApplication
 ```
 
+Legacy image cache versioning:
+
+- `game.resource.image-version` controls the Unity persistent icon-cache namespace.
+- Valid configured values are `1..127`; `-1` is reserved for unavailable image resources.
+- Increment the version whenever any served `resources/icon/*.png` content changes, and do not reuse an older value while clients may retain its cache.
+- Changing only the version intentionally forces one redownload per needed icon.
+
+For example, to publish the next icon namespace:
+
+```powershell
+java '-Dgame.resource.icon-dir=../client/Assets/Resources/SmallImages' '-Dgame.resource.image-version=2' -cp target/classes com.project.game.GameApplication
+```
+
 ## Chạy server
 
 ```powershell

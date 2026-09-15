@@ -272,6 +272,28 @@ class ResourceServiceTest {
     }
 
     @Test
+    void iconRootExposesConfiguredImageVersion(@TempDir Path root) {
+        ResourceService resources = ResourceService.fromIconRoot(root, 7);
+
+        assertEquals(7, resources.imageVersion());
+    }
+
+    @Test
+    void unavailableImageResourcesExposeMinusOneVersion() {
+        assertEquals(-1, ResourceService.unavailable().imageVersion());
+    }
+
+    @Test
+    void iconRootRejectsInvalidLegacyImageVersions(@TempDir Path root) {
+        assertThrows(IllegalArgumentException.class,
+                () -> ResourceService.fromIconRoot(root, 0));
+        assertThrows(IllegalArgumentException.class,
+                () -> ResourceService.fromIconRoot(root, -1));
+        assertThrows(IllegalArgumentException.class,
+                () -> ResourceService.fromIconRoot(root, 128));
+    }
+
+    @Test
     void absentRootReportsMissingWithoutFabricatingBytes(@TempDir Path root) {
         ResourceService resources = ResourceService.fromIconRoot(root.resolve("does-not-exist"));
 

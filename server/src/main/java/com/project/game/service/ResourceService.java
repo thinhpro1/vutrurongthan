@@ -42,8 +42,9 @@ public final class ResourceService {
             List.of(0, 3, 6, 9, 12, 15, 30, 31, 32, 33, 36),
             List.of(1, 4, 7, 10, 13, 16, 30, 31, 32, 34, 36),
             List.of(2, 5, 8, 11, 14, 17, 30, 31, 32, 35, 36));
-    private static final ResourceService UNAVAILABLE = new ResourceService(null, null, false);
+    private static final ResourceService UNAVAILABLE = new ResourceService(null, null, false, -1);
     private final Path iconRoot;
+    private final int imageVersion;
     private final List<FrameTemplate> frames;
     private final Map<Integer, List<LegacyPlayerSkill>> playerSkills;
     private final Map<Integer, LegacyMapTemplate> maps;
@@ -55,8 +56,15 @@ public final class ResourceService {
     private final Map<Integer, List<LegacyMonsterSpawn>> monsterSpawns;
     private final Map<Integer, LegacyMonsterCombatTemplate> monsterCombatTemplates;
 
-    private ResourceService(Path iconRoot, Path frameRoot, boolean requirePlayerSkills) {
+    private ResourceService(
+            Path iconRoot,
+            Path frameRoot,
+            boolean requirePlayerSkills,
+            int imageVersion) {
         this.iconRoot = iconRoot == null ? null : iconRoot.toAbsolutePath().normalize();
+        this.imageVersion = this.iconRoot == null
+                ? -1
+                : requireLegacyImageVersion(imageVersion);
         this.frames = frameRoot == null ? List.of() : loadFrames(frameRoot);
         this.playerSkills = frameRoot == null
                 ? Map.of()
@@ -91,15 +99,50 @@ public final class ResourceService {
     }
 
     public static ResourceService fromIconRoot(Path iconRoot) {
-        return new ResourceService(Objects.requireNonNull(iconRoot, "iconRoot"), null, false);
+        return fromIconRoot(iconRoot, 1);
+    }
+
+    public static ResourceService fromIconRoot(Path iconRoot, int imageVersion) {
+        return new ResourceService(
+                Objects.requireNonNull(iconRoot, "iconRoot"),
+                null,
+                false,
+                imageVersion);
     }
 
     public static ResourceService fromFrameRoot(Path frameRoot) {
-        return new ResourceService(null, Objects.requireNonNull(frameRoot, "frameRoot"), false);
+        return new ResourceService(
+                null,
+                Objects.requireNonNull(frameRoot, "frameRoot"),
+                false,
+                -1);
     }
 
     public static ResourceService fromRoots(Path iconRoot, Path frameRoot) {
-        return new ResourceService(iconRoot, frameRoot, true);
+        return new ResourceService(
+                iconRoot,
+                frameRoot,
+                true,
+                iconRoot == null ? -1 : 1);
+    }
+
+    public static ResourceService fromRoots(
+            Path iconRoot,
+            Path frameRoot,
+            int imageVersion) {
+        return new ResourceService(iconRoot, frameRoot, true, imageVersion);
+    }
+
+    public int imageVersion() {
+        return imageVersion;
+    }
+
+    private static int requireLegacyImageVersion(int imageVersion) {
+        if (imageVersion < 1 || imageVersion > Byte.MAX_VALUE) {
+            throw new IllegalArgumentException(
+                    "legacy image version must be between 1 and 127: " + imageVersion);
+        }
+        return imageVersion;
     }
 
     public Optional<byte[]> loadIcon(int iconId) {

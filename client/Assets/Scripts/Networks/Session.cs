@@ -410,7 +410,7 @@ namespace Assets.Scripts.Networks
         private void ProcessIconRequest(int id)
         {
             sbyte[] data = IconCache.Load(
-                GraphicManager.instance.versionImage,
+                GraphicManager.instance.ImageVersion,
                 id);
 
             if (data != null && data.Length > 0)

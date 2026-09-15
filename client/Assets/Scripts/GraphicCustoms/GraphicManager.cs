@@ -25,7 +25,19 @@ namespace Assets.Scripts.GraphicCustoms
 
         public Dictionary<int, long> timeRequestIcons;
 
-        public int versionImage;
+        private volatile int versionImage = -1;
+
+        private int appliedImageVersion = -1;
+
+        public int ImageVersion
+        {
+            get { return versionImage; }
+        }
+
+        public void SetImageVersion(int version)
+        {
+            versionImage = version;
+        }
 
         public bool isLowGraphic;
 
@@ -119,12 +131,30 @@ namespace Assets.Scripts.GraphicCustoms
             }
         }
 
+        private void EnsureImageVersionApplied()
+        {
+            int currentVersion = versionImage;
+            if (appliedImageVersion == currentVersion)
+            {
+                return;
+            }
+
+            images.Clear();
+            lock (iconDataLock)
+            {
+                datas.Clear();
+            }
+            timeRequestIcons.Clear();
+            appliedImageVersion = currentVersion;
+        }
+
         public void Draw(MyGraphics g, int id, int x, int y, int transform, int anchor)
         {
             if (id == -1)
             {
                 return;
             }
+            EnsureImageVersionApplied();
             if (images.ContainsKey(id))
             {
                 Paint(g, images[id], transform, x, y, anchor);
@@ -141,6 +171,7 @@ namespace Assets.Scripts.GraphicCustoms
             {
                 return;
             }
+            EnsureImageVersionApplied();
             if (images.ContainsKey(id))
             {
                 Paint(g, images[id], angle, x, y, 3);
@@ -157,6 +188,7 @@ namespace Assets.Scripts.GraphicCustoms
             {
                 return;
             }
+            EnsureImageVersionApplied();
             if (images.ContainsKey(id))
             {
                 Paint(g, images[id], 0, x, y, 3);
@@ -173,6 +205,7 @@ namespace Assets.Scripts.GraphicCustoms
             {
                 return;
             }
+            EnsureImageVersionApplied();
             if (images.ContainsKey(id))
             {
                 Paint(g, images[id], angle, x, y, anchor);

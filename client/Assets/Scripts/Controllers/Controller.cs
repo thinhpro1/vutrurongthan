@@ -85,7 +85,7 @@ namespace Assets.Scripts.Controllers
                             int type = message.ReadSByte();
                             if (type == -1)
                             {
-                                GraphicManager.instance.versionImage = message.ReadSByte();
+                                GraphicManager.instance.SetImageVersion(message.ReadSByte());
                                 ServerManager.instance.isUpdateCompleted[0] = ItemManager.instance.versionItemTemplate == message.ReadSByte();
                                 if (!ServerManager.instance.isUpdateCompleted[0])
                                 {
@@ -2750,7 +2750,7 @@ namespace Assets.Scripts.Controllers
                             {
                                 GraphicManager.instance.PublishRawIconData(iconId, data);
                                 IconCache.Save(
-                                    GraphicManager.instance.versionImage,
+                                    GraphicManager.instance.ImageVersion,
                                     iconId,
                                     data);
                             }

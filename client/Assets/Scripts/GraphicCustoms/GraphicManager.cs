@@ -19,7 +19,9 @@ namespace Assets.Scripts.GraphicCustoms
 
         public Dictionary<int, Image> images;
 
-        public Dictionary<int, sbyte[]> datas;
+        private readonly object iconDataLock = new object();
+
+        private readonly Dictionary<int, sbyte[]> datas;
 
         public Dictionary<int, long> timeRequestIcons;
 
@@ -56,14 +58,13 @@ namespace Assets.Scripts.GraphicCustoms
                     return;
                 }
 #endif
-                if (datas.ContainsKey(id))
+                sbyte[] array;
+                if (TryTakeRawIconData(id, out array))
                 {
-                    sbyte[] array = datas[id];
                     Image image = Image.createImage(array, 0, array.Length);
                     if (image != null)
                     {
-                        images.Add(id, image);
-                        datas.Remove(id);
+                        images[id] = image;
                     }
                     return;
                 }
@@ -83,42 +84,39 @@ namespace Assets.Scripts.GraphicCustoms
                     return;
                 }
 
-                sbyte[] cachedData = LoadCachedIconData(id);
-                if (cachedData != null && cachedData.Length > 0)
-                {
-                    Image cachedImage = null;
-                    try
-                    {
-                        cachedImage = Image.createImage(
-                            cachedData,
-                            0,
-                            cachedData.Length);
-                    }
-                    catch
-                    {
-                    }
-
-                    if (cachedImage != null)
-                    {
-                        images.Add(id, cachedImage);
-                        return;
-                    }
-                }
-
                 timeRequestIcons[id] = now;
-                if (!ServerManager.instance.session.iconRequest.Contains(id))
-                {
-                    ServerManager.instance.session.iconRequest.Add(id);
-                }
+                ServerManager.instance.session.QueueIconRequest(id);
             }
             catch
             {
             }
         }
 
-        private sbyte[] LoadCachedIconData(int id)
+        public void PublishRawIconData(int id, sbyte[] data)
         {
-            return IconCache.Load(versionImage, id);
+            if (data == null || data.Length == 0)
+            {
+                return;
+            }
+
+            lock (iconDataLock)
+            {
+                datas[id] = data;
+            }
+        }
+
+        private bool TryTakeRawIconData(int id, out sbyte[] data)
+        {
+            lock (iconDataLock)
+            {
+                if (!datas.TryGetValue(id, out data))
+                {
+                    return false;
+                }
+
+                datas.Remove(id);
+                return true;
+            }
         }
 
         public void Draw(MyGraphics g, int id, int x, int y, int transform, int anchor)

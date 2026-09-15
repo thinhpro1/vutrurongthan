@@ -2748,11 +2748,7 @@ namespace Assets.Scripts.Controllers
                             message.reader().Read(ref data);
                             if (data != null)
                             {
-                                if (GraphicManager.instance.datas.ContainsKey(iconId))
-                                {
-                                    GraphicManager.instance.datas.Remove(iconId);
-                                }
-                                GraphicManager.instance.datas.Add(iconId, data);
+                                GraphicManager.instance.PublishRawIconData(iconId, data);
                                 IconCache.Save(
                                     GraphicManager.instance.versionImage,
                                     iconId,

@@ -54,9 +54,14 @@ namespace Assets.Scripts.Networks
 
         private readonly BlockingCollection<Message> sendMessages = new BlockingCollection<Message>(new ConcurrentQueue<Message>());
 
-        public List<Message> recieveMessages2;
+        private readonly ConcurrentQueue<Message> recieveMessages2 =
+            new ConcurrentQueue<Message>();
 
-        public List<int> iconRequest = new List<int>();
+        private readonly ConcurrentQueue<int> iconRequests =
+            new ConcurrentQueue<int>();
+
+        private readonly ConcurrentDictionary<int, byte> queuedIconIds =
+            new ConcurrentDictionary<int, byte>();
 
         public long timeConnect;
 
@@ -67,8 +72,15 @@ namespace Assets.Scripts.Networks
             this.controller = controller;
             recieveMessages = new List<Message>();
             //sendMessages = new List<Message>();
-            recieveMessages2 = new List<Message>();
             timeConnect = Utils.CurrentTimeMillis();
+        }
+
+        public void QueueIconRequest(int id)
+        {
+            if (queuedIconIds.TryAdd(id, 0))
+            {
+                iconRequests.Enqueue(id);
+            }
         }
 
         private void NetworkInit()
@@ -231,7 +243,17 @@ namespace Assets.Scripts.Networks
             CleanNetwork();
             recieveMessages.Clear();
             //sendMessages.Clear();
-            iconRequest.Clear();
+            int ignoredIconId;
+            while (iconRequests.TryDequeue(out ignoredIconId))
+            {
+            }
+
+            queuedIconIds.Clear();
+
+            Message ignoredMessage;
+            while (recieveMessages2.TryDequeue(out ignoredMessage))
+            {
+            }
         }
 
         public bool IsConnected()
@@ -320,7 +342,7 @@ namespace Assets.Scripts.Networks
                         }
                         else if (message.id == MessageName.UPDATE_DATA || message.id == -22)
                         {
-                            recieveMessages2.Add(message);
+                            recieveMessages2.Enqueue(message);
                         }
                         else
                         {
@@ -354,34 +376,23 @@ namespace Assets.Scripts.Networks
                 {
                     try
                     {
-                        while (recieveMessages2.Count > 0)
+                        Message m;
+                        while (recieveMessages2.TryDequeue(out m))
                         {
-                            Message m = recieveMessages2[0];
                             controller.OnMessage(m);
-                            recieveMessages2.RemoveAt(0);
                         }
-                        while (iconRequest.Count > 0)
+                        int id;
+                        while (iconRequests.TryDequeue(out id))
                         {
-                            int id = iconRequest[0];
-                            sbyte[] array = null;
                             try
                             {
-                                array = IconCache.Load(
-                                    GraphicManager.instance.versionImage,
-                                    id);
+                                ProcessIconRequest(id);
                             }
-                            catch
+                            finally
                             {
+                                byte ignoredValue;
+                                queuedIconIds.TryRemove(id, out ignoredValue);
                             }
-                            if (array != null)
-                            {
-                                GraphicManager.instance.datas.Add(id, array);
-                            }
-                            else
-                            {
-                                Service.instance.RequestIcon(id);
-                            }
-                            iconRequest.RemoveAt(0);
                         }
                         Thread.Sleep(1);
                     }
@@ -394,6 +405,21 @@ namespace Assets.Scripts.Networks
             {
                 Debug.LogException(e);
             }
+        }
+
+        private void ProcessIconRequest(int id)
+        {
+            sbyte[] data = IconCache.Load(
+                GraphicManager.instance.versionImage,
+                id);
+
+            if (data != null && data.Length > 0)
+            {
+                GraphicManager.instance.PublishRawIconData(id, data);
+                return;
+            }
+
+            Service.instance.RequestIcon(id);
         }
 
         private void GetKey(Message message)

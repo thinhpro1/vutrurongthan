@@ -62,18 +62,24 @@ Icon Resource V2:
 
 Database persistence foundation:
 
-- The JDBC account layer is not wired into `AuthService` or normal server startup yet.
-- Normal `mvn test` does not require MySQL or a database password.
+- The JDBC account layer is not wired into `AuthService` or server startup.
+- Normal `mvn test` is MySQL-independent and does not require a database password.
 - Keep the database password outside the repository and provide it through the environment:
 
 ```powershell
-$env:GAME_DB_PASSWORD = 'your-db-password'
+$env:GAME_DB_PASSWORD = ''
 ```
 
-Run the real MySQL integration test only when the database and `account` table are available:
+The empty value above is valid for a local `root` account with no password. Run the real
+MySQL integration test only when the `rongthanchibi` database and `account` table are available:
 
 ```powershell
-mvn '-Dgame.db.integration-test=true' '-Dtest=JdbcAccountRepositoryIntegrationTest' test
+mvn `
+  '-Dgame.db.integration-test=true' `
+  '-Dgame.db.url=jdbc:mysql://localhost:3306/rongthanchibi' `
+  '-Dgame.db.username=root' `
+  '-Dtest=JdbcAccountRepositoryIntegrationTest' `
+  test
 ```
 
 The JDBC URL and username can be overridden with `-Dgame.db.url` and

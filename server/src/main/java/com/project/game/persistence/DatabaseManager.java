@@ -11,6 +11,9 @@ public final class DatabaseManager implements AutoCloseable {
 
     public DatabaseManager(DatabaseConfig config) {
         Objects.requireNonNull(config, "config");
+        if (config.username().isBlank()) {
+            throw new IllegalStateException("database username is not configured");
+        }
         String password = System.getenv(config.passwordEnvironmentVariable());
         if (password == null) {
             throw new IllegalStateException(

@@ -32,16 +32,31 @@ class DatabaseConfigTest {
 
     @Test
     void usesSafeDefaultsForOptionalPoolSettings() {
-        Properties properties = new Properties();
-        properties.setProperty("game.db.url", "jdbc:mysql://127.0.0.1:3306/vutrurongthan");
+        DatabaseConfig config = DatabaseConfig.fromProperties(new Properties());
 
-        DatabaseConfig config = DatabaseConfig.fromProperties(properties);
-
-        assertEquals("", config.username());
+        assertEquals("jdbc:mysql://localhost:3306/rongthanchibi", config.jdbcUrl());
+        assertEquals("root", config.username());
         assertEquals("GAME_DB_PASSWORD", config.passwordEnvironmentVariable());
         assertEquals(10, config.maximumPoolSize());
         assertEquals(1, config.minimumIdle());
         assertEquals(5000L, config.connectionTimeoutMillis());
+    }
+
+    @Test
+    void databaseManagerRejectsBlankUsernameBeforeResolvingPassword() {
+        DatabaseConfig config = new DatabaseConfig(
+                "jdbc:mysql://localhost:3306/rongthanchibi",
+                "  ",
+                "UNSET_DATABASE_PASSWORD_FOR_TEST",
+                10,
+                1,
+                5000L);
+
+        IllegalStateException exception = assertThrows(
+                IllegalStateException.class,
+                () -> new DatabaseManager(config));
+
+        assertEquals("database username is not configured", exception.getMessage());
     }
 
     @Test

@@ -534,7 +534,7 @@ class MessageHandlerTest {
     }
 
     @Test
-    void closeCannotInterleaveWithSuccessfulLoginMetadataUpdate() throws Exception {
+    void closeFinishesWhileSuccessfulLoginMetadataUpdateIsBlocked() throws Exception {
         BlockingMetadataRepository repository = new BlockingMetadataRepository();
         AuthService auth = new AuthService(repository);
         assertTrue(auth.register("user01", "secret1", "192.0.2.10").success());
@@ -559,15 +559,21 @@ class MessageHandlerTest {
             closeFinished.countDown();
         });
         assertTrue(closeInvoked.await(1, TimeUnit.SECONDS));
-        assertFalse(closeFinished.await(200, TimeUnit.MILLISECONDS));
-
-        repository.allowUpdate.countDown();
+        try {
+            assertTrue(closeFinished.await(1, TimeUnit.SECONDS),
+                    "session close waited for the metadata repository call");
+            assertEquals(SessionState.CLOSED, session.state());
+            assertEquals(null, manager.findByAccount("user01"));
+        } finally {
+            repository.allowUpdate.countDown();
+        }
         login.join(1_000);
         close.join(1_000);
 
         assertFalse(login.isAlive());
         assertFalse(close.isAlive());
         assertEquals(SessionState.CLOSED, session.state());
+        assertEquals(null, manager.findByAccount("user01"));
         assertEquals(1, repository.delegate.metadataUpdateCount());
     }
 
@@ -1142,7 +1148,7 @@ class MessageHandlerTest {
         public void updateSuccessfulLogin(long accountId, String ipAddress, Instant loginAt) {
             updateEntered.countDown();
             try {
-                if (!allowUpdate.await(1, TimeUnit.SECONDS)) {
+                if (!allowUpdate.await(5, TimeUnit.SECONDS)) {
                     throw new AccountRepositoryException("timed out waiting for test release");
                 }
             } catch (InterruptedException exception) {

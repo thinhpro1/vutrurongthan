@@ -163,10 +163,13 @@ public final class Session implements AutoCloseable {
     }
 
     private void close(String reason) {
-        if (!closed.compareAndSet(false, true)) {
-            return;
+        synchronized (this) {
+            if (!closed.compareAndSet(false, true)) {
+                return;
+            }
+            state.set(SessionState.CLOSED);
+            manager.unbindAccount(this);
         }
-        state.set(SessionState.CLOSED);
         LOGGER.info(() -> "SESSION_CLOSE id=" + id + " ip=" + remoteAddress() + " reason=" + reason);
         sendQueue.clear();
         if (readerThread != null) {
@@ -185,7 +188,6 @@ public final class Session implements AutoCloseable {
         } catch (IOException ignored) {
             // Closing an already broken socket is best-effort.
         }
-        manager.unbindAccount(this);
         manager.remove(this);
     }
 

@@ -80,7 +80,7 @@ public final class AuthService {
             if (!MessageDigest.isEqual(account.passwordHash(), candidate)) {
                 return LoginResult.failure("Tài khoản hoặc mật khẩu không chính xác");
             }
-            return LoginResult.success(account.id(), account.username());
+            return LoginResult.success(account.id(), normalize(account.username()));
         } catch (AccountRepositoryException exception) {
             LOGGER.log(Level.WARNING, "LOGIN repository failure username=" + normalized, exception);
             return LoginResult.failure(SYSTEM_BUSY);

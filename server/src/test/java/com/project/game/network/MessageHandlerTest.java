@@ -2,6 +2,9 @@ package com.project.game.network;
 
 import com.project.game.testsupport.TestServices;
 import com.project.game.testsupport.TestAccountRepository;
+import com.project.game.persistence.account.AccountRecord;
+import com.project.game.persistence.account.AccountRepository;
+import com.project.game.persistence.account.AccountRepositoryException;
 
 import com.project.game.map.MapService;
 import com.project.game.map.Zone;
@@ -31,9 +34,13 @@ import java.nio.file.Path;
 import java.nio.charset.StandardCharsets;
 import java.lang.reflect.Field;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -524,6 +531,44 @@ class MessageHandlerTest {
         Message dialog = drainMessages(session).getFirst();
         assertEquals(MessageName.DIALOG_OK, dialog.command());
         assertEquals("Hệ thống đang bận, vui lòng thử lại", dialog.reader().readUtf());
+    }
+
+    @Test
+    void closeCannotInterleaveWithSuccessfulLoginMetadataUpdate() throws Exception {
+        BlockingMetadataRepository repository = new BlockingMetadataRepository();
+        AuthService auth = new AuthService(repository);
+        assertTrue(auth.register("user01", "secret1", "192.0.2.10").success());
+        SessionManager manager = new SessionManager();
+        Session session = newSession(auth, 1024, manager, "198.51.100.1");
+        session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
+
+        Thread login = Thread.ofVirtual().start(() -> {
+            try {
+                newHandler(session, auth).onMessage(loginMessage("user01", "secret1"));
+            } catch (IOException exception) {
+                throw new RuntimeException(exception);
+            }
+        });
+        assertTrue(repository.updateEntered.await(1, TimeUnit.SECONDS));
+
+        CountDownLatch closeInvoked = new CountDownLatch(1);
+        CountDownLatch closeFinished = new CountDownLatch(1);
+        Thread close = Thread.ofVirtual().start(() -> {
+            closeInvoked.countDown();
+            session.close();
+            closeFinished.countDown();
+        });
+        assertTrue(closeInvoked.await(1, TimeUnit.SECONDS));
+        assertFalse(closeFinished.await(200, TimeUnit.MILLISECONDS));
+
+        repository.allowUpdate.countDown();
+        login.join(1_000);
+        close.join(1_000);
+
+        assertFalse(login.isAlive());
+        assertFalse(close.isAlive());
+        assertEquals(SessionState.CLOSED, session.state());
+        assertEquals(1, repository.delegate.metadataUpdateCount());
     }
 
     @Test
@@ -1076,6 +1121,36 @@ class MessageHandlerTest {
             }
         }
         throw new AssertionError("zone not found map=" + mapId + " zone=" + zoneId);
+    }
+
+    private static final class BlockingMetadataRepository implements AccountRepository {
+        private final TestAccountRepository delegate = new TestAccountRepository();
+        private final CountDownLatch updateEntered = new CountDownLatch(1);
+        private final CountDownLatch allowUpdate = new CountDownLatch(1);
+
+        @Override
+        public Optional<AccountRecord> findByUsername(String username) {
+            return delegate.findByUsername(username);
+        }
+
+        @Override
+        public long create(String username, byte[] passwordHash, byte[] passwordSalt, String ipAddress) {
+            return delegate.create(username, passwordHash, passwordSalt, ipAddress);
+        }
+
+        @Override
+        public void updateSuccessfulLogin(long accountId, String ipAddress, Instant loginAt) {
+            updateEntered.countDown();
+            try {
+                if (!allowUpdate.await(1, TimeUnit.SECONDS)) {
+                    throw new AccountRepositoryException("timed out waiting for test release");
+                }
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                throw new AccountRepositoryException("interrupted while waiting for test release", exception);
+            }
+            delegate.updateSuccessfulLogin(accountId, ipAddress, loginAt);
+        }
     }
 
     private static void awaitBlocked(Thread thread) throws InterruptedException {

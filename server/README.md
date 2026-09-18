@@ -60,6 +60,26 @@ Icon Resource V2:
 - Only changed icon fingerprints create cache misses.
 - `REQUEST_ICON` `-22` remains unchanged.
 
+Database persistence foundation:
+
+- The JDBC account layer is not wired into `AuthService` or normal server startup yet.
+- Normal `mvn test` does not require MySQL or a database password.
+- Keep the database password outside the repository and provide it through the environment:
+
+```powershell
+$env:GAME_DB_PASSWORD = 'your-db-password'
+```
+
+Run the real MySQL integration test only when the database and `account` table are available:
+
+```powershell
+mvn '-Dgame.db.integration-test=true' '-Dtest=JdbcAccountRepositoryIntegrationTest' test
+```
+
+The JDBC URL and username can be overridden with `-Dgame.db.url` and
+`-Dgame.db.username`. The reference schema is in `database/schema/account.sql`;
+the application does not execute it automatically.
+
 ## Chạy server
 
 ```powershell

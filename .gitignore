@@ -130,6 +130,7 @@ desktop.ini
 # TEMPORARY FILES
 # =========================================================
 
+/.worktrees/
 *.tmp
 *.temp
 *.bak

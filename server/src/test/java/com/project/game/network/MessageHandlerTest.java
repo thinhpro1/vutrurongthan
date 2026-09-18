@@ -44,6 +44,7 @@ import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class MessageHandlerTest {
@@ -563,7 +564,7 @@ class MessageHandlerTest {
             assertTrue(closeFinished.await(1, TimeUnit.SECONDS),
                     "session close waited for the metadata repository call");
             assertEquals(SessionState.CLOSED, session.state());
-            assertEquals(null, manager.findByAccount("user01"));
+            assertSame(session, manager.findByAccount("user01"));
         } finally {
             repository.allowUpdate.countDown();
         }
@@ -575,6 +576,58 @@ class MessageHandlerTest {
         assertEquals(SessionState.CLOSED, session.state());
         assertEquals(null, manager.findByAccount("user01"));
         assertEquals(1, repository.delegate.metadataUpdateCount());
+    }
+
+    @Test
+    void reconnectWaitsForClosedSessionLoginAdmissionToFinish() throws Exception {
+        BlockingMetadataRepository repository = new BlockingMetadataRepository();
+        AuthService auth = new AuthService(repository);
+        assertTrue(auth.register("user01", "secret1", "192.0.2.10").success());
+        SessionManager manager = new SessionManager();
+        Session first = newSession(auth, 1024, manager, "198.51.100.1");
+        Session second = newSession(auth, 1024, manager, "198.51.100.2");
+        first.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
+        second.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
+
+        Thread firstLogin = Thread.ofVirtual().start(() -> {
+            try {
+                newHandler(first, auth).onMessage(loginMessage("user01", "secret1"));
+            } catch (IOException exception) {
+                throw new RuntimeException(exception);
+            }
+        });
+        assertTrue(repository.updateEntered.await(1, TimeUnit.SECONDS));
+
+        CountDownLatch closeFinished = new CountDownLatch(1);
+        Thread close = Thread.ofVirtual().start(() -> {
+            first.close();
+            closeFinished.countDown();
+        });
+        assertTrue(closeFinished.await(1, TimeUnit.SECONDS));
+        assertEquals(SessionState.CLOSED, first.state());
+        assertSame(first, manager.findByAccount("user01"));
+
+        newHandler(second, auth).onMessage(loginMessage("user01", "secret1"));
+
+        assertEquals(SessionState.HANDSHAKE_DONE, second.state());
+        assertSame(first, manager.findByAccount("user01"));
+        assertEquals(0, repository.delegate.metadataUpdateCount());
+
+        repository.allowUpdate.countDown();
+        firstLogin.join(1_000);
+        close.join(1_000);
+
+        assertFalse(firstLogin.isAlive());
+        assertFalse(close.isAlive());
+        assertEquals(SessionState.CLOSED, first.state());
+        assertEquals(null, manager.findByAccount("user01"));
+
+        newHandler(second, auth).onMessage(loginMessage("user01", "secret1"));
+
+        assertEquals(SessionState.AUTHENTICATED, second.state());
+        assertSame(second, manager.findByAccount("user01"));
+        assertEquals(2, repository.delegate.metadataUpdateCount());
+        assertEquals("198.51.100.2", repository.delegate.requireAccount("user01").ipAddress());
     }
 
     @Test

@@ -54,8 +54,42 @@ public final class SessionManager {
         }
     }
 
+    public boolean beginAccountAdmission(Session session, String accountName) {
+        if (accountName == null || accountName.isBlank()) {
+            return false;
+        }
+        synchronized (session) {
+            if (session.state() == SessionState.CLOSED
+                    || session.accountAdmissionPending()
+                    || sessionsByAccount.putIfAbsent(accountName, session) != null) {
+                return false;
+            }
+            session.bindAccount(accountName);
+            session.markAccountAdmissionPending();
+            return true;
+        }
+    }
+
+    public void finishAccountAdmission(Session session, boolean success) {
+        synchronized (session) {
+            if (!session.accountAdmissionPending()) {
+                return;
+            }
+            session.clearAccountAdmissionPending();
+            if (!success || session.state() == SessionState.CLOSED) {
+                String accountName = session.accountName();
+                if (accountName != null) {
+                    sessionsByAccount.remove(accountName, session);
+                }
+            }
+        }
+    }
+
     public void unbindAccount(Session session) {
         synchronized (session) {
+            if (session.accountAdmissionPending()) {
+                return;
+            }
             String accountName = session.accountName();
             if (accountName != null) {
                 sessionsByAccount.remove(accountName, session);

@@ -38,6 +38,7 @@ public final class Session implements AutoCloseable {
     private final MessageHandler handler;
     private final Set<Integer> sentMapTemplates = ConcurrentHashMap.newKeySet();
     private volatile String accountName;
+    private boolean accountAdmissionPending;
     private volatile PlayerProfile player;
     private int protocolViolations;
     private volatile InputStream input;
@@ -96,6 +97,18 @@ public final class Session implements AutoCloseable {
 
     void bindAccount(String accountName) {
         this.accountName = accountName;
+    }
+
+    boolean accountAdmissionPending() {
+        return accountAdmissionPending;
+    }
+
+    void markAccountAdmissionPending() {
+        accountAdmissionPending = true;
+    }
+
+    void clearAccountAdmissionPending() {
+        accountAdmissionPending = false;
     }
 
     public void bindPlayer(PlayerProfile player) {

@@ -388,22 +388,26 @@ public final class MessageHandler {
             return;
         }
         String accountName = result.accountName();
-        if (!session.manager().bindAccount(session, accountName)) {
+        if (!session.manager().beginAccountAdmission(session, accountName)) {
             sendDialog("Tài khoản đang đăng nhập ở thiết bị khác");
             return;
         }
-        AuthService.AuthResult metadata =
-                authService.markSuccessfulLogin(result.accountId(), session.remoteAddress());
-        if (!metadata.success()) {
-            session.manager().unbindAccount(session);
-            if (session.state() != SessionState.CLOSED) {
-                sendDialog(metadata.value());
+        boolean admissionSucceeded = false;
+        try {
+            AuthService.AuthResult metadata =
+                    authService.markSuccessfulLogin(result.accountId(), session.remoteAddress());
+            if (!metadata.success()) {
+                if (session.state() != SessionState.CLOSED) {
+                    sendDialog(metadata.value());
+                }
+                return;
             }
-            return;
-        }
-        if (!session.transition(SessionState.HANDSHAKE_DONE, SessionState.AUTHENTICATED)) {
-            session.manager().unbindAccount(session);
-            return;
+            if (!session.transition(SessionState.HANDSHAKE_DONE, SessionState.AUTHENTICATED)) {
+                return;
+            }
+            admissionSucceeded = true;
+        } finally {
+            session.manager().finishAccountAdmission(session, admissionSucceeded);
         }
         PlayerProfile player = authService.findPlayer(accountName);
         if (player == null) {

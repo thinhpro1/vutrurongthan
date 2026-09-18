@@ -25,9 +25,4 @@ public record ServerServices(AuthService auth, ResourceService resources, MapSer
                         new MonsterRuntimeFactory(resources)));
     }
 
-    public static ServerServices defaults() {
-        return new ServerServices(
-                new AuthService(),
-                ResourceService.unavailable());
-    }
 }

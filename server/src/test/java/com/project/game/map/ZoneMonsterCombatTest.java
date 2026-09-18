@@ -1,5 +1,7 @@
 package com.project.game.map;
 
+import com.project.game.testsupport.TestServices;
+
 import com.project.game.monster.MonsterRuntimeFactory;
 import com.project.game.monster.MonsterAttackResult;
 import com.project.game.monster.MonsterRespawnResult;
@@ -290,7 +292,7 @@ class ZoneMonsterCombatTest {
         SessionManager manager = new SessionManager();
         Session session = new Session(manager.nextId(), new NoopTransport(), manager,
                 new LegacyPacketCodec(1024), "abc".getBytes(), 8,
-                ServerServices.defaults(), NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
+                TestServices.serverServices(), NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
         session.bindPlayer(player);
         return session;
     }

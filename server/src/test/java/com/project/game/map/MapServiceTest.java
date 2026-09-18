@@ -1,5 +1,7 @@
 package com.project.game.map;
 
+import com.project.game.testsupport.TestServices;
+
 import com.project.game.network.NetworkConfig;
 import com.project.game.network.NetworkEventObserver;
 import com.project.game.network.Session;
@@ -1575,7 +1577,7 @@ class MapServiceTest {
     }
 
     private static Session session(PlayerProfile player) {
-        return session(player, ServerServices.defaults());
+        return session(player, TestServices.serverServices());
     }
 
     private static void attackAtBarrier(CyclicBarrier start, MapService maps,
@@ -1638,7 +1640,7 @@ class MapServiceTest {
     }
 
     private static Session session(PlayerProfile player, MapService maps) {
-        return session(player, new ServerServices(new AuthService(), ResourceService.unavailable(), maps));
+        return session(player, new ServerServices(TestServices.authService(), ResourceService.unavailable(), maps));
     }
 
     private static Session session(PlayerProfile player, ServerServices services) {

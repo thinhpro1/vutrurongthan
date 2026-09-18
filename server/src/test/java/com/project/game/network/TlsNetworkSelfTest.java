@@ -1,5 +1,6 @@
 package com.project.game.network;
 
+import com.project.game.testsupport.TestServices;
 import com.project.game.network.codec.LegacyCipher;
 import com.project.game.network.codec.LegacyPacketCodec;
 import com.project.game.network.message.Message;
@@ -39,7 +40,7 @@ public final class TlsNetworkSelfTest {
                     keystore, "PKCS12", STORE_PASSWORD, "TLSv1.3");
             int port = findFreePort();
             server = new NetworkServer("127.0.0.1", port, 20, 65535, 256, 5000,
-                    KEY, ServerServices.defaults(), serverContext, NetworkConfig.defaults(),
+                    KEY, TestServices.serverServices(), serverContext, NetworkConfig.defaults(),
                     NetworkEventObserver.NO_OP);
             NetworkServer runningServer = server;
             AtomicReference<Throwable> serverFailure = new AtomicReference<>();

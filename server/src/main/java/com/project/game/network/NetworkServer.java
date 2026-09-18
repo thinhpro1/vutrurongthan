@@ -9,6 +9,9 @@ import com.project.game.map.MapService;
 import com.project.game.monster.MonsterRuntimeFactory;
 import com.project.game.network.packet.PlayerPacketWriter;
 import com.project.game.network.packet.MonsterPacketWriter;
+import com.project.game.persistence.DatabaseConfig;
+import com.project.game.persistence.DatabaseManager;
+import com.project.game.persistence.account.JdbcAccountRepository;
 import com.project.game.service.AuthService;
 import com.project.game.service.ResourceService;
 import com.project.game.service.ServerServices;
@@ -39,6 +42,7 @@ public final class NetworkServer {
     private final SSLContext tlsContext;
     private final NetworkConfig networkConfig;
     private final NetworkEventObserver eventObserver;
+    private final DatabaseManager databaseManager;
     private final SessionManager sessions = new SessionManager();
     private volatile boolean running;
     private volatile ServerSocket serverSocket;
@@ -47,6 +51,14 @@ public final class NetworkServer {
                          int sendQueueSize, int handshakeTimeoutMillis, byte[] handshakeKey,
                          ServerServices services, SSLContext tlsContext, NetworkConfig networkConfig,
                          NetworkEventObserver eventObserver) {
+        this(host, port, maxSessionsPerIp, maxPacketSize, sendQueueSize, handshakeTimeoutMillis,
+                handshakeKey, services, tlsContext, networkConfig, eventObserver, null);
+    }
+
+    private NetworkServer(String host, int port, int maxSessionsPerIp, int maxPacketSize,
+                          int sendQueueSize, int handshakeTimeoutMillis, byte[] handshakeKey,
+                          ServerServices services, SSLContext tlsContext, NetworkConfig networkConfig,
+                          NetworkEventObserver eventObserver, DatabaseManager databaseManager) {
         if (port < 0 || port > 65535 || maxSessionsPerIp < 1 || maxPacketSize < 1 || sendQueueSize < 1
                 || handshakeTimeoutMillis < 1) {
             throw new IllegalArgumentException("invalid network configuration");
@@ -68,6 +80,7 @@ public final class NetworkServer {
         this.tlsContext = tlsContext;
         this.networkConfig = Objects.requireNonNull(networkConfig, "networkConfig");
         this.eventObserver = Objects.requireNonNull(eventObserver, "eventObserver");
+        this.databaseManager = databaseManager;
     }
 
     public static NetworkServer fromSystemProperties() {
@@ -91,42 +104,56 @@ public final class NetworkServer {
         } catch (IOException | java.security.GeneralSecurityException exception) {
             throw new IllegalStateException("cannot initialize TLS network transport", exception);
         }
-        ResourceService resources = resourceService(properties);
-        MonsterRuntimeFactory monsterFactory =
-                new MonsterRuntimeFactory(resources);
-        MapService maps =
-                new MapService(
-                        new PlayerPacketWriter(),
-                        new MonsterPacketWriter(),
-                        monsterFactory);
-        ServerServices services =
-                new ServerServices(
-                        new AuthService(),
-                        resources,
-                        maps);
-        return new NetworkServer(
-                properties.getProperty("game.network.host", "127.0.0.1"),
-                integer(properties, "game.network.port", 1707),
-                integer(properties, "game.network.max-session-per-ip", 20),
-                integer(properties, "game.network.max-packet-size", 65535),
-                integer(properties, "game.network.send-queue-size", 256),
-                integer(properties, "game.network.handshake-timeout-ms", 10000),
-                "abc".getBytes(java.nio.charset.StandardCharsets.US_ASCII),
-                services, tlsContext,
-                NetworkConfig.fromProperties(properties), NetworkEventObserver.NO_OP);
+        DatabaseManager databaseManager = new DatabaseManager(DatabaseConfig.fromProperties(properties));
+        try {
+            ResourceService resources = resourceService(properties);
+            MonsterRuntimeFactory monsterFactory = new MonsterRuntimeFactory(resources);
+            MapService maps = new MapService(
+                    new PlayerPacketWriter(), new MonsterPacketWriter(), monsterFactory);
+            JdbcAccountRepository accountRepository =
+                    new JdbcAccountRepository(databaseManager.dataSource());
+            accountRepository.findByUsername("__startup_probe__");
+            AuthService auth = new AuthService(accountRepository);
+            ServerServices services = new ServerServices(auth, resources, maps);
+            return new NetworkServer(
+                    properties.getProperty("game.network.host", "127.0.0.1"),
+                    integer(properties, "game.network.port", 1707),
+                    integer(properties, "game.network.max-session-per-ip", 20),
+                    integer(properties, "game.network.max-packet-size", 65535),
+                    integer(properties, "game.network.send-queue-size", 256),
+                    integer(properties, "game.network.handshake-timeout-ms", 10000),
+                    "abc".getBytes(java.nio.charset.StandardCharsets.US_ASCII),
+                    services, tlsContext, NetworkConfig.fromProperties(properties),
+                    NetworkEventObserver.NO_OP, databaseManager);
+        } catch (RuntimeException | Error exception) {
+            databaseManager.close();
+            throw exception;
+        }
     }
 
     public void start() throws IOException {
         if (running) {
             return;
         }
-        ServerSocket listener;
-        if (tlsContext == null) {
-            listener = new ServerSocket();
-        } else {
-            listener = (SSLServerSocket) tlsContext.getServerSocketFactory().createServerSocket();
+        ServerSocket listener = null;
+        try {
+            if (tlsContext == null) {
+                listener = new ServerSocket();
+            } else {
+                listener = (SSLServerSocket) tlsContext.getServerSocketFactory().createServerSocket();
+            }
+            listener.bind(new InetSocketAddress(host, port));
+        } catch (IOException | RuntimeException exception) {
+            if (listener != null) {
+                try {
+                    listener.close();
+                } catch (IOException closeException) {
+                    exception.addSuppressed(closeException);
+                }
+            }
+            closeDatabaseManager();
+            throw exception;
         }
-        listener.bind(new InetSocketAddress(host, port));
         serverSocket = listener;
         running = true;
         try {
@@ -139,6 +166,7 @@ public final class NetworkServer {
             } catch (IOException closeException) {
                 exception.addSuppressed(closeException);
             }
+            closeDatabaseManager();
             throw exception;
         }
         LOGGER.info(() -> "Network server listening on " + host + ':' + port
@@ -184,6 +212,7 @@ public final class NetworkServer {
         }
         monsterLifecycleScheduler.stop();
         sessions.closeAll();
+        closeDatabaseManager();
     }
 
     public SessionManager sessions() {
@@ -216,11 +245,19 @@ public final class NetworkServer {
                 imageVersion);
     }
 
-    private static void overlaySystemProperties(Properties properties) {
+    static void overlaySystemProperties(Properties properties) {
         for (String key : System.getProperties().stringPropertyNames()) {
-            if (key.startsWith("game.network.") || key.startsWith("game.resource.")) {
+            if (key.startsWith("game.network.")
+                    || key.startsWith("game.resource.")
+                    || key.startsWith("game.db.")) {
                 properties.setProperty(key, System.getProperty(key));
             }
+        }
+    }
+
+    private void closeDatabaseManager() {
+        if (databaseManager != null) {
+            databaseManager.close();
         }
     }
 }

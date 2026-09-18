@@ -1,5 +1,8 @@
 package com.project.game.network;
 
+import com.project.game.testsupport.TestServices;
+import com.project.game.testsupport.TestAccountRepository;
+
 import com.project.game.map.MapService;
 import com.project.game.map.Zone;
 import com.project.game.network.codec.LegacyPacketCodec;
@@ -39,7 +42,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class MessageHandlerTest {
     @Test
     void tracksMapTemplatesPerSession() {
-        Session session = newSession(new AuthService());
+        Session session = newSession(TestServices.authService());
 
         assertFalse(session.hasSentMapTemplate(0));
         session.markMapTemplateSent(0);
@@ -54,7 +57,7 @@ class MessageHandlerTest {
                 new PlayerPacketWriter(),
                 new MonsterPacketWriter(),
                 new MonsterRuntimeFactory(resources));
-        ServerServices services = new ServerServices(new AuthService(), resources, maps);
+        ServerServices services = new ServerServices(TestServices.authService(), resources, maps);
         PlayerProfile start = PlayerProfile.initial("user01", 7, "alpha1", 0)
                 .withLocation(0, 0, 4464, 936);
         Session session = inGameSession(services, start);
@@ -126,7 +129,7 @@ class MessageHandlerTest {
                 new PlayerPacketWriter(),
                 new MonsterPacketWriter(),
                 new MonsterRuntimeFactory(resources));
-        ServerServices services = new ServerServices(new AuthService(), resources, maps);
+        ServerServices services = new ServerServices(TestServices.authService(), resources, maps);
         PlayerProfile start = PlayerProfile.initial("user01", 7, "alpha1", 0)
                 .withLocation(0, 0, 1250, 648);
         Session session = inGameSession(services, start);
@@ -147,7 +150,7 @@ class MessageHandlerTest {
                 new PlayerPacketWriter(),
                 new MonsterPacketWriter(),
                 new MonsterRuntimeFactory(resources));
-        ServerServices services = new ServerServices(new AuthService(), resources, maps);
+        ServerServices services = new ServerServices(TestServices.authService(), resources, maps);
         PlayerProfile start = PlayerProfile.initial("user01", 7, "alpha1", 0)
                 .withLocation(0, 0, 4464, 936);
         Session session = inGameSession(services, start);
@@ -174,7 +177,7 @@ class MessageHandlerTest {
     @Test
     void requestChangeMapRejectsNonEmptyPayload() {
         ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
-        Session session = inGameSession(new ServerServices(new AuthService(), resources),
+        Session session = inGameSession(new ServerServices(TestServices.authService(), resources),
                 PlayerProfile.initial("user01", 7, "alpha1", 0));
 
         newHandler(session, resources).onMessage(new Message(
@@ -186,7 +189,7 @@ class MessageHandlerTest {
     @Test
     void mapInfoRevisitUsesCachedTemplateLayout() throws Exception {
         ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
-        Session session = inGameSession(new ServerServices(new AuthService(), resources),
+        Session session = inGameSession(new ServerServices(TestServices.authService(), resources),
                 PlayerProfile.initial("user01", 7, "alpha1", 0)
                         .withLocation(0, 0, 4464, 936));
         MessageHandler handler = newHandler(session, resources);
@@ -217,7 +220,7 @@ class MessageHandlerTest {
 
     @Test
     void finishLoadRegistersPresenceAndMovementDoesNotAckMover() throws Exception {
-        AuthService auth = new AuthService();
+        AuthService auth = TestServices.authService();
         MapService maps = new MapService(
                 new PlayerPacketWriter(),
                 new MonsterPacketWriter(),
@@ -249,7 +252,7 @@ class MessageHandlerTest {
 
     @Test
     void playerMoveIsAcceptedInGameAndUpdatesSessionPosition() {
-        AuthService auth = new AuthService();
+        AuthService auth = TestServices.authService();
         Session session = inGameSessionWithPlayer(auth);
         MessageHandler handler = newHandler(session, auth);
 
@@ -265,11 +268,11 @@ class MessageHandlerTest {
 
     @Test
     void finishLoadMapIsAcceptedInGameWithoutConsumingViolationBudget() {
-        Session session = newSession(new AuthService());
+        Session session = newSession(TestServices.authService());
         session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
         session.transition(SessionState.HANDSHAKE_DONE, SessionState.AUTHENTICATED);
         session.transition(SessionState.AUTHENTICATED, SessionState.IN_GAME);
-        MessageHandler handler = newHandler(session, new AuthService());
+        MessageHandler handler = newHandler(session, TestServices.authService());
 
         handler.onMessage(new Message(MessageName.FINISH_LOAD_MAP));
         handler.onMessage(new Message(MessageName.FINISH_LOAD_MAP));
@@ -284,7 +287,7 @@ class MessageHandlerTest {
                 new PlayerPacketWriter(),
                 new MonsterPacketWriter(),
                 new MonsterRuntimeFactory(ResourceService.unavailable()));
-        ServerServices services = new ServerServices(new AuthService(), ResourceService.unavailable(), maps);
+        ServerServices services = new ServerServices(TestServices.authService(), ResourceService.unavailable(), maps);
         Session session = inGameSession(services, PlayerProfile.initial("user01", 7, "alpha1", 0));
         MessageHandler handler = newHandler(session, services, NetworkConfig.defaults());
 
@@ -407,7 +410,7 @@ class MessageHandlerTest {
         ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
         MapService maps = new MapService(new PlayerPacketWriter(), new MonsterPacketWriter(),
                 new MonsterRuntimeFactory(resources));
-        ServerServices services = new ServerServices(new AuthService(), resources, maps);
+        ServerServices services = new ServerServices(TestServices.authService(), resources, maps);
         Session session = inGameSession(services,
                 PlayerProfile.initial("user01", 7, "alpha1", 0).withLocation(1, 0, 90, 1008));
         MessageHandler handler = newHandler(session, services, NetworkConfig.defaults());
@@ -447,6 +450,83 @@ class MessageHandlerTest {
     }
 
     @Test
+    void registerUsesServerDerivedRemoteAddress() throws Exception {
+        TestAccountRepository repository = new TestAccountRepository();
+        AuthService auth = new AuthService(repository);
+        SessionManager manager = new SessionManager();
+        Session session = newSession(auth, 1024, manager, "192.0.2.44");
+        session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
+
+        newHandler(session, auth).onMessage(new Message(
+                MessageName.REGISTER_USER,
+                new MessageWriter().writeUtf("user01").writeUtf("secret1").toByteArray()));
+
+        assertEquals("192.0.2.44", repository.requireAccount("user01").ipAddress());
+    }
+
+    @Test
+    void validLoginBindsThenUpdatesMetadataThenAuthenticates() throws Exception {
+        TestAccountRepository repository = new TestAccountRepository();
+        AuthService auth = new AuthService(repository);
+        assertTrue(auth.register("user01", "secret1", "192.0.2.10").success());
+        SessionManager manager = new SessionManager();
+        Session session = newSession(auth, 1024, manager, "198.51.100.1");
+        session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
+
+        newHandler(session, auth).onMessage(loginMessage("user01", "secret1"));
+
+        assertEquals(SessionState.AUTHENTICATED, session.state());
+        assertEquals(session, manager.findByAccount("user01"));
+        assertEquals(1, repository.metadataUpdateCount());
+        assertEquals("198.51.100.1", repository.requireAccount("user01").ipAddress());
+        assertEquals(MessageName.START_CREATE_PLAYER_SCREEN, drainMessages(session).getFirst().command());
+    }
+
+    @Test
+    void duplicateOnlineLoginDoesNotUpdateSuccessfulLoginMetadata() throws Exception {
+        TestAccountRepository repository = new TestAccountRepository();
+        AuthService auth = new AuthService(repository);
+        assertTrue(auth.register("user01", "secret1", "192.0.2.10").success());
+        SessionManager manager = new SessionManager();
+        Session first = newSession(auth, 1024, manager, "198.51.100.1");
+        Session second = newSession(auth, 1024, manager, "198.51.100.2");
+        first.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
+        second.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
+
+        newHandler(first, auth).onMessage(loginMessage("user01", "secret1"));
+        newHandler(second, auth).onMessage(loginMessage("user01", "secret1"));
+
+        assertEquals(SessionState.AUTHENTICATED, first.state());
+        assertEquals(SessionState.HANDSHAKE_DONE, second.state());
+        assertEquals(first, manager.findByAccount("user01"));
+        assertEquals(1, repository.metadataUpdateCount());
+        assertEquals("198.51.100.1", repository.requireAccount("user01").ipAddress());
+        Message dialog = drainMessages(second).getFirst();
+        assertEquals(MessageName.DIALOG_OK, dialog.command());
+        assertEquals("Tài khoản đang đăng nhập ở thiết bị khác", dialog.reader().readUtf());
+    }
+
+    @Test
+    void metadataFailureRollsBackAccountBindingAndStaysUnauthenticated() throws Exception {
+        TestAccountRepository repository = new TestAccountRepository();
+        AuthService auth = new AuthService(repository);
+        assertTrue(auth.register("user01", "secret1", "192.0.2.10").success());
+        repository.failUpdate(true);
+        SessionManager manager = new SessionManager();
+        Session session = newSession(auth, 1024, manager, "198.51.100.1");
+        session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
+
+        newHandler(session, auth).onMessage(loginMessage("user01", "secret1"));
+
+        assertEquals(SessionState.HANDSHAKE_DONE, session.state());
+        assertEquals(null, manager.findByAccount("user01"));
+        assertEquals(null, session.player());
+        Message dialog = drainMessages(session).getFirst();
+        assertEquals(MessageName.DIALOG_OK, dialog.command());
+        assertEquals("Hệ thống đang bận, vui lòng thử lại", dialog.reader().readUtf());
+    }
+
+    @Test
     void closesWhenLoginContainsTrailingBytes() throws Exception {
         AuthService auth = registeredAuth();
         Session session = newSession(auth);
@@ -462,7 +542,7 @@ class MessageHandlerTest {
 
     @Test
     void closesWhenUpdateDataContainsTrailingBytes() {
-        AuthService auth = new AuthService();
+        AuthService auth = TestServices.authService();
         Session session = newSession(auth);
         session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
         MessageHandler handler = newHandler(session, auth);
@@ -492,7 +572,7 @@ class MessageHandlerTest {
 
     @Test
     void doesNotSendEmptyFrameDatasetWhenFrameResourcesAreUnavailable() {
-        Session session = newSession(new AuthService());
+        Session session = newSession(TestServices.authService());
         session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
 
         newHandler(session, ResourceService.unavailable()).onMessage(
@@ -504,7 +584,7 @@ class MessageHandlerTest {
 
     @Test
     void playerMoveRejectsTruncatedPayload() {
-        AuthService auth = new AuthService();
+        AuthService auth = TestServices.authService();
         Session session = inGameSessionWithPlayer(auth);
         MessageHandler handler = newHandler(session, auth);
 
@@ -520,7 +600,7 @@ class MessageHandlerTest {
 
     @Test
     void playerMoveRejectsTrailingPayloadBytes() {
-        AuthService auth = new AuthService();
+        AuthService auth = TestServices.authService();
         Session session = inGameSessionWithPlayer(auth);
         MessageHandler handler = newHandler(session, auth);
 
@@ -537,7 +617,7 @@ class MessageHandlerTest {
 
     @Test
     void playerMoveRemainsRejectedBeforeInGame() {
-        AuthService auth = new AuthService();
+        AuthService auth = TestServices.authService();
         Session session = newSession(auth);
         session.bindPlayer(PlayerProfile.initial("user01", 7, "alpha1", 0));
         session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
@@ -553,7 +633,7 @@ class MessageHandlerTest {
 
     @Test
     void playerMoveWithoutBoundPlayerFailsClosed() {
-        AuthService auth = new AuthService();
+        AuthService auth = TestServices.authService();
         Session session = newSession(auth);
         session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
         session.transition(SessionState.HANDSHAKE_DONE, SessionState.AUTHENTICATED);
@@ -574,7 +654,7 @@ class MessageHandlerTest {
             byte[] key = "abc".getBytes(StandardCharsets.US_ASCII);
             Session session = new Session(manager.nextId(), new TestTransport(input, output, "127.0.0.1"),
                     manager, new LegacyPacketCodec(262_144), key, 4,
-                    new ServerServices(new AuthService(), resources), NetworkConfig.defaults(),
+                    new ServerServices(TestServices.authService(), resources), NetworkConfig.defaults(),
                     NetworkEventObserver.NO_OP);
             try {
                 session.start();
@@ -620,7 +700,7 @@ class MessageHandlerTest {
                     new LegacyPacketCodec(262_144),
                     key,
                     4,
-                    new ServerServices(new AuthService(), resources),
+                    new ServerServices(TestServices.authService(), resources),
                     NetworkConfig.defaults(),
                     NetworkEventObserver.NO_OP);
             try {
@@ -671,7 +751,7 @@ class MessageHandlerTest {
             byte[] key = "abc".getBytes(StandardCharsets.US_ASCII);
             Session session = new Session(manager.nextId(), new TestTransport(input, output, "127.0.0.1"),
                     manager, new LegacyPacketCodec(262_144), key, 4,
-                    new ServerServices(new AuthService(), resources), NetworkConfig.defaults(),
+                    new ServerServices(TestServices.authService(), resources), NetworkConfig.defaults(),
                     NetworkEventObserver.NO_OP);
             try {
                 session.start();
@@ -741,7 +821,7 @@ class MessageHandlerTest {
 
     @Test
     void doesNotSendEmptyMonsterDatasetWhenMonsterResourcesAreUnavailable() {
-        Session session = newSession(new AuthService());
+        Session session = newSession(TestServices.authService());
         session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
 
         newHandler(session, ResourceService.unavailable()).onMessage(new Message(
@@ -770,7 +850,7 @@ class MessageHandlerTest {
 
     @Test
     void doesNotSendEmptyEffectDatasetWhenEffectResourcesAreUnavailable() {
-        Session session = newSession(new AuthService());
+        Session session = newSession(TestServices.authService());
         session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
 
         newHandler(session, ResourceService.unavailable()).onMessage(
@@ -784,29 +864,29 @@ class MessageHandlerTest {
     void requestIconIsAllowedOnlyAfterHandshake() {
         ResourceService resources = ResourceService.unavailable();
 
-        Session connected = newSession(new AuthService());
+        Session connected = newSession(TestServices.authService());
         newHandler(connected, resources).onMessage(iconRequest(5));
         assertEquals(SessionState.CONNECTED, connected.state());
 
-        Session handshakeDone = newSession(new AuthService());
+        Session handshakeDone = newSession(TestServices.authService());
         handshakeDone.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
         newHandler(handshakeDone, resources).onMessage(iconRequest(5));
         assertEquals(SessionState.HANDSHAKE_DONE, handshakeDone.state());
 
-        Session authenticated = newSession(new AuthService());
+        Session authenticated = newSession(TestServices.authService());
         authenticated.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
         authenticated.transition(SessionState.HANDSHAKE_DONE, SessionState.AUTHENTICATED);
         newHandler(authenticated, resources).onMessage(iconRequest(5));
         assertEquals(SessionState.AUTHENTICATED, authenticated.state());
 
-        Session inGame = newSession(new AuthService());
+        Session inGame = newSession(TestServices.authService());
         inGame.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
         inGame.transition(SessionState.HANDSHAKE_DONE, SessionState.AUTHENTICATED);
         inGame.transition(SessionState.AUTHENTICATED, SessionState.IN_GAME);
         newHandler(inGame, resources).onMessage(iconRequest(5));
         assertEquals(SessionState.IN_GAME, inGame.state());
 
-        Session closed = newSession(new AuthService());
+        Session closed = newSession(TestServices.authService());
         closed.close();
         newHandler(closed, resources).onMessage(iconRequest(5));
         assertEquals(SessionState.CLOSED, closed.state());
@@ -815,7 +895,7 @@ class MessageHandlerTest {
     @Test
     void parsesRequestIconIdAndQueuesAvailableIcon(@TempDir Path root) throws IOException {
         Files.write(root.resolve("5.png"), new byte[]{1, 2, 3});
-        Session session = newSession(new AuthService());
+        Session session = newSession(TestServices.authService());
         session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
 
         newHandler(session, ResourceService.fromIconRoot(root)).onMessage(iconRequest(5));
@@ -826,7 +906,7 @@ class MessageHandlerTest {
 
     @Test
     void rejectsRequestIconTrailingBytes() {
-        Session session = newSession(new AuthService());
+        Session session = newSession(TestServices.authService());
         session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
 
         newHandler(session, ResourceService.unavailable()).onMessage(
@@ -837,7 +917,7 @@ class MessageHandlerTest {
 
     @Test
     void missingIconDoesNotCloseAuthenticatedSessionOrQueueResponse() {
-        Session session = newSession(new AuthService());
+        Session session = newSession(TestServices.authService());
         session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
         session.transition(SessionState.HANDSHAKE_DONE, SessionState.AUTHENTICATED);
 
@@ -857,7 +937,7 @@ class MessageHandlerTest {
     @Test
     void oversizedIconIsNotQueuedPastConfiguredPacketLimit(@TempDir Path root) throws IOException {
         Files.write(root.resolve("5.png"), new byte[70_000]);
-        Session session = newSession(new AuthService(), 9);
+        Session session = newSession(TestServices.authService(), 9);
         session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
 
         newHandler(session, ResourceService.fromIconRoot(root))
@@ -873,7 +953,7 @@ class MessageHandlerTest {
     }
 
     private static MessageHandler newHandler(Session session, ResourceService resources) {
-        return newHandler(session, new ServerServices(new AuthService(), resources), NetworkConfig.defaults());
+        return newHandler(session, new ServerServices(TestServices.authService(), resources), NetworkConfig.defaults());
     }
 
     private static MessageHandler newHandler(Session session, ServerServices services, NetworkConfig config) {
@@ -883,6 +963,15 @@ class MessageHandlerTest {
     private static Message iconRequest(int iconId) {
         return new Message(MessageName.REQUEST_ICON,
                 new MessageWriter().writeShort(iconId).toByteArray());
+    }
+
+    private static Message loginMessage(String username, String password) throws IOException {
+        return new Message(MessageName.LOGIN, new MessageWriter()
+                .writeUtf("0.9.5")
+                .writeUtf(username)
+                .writeUtf(password)
+                .writeByte(1)
+                .toByteArray());
     }
 
     private static Message moveMessage(int x, int y) {
@@ -907,7 +996,7 @@ class MessageHandlerTest {
         ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
         MapService maps = new MapService(new PlayerPacketWriter(), new MonsterPacketWriter(),
                 new MonsterRuntimeFactory(resources));
-        ServerServices services = new ServerServices(new AuthService(), resources, maps);
+        ServerServices services = new ServerServices(TestServices.authService(), resources, maps);
         Session session = inGameSession(services,
                 PlayerProfile.initial("user01", 7, "alpha1", 0).withLocation(1, 0, 90, 1008));
         MessageHandler handler = newHandler(session, services, NetworkConfig.defaults());
@@ -924,8 +1013,8 @@ class MessageHandlerTest {
     }
 
     private static AuthService registeredAuth() {
-        AuthService auth = new AuthService();
-        auth.register("user01", "secret1");
+        AuthService auth = TestServices.authService();
+        auth.register("user01", "secret1", "127.0.0.1");
         return auth;
     }
 
@@ -934,8 +1023,13 @@ class MessageHandlerTest {
     }
 
     private static Session newSession(AuthService authService, int maxPacketSize) {
-        SessionManager manager = new SessionManager();
-        return new Session(manager.nextId(), new TestTransport(), manager,
+        return newSession(authService, maxPacketSize, new SessionManager(), "127.0.0.1");
+    }
+
+    private static Session newSession(AuthService authService, int maxPacketSize,
+                                      SessionManager manager, String remoteAddress) {
+        return new Session(manager.nextId(), new TestTransport(
+                new ByteArrayInputStream(new byte[0]), new ByteArrayOutputStream(), remoteAddress), manager,
                 new LegacyPacketCodec(maxPacketSize), "abc".getBytes(StandardCharsets.US_ASCII), 4,
                 new ServerServices(authService, ResourceService.unavailable()), NetworkConfig.defaults(),
                 NetworkEventObserver.NO_OP);
@@ -1023,7 +1117,7 @@ class MessageHandlerTest {
             byte[] key = "abc".getBytes(StandardCharsets.US_ASCII);
             Session session = new Session(manager.nextId(), new TestTransport(input, output, "127.0.0.1"),
                     manager, new LegacyPacketCodec(262_144), key, 4,
-                    new ServerServices(new AuthService(), resources), NetworkConfig.defaults(),
+                    new ServerServices(TestServices.authService(), resources), NetworkConfig.defaults(),
                     NetworkEventObserver.NO_OP);
             try {
                 session.start();
@@ -1059,7 +1153,7 @@ class MessageHandlerTest {
             byte[] key = "abc".getBytes(StandardCharsets.US_ASCII);
             Session session = new Session(manager.nextId(), new TestTransport(input, output, "127.0.0.1"),
                     manager, new LegacyPacketCodec(262_144), key, 4,
-                    new ServerServices(new AuthService(), resources), NetworkConfig.defaults(),
+                    new ServerServices(TestServices.authService(), resources), NetworkConfig.defaults(),
                     NetworkEventObserver.NO_OP);
             try {
                 session.start();
@@ -1109,7 +1203,7 @@ class MessageHandlerTest {
                         new LegacyPacketCodec(262_144),
                         key,
                         4,
-                        new ServerServices(new AuthService(), resources),
+                        new ServerServices(TestServices.authService(), resources),
                         NetworkConfig.defaults(),
                         NetworkEventObserver.NO_OP);
                 try {

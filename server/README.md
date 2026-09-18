@@ -14,7 +14,7 @@ Nó không import và không ghi đè `../server/src` legacy.
 - state validation cơ bản và protocol tests.
 - Java 21 virtual threads cho reader/writer mỗi session;
 - Java integration client cho N9;
-- auth-ready N11: PBKDF2, register/login, duplicate-account guard, create player;
+- auth-ready N11: PBKDF2, MySQL-backed register/login, duplicate-account guard, create player;
 - protocol-violation counter và hardening giới hạn packet/session.
 - N13 TLS 1.3 transport tùy chọn, keystore lấy từ cấu hình ngoài repo và password từ environment.
 
@@ -60,9 +60,13 @@ Icon Resource V2:
 - Only changed icon fingerprints create cache misses.
 - `REQUEST_ICON` `-22` remains unchanged.
 
-Database persistence foundation:
+Account authentication persistence:
 
-- The JDBC account layer is not wired into `AuthService` or server startup.
+- `REGISTER` and `LOGIN` use the MySQL `account` table through `AccountRepository`.
+- Account credentials survive a server restart. Player data is still memory-only, so the first
+  login after restart correctly opens `START_CREATE_PLAYER_SCREEN`.
+- Normal server startup requires the configured account database and fails if the database or
+  `account` table is unavailable. There is no production in-memory account fallback.
 - Normal `mvn test` is MySQL-independent and does not require a database password.
 - The local `root` account currently has no password, so empty-password mode is explicitly
   enabled. This avoids relying on PowerShell preserving an empty environment variable.
@@ -75,7 +79,7 @@ mvn `
   '-Dgame.db.url=jdbc:mysql://localhost:3306/rongthanchibi' `
   '-Dgame.db.username=root' `
   '-Dgame.db.allow-empty-password=true' `
-  '-Dtest=JdbcAccountRepositoryIntegrationTest' `
+  '-Dtest=JdbcAccountRepositoryIntegrationTest,AuthServiceDatabaseIntegrationTest' `
   test
 ```
 
@@ -90,7 +94,7 @@ mvn `
   '-Dgame.db.url=jdbc:mysql://localhost:3306/rongthanchibi' `
   '-Dgame.db.username=root' `
   '-Dgame.db.allow-empty-password=false' `
-  '-Dtest=JdbcAccountRepositoryIntegrationTest' `
+  '-Dtest=JdbcAccountRepositoryIntegrationTest,AuthServiceDatabaseIntegrationTest' `
   test
 ```
 
@@ -111,7 +115,8 @@ Test cả auth/create-player:
 & "$env:JAVA_HOME\bin\java.exe" -cp "target/test-classes;target/classes" com.project.game.network.ProtocolIntegrationClient 127.0.0.1 1707 codex01 secret1
 ```
 
-Mặc định server nghe `127.0.0.1:1707`. Admission ticket, repository/DB thật và domain packet writers vẫn để ở các gate sau theo plan.
+Mặc định server nghe `127.0.0.1:1707`. Account dùng MySQL; nhân vật, inventory,
+skill, quest và vị trí vẫn chỉ nằm trong bộ nhớ và chưa được persist ở phase này.
 
 ## Bật TLS 1.3
 

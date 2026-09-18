@@ -1,5 +1,6 @@
 package com.project.game.network;
 
+import com.project.game.testsupport.TestServices;
 import com.project.game.network.codec.LegacyPacketCodec;
 import com.project.game.service.ServerServices;
 import org.junit.jupiter.api.Test;
@@ -40,6 +41,6 @@ class SessionManagerTest {
     private static Session newSession(SessionManager manager) {
         return new Session(manager.nextId(), new TestTransport(), manager,
                 new LegacyPacketCodec(1024), "abc".getBytes(StandardCharsets.US_ASCII), 4,
-                ServerServices.defaults(), NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
+                TestServices.serverServices(), NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
     }
 }

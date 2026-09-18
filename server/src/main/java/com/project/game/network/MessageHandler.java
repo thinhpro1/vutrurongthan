@@ -382,14 +382,21 @@ public final class MessageHandler {
         if (reader.remaining() != 0) {
             throw new IOException("trailing login payload bytes");
         }
-        AuthService.AuthResult result = authService.login(username, password);
+        AuthService.LoginResult result = authService.login(username, password);
         if (!result.success()) {
-            sendDialog(result.value());
+            sendDialog(result.message());
             return;
         }
-        String accountName = result.value();
+        String accountName = result.accountName();
         if (!session.manager().bindAccount(session, accountName)) {
             sendDialog("Tài khoản đang đăng nhập ở thiết bị khác");
+            return;
+        }
+        AuthService.AuthResult metadata =
+                authService.markSuccessfulLogin(result.accountId(), session.remoteAddress());
+        if (!metadata.success()) {
+            session.manager().unbindAccount(session);
+            sendDialog(metadata.value());
             return;
         }
         session.transition(SessionState.HANDSHAKE_DONE, SessionState.AUTHENTICATED);
@@ -406,7 +413,8 @@ public final class MessageHandler {
 
     private void handleRegister(Message message) throws IOException {
         var reader = message.reader();
-        AuthService.AuthResult result = authService.register(reader.readUtf(), reader.readUtf());
+        AuthService.AuthResult result = authService.register(
+                reader.readUtf(), reader.readUtf(), session.remoteAddress());
         sendDialog(result.value());
     }
 

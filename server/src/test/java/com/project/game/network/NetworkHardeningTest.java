@@ -1,5 +1,6 @@
 package com.project.game.network;
 
+import com.project.game.testsupport.TestServices;
 import com.project.game.network.codec.LegacyCipher;
 import com.project.game.network.codec.LegacyPacketCodec;
 import com.project.game.network.message.Message;
@@ -33,7 +34,7 @@ class NetworkHardeningTest {
             AtomicBoolean observerCalled = new AtomicBoolean();
             Session session = new Session(manager.nextId(), transport, manager, new LegacyPacketCodec(1024),
                     "abc".getBytes(StandardCharsets.US_ASCII), 4,
-                    new ServerServices(new AuthService(), ResourceService.unavailable()), NetworkConfig.defaults(),
+                    new ServerServices(TestServices.authService(), ResourceService.unavailable()), NetworkConfig.defaults(),
                     (ignored, type) -> {
                         observerCalled.set(true);
                         throw new IllegalStateException("observer failed");
@@ -74,7 +75,7 @@ class NetworkHardeningTest {
             BlockingOutput output = new BlockingOutput();
             TestTransport transport = new TestTransport(input, output, "127.0.0.1");
             Session session = new Session(manager.nextId(), transport, manager, new LegacyPacketCodec(1024),
-                    "abc".getBytes(StandardCharsets.US_ASCII), 1, ServerServices.defaults(),
+                    "abc".getBytes(StandardCharsets.US_ASCII), 1, TestServices.serverServices(),
                     NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
             assertTrue(manager.tryAdd(session, 1));
             session.start();
@@ -91,7 +92,7 @@ class NetworkHardeningTest {
     private static Session session(SessionManager manager, String ip, int queueSize) {
         return new Session(manager.nextId(), new TestTransport(new java.io.ByteArrayInputStream(new byte[0]),
                 new ByteArrayOutputStream(), ip), manager, new LegacyPacketCodec(1024),
-                "abc".getBytes(StandardCharsets.US_ASCII), queueSize, ServerServices.defaults(),
+                "abc".getBytes(StandardCharsets.US_ASCII), queueSize, TestServices.serverServices(),
                 NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
     }
 

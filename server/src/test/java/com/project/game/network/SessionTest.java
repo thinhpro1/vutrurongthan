@@ -1,5 +1,6 @@
 package com.project.game.network;
 
+import com.project.game.testsupport.TestServices;
 import com.project.game.network.codec.LegacyPacketCodec;
 import com.project.game.network.codec.LegacyCipher;
 import com.project.game.network.message.Message;
@@ -51,7 +52,7 @@ class SessionTest {
         };
         Session session = new Session(manager.nextId(), transport, manager,
                 new LegacyPacketCodec(1024), "abc".getBytes(StandardCharsets.US_ASCII), 4,
-                ServerServices.defaults(), NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
+                TestServices.serverServices(), NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
         assertTrue(manager.tryAdd(session, 1));
 
         assertThrows(IOException.class, session::start);
@@ -69,7 +70,7 @@ class SessionTest {
             SessionManager manager = new SessionManager();
             Session session = new Session(manager.nextId(), new TestTransport(input, output, "127.0.0.1"), manager,
                     new LegacyPacketCodec(1024), "abc".getBytes(StandardCharsets.US_ASCII), 8,
-                    ServerServices.defaults(), NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
+                    TestServices.serverServices(), NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
             List<Message> expected = List.of(
                     new Message(MessageName.DIALOG_OK, new byte[]{1}),
                     new Message(MessageName.START_CREATE_PLAYER_SCREEN, new byte[]{2, 3}),

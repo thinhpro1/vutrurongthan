@@ -1,5 +1,7 @@
 package com.project.game.network;
 
+import com.project.game.testsupport.TestServices;
+
 import com.project.game.network.codec.LegacyPacketCodec;
 import com.project.game.network.message.Message;
 import com.project.game.network.message.MessageName;
@@ -18,6 +20,29 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class NetworkConfigTest {
     @Test
+    void overlaysOnlySupportedGameSystemPropertyNamespaces() {
+        String dbKey = "game.db.url";
+        String unrelatedKey = "game.other.value";
+        String previousDb = System.getProperty(dbKey);
+        String previousUnrelated = System.getProperty(unrelatedKey);
+        try {
+            System.setProperty(dbKey, "jdbc:mysql://override/rongthanchibi");
+            System.setProperty(unrelatedKey, "must-not-overlay");
+            Properties properties = new Properties();
+            properties.setProperty(dbKey, "jdbc:mysql://baseline/rongthanchibi");
+            properties.setProperty(unrelatedKey, "baseline");
+
+            NetworkServer.overlaySystemProperties(properties);
+
+            assertEquals("jdbc:mysql://override/rongthanchibi", properties.getProperty(dbKey));
+            assertEquals("baseline", properties.getProperty(unrelatedKey));
+        } finally {
+            restoreProperty(dbKey, previousDb);
+            restoreProperty(unrelatedKey, previousUnrelated);
+        }
+    }
+
+    @Test
     void readsClientCompatibilityValuesFromProperties() {
         Properties properties = new Properties();
         properties.setProperty("game.client.version", "0.9.6");
@@ -27,6 +52,14 @@ class NetworkConfigTest {
 
         assertEquals("0.9.6", config.clientVersion());
         assertEquals(2, config.loginVersion());
+    }
+
+    private static void restoreProperty(String key, String value) {
+        if (value == null) {
+            System.clearProperty(key);
+        } else {
+            System.setProperty(key, value);
+        }
     }
 
     @Test
@@ -44,8 +77,8 @@ class NetworkConfigTest {
 
     @Test
     void handlerUsesConfiguredClientVersionAndLoginVersion() throws Exception {
-        AuthService auth = new AuthService();
-        auth.register("user01", "secret1");
+        AuthService auth = TestServices.authService();
+        auth.register("user01", "secret1", "127.0.0.1");
         SessionManager manager = new SessionManager();
         Session session = new Session(manager.nextId(), new TestTransport(), manager,
                 new LegacyPacketCodec(1024), "abc".getBytes(StandardCharsets.US_ASCII), 4,

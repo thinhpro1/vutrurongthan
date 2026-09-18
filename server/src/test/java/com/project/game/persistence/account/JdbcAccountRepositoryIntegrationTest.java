@@ -92,6 +92,7 @@ class JdbcAccountRepositoryIntegrationTest {
                 "game.db.url",
                 "game.db.username",
                 "game.db.password-env",
+                "game.db.allow-empty-password",
                 "game.db.maximum-pool-size",
                 "game.db.minimum-idle",
                 "game.db.connection-timeout-ms"}) {

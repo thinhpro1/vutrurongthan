@@ -7,12 +7,14 @@ public record DatabaseConfig(
         String jdbcUrl,
         String username,
         String passwordEnvironmentVariable,
+        boolean allowEmptyPassword,
         int maximumPoolSize,
         int minimumIdle,
         long connectionTimeoutMillis) {
     private static final String DEFAULT_URL = "jdbc:mysql://localhost:3306/rongthanchibi";
     private static final String DEFAULT_USERNAME = "root";
     private static final String DEFAULT_PASSWORD_ENV = "GAME_DB_PASSWORD";
+    private static final boolean DEFAULT_ALLOW_EMPTY_PASSWORD = false;
     private static final int DEFAULT_MAXIMUM_POOL_SIZE = 10;
     private static final int DEFAULT_MINIMUM_IDLE = 1;
     private static final long DEFAULT_CONNECTION_TIMEOUT_MILLIS = 5_000L;
@@ -52,6 +54,9 @@ public record DatabaseConfig(
                 properties.getProperty("game.db.url", DEFAULT_URL),
                 properties.getProperty("game.db.username", DEFAULT_USERNAME),
                 properties.getProperty("game.db.password-env", DEFAULT_PASSWORD_ENV),
+                Boolean.parseBoolean(properties.getProperty(
+                        "game.db.allow-empty-password",
+                        Boolean.toString(DEFAULT_ALLOW_EMPTY_PASSWORD)).trim()),
                 integerProperty(properties, "game.db.maximum-pool-size", DEFAULT_MAXIMUM_POOL_SIZE),
                 integerProperty(properties, "game.db.minimum-idle", DEFAULT_MINIMUM_IDLE),
                 longProperty(properties, "game.db.connection-timeout-ms",

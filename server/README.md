@@ -64,28 +64,34 @@ Database persistence foundation:
 
 - The JDBC account layer is not wired into `AuthService` or server startup.
 - Normal `mvn test` is MySQL-independent and does not require a database password.
-- Keep the database password outside the repository and provide it through the environment:
-
-```powershell
-$env:GAME_DB_PASSWORD = ''
-```
-
-The empty value above is valid for a local `root` account with no password. Run the real
-MySQL integration test only when the `rongthanchibi` database and `account` table are available:
+- The local `root` account currently has no password, so empty-password mode is explicitly
+  enabled. This avoids relying on PowerShell preserving an empty environment variable.
+- Run the real MySQL integration test only when the `rongthanchibi` database and `account`
+  table are available:
 
 ```powershell
 mvn `
   '-Dgame.db.integration-test=true' `
   '-Dgame.db.url=jdbc:mysql://localhost:3306/rongthanchibi' `
   '-Dgame.db.username=root' `
+  '-Dgame.db.allow-empty-password=true' `
   '-Dtest=JdbcAccountRepositoryIntegrationTest' `
   test
 ```
 
-If the local `root` account later has a password, set it locally without committing it:
+For a password-protected local `root` account, keep the password outside the repository and
+disable empty-password mode explicitly:
 
 ```powershell
 $env:GAME_DB_PASSWORD = 'your-local-password'
+
+mvn `
+  '-Dgame.db.integration-test=true' `
+  '-Dgame.db.url=jdbc:mysql://localhost:3306/rongthanchibi' `
+  '-Dgame.db.username=root' `
+  '-Dgame.db.allow-empty-password=false' `
+  '-Dtest=JdbcAccountRepositoryIntegrationTest' `
+  test
 ```
 
 The JDBC URL and username can be overridden with `-Dgame.db.url` and

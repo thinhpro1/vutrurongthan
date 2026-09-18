@@ -5,6 +5,7 @@ import com.zaxxer.hikari.HikariDataSource;
 
 import javax.sql.DataSource;
 import java.util.Objects;
+import java.util.function.Function;
 
 public final class DatabaseManager implements AutoCloseable {
     private final HikariDataSource dataSource;
@@ -14,12 +15,7 @@ public final class DatabaseManager implements AutoCloseable {
         if (config.username().isBlank()) {
             throw new IllegalStateException("database username is not configured");
         }
-        String password = System.getenv(config.passwordEnvironmentVariable());
-        if (password == null) {
-            throw new IllegalStateException(
-                    "database password environment variable is not configured: "
-                            + config.passwordEnvironmentVariable());
-        }
+        String password = resolvePassword(config, System::getenv);
 
         HikariConfig hikari = new HikariConfig();
         hikari.setJdbcUrl(config.jdbcUrl());
@@ -30,6 +26,23 @@ public final class DatabaseManager implements AutoCloseable {
         hikari.setConnectionTimeout(config.connectionTimeoutMillis());
         hikari.setPoolName("rongthan-db");
         dataSource = new HikariDataSource(hikari);
+    }
+
+    static String resolvePassword(
+            DatabaseConfig config,
+            Function<String, String> environment) {
+        Objects.requireNonNull(config, "config");
+        Objects.requireNonNull(environment, "environment");
+        String password = environment.apply(config.passwordEnvironmentVariable());
+        if (password == null) {
+            if (config.allowEmptyPassword()) {
+                return "";
+            }
+            throw new IllegalStateException(
+                    "database password environment variable is not configured: "
+                            + config.passwordEnvironmentVariable());
+        }
+        return password;
     }
 
     public DataSource dataSource() {

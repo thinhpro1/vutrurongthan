@@ -82,6 +82,12 @@ mvn `
   test
 ```
 
+If the local `root` account later has a password, set it locally without committing it:
+
+```powershell
+$env:GAME_DB_PASSWORD = 'your-local-password'
+```
+
 The JDBC URL and username can be overridden with `-Dgame.db.url` and
 `-Dgame.db.username`. The reference schema is in `database/schema/account.sql`;
 the application does not execute it automatically.

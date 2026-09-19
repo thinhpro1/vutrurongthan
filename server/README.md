@@ -60,18 +60,19 @@ Icon Resource V2:
 - Only changed icon fingerprints create cache misses.
 - `REQUEST_ICON` `-22` remains unchanged.
 
-Account authentication persistence:
+Account and player persistence:
 
 - `REGISTER` and `LOGIN` use the MySQL `account` table through `AccountRepository`.
-- Account credentials survive a server restart. Player data is still memory-only, so the first
-  login after restart correctly opens `START_CREATE_PLAYER_SCREEN`.
-- Normal server startup requires the configured account database and fails if the database or
-  `account` table is unavailable. There is no production in-memory account fallback.
-- Normal `mvn test` is MySQL-independent and does not require a database password.
+- Account credentials and the single player row per account survive a server restart.
+- Apply `database/schema/account.sql` first, then `database/schema/player.sql` to the configured
+  MySQL database. The application does not execute either reference schema automatically.
+- Normal server startup requires the configured database, `account` table, and `player` table;
+  startup fails when any required table is unavailable. There is no production in-memory
+  account/player fallback.
 - The local `root` account currently has no password, so empty-password mode is explicitly
   enabled. This avoids relying on PowerShell preserving an empty environment variable.
-- Run the real MySQL integration test only when the `rongthanchibi` database and `account`
-  table are available:
+- Normal `mvn test` is MySQL-independent. Real DB integration remains opt-in and requires the
+  `rongthanchibi` database plus both tables:
 
 ```powershell
 mvn `
@@ -79,7 +80,7 @@ mvn `
   '-Dgame.db.url=jdbc:mysql://localhost:3306/rongthanchibi' `
   '-Dgame.db.username=root' `
   '-Dgame.db.allow-empty-password=true' `
-  '-Dtest=JdbcAccountRepositoryIntegrationTest,AuthServiceDatabaseIntegrationTest' `
+  '-Dtest=JdbcAccountRepositoryIntegrationTest,AuthServiceDatabaseIntegrationTest,JdbcPlayerRepositoryIntegrationTest,PlayerServiceDatabaseIntegrationTest' `
   test
 ```
 
@@ -94,18 +95,18 @@ mvn `
   '-Dgame.db.url=jdbc:mysql://localhost:3306/rongthanchibi' `
   '-Dgame.db.username=root' `
   '-Dgame.db.allow-empty-password=false' `
-  '-Dtest=JdbcAccountRepositoryIntegrationTest,AuthServiceDatabaseIntegrationTest' `
+  '-Dtest=JdbcAccountRepositoryIntegrationTest,AuthServiceDatabaseIntegrationTest,JdbcPlayerRepositoryIntegrationTest,PlayerServiceDatabaseIntegrationTest' `
   test
 ```
 
 The JDBC URL and username can be overridden with `-Dgame.db.url` and
-`-Dgame.db.username`. The reference schema is in `database/schema/account.sql`;
-the application does not execute it automatically.
+`-Dgame.db.username`. Player `zoneId` is runtime-only; durable position stores only
+`mapId`, `x`, and `y`. `exp` is total accumulated EXP and there is no `max_exp` column.
 
 ## Chạy server
 
 ```powershell
-.\mvnw.cmd -q package
+mvn -q package
 java -cp target/classes com.project.game.GameApplication
 ```
 
@@ -115,8 +116,8 @@ Test cả auth/create-player:
 & "$env:JAVA_HOME\bin\java.exe" -cp "target/test-classes;target/classes" com.project.game.network.ProtocolIntegrationClient 127.0.0.1 1707 codex01 secret1
 ```
 
-Mặc định server nghe `127.0.0.1:1707`. Account dùng MySQL; nhân vật, inventory,
-skill, quest và vị trí vẫn chỉ nằm trong bộ nhớ và chưa được persist ở phase này.
+Mặc định server nghe `127.0.0.1:1707`. Account và player dùng MySQL; inventory, skill và
+quest chưa nằm trong phạm vi persistence V1. Runtime zone membership vẫn chỉ nằm trong bộ nhớ.
 
 ## Bật TLS 1.3
 

@@ -735,8 +735,8 @@ class MapServiceTest {
         assertEquals(0, revived.zoneId());
         assertEquals(1250, revived.x());
         assertEquals(648, revived.y());
-        assertEquals(revived.maxHp(), revived.hp());
-        assertEquals(revived.maxMp(), revived.mp());
+        assertEquals(revived.currentStats().maxHp(), revived.hp());
+        assertEquals(revived.currentStats().maxMp(), revived.mp());
         assertEquals(revived, dead.player());
         assertEquals(1, maps.memberCount(1, 0));
         assertEquals(0, maps.memberCount(0, 0));
@@ -1565,15 +1565,9 @@ class MapServiceTest {
     }
 
     private static PlayerProfile player(int id, int mapId, int zoneId) {
-        PlayerProfile base = PlayerProfile.initial("user" + id, id, "player" + id, 0);
-        return new PlayerProfile(base.accountName(), base.id(), base.name(), base.gender(), base.power(),
-                base.potential(), base.level(), base.pointSkill(), base.head(), base.body(), base.mount(), base.bag(),
-                base.medal(), base.aura(), base.baseDamage(), base.baseHp(), base.baseMp(), base.baseConstitution(),
-                base.potentialUpDamage(), base.potentialUpHp(), base.potentialUpMp(), base.potentialUpConstitution(),
-                base.maxHp(), base.maxMp(), base.hp(), base.mp(), base.speed(), base.pointPk(), base.pointActivity(),
-                base.countBarrack(), base.dodge(), base.critical(), base.reduceDamage(), base.bloodsucking(),
-                base.manaSucking(), base.strikeBack(), base.damage(), base.coin(), base.coinLock(), base.diamond(),
-                base.ruby(), base.spaceship(), mapId, zoneId, base.x(), base.y());
+        return PlayerProfile.initial((long) id, id, "player" + id, 0)
+                .withLocation(mapId, zoneId, 1250, 648)
+                .withHp(100);
     }
 
     private static Session session(PlayerProfile player) {
@@ -1640,7 +1634,7 @@ class MapServiceTest {
     }
 
     private static Session session(PlayerProfile player, MapService maps) {
-        return session(player, new ServerServices(TestServices.authService(), ResourceService.unavailable(), maps));
+        return session(player, TestServices.serverServices(TestServices.authService(), ResourceService.unavailable(), maps));
     }
 
     private static Session session(PlayerProfile player, ServerServices services) {

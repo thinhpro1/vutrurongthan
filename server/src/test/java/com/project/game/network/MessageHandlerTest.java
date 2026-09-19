@@ -65,8 +65,8 @@ class MessageHandlerTest {
                 new PlayerPacketWriter(),
                 new MonsterPacketWriter(),
                 new MonsterRuntimeFactory(resources));
-        ServerServices services = new ServerServices(TestServices.authService(), resources, maps);
-        PlayerProfile start = PlayerProfile.initial("user01", 7, "alpha1", 0)
+        ServerServices services = TestServices.serverServices(TestServices.authService(), resources, maps);
+        PlayerProfile start = PlayerProfile.initial(1L, 7, "alpha1", 0)
                 .withLocation(0, 0, 4464, 936);
         Session session = inGameSession(services, start);
         MessageHandler handler = newHandler(session, services, NetworkConfig.defaults());
@@ -75,13 +75,7 @@ class MessageHandlerTest {
         handler.onMessage(new Message(MessageName.REQUEST_CHANGE_MAP));
 
         assertEquals(SessionState.IN_GAME, session.state());
-        assertEquals(new PlayerProfile(
-                "user01", 7, "alpha1", 0,
-                1, 1, 1, 1, 5, 6, -1, -1, -1, -1,
-                10, 5, 5, 5, 10, 10, 10, 10,
-                150, 150, 100, 100, 12, 0, 0, 1,
-                "0%", "0%", "0%", "0%", "0%", "0%",
-                10, 0, 10_000, 0, 25, 0, 1, 0, 90, 1008), session.player());
+        assertEquals(start.withLocation(1, 0, 90, 1008), session.player());
         assertEquals(1, session.queuedMessages());
         Message mapInfo = drainMessages(session).getFirst();
         assertEquals(MessageName.MAP_INFO, mapInfo.command());
@@ -137,8 +131,8 @@ class MessageHandlerTest {
                 new PlayerPacketWriter(),
                 new MonsterPacketWriter(),
                 new MonsterRuntimeFactory(resources));
-        ServerServices services = new ServerServices(TestServices.authService(), resources, maps);
-        PlayerProfile start = PlayerProfile.initial("user01", 7, "alpha1", 0)
+        ServerServices services = TestServices.serverServices(TestServices.authService(), resources, maps);
+        PlayerProfile start = PlayerProfile.initial(1L, 7, "alpha1", 0)
                 .withLocation(0, 0, 1250, 648);
         Session session = inGameSession(services, start);
         MessageHandler handler = newHandler(session, services, NetworkConfig.defaults());
@@ -158,8 +152,8 @@ class MessageHandlerTest {
                 new PlayerPacketWriter(),
                 new MonsterPacketWriter(),
                 new MonsterRuntimeFactory(resources));
-        ServerServices services = new ServerServices(TestServices.authService(), resources, maps);
-        PlayerProfile start = PlayerProfile.initial("user01", 7, "alpha1", 0)
+        ServerServices services = TestServices.serverServices(TestServices.authService(), resources, maps);
+        PlayerProfile start = PlayerProfile.initial(1L, 7, "alpha1", 0)
                 .withLocation(0, 0, 4464, 936);
         Session session = inGameSession(services, start);
         MessageHandler handler = newHandler(session, services, NetworkConfig.defaults());
@@ -185,8 +179,8 @@ class MessageHandlerTest {
     @Test
     void requestChangeMapRejectsNonEmptyPayload() {
         ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
-        Session session = inGameSession(new ServerServices(TestServices.authService(), resources),
-                PlayerProfile.initial("user01", 7, "alpha1", 0));
+        Session session = inGameSession(TestServices.serverServices(TestServices.authService(), resources),
+                PlayerProfile.initial(1L, 7, "alpha1", 0));
 
         newHandler(session, resources).onMessage(new Message(
                 MessageName.REQUEST_CHANGE_MAP, new byte[]{1}));
@@ -197,8 +191,8 @@ class MessageHandlerTest {
     @Test
     void mapInfoRevisitUsesCachedTemplateLayout() throws Exception {
         ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
-        Session session = inGameSession(new ServerServices(TestServices.authService(), resources),
-                PlayerProfile.initial("user01", 7, "alpha1", 0)
+        Session session = inGameSession(TestServices.serverServices(TestServices.authService(), resources),
+                PlayerProfile.initial(1L, 7, "alpha1", 0)
                         .withLocation(0, 0, 4464, 936));
         MessageHandler handler = newHandler(session, resources);
         session.markMapTemplateSent(0);
@@ -233,9 +227,9 @@ class MessageHandlerTest {
                 new PlayerPacketWriter(),
                 new MonsterPacketWriter(),
                 new MonsterRuntimeFactory(ResourceService.unavailable()));
-        ServerServices services = new ServerServices(auth, ResourceService.unavailable(), maps);
-        Session first = inGameSession(services, PlayerProfile.initial("user01", 1, "alpha1", 0));
-        Session second = inGameSession(services, PlayerProfile.initial("user02", 2, "beta22", 0));
+        ServerServices services = TestServices.serverServices(auth, ResourceService.unavailable(), maps);
+        Session first = inGameSession(services, PlayerProfile.initial(1L, 1, "alpha1", 0));
+        Session second = inGameSession(services, PlayerProfile.initial(2L, 2, "beta22", 0));
         MessageHandler firstHandler = newHandler(first, services, NetworkConfig.defaults());
         MessageHandler secondHandler = newHandler(second, services, NetworkConfig.defaults());
 
@@ -295,8 +289,8 @@ class MessageHandlerTest {
                 new PlayerPacketWriter(),
                 new MonsterPacketWriter(),
                 new MonsterRuntimeFactory(ResourceService.unavailable()));
-        ServerServices services = new ServerServices(TestServices.authService(), ResourceService.unavailable(), maps);
-        Session session = inGameSession(services, PlayerProfile.initial("user01", 7, "alpha1", 0));
+        ServerServices services = TestServices.serverServices(TestServices.authService(), ResourceService.unavailable(), maps);
+        Session session = inGameSession(services, PlayerProfile.initial(1L, 7, "alpha1", 0));
         MessageHandler handler = newHandler(session, services, NetworkConfig.defaults());
 
         handler.onMessage(new Message(MessageName.FINISH_LOAD_MAP, new byte[]{1}));
@@ -418,9 +412,9 @@ class MessageHandlerTest {
         ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
         MapService maps = new MapService(new PlayerPacketWriter(), new MonsterPacketWriter(),
                 new MonsterRuntimeFactory(resources));
-        ServerServices services = new ServerServices(TestServices.authService(), resources, maps);
+        ServerServices services = TestServices.serverServices(TestServices.authService(), resources, maps);
         Session session = inGameSession(services,
-                PlayerProfile.initial("user01", 7, "alpha1", 0).withLocation(1, 0, 90, 1008));
+                PlayerProfile.initial(1L, 7, "alpha1", 0).withLocation(1, 0, 90, 1008));
         MessageHandler handler = newHandler(session, services, NetworkConfig.defaults());
         maps.monsterSnapshots(1, 0);
 
@@ -661,7 +655,7 @@ class MessageHandlerTest {
         AuthService auth = registeredAuth();
         Session session = newSession(auth);
         session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
-        session.bindAccount("user01");
+        session.bindAccount(1L, "user01");
         session.transition(SessionState.HANDSHAKE_DONE, SessionState.AUTHENTICATED);
         MessageHandler handler = newHandler(session, auth);
         MessageWriter create = new MessageWriter()
@@ -723,7 +717,7 @@ class MessageHandlerTest {
     void playerMoveRemainsRejectedBeforeInGame() {
         AuthService auth = TestServices.authService();
         Session session = newSession(auth);
-        session.bindPlayer(PlayerProfile.initial("user01", 7, "alpha1", 0));
+        session.bindPlayer(PlayerProfile.initial(1L, 7, "alpha1", 0));
         session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
         session.transition(SessionState.HANDSHAKE_DONE, SessionState.AUTHENTICATED);
         MessageHandler handler = newHandler(session, auth);
@@ -758,7 +752,7 @@ class MessageHandlerTest {
             byte[] key = "abc".getBytes(StandardCharsets.US_ASCII);
             Session session = new Session(manager.nextId(), new TestTransport(input, output, "127.0.0.1"),
                     manager, new LegacyPacketCodec(262_144), key, 4,
-                    new ServerServices(TestServices.authService(), resources), NetworkConfig.defaults(),
+                    TestServices.serverServices(TestServices.authService(), resources), NetworkConfig.defaults(),
                     NetworkEventObserver.NO_OP);
             try {
                 session.start();
@@ -804,7 +798,7 @@ class MessageHandlerTest {
                     new LegacyPacketCodec(262_144),
                     key,
                     4,
-                    new ServerServices(TestServices.authService(), resources),
+                    TestServices.serverServices(TestServices.authService(), resources),
                     NetworkConfig.defaults(),
                     NetworkEventObserver.NO_OP);
             try {
@@ -855,7 +849,7 @@ class MessageHandlerTest {
             byte[] key = "abc".getBytes(StandardCharsets.US_ASCII);
             Session session = new Session(manager.nextId(), new TestTransport(input, output, "127.0.0.1"),
                     manager, new LegacyPacketCodec(262_144), key, 4,
-                    new ServerServices(TestServices.authService(), resources), NetworkConfig.defaults(),
+                    TestServices.serverServices(TestServices.authService(), resources), NetworkConfig.defaults(),
                     NetworkEventObserver.NO_OP);
             try {
                 session.start();
@@ -1052,12 +1046,12 @@ class MessageHandlerTest {
     }
 
     private static MessageHandler newHandler(Session session, AuthService authService) {
-        return newHandler(session, new ServerServices(authService, ResourceService.unavailable()),
+        return newHandler(session, TestServices.serverServices(authService, ResourceService.unavailable()),
                 NetworkConfig.defaults());
     }
 
     private static MessageHandler newHandler(Session session, ResourceService resources) {
-        return newHandler(session, new ServerServices(TestServices.authService(), resources), NetworkConfig.defaults());
+        return newHandler(session, TestServices.serverServices(TestServices.authService(), resources), NetworkConfig.defaults());
     }
 
     private static MessageHandler newHandler(Session session, ServerServices services, NetworkConfig config) {
@@ -1100,9 +1094,9 @@ class MessageHandlerTest {
         ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
         MapService maps = new MapService(new PlayerPacketWriter(), new MonsterPacketWriter(),
                 new MonsterRuntimeFactory(resources));
-        ServerServices services = new ServerServices(TestServices.authService(), resources, maps);
+        ServerServices services = TestServices.serverServices(TestServices.authService(), resources, maps);
         Session session = inGameSession(services,
-                PlayerProfile.initial("user01", 7, "alpha1", 0).withLocation(1, 0, 90, 1008));
+                PlayerProfile.initial(1L, 7, "alpha1", 0).withLocation(1, 0, 90, 1008));
         MessageHandler handler = newHandler(session, services, NetworkConfig.defaults());
         maps.finishLoad(session);
         try {
@@ -1135,13 +1129,13 @@ class MessageHandlerTest {
         return new Session(manager.nextId(), new TestTransport(
                 new ByteArrayInputStream(new byte[0]), new ByteArrayOutputStream(), remoteAddress), manager,
                 new LegacyPacketCodec(maxPacketSize), "abc".getBytes(StandardCharsets.US_ASCII), 4,
-                new ServerServices(authService, ResourceService.unavailable()), NetworkConfig.defaults(),
+                TestServices.serverServices(authService, ResourceService.unavailable()), NetworkConfig.defaults(),
                 NetworkEventObserver.NO_OP);
     }
 
     private static Session inGameSessionWithPlayer(AuthService auth) {
         Session session = newSession(auth);
-        session.bindPlayer(PlayerProfile.initial("user01", 7, "alpha1", 0));
+        session.bindPlayer(PlayerProfile.initial(1L, 7, "alpha1", 0));
         session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
         session.transition(SessionState.HANDSHAKE_DONE, SessionState.AUTHENTICATED);
         session.transition(SessionState.AUTHENTICATED, SessionState.IN_GAME);
@@ -1251,7 +1245,7 @@ class MessageHandlerTest {
             byte[] key = "abc".getBytes(StandardCharsets.US_ASCII);
             Session session = new Session(manager.nextId(), new TestTransport(input, output, "127.0.0.1"),
                     manager, new LegacyPacketCodec(262_144), key, 4,
-                    new ServerServices(TestServices.authService(), resources), NetworkConfig.defaults(),
+                    TestServices.serverServices(TestServices.authService(), resources), NetworkConfig.defaults(),
                     NetworkEventObserver.NO_OP);
             try {
                 session.start();
@@ -1287,7 +1281,7 @@ class MessageHandlerTest {
             byte[] key = "abc".getBytes(StandardCharsets.US_ASCII);
             Session session = new Session(manager.nextId(), new TestTransport(input, output, "127.0.0.1"),
                     manager, new LegacyPacketCodec(262_144), key, 4,
-                    new ServerServices(TestServices.authService(), resources), NetworkConfig.defaults(),
+                    TestServices.serverServices(TestServices.authService(), resources), NetworkConfig.defaults(),
                     NetworkEventObserver.NO_OP);
             try {
                 session.start();
@@ -1337,7 +1331,7 @@ class MessageHandlerTest {
                         new LegacyPacketCodec(262_144),
                         key,
                         4,
-                        new ServerServices(TestServices.authService(), resources),
+                        TestServices.serverServices(TestServices.authService(), resources),
                         NetworkConfig.defaults(),
                         NetworkEventObserver.NO_OP);
                 try {

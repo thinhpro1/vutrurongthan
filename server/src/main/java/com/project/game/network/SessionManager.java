@@ -36,26 +36,8 @@ public final class SessionManager {
         }
     }
 
-    public boolean bindAccount(Session session, String accountName) {
-        if (accountName == null || accountName.isBlank()) {
-            return false;
-        }
-        synchronized (session) {
-            if (session.state() == SessionState.CLOSED
-                    || sessionsByAccount.putIfAbsent(accountName, session) != null) {
-                return false;
-            }
-            if (session.state() == SessionState.CLOSED) {
-                sessionsByAccount.remove(accountName, session);
-                return false;
-            }
-            session.bindAccount(accountName);
-            return true;
-        }
-    }
-
-    public boolean beginAccountAdmission(Session session, String accountName) {
-        if (accountName == null || accountName.isBlank()) {
+    public boolean beginAccountAdmission(Session session, long accountId, String accountName) {
+        if (accountId <= 0L || accountName == null || accountName.isBlank()) {
             return false;
         }
         synchronized (session) {
@@ -64,7 +46,7 @@ public final class SessionManager {
                     || sessionsByAccount.putIfAbsent(accountName, session) != null) {
                 return false;
             }
-            session.bindAccount(accountName);
+            session.bindAccount(accountId, accountName);
             session.markAccountAdmissionPending();
             return true;
         }

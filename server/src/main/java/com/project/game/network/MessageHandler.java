@@ -12,6 +12,7 @@ import com.project.game.service.AuthService;
 import com.project.game.service.IconFingerprint;
 import com.project.game.service.ResourceService;
 import com.project.game.service.ServerServices;
+import com.project.game.service.PlayerService;
 
 import java.io.IOException;
 import java.util.Objects;
@@ -34,6 +35,7 @@ public final class MessageHandler {
     private final AuthService authService;
     private final ResourceService resourceService;
     private final MapService mapService;
+    private final PlayerService playerService;
     private final NetworkConfig networkConfig;
     private final NetworkEventObserver eventObserver;
     private final PlayerPacketWriter playerPackets = new PlayerPacketWriter();
@@ -46,6 +48,7 @@ public final class MessageHandler {
         this.authService = services.auth();
         this.resourceService = services.resources();
         this.mapService = services.maps();
+        this.playerService = services.players();
         this.networkConfig = networkConfig;
         this.eventObserver = eventObserver;
     }
@@ -388,7 +391,7 @@ public final class MessageHandler {
             return;
         }
         String accountName = result.accountName();
-        if (!session.manager().beginAccountAdmission(session, accountName)) {
+        if (!session.manager().beginAccountAdmission(session, result.accountId(), accountName)) {
             sendDialog("Tài khoản đang đăng nhập ở thiết bị khác");
             return;
         }
@@ -402,20 +405,27 @@ public final class MessageHandler {
                 }
                 return;
             }
+            PlayerService.PlayerLoadResult loaded = playerService.load(result.accountId());
+            if (!loaded.success()) {
+                if (session.state() != SessionState.CLOSED) {
+                    sendDialog(loaded.message());
+                }
+                return;
+            }
             if (!session.transition(SessionState.HANDSHAKE_DONE, SessionState.AUTHENTICATED)) {
                 return;
             }
             admissionSucceeded = true;
+            if (!loaded.found()) {
+                session.send(new Message(MessageName.START_CREATE_PLAYER_SCREEN));
+            } else {
+                PlayerProfile player = loaded.player();
+                session.bindPlayer(player);
+                session.transition(SessionState.AUTHENTICATED, SessionState.IN_GAME);
+                enterGame(player);
+            }
         } finally {
             session.manager().finishAccountAdmission(session, admissionSucceeded);
-        }
-        PlayerProfile player = authService.findPlayer(accountName);
-        if (player == null) {
-            session.send(new Message(MessageName.START_CREATE_PLAYER_SCREEN));
-        } else {
-            session.bindPlayer(player);
-            session.transition(SessionState.AUTHENTICATED, SessionState.IN_GAME);
-            enterGame(player);
         }
         LOGGER.info(() -> "LOGIN success session=" + session.id());
     }
@@ -434,8 +444,8 @@ public final class MessageHandler {
         if (reader.remaining() != 0) {
             throw new IOException("trailing CREATE_PLAYER payload bytes");
         }
-        AuthService.PlayerResult result = authService.createPlayer(
-                session.accountName(), name, gender);
+        PlayerService.PlayerResult result = playerService.create(
+                session.accountId(), name, gender);
         if (!result.success()) {
             sendDialog(result.message());
             return;
@@ -464,6 +474,7 @@ public final class MessageHandler {
         }
 
         PlayerProfile player = revived.orElseThrow();
+        playerService.checkpoint(player);
         sendMapInfo(player);
         if (session.state() != SessionState.CLOSED) {
             session.send(playerPackets.wakeUpFromDie(player));
@@ -521,7 +532,9 @@ public final class MessageHandler {
         if (changed.isEmpty()) {
             return;
         }
-        sendMapInfo(changed.orElseThrow());
+        PlayerProfile changedPlayer = changed.orElseThrow();
+        playerService.checkpoint(changedPlayer);
+        sendMapInfo(changedPlayer);
         LOGGER.info(() -> "REQUEST_CHANGE_MAP_TX from=" + player.mapId()
                 + " to=" + changed.orElseThrow().mapId() + " session=" + session.id());
     }
@@ -622,11 +635,11 @@ public final class MessageHandler {
         if (player == null
                 || player.mapId() != pending.mapId()
                 || player.zoneId() != pending.zoneId()
-                || player.damage() <= 0) {
+                || player.currentStats().damage() <= 0) {
             return;
         }
 
-        mapService.attackMonster(session, targetId, player.damage());
+        mapService.attackMonster(session, targetId, player.currentStats().damage());
     }
 
     private void enterGame(PlayerProfile player) throws IOException {
@@ -643,41 +656,41 @@ public final class MessageHandler {
                 .writeLong(player.power())
                 .writeLong(player.potential())
                 .writeShort(player.level())
-                .writeShort(player.pointSkill())
-                .writeShort(player.head())
-                .writeShort(player.body())
-                .writeShort(player.mount())
-                .writeShort(player.bag())
-                .writeShort(player.medal())
-                .writeShort(player.aura())
-                .writeInt(player.baseDamage())
-                .writeInt(player.baseHp())
-                .writeInt(player.baseMp())
-                .writeInt(player.baseConstitution())
-                .writeLong(player.potentialUpDamage())
-                .writeLong(player.potentialUpHp())
-                .writeLong(player.potentialUpMp())
-                .writeLong(player.potentialUpConstitution())
-                .writeLong(player.maxHp())
-                .writeLong(player.maxMp())
+                .writeShort(1)
+                .writeShort(player.appearance().head())
+                .writeShort(player.appearance().body())
+                .writeShort(player.appearance().mount())
+                .writeShort(player.appearance().bag())
+                .writeShort(player.appearance().medal())
+                .writeShort(player.appearance().aura())
+                .writeInt(Math.toIntExact(player.baseStats().damage()))
+                .writeInt(Math.toIntExact(player.baseStats().hp()))
+                .writeInt(Math.toIntExact(player.baseStats().mp()))
+                .writeInt(Math.toIntExact(player.baseStats().constitution()))
+                .writeLong(10)
+                .writeLong(10)
+                .writeLong(10)
+                .writeLong(10)
+                .writeLong(player.currentStats().maxHp())
+                .writeLong(player.currentStats().maxMp())
                 .writeLong(player.hp())
                 .writeLong(player.mp())
-                .writeByte(player.speed())
-                .writeByte(player.pointPk())
-                .writeShort(player.pointActivity())
-                .writeByte(player.countBarrack())
-                .writeUtf(player.dodge())
-                .writeUtf(player.critical())
-                .writeUtf(player.reduceDamage())
-                .writeUtf(player.bloodsucking())
-                .writeUtf(player.manaSucking())
-                .writeUtf(player.strikeBack())
-                .writeLong(player.damage())
+                .writeByte(player.currentStats().speed())
+                .writeByte(0)
+                .writeShort(0)
+                .writeByte(1)
+                .writeUtf(player.currentStats().dodge() + "%")
+                .writeUtf(player.currentStats().critical() + "%")
+                .writeUtf("0%")
+                .writeUtf("0%")
+                .writeUtf("0%")
+                .writeUtf("0%")
+                .writeLong(player.currentStats().damage())
                 .writeLong(player.coin())
                 .writeLong(player.coinLock())
                 .writeInt(player.diamond())
                 .writeInt(player.ruby())
-                .writeByte(player.spaceship());
+                .writeByte(player.appearance().spaceship());
         var skills = resourceService.playerSkills(player.gender());
         if (skills.size() != 11) {
             throw new IOException(

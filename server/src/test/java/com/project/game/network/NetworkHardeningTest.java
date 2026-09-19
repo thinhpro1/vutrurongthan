@@ -34,7 +34,7 @@ class NetworkHardeningTest {
             AtomicBoolean observerCalled = new AtomicBoolean();
             Session session = new Session(manager.nextId(), transport, manager, new LegacyPacketCodec(1024),
                     "abc".getBytes(StandardCharsets.US_ASCII), 4,
-                    new ServerServices(TestServices.authService(), ResourceService.unavailable()), NetworkConfig.defaults(),
+                    TestServices.serverServices(TestServices.authService(), ResourceService.unavailable()), NetworkConfig.defaults(),
                     (ignored, type) -> {
                         observerCalled.set(true);
                         throw new IllegalStateException("observer failed");

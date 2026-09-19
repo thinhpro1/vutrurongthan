@@ -11,7 +11,7 @@ class PlayerPacketWriterTest {
     @Test
     void usesLegacyCommandIds() {
         PlayerPacketWriter writer = new PlayerPacketWriter();
-        PlayerProfile player = PlayerProfile.initial("user01", 7, "alpha1", 0);
+        PlayerProfile player = PlayerProfile.initial(1L, 7, "alpha1", 0);
 
         assertEquals(MessageName.ADD_PLAYER, writer.addPlayer(player).command());
         assertEquals(MessageName.REMOVE_PLAYER, writer.removePlayer(player.id()).command());
@@ -65,7 +65,7 @@ class PlayerPacketWriterTest {
 
     @Test
     void writesWakeUpFromDiePacketExactly() throws Exception {
-        PlayerProfile player = PlayerProfile.initial("wake", 77, "wake", 0)
+        PlayerProfile player = PlayerProfile.initial(77L, 77, "wake1", 0)
                 .revivedAt(0, 0, 1250, 648);
 
         Message packet = new PlayerPacketWriter().wakeUpFromDie(player);
@@ -75,8 +75,8 @@ class PlayerPacketWriterTest {
         assertEquals(77, reader.readInt());
         assertEquals(1250, reader.readShort());
         assertEquals(648, reader.readShort());
-        assertEquals(player.maxHp(), reader.readLong());
-        assertEquals(player.maxMp(), reader.readLong());
+        assertEquals(player.currentStats().maxHp(), reader.readLong());
+        assertEquals(player.currentStats().maxMp(), reader.readLong());
         assertEquals(0, reader.remaining());
     }
 
@@ -93,28 +93,28 @@ class PlayerPacketWriterTest {
 
     @Test
     void serializesCanonicalNormalPlayerPayload() throws Exception {
-        PlayerProfile player = PlayerProfile.initial("user01", 0x01020304, "alpha1", 0);
+        PlayerProfile player = PlayerProfile.initial(1L, 0x01020304, "alpha1", 0);
         Message message = new PlayerPacketWriter().addPlayer(player);
         var reader = message.reader();
 
         assertEquals(player.id(), reader.readInt());
         assertEquals(player.name(), reader.readUtf());
         assertEquals(player.gender(), reader.readByte());
-        assertEquals(player.head(), reader.readShort());
-        assertEquals(player.body(), reader.readShort());
-        assertEquals(player.mount(), reader.readShort());
-        assertEquals(player.bag(), reader.readShort());
-        assertEquals(player.medal(), reader.readShort());
-        assertEquals(player.aura(), reader.readShort());
+        assertEquals(player.appearance().head(), reader.readShort());
+        assertEquals(player.appearance().body(), reader.readShort());
+        assertEquals(player.appearance().mount(), reader.readShort());
+        assertEquals(player.appearance().bag(), reader.readShort());
+        assertEquals(player.appearance().medal(), reader.readShort());
+        assertEquals(player.appearance().aura(), reader.readShort());
         assertEquals(player.x(), reader.readShort());
         assertEquals(player.y(), reader.readShort());
-        assertEquals(player.maxHp(), reader.readLong());
+        assertEquals(player.currentStats().maxHp(), reader.readLong());
         assertEquals(player.hp(), reader.readLong());
         assertEquals(0, reader.readByte()); // normal typePk
         assertEquals(0, reader.readByte()); // normal typeFlag
         assertEquals(player.level(), reader.readShort());
-        assertEquals(player.spaceship(), reader.readByte());
-        assertEquals(player.speed(), reader.readByte());
+        assertEquals(player.appearance().spaceship(), reader.readByte());
+        assertEquals(player.currentStats().speed(), reader.readByte());
         assertEquals(-1, reader.readInt()); // no clan
         assertEquals(-1, reader.readByte()); // old upgrade/levelEquip sentinel
         assertEquals(0, reader.readByte()); // no runtime effects

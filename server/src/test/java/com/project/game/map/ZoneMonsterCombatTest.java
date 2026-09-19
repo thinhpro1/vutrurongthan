@@ -62,8 +62,8 @@ class ZoneMonsterCombatTest {
     @Test
     void containsRequiresExactSessionIdentity() {
         Zone zone = new Zone(1, 0, List.of());
-        Session first = session(PlayerProfile.initial("user01", 7, "alpha1", 1));
-        Session equivalent = session(PlayerProfile.initial("user02", 7, "alpha2", 1));
+        Session first = session(PlayerProfile.initial(1L, 7, "alpha1", 1));
+        Session equivalent = session(PlayerProfile.initial(2L, 7, "alpha2", 1));
 
         zone.add(first);
 
@@ -92,7 +92,7 @@ class ZoneMonsterCombatTest {
     @Test
     void oneMemberDeathRespawnsOnlyAfterNineSecondDeadline() {
         Zone zone = map1Zone();
-        Session player = session(PlayerProfile.initial("respawn1", 1, "alpha1", 1));
+        Session player = session(PlayerProfile.initial(1L, 1, "alpha1", 1));
         zone.add(player);
 
         zone.damageMonster(0, 1, 500, NOW).orElseThrow();
@@ -109,8 +109,8 @@ class ZoneMonsterCombatTest {
     @Test
     void respawnDeadlineDoesNotChangeWhenMembershipChangesAfterDeath() {
         Zone zone = map1Zone();
-        Session first = session(PlayerProfile.initial("freeze1", 1, "alpha1", 1));
-        Session second = session(PlayerProfile.initial("freeze2", 2, "beta22", 1));
+        Session first = session(PlayerProfile.initial(1L, 1, "alpha1", 1));
+        Session second = session(PlayerProfile.initial(2L, 2, "beta22", 1));
 
         zone.add(first);
         zone.add(second);
@@ -126,14 +126,14 @@ class ZoneMonsterCombatTest {
     @Test
     void joinsAfterDeathDoNotShortenExistingRespawnDeadline() {
         Zone zone = map1Zone();
-        Session first = session(PlayerProfile.initial("joinlater1", 1, "alpha1", 1));
+        Session first = session(PlayerProfile.initial(1L, 1, "alpha1", 1));
         zone.add(first);
 
         zone.damageMonster(0, 1, 500, NOW).orElseThrow();
 
         for (int id = 2; id <= 6; id++) {
             zone.add(session(PlayerProfile.initial(
-                    "joinlater" + id, id, "player" + id, 1)));
+                    (long) id, id, "player" + id, 1)));
         }
 
         assertTrue(zone.respawnDueMonsters(NOW + 5_001).isEmpty());
@@ -145,7 +145,7 @@ class ZoneMonsterCombatTest {
     @Test
     void returnsMultipleDueRespawnsOnceInRuntimeOrder() {
         Zone zone = map1Zone();
-        Session first = session(PlayerProfile.initial("multi01", 1, "alpha1", 1));
+        Session first = session(PlayerProfile.initial(1L, 1, "alpha1", 1));
         zone.add(first);
 
         zone.damageMonster(0, 1, 500, NOW).orElseThrow();
@@ -278,8 +278,9 @@ class ZoneMonsterCombatTest {
     }
 
     private static Session playerAt(int id, int x, int y) {
-        return session(PlayerProfile.initial("player" + id, id, "player" + id, 1)
-                .withLocation(1, 0, x, y));
+        return session(PlayerProfile.initial((long) id, id, "player" + id, 1)
+                .withLocation(1, 0, x, y)
+                .withHp(100));
     }
 
     private static Zone map1Zone() {

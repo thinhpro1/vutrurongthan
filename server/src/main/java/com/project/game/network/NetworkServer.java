@@ -12,7 +12,9 @@ import com.project.game.network.packet.MonsterPacketWriter;
 import com.project.game.persistence.DatabaseConfig;
 import com.project.game.persistence.DatabaseManager;
 import com.project.game.persistence.account.JdbcAccountRepository;
+import com.project.game.persistence.player.JdbcPlayerRepository;
 import com.project.game.service.AuthService;
+import com.project.game.service.PlayerService;
 import com.project.game.service.ResourceService;
 import com.project.game.service.ServerServices;
 
@@ -113,8 +115,12 @@ public final class NetworkServer {
             JdbcAccountRepository accountRepository =
                     new JdbcAccountRepository(databaseManager.dataSource());
             accountRepository.findByUsername("__startup_probe__");
+            JdbcPlayerRepository playerRepository =
+                    new JdbcPlayerRepository(databaseManager.dataSource());
+            playerRepository.findByAccountId(1L);
             AuthService auth = new AuthService(accountRepository);
-            ServerServices services = new ServerServices(auth, resources, maps);
+            ServerServices services = new ServerServices(
+                    auth, resources, maps, new PlayerService(playerRepository));
             return new NetworkServer(
                     properties.getProperty("game.network.host", "127.0.0.1"),
                     integer(properties, "game.network.port", 1707),

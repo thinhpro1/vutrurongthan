@@ -4,7 +4,6 @@ import com.project.game.persistence.account.AccountRecord;
 import com.project.game.persistence.account.AccountRepository;
 import com.project.game.persistence.account.AccountRepositoryException;
 import com.project.game.persistence.account.DuplicateAccountException;
-import com.project.game.player.PlayerProfile;
 
 import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.PBEKeySpec;
@@ -12,30 +11,24 @@ import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.time.Instant;
-import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.regex.Pattern;
 
 /**
  * Account authentication boundary backed by the configured account repository. Player state
- * remains intentionally in-memory until a later persistence phase.
+ * is deliberately limited to account authentication and metadata.
  */
 public final class AuthService {
     private static final Logger LOGGER = Logger.getLogger(AuthService.class.getName());
     private static final String SYSTEM_BUSY = "Hệ thống đang bận, vui lòng thử lại";
     private static final Pattern USERNAME = Pattern.compile("^[a-z0-9]{5,25}$");
     private static final Pattern PASSWORD = Pattern.compile("^[a-z0-9]{5,25}$");
-    private static final Pattern PLAYER_NAME = Pattern.compile("^[a-z0-9]{5,10}$");
     private static final int ITERATIONS = 120_000;
     private static final int KEY_BITS = 256;
     private final SecureRandom random = new SecureRandom();
     private final AccountRepository accountRepository;
-    private final Map<String, PlayerProfile> players = new ConcurrentHashMap<>();
-    private final AtomicInteger nextPlayerId = new AtomicInteger(1);
 
     public AuthService(AccountRepository accountRepository) {
         this.accountRepository = Objects.requireNonNull(accountRepository, "accountRepository");
@@ -98,26 +91,6 @@ public final class AuthService {
         }
     }
 
-    public PlayerResult createPlayer(String accountName, String name, int gender) {
-        String normalized = normalize(name);
-        if (!PLAYER_NAME.matcher(normalized).matches() || gender < 0 || gender > 2) {
-            return PlayerResult.failure("Thông tin nhân vật không hợp lệ");
-        }
-        PlayerProfile profile = PlayerProfile.initial(
-                accountName,
-                nextPlayerId.getAndIncrement(),
-                normalized,
-                gender);
-        return players.values().stream().anyMatch(player -> player.name().equals(normalized))
-                || players.putIfAbsent(accountName, profile) != null
-                ? PlayerResult.failure("Nhân vật đã tồn tại")
-                : PlayerResult.success(profile);
-    }
-
-    public PlayerProfile findPlayer(String accountName) {
-        return players.get(accountName);
-    }
-
     private byte[] hash(String password, byte[] salt) {
         try {
             PBEKeySpec spec = new PBEKeySpec(password.toCharArray(), salt, ITERATIONS, KEY_BITS);
@@ -151,13 +124,4 @@ public final class AuthService {
         }
     }
 
-    public record PlayerResult(boolean success, PlayerProfile player, String message) {
-        static PlayerResult success(PlayerProfile player) {
-            return new PlayerResult(true, player, "Tạo nhân vật thành công");
-        }
-
-        static PlayerResult failure(String message) {
-            return new PlayerResult(false, null, message);
-        }
-    }
 }

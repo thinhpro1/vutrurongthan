@@ -17,21 +17,21 @@ public final class PlayerPacketWriter {
                     .writeInt(player.id())
                     .writeUtf(player.name())
                     .writeByte(player.gender())
-                    .writeShort(player.head())
-                    .writeShort(player.body())
-                    .writeShort(player.mount())
-                    .writeShort(player.bag())
-                    .writeShort(player.medal())
-                    .writeShort(player.aura())
+                    .writeShort(player.appearance().head())
+                    .writeShort(player.appearance().body())
+                    .writeShort(player.appearance().mount())
+                    .writeShort(player.appearance().bag())
+                    .writeShort(player.appearance().medal())
+                    .writeShort(player.appearance().aura())
                     .writeShort(player.x())
                     .writeShort(player.y())
-                    .writeLong(player.maxHp())
+                    .writeLong(player.currentStats().maxHp())
                     .writeLong(player.hp())
                     .writeByte(0) // normal typePk
                     .writeByte(0) // normal typeFlag
                     .writeShort(player.level())
-                    .writeByte(player.spaceship())
-                    .writeByte(player.speed())
+                    .writeByte(player.appearance().spaceship())
+                    .writeByte(player.currentStats().speed())
                     .writeInt(-1) // no clan
                     .writeByte(-1) // no equipped upgrade
                     .writeByte(0); // no runtime effects

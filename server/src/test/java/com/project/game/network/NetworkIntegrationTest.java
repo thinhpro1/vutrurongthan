@@ -64,7 +64,7 @@ class NetworkIntegrationTest {
         NetworkServer server = new NetworkServer(
                 "127.0.0.1", 0, 4, 262_144, 16, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
-                new ServerServices(auth, resources, maps), null,
+                TestServices.serverServices(auth, resources, maps), null,
                 NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
         AtomicReference<Throwable> serverFailure = new AtomicReference<>();
         Thread serverThread = Thread.ofVirtual().start(() -> {
@@ -111,8 +111,8 @@ class NetworkIntegrationTest {
                         "monster lifecycle scheduler did not reach target selection");
                 Session dead = server.sessions().findByAccount(victimAccount);
                 assertTrue(dead != null);
-                long expectedMaxHp = dead.player().maxHp();
-                long expectedMaxMp = dead.player().maxMp();
+                long expectedMaxHp = dead.player().currentStats().maxHp();
+                long expectedMaxMp = dead.player().currentStats().maxMp();
                 dead.bindPlayer(dead.player().withHp(10L));
                 random.release.countDown();
 
@@ -181,8 +181,8 @@ class NetworkIntegrationTest {
                 assertEquals(0, revived.player().zoneId());
                 assertEquals(1250, revived.player().x());
                 assertEquals(648, revived.player().y());
-                assertEquals(revived.player().maxHp(), revived.player().hp());
-                assertEquals(revived.player().maxMp(), revived.player().mp());
+                assertEquals(revived.player().currentStats().maxHp(), revived.player().hp());
+                assertEquals(revived.player().currentStats().maxMp(), revived.player().mp());
                 awaitMemberCount(maps, 0, 0, 1);
                 assertEquals(1, maps.memberCount(0, 0));
 
@@ -207,7 +207,7 @@ class NetworkIntegrationTest {
         NetworkServer server = new NetworkServer(
                 "127.0.0.1", 0, 2, 262_144, 8, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
-                new ServerServices(auth, resources), null,
+                TestServices.serverServices(auth, resources), null,
                 NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
         AtomicReference<Throwable> serverFailure = new AtomicReference<>();
         Thread serverThread = Thread.ofVirtual().start(() -> {
@@ -250,7 +250,7 @@ class NetworkIntegrationTest {
         assertTrue(auth.register("mapround1", "secret1", "127.0.0.1").success());
         NetworkServer server = new NetworkServer("127.0.0.1", 0, 2, 262_144, 8, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
-                new ServerServices(auth, resources), null,
+                TestServices.serverServices(auth, resources), null,
                 NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
         AtomicReference<Throwable> serverFailure = new AtomicReference<>();
         Thread serverThread = Thread.ofVirtual().start(() -> {
@@ -324,7 +324,7 @@ class NetworkIntegrationTest {
                 new MonsterRuntimeFactory(resources));
         NetworkServer server = new NetworkServer("127.0.0.1", 0, 4, 262_144, 16, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
-                new ServerServices(auth, resources, maps), null,
+                TestServices.serverServices(auth, resources, maps), null,
                 NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
         AtomicReference<Throwable> serverFailure = new AtomicReference<>();
         Thread serverThread = Thread.ofVirtual().start(() -> {
@@ -408,7 +408,7 @@ class NetworkIntegrationTest {
         NetworkServer server = new NetworkServer(
                 "127.0.0.1", 0, 4, 262_144, 16, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
-                new ServerServices(auth, resources, maps), null,
+                TestServices.serverServices(auth, resources, maps), null,
                 NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
         AtomicReference<Throwable> serverFailure = new AtomicReference<>();
         Thread serverThread = Thread.ofVirtual().start(() -> {
@@ -504,7 +504,7 @@ class NetworkIntegrationTest {
         NetworkServer server = new NetworkServer(
                 "127.0.0.1", 0, 4, 262_144, 16, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
-                new ServerServices(auth, resources, maps), null,
+                TestServices.serverServices(auth, resources, maps), null,
                 NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
         AtomicReference<Throwable> serverFailure = new AtomicReference<>();
         Thread serverThread = Thread.ofVirtual().start(() -> {
@@ -569,7 +569,7 @@ class NetworkIntegrationTest {
         NetworkServer server = new NetworkServer(
                 "127.0.0.1", 0, 4, 262_144, 16, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
-                new ServerServices(auth, resources, maps), null,
+                TestServices.serverServices(auth, resources, maps), null,
                 NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
         AtomicReference<Throwable> serverFailure = new AtomicReference<>();
         Thread serverThread = Thread.ofVirtual().start(() -> {
@@ -700,7 +700,7 @@ class NetworkIntegrationTest {
         NetworkServer server = new NetworkServer(
                 "127.0.0.1", 0, 4, 262_144, 16, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
-                new ServerServices(auth, resources, maps), null,
+                TestServices.serverServices(auth, resources, maps), null,
                 NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
         AtomicReference<Throwable> serverFailure = new AtomicReference<>();
         Thread serverThread = Thread.ofVirtual().start(() -> {
@@ -737,7 +737,7 @@ class NetworkIntegrationTest {
 
                 live = server.sessions().findByAccount(accountName);
                 assertTrue(live != null);
-                assertEquals(100L, live.player().hp());
+                assertEquals(200L, live.player().hp());
                 assertEquals(1L, live.player().potential());
                 assertEquals(1L, live.player().power());
 
@@ -783,7 +783,7 @@ class NetworkIntegrationTest {
         NetworkServer server = new NetworkServer(
                 "127.0.0.1", 0, 4, 262_144, 16, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
-                new ServerServices(auth, resources, maps), null,
+                TestServices.serverServices(auth, resources, maps), null,
                 NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
         AtomicReference<Throwable> serverFailure = new AtomicReference<>();
         Thread serverThread = Thread.ofVirtual().start(() -> {
@@ -828,7 +828,7 @@ class NetworkIntegrationTest {
                 clock.advanceMillis(1L);
                 assertMonsterAttack(first.readServerMessage(), 0, first.playerInfo().id(), 10L);
                 assertMonsterAttack(second.readServerMessage(), 0, first.playerInfo().id(), 10L);
-                assertEquals(90L, server.sessions().findByAccount("retaliatea").player().hp());
+                assertEquals(190L, server.sessions().findByAccount("retaliatea").player().hp());
 
                 clock.advanceMillis(1_600L);
                 assertNoServerMessage(first);
@@ -836,9 +836,9 @@ class NetworkIntegrationTest {
                 clock.advanceMillis(1L);
                 assertMonsterAttack(first.readServerMessage(), 0, first.playerInfo().id(), 10L);
                 assertMonsterAttack(second.readServerMessage(), 0, first.playerInfo().id(), 10L);
-                assertEquals(80L, server.sessions().findByAccount("retaliatea").player().hp());
+                assertEquals(180L, server.sessions().findByAccount("retaliatea").player().hp());
 
-                for (int expectedHp = 70; expectedHp >= 10; expectedHp -= 10) {
+                for (int expectedHp = 170; expectedHp >= 10; expectedHp -= 10) {
                     clock.advanceMillis(1_601L);
                     assertMonsterAttack(first.readServerMessage(), 0, first.playerInfo().id(), 10L);
                     assertMonsterAttack(second.readServerMessage(), 0, first.playerInfo().id(), 10L);
@@ -882,7 +882,7 @@ class NetworkIntegrationTest {
                 assertMonsterAttack(second.readServerMessage(), 0, second.playerInfo().id(), 10L);
                 assertNoServerMessage(first);
                 assertEquals(0L, server.sessions().findByAccount("retaliatea").player().hp());
-                assertEquals(90L, server.sessions().findByAccount("retaliateb").player().hp());
+                assertEquals(190L, server.sessions().findByAccount("retaliateb").player().hp());
             }
             waitForNoSessions(server);
         } finally {
@@ -907,7 +907,7 @@ class NetworkIntegrationTest {
         NetworkServer server = new NetworkServer(
                 "127.0.0.1", 0, 2, 262_144, 8, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
-                new ServerServices(auth, resources, maps), null,
+                TestServices.serverServices(auth, resources, maps), null,
                 NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
         AtomicReference<Throwable> serverFailure = new AtomicReference<>();
         Thread serverThread = Thread.ofVirtual().start(() -> {
@@ -936,11 +936,11 @@ class NetworkIntegrationTest {
                 assertMonsterInjure(client.readServerMessage(), 0, 10, 290);
                 clock.advanceMillis(1L);
                 assertMonsterAttack(client.readServerMessage(), 0, client.playerInfo().id(), 10L);
-                assertEquals(90L, server.sessions().findByAccount("retaliaterace").player().hp());
+                assertEquals(190L, server.sessions().findByAccount("retaliaterace").player().hp());
 
                 client.move(1260, 640);
                 awaitPlayerPosition(server, "retaliaterace", 1260, 640);
-                assertEquals(90L, server.sessions().findByAccount("retaliaterace").player().hp());
+                assertEquals(190L, server.sessions().findByAccount("retaliaterace").player().hp());
                 assertEquals(1260, server.sessions().findByAccount("retaliaterace").player().x());
                 assertEquals(640, server.sessions().findByAccount("retaliaterace").player().y());
                 assertNoServerMessage(client);
@@ -952,7 +952,7 @@ class NetworkIntegrationTest {
                 assertEquals(4374, map0.x());
                 assertEquals(936, map0.y());
                 assertTrue(map0.monsters().isEmpty());
-                assertEquals(90L, server.sessions().findByAccount("retaliaterace").player().hp());
+                assertEquals(190L, server.sessions().findByAccount("retaliaterace").player().hp());
                 assertEquals(0, server.sessions().findByAccount("retaliaterace").player().mapId());
                 assertNoServerMessage(client);
             }
@@ -969,7 +969,7 @@ class NetworkIntegrationTest {
         ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
         NetworkServer server = new NetworkServer("127.0.0.1", 0, 2, 262_144, 8, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
-                new ServerServices(TestServices.authService(), resources), null,
+                TestServices.serverServices(TestServices.authService(), resources), null,
                 NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
         AtomicReference<Throwable> serverFailure = new AtomicReference<>();
         Thread serverThread = Thread.ofVirtual().start(() -> {
@@ -1016,7 +1016,7 @@ class NetworkIntegrationTest {
         ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
         NetworkServer server = new NetworkServer("127.0.0.1", 0, 2, 262_144, 8, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
-                new ServerServices(TestServices.authService(), resources), null,
+                TestServices.serverServices(TestServices.authService(), resources), null,
                 NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
         AtomicReference<Throwable> serverFailure = new AtomicReference<>();
         Thread serverThread = Thread.ofVirtual().start(() -> {
@@ -1051,7 +1051,7 @@ class NetworkIntegrationTest {
                 Path.of("..", "client", "Assets", "Resources", "Jsons"));
         NetworkServer server = new NetworkServer("127.0.0.1", 0, 2, 4096, 8, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
-                new ServerServices(TestServices.authService(), resources), null,
+                TestServices.serverServices(TestServices.authService(), resources), null,
                 NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
         AtomicReference<Throwable> serverFailure = new AtomicReference<>();
         Thread serverThread = Thread.ofVirtual().start(() -> {
@@ -1077,7 +1077,7 @@ class NetworkIntegrationTest {
         ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
         NetworkServer server = new NetworkServer("127.0.0.1", 0, 2, 262_144, 8, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
-                new ServerServices(TestServices.authService(), resources), null,
+                TestServices.serverServices(TestServices.authService(), resources), null,
                 NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
         AtomicReference<Throwable> serverFailure = new AtomicReference<>();
         Thread serverThread = Thread.ofVirtual().start(() -> {
@@ -1170,7 +1170,7 @@ class NetworkIntegrationTest {
         NetworkServer server = new NetworkServer(
                 "127.0.0.1", 0, 2, 262_144, 8, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
-                new ServerServices(TestServices.authService(), resources),
+                TestServices.serverServices(TestServices.authService(), resources),
                 null,
                 NetworkConfig.defaults(),
                 NetworkEventObserver.NO_OP);
@@ -1259,7 +1259,7 @@ class NetworkIntegrationTest {
         NetworkServer server = new NetworkServer(
                 "127.0.0.1", 0, 2, 262_144, 8, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
-                new ServerServices(auth, resources),
+                TestServices.serverServices(auth, resources),
                 null,
                 NetworkConfig.defaults(),
                 NetworkEventObserver.NO_OP);
@@ -1369,7 +1369,7 @@ class NetworkIntegrationTest {
         };
         NetworkServer server = new NetworkServer("127.0.0.1", 0, 2, 4096, 8, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
-                new ServerServices(TestServices.authService(), resources), null,
+                TestServices.serverServices(TestServices.authService(), resources), null,
                 NetworkConfig.defaults(), observer);
         AtomicReference<Throwable> serverFailure = new AtomicReference<>();
         Thread serverThread = Thread.ofVirtual().start(() -> {
@@ -1402,7 +1402,7 @@ class NetworkIntegrationTest {
         Files.write(iconRoot.resolve("5.png"), iconData);
         NetworkServer server = new NetworkServer("127.0.0.1", 0, 2, 1024, 8, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
-                new ServerServices(TestServices.authService(), ResourceService.fromIconRoot(iconRoot)),
+                TestServices.serverServices(TestServices.authService(), ResourceService.fromIconRoot(iconRoot)),
                 null, NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
         AtomicReference<Throwable> serverFailure = new AtomicReference<>();
         Thread serverThread = Thread.ofVirtual().start(() -> {
@@ -1432,7 +1432,7 @@ class NetworkIntegrationTest {
         ResourceService resources = ResourceService.fromIconRoot(iconRoot, 2);
         NetworkServer server = new NetworkServer("127.0.0.1", 0, 2, 1024, 8, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
-                new ServerServices(TestServices.authService(), resources),
+                TestServices.serverServices(TestServices.authService(), resources),
                 null, NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
         AtomicReference<Throwable> serverFailure = new AtomicReference<>();
         Thread serverThread = Thread.ofVirtual().start(() -> {
@@ -1500,7 +1500,7 @@ class NetworkIntegrationTest {
         Files.write(iconRoot.resolve("2170.png"), iconData);
         NetworkServer server = new NetworkServer("127.0.0.1", 0, 2, 262_144, 8, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
-                new ServerServices(TestServices.authService(), ResourceService.fromIconRoot(iconRoot)),
+                TestServices.serverServices(TestServices.authService(), ResourceService.fromIconRoot(iconRoot)),
                 null, NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
         AtomicReference<Throwable> serverFailure = new AtomicReference<>();
         Thread serverThread = Thread.ofVirtual().start(() -> {
@@ -1527,7 +1527,7 @@ class NetworkIntegrationTest {
         Files.write(iconRoot.resolve("2170.png"), iconData);
         NetworkServer server = new NetworkServer("127.0.0.1", 0, 2, 262_144, 8, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
-                new ServerServices(TestServices.authService(), ResourceService.fromIconRoot(iconRoot)),
+                TestServices.serverServices(TestServices.authService(), ResourceService.fromIconRoot(iconRoot)),
                 null, NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
         AtomicReference<Throwable> serverFailure = new AtomicReference<>();
         Thread serverThread = Thread.ofVirtual().start(() -> {
@@ -1573,7 +1573,7 @@ class NetworkIntegrationTest {
         };
         NetworkServer server = new NetworkServer("127.0.0.1", 0, 2, 1024, 8, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
-                new ServerServices(TestServices.authService(), ResourceService.fromFrameRoot(
+                TestServices.serverServices(TestServices.authService(), ResourceService.fromFrameRoot(
                         Path.of("resources", "json"))),
                 null, NetworkConfig.defaults(), observer);
         AtomicReference<Throwable> serverFailure = new AtomicReference<>();
@@ -2099,13 +2099,13 @@ class NetworkIntegrationTest {
         assertEquals(head, player.head());
         assertEquals(body, player.body());
         assertEquals(10, player.baseDamage());
-        assertEquals(5, player.baseHp());
-        assertEquals(5, player.baseMp());
+        assertEquals(200, player.baseHp());
+        assertEquals(200, player.baseMp());
         assertEquals(5, player.baseConstitution());
-        assertEquals(150, player.maxHp());
-        assertEquals(150, player.maxMp());
-        assertEquals(100, player.hp());
-        assertEquals(100, player.mp());
+        assertEquals(200, player.maxHp());
+        assertEquals(200, player.maxMp());
+        assertEquals(200, player.hp());
+        assertEquals(200, player.mp());
         assertEquals(skillIds, player.skillIds());
         assertEquals(List.of(gender, -1, -1, -1, -1, -1), player.keySkillIds());
         assertEquals(gender, player.mySkillId());
@@ -2328,8 +2328,8 @@ class NetworkIntegrationTest {
         assertEquals(-1, reader.readShort()); // aura
         assertEquals(1250, reader.readShort());
         assertEquals(648, reader.readShort());
-        assertEquals(150, reader.readLong());
-        assertEquals(100, reader.readLong());
+        assertEquals(200, reader.readLong());
+        assertEquals(200, reader.readLong());
         assertEquals(0, reader.readByte()); // typePk
         assertEquals(0, reader.readByte()); // typeFlag
         assertEquals(1, reader.readShort());

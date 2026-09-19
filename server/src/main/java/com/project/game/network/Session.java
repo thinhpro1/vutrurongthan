@@ -7,6 +7,7 @@ import com.project.game.network.transport.ClientTransport;
 import com.project.game.player.PlayerProfile;
 import com.project.game.map.MapService;
 import com.project.game.service.ServerServices;
+import com.project.game.service.PlayerService;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -34,10 +35,12 @@ public final class Session implements AutoCloseable {
     private final AtomicReference<SessionState> state = new AtomicReference<>(SessionState.CONNECTED);
     private final AtomicBoolean closed = new AtomicBoolean();
     private final MapService mapService;
+    private final PlayerService playerService;
     private final Object writeLock = new Object();
     private final MessageHandler handler;
     private final Set<Integer> sentMapTemplates = ConcurrentHashMap.newKeySet();
     private volatile String accountName;
+    private volatile long accountId;
     private boolean accountAdmissionPending;
     private volatile PlayerProfile player;
     private int protocolViolations;
@@ -60,6 +63,7 @@ public final class Session implements AutoCloseable {
         this.cipher = new LegacyCipher(handshakeKey);
         this.sendQueue = new ArrayBlockingQueue<>(queueSize);
         this.mapService = Objects.requireNonNull(services, "services").maps();
+        this.playerService = services.players();
         this.handler = new MessageHandler(this, services, networkConfig, eventObserver);
     }
 
@@ -91,11 +95,19 @@ public final class Session implements AutoCloseable {
         return accountName;
     }
 
+    public long accountId() {
+        return accountId;
+    }
+
     public PlayerProfile player() {
         return player;
     }
 
-    void bindAccount(String accountName) {
+    void bindAccount(long accountId, String accountName) {
+        if (accountId <= 0L) {
+            throw new IllegalArgumentException("accountId must be positive");
+        }
+        this.accountId = accountId;
         this.accountName = accountName;
     }
 
@@ -181,7 +193,6 @@ public final class Session implements AutoCloseable {
                 return;
             }
             state.set(SessionState.CLOSED);
-            manager.unbindAccount(this);
         }
         LOGGER.info(() -> "SESSION_CLOSE id=" + id + " ip=" + remoteAddress() + " reason=" + reason);
         sendQueue.clear();
@@ -195,6 +206,16 @@ public final class Session implements AutoCloseable {
             mapService.leave(this);
         } catch (RuntimeException exception) {
             LOGGER.log(Level.WARNING, "Map cleanup failed for session id=" + id, exception);
+        }
+        PlayerProfile snapshot = player;
+        try {
+            if (snapshot != null && snapshot.id() > 0 && accountId > 0L) {
+                playerService.checkpoint(snapshot);
+            }
+        } catch (RuntimeException exception) {
+            LOGGER.log(Level.WARNING, "Player checkpoint failed for session id=" + id, exception);
+        } finally {
+            manager.unbindAccount(this);
         }
         try {
             transport.close();

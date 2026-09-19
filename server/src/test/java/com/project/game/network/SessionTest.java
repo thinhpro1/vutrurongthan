@@ -7,6 +7,19 @@ import com.project.game.network.message.Message;
 import com.project.game.network.message.MessageName;
 import com.project.game.network.transport.ClientTransport;
 import com.project.game.service.ServerServices;
+import com.project.game.service.AuthService;
+import com.project.game.service.PlayerService;
+import com.project.game.persistence.player.PlayerRecord;
+import com.project.game.persistence.player.PlayerRepository;
+import com.project.game.persistence.player.PlayerRepositoryException;
+import com.project.game.player.PlayerProfile;
+import com.project.game.map.MapService;
+import com.project.game.monster.MonsterRuntimeFactory;
+import com.project.game.network.packet.MonsterPacketWriter;
+import com.project.game.network.packet.PlayerPacketWriter;
+import com.project.game.service.ResourceService;
+import com.project.game.testsupport.TestAccountRepository;
+import com.project.game.testsupport.TestPlayerRepository;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -19,6 +32,9 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.CountDownLatch;
+import java.time.Instant;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -91,6 +107,73 @@ class SessionTest {
             assertEquals(expected.get(2), codec.readServerResponse(wire, cipher, true));
             assertEquals(0, wire.available());
             session.close();
+        }
+    }
+
+    @Test
+    void closeKeepsAccountReservedUntilFinalPlayerCheckpointCompletes() throws Exception {
+        TestPlayerRepository delegate = new TestPlayerRepository();
+        BlockingPlayerRepository repository = new BlockingPlayerRepository(delegate);
+        AuthService auth = new AuthService(new TestAccountRepository());
+        ResourceService resources = ResourceService.unavailable();
+        MapService maps = new MapService(new PlayerPacketWriter(), new MonsterPacketWriter(),
+                new MonsterRuntimeFactory(resources));
+        PlayerService players = new PlayerService(repository);
+        PlayerProfile player = players.create(101L, "alpha1", 0).player().withHp(77);
+        ServerServices services = new ServerServices(auth, resources, maps, players);
+        SessionManager manager = new SessionManager();
+        Session session = new Session(manager.nextId(), new TestTransport(), manager,
+                new LegacyPacketCodec(1024), "abc".getBytes(StandardCharsets.US_ASCII), 4,
+                services, NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
+        assertTrue(manager.beginAccountAdmission(session, 101L, "user01"));
+        manager.finishAccountAdmission(session, true);
+        session.bindPlayer(player);
+        session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
+        session.transition(SessionState.HANDSHAKE_DONE, SessionState.AUTHENTICATED);
+        session.transition(SessionState.AUTHENTICATED, SessionState.IN_GAME);
+
+        Thread close = Thread.ofVirtual().start(session::close);
+        assertTrue(repository.updateEntered.await(1, java.util.concurrent.TimeUnit.SECONDS));
+        assertTrue(manager.findByAccount("user01") == session);
+
+        repository.allowUpdate.countDown();
+        close.join(1_000);
+        assertTrue(!close.isAlive());
+        assertEquals(null, manager.findByAccount("user01"));
+        assertEquals(77L, delegate.requireByAccountId(101L).hp());
+    }
+
+    private static final class BlockingPlayerRepository implements PlayerRepository {
+        private final TestPlayerRepository delegate;
+        private final CountDownLatch updateEntered = new CountDownLatch(1);
+        private final CountDownLatch allowUpdate = new CountDownLatch(1);
+
+        private BlockingPlayerRepository(TestPlayerRepository delegate) {
+            this.delegate = delegate;
+        }
+
+        @Override
+        public Optional<PlayerRecord> findByAccountId(long accountId) {
+            return delegate.findByAccountId(accountId);
+        }
+
+        @Override
+        public PlayerRecord create(PlayerRecord initialWithoutId) {
+            return delegate.create(initialWithoutId);
+        }
+
+        @Override
+        public void updateCheckpoint(PlayerProfile player, Instant playedAt) {
+            updateEntered.countDown();
+            try {
+                if (!allowUpdate.await(1, java.util.concurrent.TimeUnit.SECONDS)) {
+                    throw new PlayerRepositoryException("timed out in test");
+                }
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                throw new PlayerRepositoryException("interrupted in test", exception);
+            }
+            delegate.updateCheckpoint(player, playedAt);
         }
     }
 

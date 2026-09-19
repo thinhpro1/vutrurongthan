@@ -27,7 +27,7 @@ class ZoneTest {
     @Test
     void startsEmptyAndTracksBoundPlayer() {
         Zone zone = new Zone(0, 0, List.of());
-        Session session = session(PlayerProfile.initial("user01", 7, "alpha1", 0));
+        Session session = session(PlayerProfile.initial(1L, 7, "alpha1", 0));
 
         assertEquals(0, zone.size());
         assertTrue(zone.add(session));
@@ -41,7 +41,7 @@ class ZoneTest {
     @Test
     void duplicateSameSessionIsIdempotent() {
         Zone zone = new Zone(0, 0, List.of());
-        Session session = session(PlayerProfile.initial("user01", 7, "alpha1", 0));
+        Session session = session(PlayerProfile.initial(1L, 7, "alpha1", 0));
 
         assertTrue(zone.add(session));
         assertFalse(zone.add(session));
@@ -51,8 +51,8 @@ class ZoneTest {
     @Test
     void differentSessionCannotReplaceSamePlayerId() {
         Zone zone = new Zone(0, 0, List.of());
-        Session first = session(PlayerProfile.initial("user01", 7, "alpha1", 0));
-        Session second = session(PlayerProfile.initial("user02", 7, "alpha2", 0));
+        Session first = session(PlayerProfile.initial(1L, 7, "alpha1", 0));
+        Session second = session(PlayerProfile.initial(2L, 7, "alpha2", 0));
 
         assertTrue(zone.add(first));
         assertFalse(zone.add(second));
@@ -62,7 +62,7 @@ class ZoneTest {
     @Test
     void snapshotIsImmutable() {
         Zone zone = new Zone(0, 0, List.of());
-        zone.add(session(PlayerProfile.initial("user01", 7, "alpha1", 0)));
+        zone.add(session(PlayerProfile.initial(1L, 7, "alpha1", 0)));
 
         List<Session> snapshot = zone.snapshot();
         assertThrows(UnsupportedOperationException.class, snapshot::clear);
@@ -84,8 +84,8 @@ class ZoneTest {
     @Test
     void atomicallyReturnsExistingMembersWhileAddingNewMember() {
         Zone zone = new Zone(0, 0, List.of());
-        Session first = session(PlayerProfile.initial("user01", 1, "alpha1", 0));
-        Session second = session(PlayerProfile.initial("user02", 2, "beta22", 0));
+        Session first = session(PlayerProfile.initial(1L, 1, "alpha1", 0));
+        Session second = session(PlayerProfile.initial(2L, 2, "beta22", 0));
         zone.add(first);
 
         List<Session> existing = zone.addAndSnapshot(second);

@@ -1,4 +1,4 @@
-package com.project.game.frame;
+package com.project.game.resource;
 
 import java.util.Collections;
 import java.util.List;

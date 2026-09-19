@@ -4,7 +4,7 @@ import com.project.game.persistence.DatabaseConfig;
 import com.project.game.persistence.DatabaseManager;
 import com.project.game.persistence.account.JdbcAccountRepository;
 import com.project.game.player.PlayerInitialProfileFactory;
-import com.project.game.service.PlayerService;
+import com.project.game.player.PlayerService;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 

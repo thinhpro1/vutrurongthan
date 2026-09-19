@@ -1,4 +1,4 @@
-package com.project.game.service;
+package com.project.game.resource;
 
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;

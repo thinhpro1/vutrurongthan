@@ -1,6 +1,6 @@
 package com.project.game.monster;
 
-import com.project.game.service.ResourceService;
+import com.project.game.resource.ResourceService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 

@@ -1,10 +1,9 @@
-package com.project.game.service;
+package com.project.game.resource;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
 import com.google.gson.JsonParser;
-import com.project.game.frame.FrameTemplate;
 import com.project.game.map.LegacyWaypoint;
 import com.project.game.map.LegacyMapTemplate;
 import com.project.game.monster.LegacyMonsterDart;

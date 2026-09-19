@@ -1,6 +1,6 @@
 package com.project.game.monster;
 
-import com.project.game.service.ResourceService;
+import com.project.game.resource.ResourceService;
 
 import java.util.List;
 import java.util.Map;

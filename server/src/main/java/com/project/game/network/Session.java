@@ -7,7 +7,7 @@ import com.project.game.network.transport.ClientTransport;
 import com.project.game.player.PlayerProfile;
 import com.project.game.map.MapService;
 import com.project.game.service.ServerServices;
-import com.project.game.service.PlayerService;
+import com.project.game.player.PlayerService;
 
 import java.io.IOException;
 import java.io.InputStream;

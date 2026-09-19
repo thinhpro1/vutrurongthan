@@ -1,8 +1,8 @@
 package com.project.game.testsupport;
 
-import com.project.game.service.AuthService;
-import com.project.game.service.PlayerService;
-import com.project.game.service.ResourceService;
+import com.project.game.account.AuthService;
+import com.project.game.player.PlayerService;
+import com.project.game.resource.ResourceService;
 import com.project.game.service.ServerServices;
 import com.project.game.map.MapService;
 

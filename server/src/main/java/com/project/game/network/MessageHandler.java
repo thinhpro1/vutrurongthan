@@ -1,6 +1,6 @@
 package com.project.game.network;
 
-import com.project.game.frame.FrameTemplate;
+import com.project.game.resource.FrameTemplate;
 import com.project.game.map.MapService;
 import com.project.game.monster.LegacyMonsterDartPhase;
 import com.project.game.network.message.Message;
@@ -9,11 +9,11 @@ import com.project.game.network.message.MessageWriter;
 import com.project.game.network.packet.PlayerPacketWriter;
 import com.project.game.network.packet.LegacyPlayerCompatibilityValidator;
 import com.project.game.player.PlayerProfile;
-import com.project.game.service.AuthService;
-import com.project.game.service.IconFingerprint;
-import com.project.game.service.ResourceService;
+import com.project.game.account.AuthService;
+import com.project.game.resource.IconFingerprint;
+import com.project.game.resource.ResourceService;
 import com.project.game.service.ServerServices;
-import com.project.game.service.PlayerService;
+import com.project.game.player.PlayerService;
 
 import java.io.IOException;
 import java.util.Objects;

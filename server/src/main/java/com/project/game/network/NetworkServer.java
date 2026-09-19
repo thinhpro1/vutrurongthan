@@ -13,9 +13,9 @@ import com.project.game.persistence.DatabaseConfig;
 import com.project.game.persistence.DatabaseManager;
 import com.project.game.persistence.account.JdbcAccountRepository;
 import com.project.game.persistence.player.JdbcPlayerRepository;
-import com.project.game.service.AuthService;
-import com.project.game.service.PlayerService;
-import com.project.game.service.ResourceService;
+import com.project.game.account.AuthService;
+import com.project.game.player.PlayerService;
+import com.project.game.resource.ResourceService;
 import com.project.game.service.ServerServices;
 
 import java.io.IOException;

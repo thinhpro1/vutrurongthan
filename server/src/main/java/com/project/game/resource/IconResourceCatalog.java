@@ -1,4 +1,4 @@
-package com.project.game.service;
+package com.project.game.resource;
 
 import java.io.IOException;
 import java.nio.file.Files;

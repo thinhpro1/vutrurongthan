@@ -1,4 +1,4 @@
-package com.project.game.service;
+package com.project.game.player;
 
 import com.project.game.persistence.player.DuplicatePlayerException;
 import com.project.game.persistence.player.PlayerRecord;

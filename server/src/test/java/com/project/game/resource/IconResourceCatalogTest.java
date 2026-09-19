@@ -1,4 +1,4 @@
-package com.project.game.service;
+package com.project.game.resource;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;

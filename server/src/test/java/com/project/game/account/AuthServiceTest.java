@@ -1,4 +1,4 @@
-package com.project.game.service;
+package com.project.game.account;
 
 import com.project.game.persistence.account.AccountRecord;
 import com.project.game.testsupport.TestAccountRepository;

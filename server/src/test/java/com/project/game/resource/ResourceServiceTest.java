@@ -1,6 +1,5 @@
-package com.project.game.service;
+package com.project.game.resource;
 
-import com.project.game.frame.FrameTemplate;
 import com.project.game.monster.LegacyMonsterSpawn;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;

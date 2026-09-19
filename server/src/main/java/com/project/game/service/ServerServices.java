@@ -1,6 +1,9 @@
 package com.project.game.service;
 
+import com.project.game.account.AuthService;
 import com.project.game.map.MapService;
+import com.project.game.player.PlayerService;
+import com.project.game.resource.ResourceService;
 
 import java.util.Objects;
 

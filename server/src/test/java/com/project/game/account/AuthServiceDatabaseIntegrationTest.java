@@ -1,4 +1,4 @@
-package com.project.game.service;
+package com.project.game.account;
 
 import com.project.game.persistence.DatabaseConfig;
 import com.project.game.persistence.DatabaseManager;

@@ -10,6 +10,7 @@ import com.project.game.map.MapService;
 import com.project.game.map.Zone;
 import com.project.game.network.codec.LegacyPacketCodec;
 import com.project.game.network.codec.LegacyCipher;
+import com.project.game.network.handler.MessageHandler;
 import com.project.game.network.message.Message;
 import com.project.game.network.message.MessageName;
 import com.project.game.network.message.MessageWriter;

@@ -2,6 +2,7 @@ package com.project.game.network;
 
 import com.project.game.network.codec.LegacyCipher;
 import com.project.game.network.codec.LegacyPacketCodec;
+import com.project.game.network.handler.MessageHandler;
 import com.project.game.network.message.Message;
 import com.project.game.network.transport.ClientTransport;
 import com.project.game.player.PlayerProfile;
@@ -87,7 +88,7 @@ public final class Session implements AutoCloseable {
         return sendQueue.size();
     }
 
-    int maxPacketSize() {
+    public int maxPacketSize() {
         return codec.maxPacketSize();
     }
 

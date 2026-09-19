@@ -1,5 +1,7 @@
 package com.project.game.network;
 
+import com.project.game.network.handler.MessageHandler;
+
 import com.project.game.testsupport.TestServices;
 
 import com.project.game.network.codec.LegacyPacketCodec;

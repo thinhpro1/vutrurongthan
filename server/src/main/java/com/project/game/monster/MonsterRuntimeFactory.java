@@ -1,6 +1,6 @@
 package com.project.game.monster;
 
-import com.project.game.resource.ResourceService;
+import com.project.game.resource.GameResources;
 
 import java.util.List;
 import java.util.Map;
@@ -9,9 +9,9 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 
 public final class MonsterRuntimeFactory {
-    private final ResourceService resources;
+    private final GameResources resources;
 
-    public MonsterRuntimeFactory(ResourceService resources) {
+    public MonsterRuntimeFactory(GameResources resources) {
         this.resources = Objects.requireNonNull(resources, "resources");
     }
 

@@ -19,7 +19,7 @@ import com.project.game.monster.MonsterMoveResult;
 import com.project.game.monster.RuntimeMonster;
 import com.project.game.player.PlayerProfile;
 import com.project.game.account.AuthService;
-import com.project.game.resource.ResourceService;
+import com.project.game.resource.GameResources;
 import com.project.game.service.ServerServices;
 import com.project.game.test.MutableClock;
 import org.junit.jupiter.api.Test;
@@ -1587,7 +1587,7 @@ class MapServiceTest {
 
     private static MonsterRuntimeFactory monsterFactory() {
         return new MonsterRuntimeFactory(
-                ResourceService.fromFrameRoot(
+                GameResources.fromFrameRoot(
                         Path.of("resources", "json")));
     }
 
@@ -1616,7 +1616,7 @@ class MapServiceTest {
     }
 
     private static MapService mapsWithoutMonsters() {
-        ResourceService resources = ResourceService.unavailable();
+        GameResources resources = GameResources.unavailable();
         return new MapService(
                 new PlayerPacketWriter(),
                 new MonsterPacketWriter(),
@@ -1634,7 +1634,7 @@ class MapServiceTest {
     }
 
     private static Session session(PlayerProfile player, MapService maps) {
-        return session(player, TestServices.serverServices(TestServices.authService(), ResourceService.unavailable(), maps));
+        return session(player, TestServices.serverServices(TestServices.authService(), GameResources.unavailable(), maps));
     }
 
     private static Session session(PlayerProfile player, ServerServices services) {

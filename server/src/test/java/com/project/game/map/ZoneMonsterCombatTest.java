@@ -14,7 +14,7 @@ import com.project.game.network.SessionState;
 import com.project.game.network.codec.LegacyPacketCodec;
 import com.project.game.network.transport.ClientTransport;
 import com.project.game.player.PlayerProfile;
-import com.project.game.resource.ResourceService;
+import com.project.game.resource.GameResources;
 import com.project.game.service.ServerServices;
 import org.junit.jupiter.api.Test;
 
@@ -285,7 +285,7 @@ class ZoneMonsterCombatTest {
 
     private static Zone map1Zone() {
         MonsterRuntimeFactory factory = new MonsterRuntimeFactory(
-                ResourceService.fromFrameRoot(Path.of("resources", "json")));
+                GameResources.fromFrameRoot(Path.of("resources", "json")));
         return new Zone(1, 0, factory.createForMap(1));
     }
 

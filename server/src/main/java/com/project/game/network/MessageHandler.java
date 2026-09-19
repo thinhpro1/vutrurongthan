@@ -11,7 +11,10 @@ import com.project.game.network.packet.LegacyPlayerCompatibilityValidator;
 import com.project.game.player.PlayerProfile;
 import com.project.game.account.AuthService;
 import com.project.game.resource.IconFingerprint;
-import com.project.game.resource.ResourceService;
+import com.project.game.resource.GameResources;
+import com.project.game.resource.LegacyPlayerSkill;
+import com.project.game.resource.LegacySkillOption;
+import com.project.game.resource.LegacySkillPaint;
 import com.project.game.service.ServerServices;
 import com.project.game.player.PlayerService;
 
@@ -34,7 +37,7 @@ public final class MessageHandler {
     private static final int DEV_FRAME_VERSION = 1;
     private final Session session;
     private final AuthService authService;
-    private final ResourceService resourceService;
+    private final GameResources resourceService;
     private final MapService mapService;
     private final PlayerService playerService;
     private final NetworkConfig networkConfig;
@@ -699,7 +702,7 @@ public final class MessageHandler {
                     "legacy player skill bootstrap unavailable for gender " + player.gender());
         }
         writer.writeByte(skills.size());
-        for (ResourceService.LegacyPlayerSkill skill : skills) {
+        for (LegacyPlayerSkill skill : skills) {
             writePlayerSkill(writer, skill);
         }
         writer.writeByte(6)
@@ -801,7 +804,7 @@ public final class MessageHandler {
         }
     }
 
-    private void writePlayerSkill(MessageWriter writer, ResourceService.LegacyPlayerSkill skill)
+    private void writePlayerSkill(MessageWriter writer, LegacyPlayerSkill skill)
             throws IOException {
         writer.writeByte(skill.id())
                 .writeByte(skill.names().size());
@@ -855,7 +858,7 @@ public final class MessageHandler {
             }
         }
         writer.writeByte(skill.options().size());
-        for (ResourceService.LegacySkillOption option : skill.options()) {
+        for (LegacySkillOption option : skill.options()) {
             writer.writeByte(option.id())
                     .writeUtf(option.name())
                     .writeByte(option.normal().size());
@@ -875,7 +878,7 @@ public final class MessageHandler {
             writer.writeLong(skill.timeCanUse());
         }
         writer.writeByte(skill.paints().size());
-        for (ResourceService.LegacySkillPaint paint : skill.paints()) {
+        for (LegacySkillPaint paint : skill.paints()) {
             writer.writeUtf(paint.percent())
                     .writeShort(paint.paintId());
         }

@@ -2,7 +2,7 @@ package com.project.game.testsupport;
 
 import com.project.game.account.AuthService;
 import com.project.game.player.PlayerService;
-import com.project.game.resource.ResourceService;
+import com.project.game.resource.GameResources;
 import com.project.game.service.ServerServices;
 import com.project.game.map.MapService;
 
@@ -24,10 +24,10 @@ public final class TestServices {
 
     public static ServerServices serverServices() {
         AuthService auth = authService();
-        return serverServices(auth, ResourceService.unavailable());
+        return serverServices(auth, GameResources.unavailable());
     }
 
-    public static ServerServices serverServices(AuthService auth, ResourceService resources) {
+    public static ServerServices serverServices(AuthService auth, GameResources resources) {
         return new ServerServices(auth, resources,
                 new MapService(
                         new com.project.game.network.packet.PlayerPacketWriter(),
@@ -36,7 +36,7 @@ public final class TestServices {
                 new PlayerService(playerRepository(auth)));
     }
 
-    public static ServerServices serverServices(AuthService auth, ResourceService resources,
+    public static ServerServices serverServices(AuthService auth, GameResources resources,
                                                 MapService maps) {
         return new ServerServices(auth, resources, maps,
                 new PlayerService(playerRepository(auth)));

@@ -15,7 +15,7 @@ import com.project.game.persistence.account.JdbcAccountRepository;
 import com.project.game.persistence.player.JdbcPlayerRepository;
 import com.project.game.account.AuthService;
 import com.project.game.player.PlayerService;
-import com.project.game.resource.ResourceService;
+import com.project.game.resource.GameResources;
 import com.project.game.service.ServerServices;
 
 import java.io.IOException;
@@ -108,7 +108,7 @@ public final class NetworkServer {
         }
         DatabaseManager databaseManager = new DatabaseManager(DatabaseConfig.fromProperties(properties));
         try {
-            ResourceService resources = resourceService(properties);
+            GameResources resources = resourceService(properties);
             MonsterRuntimeFactory monsterFactory = new MonsterRuntimeFactory(resources);
             MapService maps = new MapService(
                     new PlayerPacketWriter(), new MonsterPacketWriter(), monsterFactory);
@@ -234,7 +234,7 @@ public final class NetworkServer {
         return Integer.parseInt(properties.getProperty(key, Integer.toString(fallback)));
     }
 
-    private static ResourceService resourceService(Properties properties) {
+    private static GameResources resourceService(Properties properties) {
         String configuredIconRoot = properties.getProperty("game.resource.icon-dir", "").trim();
         String configuredJsonRoot = properties.getProperty("game.resource.json-dir", "").trim();
         int imageVersion = integer(properties, "game.resource.image-version", -1);
@@ -242,10 +242,10 @@ public final class NetworkServer {
                 ? null : java.nio.file.Path.of(configuredIconRoot);
         if (configuredJsonRoot.isEmpty()) {
             return iconRoot == null
-                    ? ResourceService.unavailable()
-                    : ResourceService.fromIconRoot(iconRoot, imageVersion);
+                    ? GameResources.unavailable()
+                    : GameResources.fromIconRoot(iconRoot, imageVersion);
         }
-        return ResourceService.fromRoots(
+        return GameResources.fromRoots(
                 iconRoot,
                 java.nio.file.Path.of(configuredJsonRoot),
                 imageVersion);

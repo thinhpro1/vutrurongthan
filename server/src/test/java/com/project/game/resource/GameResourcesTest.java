@@ -26,10 +26,10 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-class ResourceServiceTest {
+class GameResourcesTest {
     @Test
     void loadsCanonicalMonsterCombatTemplate() {
-        ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
+        GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"));
 
         var combat = resources.monsterCombatTemplate(1).orElseThrow();
         assertEquals(1, combat.templateId());
@@ -99,7 +99,7 @@ class ResourceServiceTest {
                 root.resolve("MonsterCombatBootstrap.json"),
                 new Gson().toJson(canonicalMonsterCombatBootstrap()));
 
-        ResourceService resources = ResourceService.fromRoots(null, root);
+        GameResources resources = GameResources.fromRoots(null, root);
 
         var combat = resources.monsterCombatTemplate(1).orElseThrow();
         assertEquals(10L, combat.damage());
@@ -120,7 +120,7 @@ class ResourceServiceTest {
 
     @Test
     void loadsCanonicalStaticMap1MonsterBootstrap() throws Exception {
-        ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
+        GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"));
 
         assertEquals(1, resources.monsterVersion());
         assertEquals(1, resources.monsterDarts().size());
@@ -175,7 +175,7 @@ class ResourceServiceTest {
 
     @Test
     void unavailableServiceHasNoMonsterBootstrap() {
-        ResourceService resources = ResourceService.unavailable();
+        GameResources resources = GameResources.unavailable();
 
         assertEquals(-1, resources.monsterVersion());
         assertTrue(resources.monsterDarts().isEmpty());
@@ -264,7 +264,7 @@ class ResourceServiceTest {
     void loadsOnlyNumericPngFilesBelowConfiguredRoot(@TempDir Path root) throws IOException {
         byte[] expected = new byte[]{1, 2, 3, 4};
         Files.write(root.resolve("5.png"), expected);
-        ResourceService resources = ResourceService.fromIconRoot(root);
+        GameResources resources = GameResources.fromIconRoot(root);
 
         assertArrayEquals(expected, resources.loadIcon(5).orElseThrow());
         assertTrue(resources.loadIcon(6).isEmpty());
@@ -275,7 +275,7 @@ class ResourceServiceTest {
         Files.write(root.resolve("10.png"), new byte[]{1, 2, 3});
         Files.write(root.resolve("2.png"), new byte[]{4, 5, 6});
 
-        ResourceService resources = ResourceService.fromIconRoot(root, 2);
+        GameResources resources = GameResources.fromIconRoot(root, 2);
 
         assertEquals(List.of(2, 10), resources.iconManifest().stream()
                 .map(IconFingerprint::iconId)
@@ -285,46 +285,46 @@ class ResourceServiceTest {
 
     @Test
     void unavailableServiceHasEmptyIconManifest() {
-        assertTrue(ResourceService.unavailable().iconManifest().isEmpty());
+        assertTrue(GameResources.unavailable().iconManifest().isEmpty());
     }
 
     @Test
     void iconRootExposesConfiguredImageVersion(@TempDir Path root) {
-        ResourceService resources = ResourceService.fromIconRoot(root, 7);
+        GameResources resources = GameResources.fromIconRoot(root, 7);
 
         assertEquals(7, resources.imageVersion());
     }
 
     @Test
     void unavailableImageResourcesExposeMinusOneVersion() {
-        assertEquals(-1, ResourceService.unavailable().imageVersion());
+        assertEquals(-1, GameResources.unavailable().imageVersion());
     }
 
     @Test
     void iconRootRejectsInvalidLegacyImageVersions(@TempDir Path root) {
         assertThrows(IllegalArgumentException.class,
-                () -> ResourceService.fromIconRoot(root, 0));
+                () -> GameResources.fromIconRoot(root, 0));
         assertThrows(IllegalArgumentException.class,
-                () -> ResourceService.fromIconRoot(root, -1));
+                () -> GameResources.fromIconRoot(root, -1));
         assertThrows(IllegalArgumentException.class,
-                () -> ResourceService.fromIconRoot(root, 128));
+                () -> GameResources.fromIconRoot(root, 128));
     }
 
     @Test
     void absentRootReportsMissingWithoutFabricatingBytes(@TempDir Path root) {
-        ResourceService resources = ResourceService.fromIconRoot(root.resolve("does-not-exist"));
+        GameResources resources = GameResources.fromIconRoot(root.resolve("does-not-exist"));
 
         assertTrue(resources.loadIcon(5).isEmpty());
     }
 
     @Test
     void unavailableServiceReportsMissing() {
-        assertTrue(ResourceService.unavailable().loadIcon(5).isEmpty());
+        assertTrue(GameResources.unavailable().loadIcon(5).isEmpty());
     }
 
     @Test
     void loadsRequiredFramesFromCanonicalClientResource(@TempDir Path ignored) {
-        ResourceService resources = ResourceService.fromFrameRoot(
+        GameResources resources = GameResources.fromFrameRoot(
                 Path.of("..", "client", "Assets", "Resources", "Jsons"));
 
         assertEquals(List.of(3, 4, 5, 6, 7, 8, 21, 22, 23),
@@ -361,7 +361,7 @@ class ResourceServiceTest {
                 + ",\"21\":" + frame + ",\"22\":" + frame + ",\"23\":" + frame + "}";
         Files.writeString(root.resolve("Frame.json"), json);
 
-        ResourceService resources = ResourceService.fromFrameRoot(root);
+        GameResources resources = GameResources.fromFrameRoot(root);
 
         assertEquals(List.of(3, 4, 5, 6, 7, 8, 21, 22, 23),
                 resources.frames().stream().map(FrameTemplate::id).toList());
@@ -369,26 +369,26 @@ class ResourceServiceTest {
 
     @Test
     void loadsExactFreshPlayerSkillIdsByGender() {
-        ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
+        GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"));
 
         assertEquals(List.of(0, 3, 6, 9, 12, 15, 30, 31, 32, 33, 36),
-                resources.playerSkills(0).stream().map(ResourceService.LegacyPlayerSkill::id).toList());
+                resources.playerSkills(0).stream().map(LegacyPlayerSkill::id).toList());
         assertEquals(List.of(1, 4, 7, 10, 13, 16, 30, 31, 32, 34, 36),
-                resources.playerSkills(1).stream().map(ResourceService.LegacyPlayerSkill::id).toList());
+                resources.playerSkills(1).stream().map(LegacyPlayerSkill::id).toList());
         assertEquals(List.of(2, 5, 8, 11, 14, 17, 30, 31, 32, 35, 36),
-                resources.playerSkills(2).stream().map(ResourceService.LegacyPlayerSkill::id).toList());
+                resources.playerSkills(2).stream().map(LegacyPlayerSkill::id).toList());
 
         for (int gender = 0; gender < 3; gender++) {
-            List<ResourceService.LegacyPlayerSkill> skills = resources.playerSkills(gender);
+            List<LegacyPlayerSkill> skills = resources.playerSkills(gender);
             assertEquals(1, skills.get(0).level());
             assertTrue(skills.stream().skip(1).allMatch(skill -> skill.level() == 0));
             assertTrue(skills.stream().allMatch(skill -> skill.upgrade() == 0
                     && skill.point() == 0 && skill.cooldownReduction() == 0));
         }
 
-        ResourceService.LegacyPlayerSkill earth = resources.playerSkills(0).get(0);
-        ResourceService.LegacyPlayerSkill namek = resources.playerSkills(1).get(0);
-        ResourceService.LegacyPlayerSkill saiyan = resources.playerSkills(2).get(0);
+        LegacyPlayerSkill earth = resources.playerSkills(0).get(0);
+        LegacyPlayerSkill namek = resources.playerSkills(1).get(0);
+        LegacyPlayerSkill saiyan = resources.playerSkills(2).get(0);
         assertEquals(List.of(1879, 1885), earth.icons());
         assertEquals(List.of(1879, 1883), namek.icons());
         assertEquals(List.of(1879, 1880), saiyan.icons());
@@ -398,18 +398,18 @@ class ResourceServiceTest {
         assertEquals(List.of(0, 30_000, 35_000, 40_000, 45_000, 50_000, 55_000),
                 earth.pointUpgrade());
         assertEquals(List.of("50.0", "100.0"),
-                earth.paints().stream().map(ResourceService.LegacySkillPaint::percent).toList());
-        ResourceService.LegacyPlayerSkill teleport = resources.playerSkills(0).stream()
+                earth.paints().stream().map(LegacySkillPaint::percent).toList());
+        LegacyPlayerSkill teleport = resources.playerSkills(0).stream()
                 .filter(skill -> skill.id() == 31)
                 .findFirst()
                 .orElseThrow();
         assertEquals(List.of("10.0", "20.0", "30.0"),
-                teleport.paints().stream().map(ResourceService.LegacySkillPaint::percent).toList());
+                teleport.paints().stream().map(LegacySkillPaint::percent).toList());
     }
 
     @Test
     void loadsExactMapZeroBootstrap() throws Exception {
-        ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
+        GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"));
 
         var map = resources.map(0).orElseThrow();
         var map1 = resources.map(1).orElseThrow();
@@ -482,14 +482,14 @@ class ResourceServiceTest {
 
     @Test
     void loadsExactLegacyLevels() throws Exception {
-        ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
+        GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"));
         var levels = resources.levels();
 
         assertEquals(102, levels.size());
-        assertEquals(new ResourceService.LegacyLevel(0, "Tân binh", 0L), levels.get(0));
-        assertEquals(new ResourceService.LegacyLevel(1, "Tân binh", 1L), levels.get(1));
-        assertEquals(new ResourceService.LegacyLevel(2, "Tân binh", 100L), levels.get(2));
-        assertEquals(new ResourceService.LegacyLevel(
+        assertEquals(new LegacyLevel(0, "Tân binh", 0L), levels.get(0));
+        assertEquals(new LegacyLevel(1, "Tân binh", 1L), levels.get(1));
+        assertEquals(new LegacyLevel(2, "Tân binh", 100L), levels.get(2));
+        assertEquals(new LegacyLevel(
                 101, "Thần # cấp 5", 6_000_000_000_000_000L), levels.get(101));
 
         for (int id = 0; id < levels.size(); id++) {
@@ -505,23 +505,23 @@ class ResourceServiceTest {
 
     @Test
     void loadsCanonicalMovementEffects() throws Exception {
-        ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
+        GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"));
 
         var effects = resources.effects();
 
         assertEquals(List.of(6, 7, 13, 17),
-                effects.stream().map(ResourceService.LegacyEffectImage::id).toList());
+                effects.stream().map(LegacyEffectImage::id).toList());
         assertEquals(4, effects.size());
         assertTrue(effects.stream().allMatch(effect -> !effect.icons().isEmpty()));
         assertTrue(effects.stream().allMatch(effect -> effect.icons().size() <= Byte.MAX_VALUE));
 
-        assertEquals(new ResourceService.LegacyEffectImage(6, 0, 0, 100, List.of(71, 72)),
+        assertEquals(new LegacyEffectImage(6, 0, 0, 100, List.of(71, 72)),
                 effects.get(0));
-        assertEquals(new ResourceService.LegacyEffectImage(7, 0, 0, 100, List.of(68, 69, 70)),
+        assertEquals(new LegacyEffectImage(7, 0, 0, 100, List.of(68, 69, 70)),
                 effects.get(1));
-        assertEquals(new ResourceService.LegacyEffectImage(
+        assertEquals(new LegacyEffectImage(
                 13, 0, 0, 100, List.of(971, 972, 973)), effects.get(2));
-        assertEquals(new ResourceService.LegacyEffectImage(
+        assertEquals(new LegacyEffectImage(
                 17, 0, -10, 50, List.of(1911, 1912, 1913, 1914)), effects.get(3));
         for (var effect : effects) {
             assertTrue(effect.id() >= Short.MIN_VALUE && effect.id() <= Short.MAX_VALUE);
@@ -627,7 +627,7 @@ class ResourceServiceTest {
 
     @Test
     void pinsLegacyMapZeroGridHash() throws Exception {
-        ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
+        GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"));
         var map = resources.map(0).orElseThrow();
 
         String hash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
@@ -650,7 +650,7 @@ class ResourceServiceTest {
                 new GsonBuilder().serializeNulls().create().toJson(bootstrap));
 
         IllegalArgumentException failure = assertThrows(IllegalArgumentException.class,
-                () -> ResourceService.fromFrameRoot(root));
+                () -> GameResources.fromFrameRoot(root));
         assertTrue(failure.getMessage().contains("grid"), failure.getMessage());
         assertTrue(failure.getMessage().contains("data length"), failure.getMessage());
     }
@@ -731,7 +731,7 @@ class ResourceServiceTest {
         Files.writeString(root.resolve("PlayerSkillBootstrap.json"), new Gson().toJson(bootstrap));
 
         IllegalArgumentException failure = assertThrows(IllegalArgumentException.class,
-                () -> ResourceService.fromFrameRoot(root));
+                () -> GameResources.fromFrameRoot(root));
         assertTrue(failure.getMessage().contains("initialPaints"));
     }
 
@@ -749,12 +749,12 @@ class ResourceServiceTest {
         Files.writeString(root.resolve("LevelBootstrap.json"), new Gson().toJson(bootstrap));
 
         IllegalArgumentException failure = assertThrows(IllegalArgumentException.class,
-                () -> ResourceService.fromFrameRoot(root));
+                () -> GameResources.fromFrameRoot(root));
         assertTrue(failure.getMessage().contains("LevelBootstrap"));
         assertTrue(failure.getMessage().contains("increasing"));
     }
 
-    private static String levelTableSha256(List<ResourceService.LegacyLevel> levels)
+    private static String levelTableSha256(List<LegacyLevel> levels)
             throws Exception {
         MessageDigest digest = MessageDigest.getInstance("SHA-256");
         StringBuilder canonical = new StringBuilder();
@@ -803,7 +803,7 @@ class ResourceServiceTest {
         Files.writeString(root.resolve("MonsterBootstrap.json"),
                 new GsonBuilder().serializeNulls().create().toJson(bootstrap));
         assertThrows(IllegalArgumentException.class,
-                () -> ResourceService.fromFrameRoot(root));
+                () -> GameResources.fromFrameRoot(root));
     }
 
     private static void assertMonsterCombatBootstrapRejected(
@@ -816,7 +816,7 @@ class ResourceServiceTest {
         Files.writeString(root.resolve("MonsterCombatBootstrap.json"),
                 new GsonBuilder().serializeNulls().create().toJson(bootstrap));
         assertThrows(IllegalArgumentException.class,
-                () -> ResourceService.fromRoots(null, root));
+                () -> GameResources.fromRoots(null, root));
     }
 
     private static void assertEffectBootstrapRejected(Path root,
@@ -826,7 +826,7 @@ class ResourceServiceTest {
         Files.writeString(root.resolve("EffectBootstrap.json"),
                 new GsonBuilder().serializeNulls().create().toJson(bootstrap));
         assertThrows(IllegalArgumentException.class,
-                () -> ResourceService.fromFrameRoot(root));
+                () -> GameResources.fromFrameRoot(root));
     }
 
     private static void assertMapBootstrapRejected(Path root,
@@ -836,7 +836,7 @@ class ResourceServiceTest {
         Files.writeString(root.resolve("MapBootstrap.json"),
                 new GsonBuilder().serializeNulls().create().toJson(bootstrap));
         assertThrows(IllegalArgumentException.class,
-                () -> ResourceService.fromFrameRoot(root));
+                () -> GameResources.fromFrameRoot(root));
     }
 
     private static void assertFrame(FrameTemplate frame, int id, int type, int hpBar, int chat,

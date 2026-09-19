@@ -17,7 +17,7 @@ import com.project.game.map.MapService;
 import com.project.game.monster.MonsterRuntimeFactory;
 import com.project.game.network.packet.MonsterPacketWriter;
 import com.project.game.network.packet.PlayerPacketWriter;
-import com.project.game.resource.ResourceService;
+import com.project.game.resource.GameResources;
 import com.project.game.testsupport.TestAccountRepository;
 import com.project.game.testsupport.TestPlayerRepository;
 import org.junit.jupiter.api.Test;
@@ -117,7 +117,7 @@ class SessionTest {
         TestPlayerRepository delegate = new TestPlayerRepository();
         BlockingPlayerRepository repository = new BlockingPlayerRepository(delegate);
         AuthService auth = new AuthService(new TestAccountRepository());
-        ResourceService resources = ResourceService.unavailable();
+        GameResources resources = GameResources.unavailable();
         MapService maps = new MapService(new PlayerPacketWriter(), new MonsterPacketWriter(),
                 new MonsterRuntimeFactory(resources));
         PlayerService players = new PlayerService(repository);
@@ -155,9 +155,9 @@ class SessionTest {
         Session session = new Session(manager.nextId(), new TestTransport(), manager,
                 new LegacyPacketCodec(1024), "abc".getBytes(StandardCharsets.US_ASCII), 4,
                 new ServerServices(new AuthService(new TestAccountRepository()),
-                        ResourceService.unavailable(),
+                        GameResources.unavailable(),
                         new MapService(new PlayerPacketWriter(), new MonsterPacketWriter(),
-                                new MonsterRuntimeFactory(ResourceService.unavailable())),
+                                new MonsterRuntimeFactory(GameResources.unavailable())),
                         players),
                 NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
         assertTrue(manager.tryAdd(session, 1));
@@ -189,9 +189,9 @@ class SessionTest {
         Session session = new Session(manager.nextId(), transport, manager,
                 new LegacyPacketCodec(1024), "abc".getBytes(StandardCharsets.US_ASCII), 4,
                 new ServerServices(new AuthService(new TestAccountRepository()),
-                        ResourceService.unavailable(),
+                        GameResources.unavailable(),
                         new MapService(new PlayerPacketWriter(), new MonsterPacketWriter(),
-                                new MonsterRuntimeFactory(ResourceService.unavailable())),
+                                new MonsterRuntimeFactory(GameResources.unavailable())),
                         players),
                 NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
         assertTrue(manager.tryAdd(session, 1));
@@ -231,9 +231,9 @@ class SessionTest {
         Session session = new Session(manager.nextId(), transport, manager,
                 new LegacyPacketCodec(1024), "abc".getBytes(StandardCharsets.US_ASCII), 4,
                 new ServerServices(new AuthService(new TestAccountRepository()),
-                        ResourceService.unavailable(),
+                        GameResources.unavailable(),
                         new MapService(new PlayerPacketWriter(), new MonsterPacketWriter(),
-                                new MonsterRuntimeFactory(ResourceService.unavailable())),
+                                new MonsterRuntimeFactory(GameResources.unavailable())),
                         players),
                 NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
         assertTrue(manager.tryAdd(session, 1));

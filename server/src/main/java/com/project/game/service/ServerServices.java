@@ -3,12 +3,12 @@ package com.project.game.service;
 import com.project.game.account.AuthService;
 import com.project.game.map.MapService;
 import com.project.game.player.PlayerService;
-import com.project.game.resource.ResourceService;
+import com.project.game.resource.GameResources;
 
 import java.util.Objects;
 
 /** Shared coarse services used by one accepted legacy session. */
-public record ServerServices(AuthService auth, ResourceService resources, MapService maps,
+public record ServerServices(AuthService auth, GameResources resources, MapService maps,
                              PlayerService players) {
     public ServerServices {
         Objects.requireNonNull(auth, "auth");

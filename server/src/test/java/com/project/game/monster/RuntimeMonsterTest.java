@@ -1,6 +1,6 @@
 package com.project.game.monster;
 
-import com.project.game.resource.ResourceService;
+import com.project.game.resource.GameResources;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Path;
@@ -389,12 +389,12 @@ class RuntimeMonsterTest {
     }
 
     private static RuntimeMonster map1Monster() {
-        ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
+        GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"));
         return new MonsterRuntimeFactory(resources).createForMap(1).getFirst();
     }
 
     private static LegacyMonsterTemplate map1Movement() {
-        ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
+        GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"));
         return resources.monsterTemplates().getFirst();
     }
 }

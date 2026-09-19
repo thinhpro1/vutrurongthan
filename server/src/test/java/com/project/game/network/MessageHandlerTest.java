@@ -18,7 +18,7 @@ import com.project.game.network.packet.MonsterPacketWriter;
 import com.project.game.monster.MonsterRuntimeFactory;
 import com.project.game.account.AuthService;
 import com.project.game.resource.IconFingerprint;
-import com.project.game.resource.ResourceService;
+import com.project.game.resource.GameResources;
 import com.project.game.service.ServerServices;
 import com.project.game.player.PlayerProfile;
 import org.junit.jupiter.api.Test;
@@ -60,7 +60,7 @@ class MessageHandlerTest {
 
     @Test
     void changesMapOnlyWhenInsideSupportedWaypoint() throws Exception {
-        ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
+        GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"));
         MapService maps = new MapService(
                 new PlayerPacketWriter(),
                 new MonsterPacketWriter(),
@@ -126,7 +126,7 @@ class MessageHandlerTest {
 
     @Test
     void requestChangeMapOutsideWaypointIsNoOp() throws Exception {
-        ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
+        GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"));
         MapService maps = new MapService(
                 new PlayerPacketWriter(),
                 new MonsterPacketWriter(),
@@ -147,7 +147,7 @@ class MessageHandlerTest {
 
     @Test
     void requestChangeMapPreservesAuthoritativeHpChangedBeforeZoneTransition() throws Exception {
-        ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
+        GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"));
         MapService maps = new MapService(
                 new PlayerPacketWriter(),
                 new MonsterPacketWriter(),
@@ -178,7 +178,7 @@ class MessageHandlerTest {
 
     @Test
     void requestChangeMapRejectsNonEmptyPayload() {
-        ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
+        GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"));
         Session session = inGameSession(TestServices.serverServices(TestServices.authService(), resources),
                 PlayerProfile.initial(1L, 7, "alpha1", 0));
 
@@ -190,7 +190,7 @@ class MessageHandlerTest {
 
     @Test
     void mapInfoRevisitUsesCachedTemplateLayout() throws Exception {
-        ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
+        GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"));
         Session session = inGameSession(TestServices.serverServices(TestServices.authService(), resources),
                 PlayerProfile.initial(1L, 7, "alpha1", 0)
                         .withLocation(0, 0, 4464, 936));
@@ -226,8 +226,8 @@ class MessageHandlerTest {
         MapService maps = new MapService(
                 new PlayerPacketWriter(),
                 new MonsterPacketWriter(),
-                new MonsterRuntimeFactory(ResourceService.unavailable()));
-        ServerServices services = TestServices.serverServices(auth, ResourceService.unavailable(), maps);
+                new MonsterRuntimeFactory(GameResources.unavailable()));
+        ServerServices services = TestServices.serverServices(auth, GameResources.unavailable(), maps);
         Session first = inGameSession(services, PlayerProfile.initial(1L, 1, "alpha1", 0));
         Session second = inGameSession(services, PlayerProfile.initial(2L, 2, "beta22", 0));
         MessageHandler firstHandler = newHandler(first, services, NetworkConfig.defaults());
@@ -288,8 +288,8 @@ class MessageHandlerTest {
         MapService maps = new MapService(
                 new PlayerPacketWriter(),
                 new MonsterPacketWriter(),
-                new MonsterRuntimeFactory(ResourceService.unavailable()));
-        ServerServices services = TestServices.serverServices(TestServices.authService(), ResourceService.unavailable(), maps);
+                new MonsterRuntimeFactory(GameResources.unavailable()));
+        ServerServices services = TestServices.serverServices(TestServices.authService(), GameResources.unavailable(), maps);
         Session session = inGameSession(services, PlayerProfile.initial(1L, 7, "alpha1", 0));
         MessageHandler handler = newHandler(session, services, NetworkConfig.defaults());
 
@@ -409,7 +409,7 @@ class MessageHandlerTest {
 
     @Test
     void preFinishMapInfoZoneCannotBeTargeted() {
-        ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
+        GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"));
         MapService maps = new MapService(new PlayerPacketWriter(), new MonsterPacketWriter(),
                 new MonsterRuntimeFactory(resources));
         ServerServices services = TestServices.serverServices(TestServices.authService(), resources, maps);
@@ -673,7 +673,7 @@ class MessageHandlerTest {
         Session session = newSession(TestServices.authService());
         session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
 
-        newHandler(session, ResourceService.unavailable()).onMessage(
+        newHandler(session, GameResources.unavailable()).onMessage(
                 new Message(MessageName.UPDATE_DATA, new byte[]{7}));
 
         assertEquals(0, session.queuedMessages());
@@ -744,7 +744,7 @@ class MessageHandlerTest {
 
     @Test
     void serializesExactLegacyLevelResource() throws Exception {
-        ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
+        GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"));
         PipedInputStream input = new PipedInputStream();
         try (PipedOutputStream inputWriter = new PipedOutputStream(input)) {
             ByteArrayOutputStream output = new ByteArrayOutputStream();
@@ -785,7 +785,7 @@ class MessageHandlerTest {
 
     @Test
     void serializesMovementEffectResourceInUnityFieldOrder() throws Exception {
-        ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
+        GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"));
         PipedInputStream input = new PipedInputStream();
         try (PipedOutputStream inputWriter = new PipedOutputStream(input)) {
             ByteArrayOutputStream output = new ByteArrayOutputStream();
@@ -841,7 +841,7 @@ class MessageHandlerTest {
 
     @Test
     void serializesExactLegacyMonsterResourceInUnityFieldOrder() throws Exception {
-        ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
+        GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"));
         PipedInputStream input = new PipedInputStream();
         try (PipedOutputStream inputWriter = new PipedOutputStream(input)) {
             ByteArrayOutputStream output = new ByteArrayOutputStream();
@@ -922,7 +922,7 @@ class MessageHandlerTest {
         Session session = newSession(TestServices.authService());
         session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
 
-        newHandler(session, ResourceService.unavailable()).onMessage(new Message(
+        newHandler(session, GameResources.unavailable()).onMessage(new Message(
                 MessageName.UPDATE_DATA, new byte[]{4}));
 
         assertEquals(0, session.queuedMessages());
@@ -931,19 +931,19 @@ class MessageHandlerTest {
 
     @Test
     void manifestAdvertisesLoadedEffectVersionTwo() throws Exception {
-        assertEquals(2, readManifestEffectVersion(ResourceService.fromFrameRoot(
+        assertEquals(2, readManifestEffectVersion(GameResources.fromFrameRoot(
                 Path.of("resources", "json"))));
     }
 
     @Test
     void manifestAdvertisesLoadedMonsterVersionOne() throws Exception {
-        assertEquals(1, readManifestMonsterVersion(ResourceService.fromFrameRoot(
+        assertEquals(1, readManifestMonsterVersion(GameResources.fromFrameRoot(
                 Path.of("resources", "json"))));
     }
 
     @Test
     void manifestAdvertisesUnavailableMonsterVersionMinusOne() throws Exception {
-        assertEquals(-1, readManifestMonsterVersion(ResourceService.unavailable()));
+        assertEquals(-1, readManifestMonsterVersion(GameResources.unavailable()));
     }
 
     @Test
@@ -951,7 +951,7 @@ class MessageHandlerTest {
         Session session = newSession(TestServices.authService());
         session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
 
-        newHandler(session, ResourceService.unavailable()).onMessage(
+        newHandler(session, GameResources.unavailable()).onMessage(
                 new Message(MessageName.UPDATE_DATA, new byte[]{3}));
 
         assertEquals(0, session.queuedMessages());
@@ -960,7 +960,7 @@ class MessageHandlerTest {
 
     @Test
     void requestIconIsAllowedOnlyAfterHandshake() {
-        ResourceService resources = ResourceService.unavailable();
+        GameResources resources = GameResources.unavailable();
 
         Session connected = newSession(TestServices.authService());
         newHandler(connected, resources).onMessage(iconRequest(5));
@@ -996,7 +996,7 @@ class MessageHandlerTest {
         Session session = newSession(TestServices.authService());
         session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
 
-        newHandler(session, ResourceService.fromIconRoot(root)).onMessage(iconRequest(5));
+        newHandler(session, GameResources.fromIconRoot(root)).onMessage(iconRequest(5));
 
         assertEquals(1, session.queuedMessages());
         assertEquals(SessionState.HANDSHAKE_DONE, session.state());
@@ -1007,7 +1007,7 @@ class MessageHandlerTest {
         Session session = newSession(TestServices.authService());
         session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
 
-        newHandler(session, ResourceService.unavailable()).onMessage(
+        newHandler(session, GameResources.unavailable()).onMessage(
                 new Message(MessageName.REQUEST_ICON, new byte[]{0, 5, 0x7f}));
 
         assertEquals(SessionState.CLOSED, session.state());
@@ -1019,7 +1019,7 @@ class MessageHandlerTest {
         session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
         session.transition(SessionState.HANDSHAKE_DONE, SessionState.AUTHENTICATED);
 
-        MessageHandler handler = newHandler(session, ResourceService.unavailable());
+        MessageHandler handler = newHandler(session, GameResources.unavailable());
         handler.onMessage(iconRequest(5));
 
         assertEquals(SessionState.AUTHENTICATED, session.state());
@@ -1038,7 +1038,7 @@ class MessageHandlerTest {
         Session session = newSession(TestServices.authService(), 9);
         session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
 
-        newHandler(session, ResourceService.fromIconRoot(root))
+        newHandler(session, GameResources.fromIconRoot(root))
                 .onMessage(iconRequest(5));
 
         assertEquals(SessionState.HANDSHAKE_DONE, session.state());
@@ -1046,11 +1046,11 @@ class MessageHandlerTest {
     }
 
     private static MessageHandler newHandler(Session session, AuthService authService) {
-        return newHandler(session, TestServices.serverServices(authService, ResourceService.unavailable()),
+        return newHandler(session, TestServices.serverServices(authService, GameResources.unavailable()),
                 NetworkConfig.defaults());
     }
 
-    private static MessageHandler newHandler(Session session, ResourceService resources) {
+    private static MessageHandler newHandler(Session session, GameResources resources) {
         return newHandler(session, TestServices.serverServices(TestServices.authService(), resources), NetworkConfig.defaults());
     }
 
@@ -1091,7 +1091,7 @@ class MessageHandlerTest {
     }
 
     private static CombatContext combatContext() {
-        ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
+        GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"));
         MapService maps = new MapService(new PlayerPacketWriter(), new MonsterPacketWriter(),
                 new MonsterRuntimeFactory(resources));
         ServerServices services = TestServices.serverServices(TestServices.authService(), resources, maps);
@@ -1129,7 +1129,7 @@ class MessageHandlerTest {
         return new Session(manager.nextId(), new TestTransport(
                 new ByteArrayInputStream(new byte[0]), new ByteArrayOutputStream(), remoteAddress), manager,
                 new LegacyPacketCodec(maxPacketSize), "abc".getBytes(StandardCharsets.US_ASCII), 4,
-                TestServices.serverServices(authService, ResourceService.unavailable()), NetworkConfig.defaults(),
+                TestServices.serverServices(authService, GameResources.unavailable()), NetworkConfig.defaults(),
                 NetworkEventObserver.NO_OP);
     }
 
@@ -1237,7 +1237,7 @@ class MessageHandlerTest {
         assertTrue(output.size() > 0, "timed out waiting for level resource response");
     }
 
-    private static int readManifestMonsterVersion(ResourceService resources) throws Exception {
+    private static int readManifestMonsterVersion(GameResources resources) throws Exception {
         PipedInputStream input = new PipedInputStream();
         try (PipedOutputStream inputWriter = new PipedOutputStream(input)) {
             ByteArrayOutputStream output = new ByteArrayOutputStream();
@@ -1273,7 +1273,7 @@ class MessageHandlerTest {
         }
     }
 
-    private static int readManifestEffectVersion(ResourceService resources) throws Exception {
+    private static int readManifestEffectVersion(GameResources resources) throws Exception {
         PipedInputStream input = new PipedInputStream();
         try (PipedOutputStream inputWriter = new PipedOutputStream(input)) {
             ByteArrayOutputStream output = new ByteArrayOutputStream();
@@ -1317,7 +1317,7 @@ class MessageHandlerTest {
             byte[] icon10 = new byte[]{1, 2, 3};
             Files.write(iconRoot.resolve("10.png"), icon10);
             Files.write(iconRoot.resolve("2.png"), icon2);
-            ResourceService resources = ResourceService.fromIconRoot(iconRoot, 2);
+            GameResources resources = GameResources.fromIconRoot(iconRoot, 2);
 
             PipedInputStream input = new PipedInputStream();
             try (PipedOutputStream inputWriter = new PipedOutputStream(input)) {

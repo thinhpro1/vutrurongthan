@@ -1,6 +1,6 @@
 package com.project.game.monster;
 
-import com.project.game.resource.ResourceService;
+import com.project.game.resource.GameResources;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -15,8 +15,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class MonsterRuntimeFactoryTest {
-    private static ResourceService resources() {
-        return ResourceService.fromFrameRoot(
+    private static GameResources resources() {
+        return GameResources.fromFrameRoot(
                 Path.of("resources", "json"));
     }
 
@@ -78,7 +78,7 @@ class MonsterRuntimeFactoryTest {
         Files.copy(Path.of("resources", "json", "MonsterBootstrap.json"),
                 root.resolve("MonsterBootstrap.json"));
 
-        ResourceService resources = ResourceService.fromFrameRoot(root);
+        GameResources resources = GameResources.fromFrameRoot(root);
         IllegalStateException failure = assertThrows(IllegalStateException.class,
                 () -> new MonsterRuntimeFactory(resources).createForMap(1));
         assertTrue(failure.getMessage().contains("missing monster combat template 1"));

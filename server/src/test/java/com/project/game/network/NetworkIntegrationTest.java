@@ -14,7 +14,7 @@ import com.project.game.map.MapService;
 import com.project.game.monster.MonsterRuntimeFactory;
 import com.project.game.account.AuthService;
 import com.project.game.resource.IconFingerprint;
-import com.project.game.resource.ResourceService;
+import com.project.game.resource.GameResources;
 import com.project.game.service.ServerServices;
 import com.project.game.test.MutableClock;
 import org.junit.jupiter.api.Test;
@@ -49,7 +49,7 @@ class NetworkIntegrationTest {
     void javaClientDiesToMonsterAndReturnsTown() throws Exception {
         String victimAccount = "deathrevivea";
         String observerAccount = "deathreviveb";
-        ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
+        GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"));
         AuthService auth = TestServices.authService();
         MutableClock clock = new MutableClock(1_000_000L);
         BlockingLifecycleRandom random = new BlockingLifecycleRandom();
@@ -201,7 +201,7 @@ class NetworkIntegrationTest {
     @Test
     void livingPlayerReturnTownRequestIsIgnored() throws Exception {
         String accountName = "livingreturn";
-        ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
+        GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"));
         AuthService auth = TestServices.authService();
         assertTrue(auth.register(accountName, "secret1", "127.0.0.1").success());
         NetworkServer server = new NetworkServer(
@@ -245,7 +245,7 @@ class NetworkIntegrationTest {
 
     @Test
     void javaClientRoundTripsMap0AndMap1WithCachedTemplates() throws Exception {
-        ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
+        GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"));
         AuthService auth = TestServices.authService();
         assertTrue(auth.register("mapround1", "secret1", "127.0.0.1").success());
         NetworkServer server = new NetworkServer("127.0.0.1", 0, 2, 262_144, 8, 1_000,
@@ -314,7 +314,7 @@ class NetworkIntegrationTest {
 
     @Test
     void javaClientsFollowEachOtherAcrossMapsWithoutCrossMapPresence() throws Exception {
-        ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
+        GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"));
         AuthService auth = TestServices.authService();
         assertTrue(auth.register("mapzonea", "secret1", "127.0.0.1").success());
         assertTrue(auth.register("mapzoneb", "secret1", "127.0.0.1").success());
@@ -393,7 +393,7 @@ class NetworkIntegrationTest {
 
     @Test
     void javaClientsObserveAuthoritativeMonsterMovementAndChase() throws Exception {
-        ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
+        GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"));
         AuthService auth = TestServices.authService();
         MutableClock clock = new MutableClock(1_000_000L);
         assertTrue(auth.register("chasetcp1", "secret1", "127.0.0.1").success());
@@ -493,7 +493,7 @@ class NetworkIntegrationTest {
 
     @Test
     void twoClientsSeeSameZonePresenceMovementAndDisconnect() throws Exception {
-        ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
+        GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"));
         AuthService auth = TestServices.authService();
         assertTrue(auth.register("zonea1", "secret1", "127.0.0.1").success());
         assertTrue(auth.register("zoneb1", "secret1", "127.0.0.1").success());
@@ -556,7 +556,7 @@ class NetworkIntegrationTest {
 
     @Test
     void twoClientsFightMap1MonsterObserveRespawnAndFightAgain() throws Exception {
-        ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
+        GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"));
         AuthService auth = TestServices.authService();
         MutableClock clock = new MutableClock(1_000_000L);
         assertTrue(auth.register("combatza", "secret1", "127.0.0.1").success());
@@ -690,7 +690,7 @@ class NetworkIntegrationTest {
     @Test
     void javaClientReceivesPotentialRewardAfterKillingMonster() throws Exception {
         String accountName = "rewardtcp";
-        ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
+        GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"));
         AuthService auth = TestServices.authService();
         assertTrue(auth.register(accountName, "secret1", "127.0.0.1").success());
         MapService maps = new MapService(
@@ -769,7 +769,7 @@ class NetworkIntegrationTest {
 
     @Test
     void monsterRetaliatesAfterHitWithoutLethalPlayerDamage() throws Exception {
-        ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
+        GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"));
         AuthService auth = TestServices.authService();
         MutableClock clock = new MutableClock(1_000_000L);
         assertTrue(auth.register("retaliatea", "secret1", "127.0.0.1").success());
@@ -894,7 +894,7 @@ class NetworkIntegrationTest {
 
     @Test
     void retaliationPlayerStateSurvivesMoveAndMapChangeOverTcp() throws Exception {
-        ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
+        GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"));
         AuthService auth = TestServices.authService();
         MutableClock clock = new MutableClock(1_000_000L);
         assertTrue(auth.register("retaliaterace", "secret1", "127.0.0.1").success());
@@ -966,7 +966,7 @@ class NetworkIntegrationTest {
 
     @Test
     void javaClientCreatesFreshPlayerAndParsesLegacyMapZero() throws Exception {
-        ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
+        GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"));
         NetworkServer server = new NetworkServer("127.0.0.1", 0, 2, 262_144, 8, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
                 TestServices.serverServices(TestServices.authService(), resources), null,
@@ -1013,7 +1013,7 @@ class NetworkIntegrationTest {
 
     @Test
     void javaClientRelogsExistingPlayerAndReceivesLegacyMapZero() throws Exception {
-        ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
+        GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"));
         NetworkServer server = new NetworkServer("127.0.0.1", 0, 2, 262_144, 8, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
                 TestServices.serverServices(TestServices.authService(), resources), null,
@@ -1047,7 +1047,7 @@ class NetworkIntegrationTest {
 
     @Test
     void javaClientReceivesLegacyFrameDefinitionsInUnityFieldOrder() throws Exception {
-        ResourceService resources = ResourceService.fromFrameRoot(
+        GameResources resources = GameResources.fromFrameRoot(
                 Path.of("..", "client", "Assets", "Resources", "Jsons"));
         NetworkServer server = new NetworkServer("127.0.0.1", 0, 2, 4096, 8, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
@@ -1074,7 +1074,7 @@ class NetworkIntegrationTest {
 
     @Test
     void javaClientLoadsLegacyLevelResource() throws Exception {
-        ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
+        GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"));
         NetworkServer server = new NetworkServer("127.0.0.1", 0, 2, 262_144, 8, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
                 TestServices.serverServices(TestServices.authService(), resources), null,
@@ -1163,7 +1163,7 @@ class NetworkIntegrationTest {
 
     @Test
     void javaClientLoadsMovementEffectResource(@TempDir Path iconRoot) throws Exception {
-        ResourceService resources = ResourceService.fromRoots(
+        GameResources resources = GameResources.fromRoots(
                 iconRoot,
                 Path.of("resources", "json"),
                 7);
@@ -1254,7 +1254,7 @@ class NetworkIntegrationTest {
 
     @Test
     void javaClientMovesThreeTimesWithoutDisconnecting() throws Exception {
-        ResourceService resources = ResourceService.fromFrameRoot(Path.of("resources", "json"));
+        GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"));
         AuthService auth = TestServices.authService();
         NetworkServer server = new NetworkServer(
                 "127.0.0.1", 0, 2, 262_144, 8, 1_000,
@@ -1359,7 +1359,7 @@ class NetworkIntegrationTest {
 
     @Test
     void javaClientVersionCacheSkipsSecondFrameRequest() throws Exception {
-        ResourceService resources = ResourceService.fromFrameRoot(
+        GameResources resources = GameResources.fromFrameRoot(
                 Path.of("..", "client", "Assets", "Resources", "Jsons"));
         AtomicInteger frameUpdateCount = new AtomicInteger();
         NetworkEventObserver observer = (session, type) -> {
@@ -1402,7 +1402,7 @@ class NetworkIntegrationTest {
         Files.write(iconRoot.resolve("5.png"), iconData);
         NetworkServer server = new NetworkServer("127.0.0.1", 0, 2, 1024, 8, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
-                TestServices.serverServices(TestServices.authService(), ResourceService.fromIconRoot(iconRoot)),
+                TestServices.serverServices(TestServices.authService(), GameResources.fromIconRoot(iconRoot)),
                 null, NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
         AtomicReference<Throwable> serverFailure = new AtomicReference<>();
         Thread serverThread = Thread.ofVirtual().start(() -> {
@@ -1429,7 +1429,7 @@ class NetworkIntegrationTest {
         byte[] otherIconData = new byte[]{5, 6, 7};
         Files.write(iconRoot.resolve("5.png"), iconData);
         Files.write(iconRoot.resolve("10.png"), otherIconData);
-        ResourceService resources = ResourceService.fromIconRoot(iconRoot, 2);
+        GameResources resources = GameResources.fromIconRoot(iconRoot, 2);
         NetworkServer server = new NetworkServer("127.0.0.1", 0, 2, 1024, 8, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
                 TestServices.serverServices(TestServices.authService(), resources),
@@ -1500,7 +1500,7 @@ class NetworkIntegrationTest {
         Files.write(iconRoot.resolve("2170.png"), iconData);
         NetworkServer server = new NetworkServer("127.0.0.1", 0, 2, 262_144, 8, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
-                TestServices.serverServices(TestServices.authService(), ResourceService.fromIconRoot(iconRoot)),
+                TestServices.serverServices(TestServices.authService(), GameResources.fromIconRoot(iconRoot)),
                 null, NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
         AtomicReference<Throwable> serverFailure = new AtomicReference<>();
         Thread serverThread = Thread.ofVirtual().start(() -> {
@@ -1527,7 +1527,7 @@ class NetworkIntegrationTest {
         Files.write(iconRoot.resolve("2170.png"), iconData);
         NetworkServer server = new NetworkServer("127.0.0.1", 0, 2, 262_144, 8, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
-                TestServices.serverServices(TestServices.authService(), ResourceService.fromIconRoot(iconRoot)),
+                TestServices.serverServices(TestServices.authService(), GameResources.fromIconRoot(iconRoot)),
                 null, NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
         AtomicReference<Throwable> serverFailure = new AtomicReference<>();
         Thread serverThread = Thread.ofVirtual().start(() -> {
@@ -1573,7 +1573,7 @@ class NetworkIntegrationTest {
         };
         NetworkServer server = new NetworkServer("127.0.0.1", 0, 2, 1024, 8, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
-                TestServices.serverServices(TestServices.authService(), ResourceService.fromFrameRoot(
+                TestServices.serverServices(TestServices.authService(), GameResources.fromFrameRoot(
                         Path.of("resources", "json"))),
                 null, NetworkConfig.defaults(), observer);
         AtomicReference<Throwable> serverFailure = new AtomicReference<>();

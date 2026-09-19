@@ -188,6 +188,7 @@ public final class Session implements AutoCloseable {
     }
 
     private void close(String reason) {
+        Thread currentThread = Thread.currentThread();
         synchronized (this) {
             if (!closed.compareAndSet(false, true)) {
                 return;
@@ -196,10 +197,10 @@ public final class Session implements AutoCloseable {
         }
         LOGGER.info(() -> "SESSION_CLOSE id=" + id + " ip=" + remoteAddress() + " reason=" + reason);
         sendQueue.clear();
-        if (readerThread != null) {
+        if (readerThread != null && readerThread != currentThread) {
             readerThread.interrupt();
         }
-        if (writerThread != null) {
+        if (writerThread != null && writerThread != currentThread) {
             writerThread.interrupt();
         }
         try {
@@ -210,10 +211,17 @@ public final class Session implements AutoCloseable {
         PlayerProfile snapshot = player;
         try {
             if (snapshot != null && snapshot.id() > 0 && accountId > 0L) {
-                playerService.checkpoint(snapshot);
+                boolean interruptedBeforeCheckpoint = Thread.interrupted();
+                try {
+                    playerService.checkpoint(snapshot);
+                } catch (RuntimeException exception) {
+                    LOGGER.log(Level.WARNING, "Player checkpoint failed for session id=" + id, exception);
+                } finally {
+                    if (interruptedBeforeCheckpoint) {
+                        Thread.currentThread().interrupt();
+                    }
+                }
             }
-        } catch (RuntimeException exception) {
-            LOGGER.log(Level.WARNING, "Player checkpoint failed for session id=" + id, exception);
         } finally {
             manager.unbindAccount(this);
         }

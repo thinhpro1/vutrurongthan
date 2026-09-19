@@ -32,11 +32,13 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.CountDownLatch;
 import java.time.Instant;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -143,10 +145,116 @@ class SessionTest {
         assertEquals(77L, delegate.requireByAccountId(101L).hp());
     }
 
+    @Test
+    void readerThreadCloseDoesNotSelfInterruptBeforeCheckpoint() throws Exception {
+        TestPlayerRepository delegate = new TestPlayerRepository();
+        BlockingPlayerRepository repository = new BlockingPlayerRepository(delegate);
+        PlayerService players = new PlayerService(repository);
+        PlayerProfile player = players.create(101L, "alpha1", 0).player().withHp(77);
+        SessionManager manager = new SessionManager();
+        Session session = new Session(manager.nextId(), new TestTransport(), manager,
+                new LegacyPacketCodec(1024), "abc".getBytes(StandardCharsets.US_ASCII), 4,
+                new ServerServices(new AuthService(new TestAccountRepository()),
+                        ResourceService.unavailable(),
+                        new MapService(new PlayerPacketWriter(), new MonsterPacketWriter(),
+                                new MonsterRuntimeFactory(ResourceService.unavailable())),
+                        players),
+                NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
+        assertTrue(manager.tryAdd(session, 1));
+        assertTrue(manager.beginAccountAdmission(session, 101L, "user01"));
+        manager.finishAccountAdmission(session, true);
+        session.bindPlayer(player);
+
+        session.start();
+        assertTrue(repository.updateEntered.await(1, java.util.concurrent.TimeUnit.SECONDS));
+        assertFalse(repository.interruptedAtCheckpoint.get());
+        assertTrue(manager.findByAccount("user01") == session);
+        assertEquals(1, repository.checkpointCalls.get());
+
+        repository.allowUpdate.countDown();
+        waitForAccountRelease(manager);
+        waitForClosed(session);
+        assertEquals(null, manager.findByAccount("user01"));
+        assertEquals(77, delegate.requireByAccountId(101L).hp());
+    }
+
+    @Test
+    void preInterruptedCloseStillCheckpointsAndRestoresInterruptStatus() throws Exception {
+        TestPlayerRepository delegate = new TestPlayerRepository();
+        BlockingPlayerRepository repository = new BlockingPlayerRepository(delegate);
+        PlayerService players = new PlayerService(repository);
+        PlayerProfile player = players.create(101L, "alpha1", 0).player().withHp(66);
+        SessionManager manager = new SessionManager();
+        TestTransport transport = new TestTransport();
+        Session session = new Session(manager.nextId(), transport, manager,
+                new LegacyPacketCodec(1024), "abc".getBytes(StandardCharsets.US_ASCII), 4,
+                new ServerServices(new AuthService(new TestAccountRepository()),
+                        ResourceService.unavailable(),
+                        new MapService(new PlayerPacketWriter(), new MonsterPacketWriter(),
+                                new MonsterRuntimeFactory(ResourceService.unavailable())),
+                        players),
+                NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
+        assertTrue(manager.tryAdd(session, 1));
+        assertTrue(manager.beginAccountAdmission(session, 101L, "user01"));
+        manager.finishAccountAdmission(session, true);
+        session.bindPlayer(player);
+        AtomicBoolean interruptedAfterClose = new AtomicBoolean();
+
+        Thread close = Thread.ofVirtual().start(() -> {
+            Thread.currentThread().interrupt();
+            session.close();
+            interruptedAfterClose.set(Thread.currentThread().isInterrupted());
+        });
+
+        assertTrue(repository.updateEntered.await(1, java.util.concurrent.TimeUnit.SECONDS));
+        assertFalse(repository.interruptedAtCheckpoint.get());
+        assertTrue(manager.findByAccount("user01") == session);
+        assertEquals(1, repository.checkpointCalls.get());
+        repository.allowUpdate.countDown();
+        close.join(1_000);
+
+        assertFalse(close.isAlive());
+        assertTrue(interruptedAfterClose.get());
+        assertTrue(transport.isClosed());
+        assertEquals(null, manager.findByAccount("user01"));
+        assertEquals(66, delegate.requireByAccountId(101L).hp());
+    }
+
+    @Test
+    void checkpointFailureStillReleasesAccountAndSession() {
+        TestPlayerRepository repository = new TestPlayerRepository();
+        repository.failUpdate(true);
+        PlayerService players = new PlayerService(repository);
+        PlayerProfile player = players.create(101L, "alpha1", 0).player();
+        SessionManager manager = new SessionManager();
+        TestTransport transport = new TestTransport();
+        Session session = new Session(manager.nextId(), transport, manager,
+                new LegacyPacketCodec(1024), "abc".getBytes(StandardCharsets.US_ASCII), 4,
+                new ServerServices(new AuthService(new TestAccountRepository()),
+                        ResourceService.unavailable(),
+                        new MapService(new PlayerPacketWriter(), new MonsterPacketWriter(),
+                                new MonsterRuntimeFactory(ResourceService.unavailable())),
+                        players),
+                NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
+        assertTrue(manager.tryAdd(session, 1));
+        assertTrue(manager.beginAccountAdmission(session, 101L, "user01"));
+        manager.finishAccountAdmission(session, true);
+        session.bindPlayer(player);
+
+        session.close();
+
+        assertEquals(SessionState.CLOSED, session.state());
+        assertTrue(transport.isClosed());
+        assertEquals(null, manager.findByAccount("user01"));
+        assertEquals(0, manager.onlineCount());
+    }
+
     private static final class BlockingPlayerRepository implements PlayerRepository {
         private final TestPlayerRepository delegate;
         private final CountDownLatch updateEntered = new CountDownLatch(1);
         private final CountDownLatch allowUpdate = new CountDownLatch(1);
+        private final AtomicBoolean interruptedAtCheckpoint = new AtomicBoolean();
+        private final AtomicInteger checkpointCalls = new AtomicInteger();
 
         private BlockingPlayerRepository(TestPlayerRepository delegate) {
             this.delegate = delegate;
@@ -164,6 +272,8 @@ class SessionTest {
 
         @Override
         public void updateCheckpoint(PlayerProfile player, Instant playedAt) {
+            checkpointCalls.incrementAndGet();
+            interruptedAtCheckpoint.set(Thread.currentThread().isInterrupted());
             updateEntered.countDown();
             try {
                 if (!allowUpdate.await(1, java.util.concurrent.TimeUnit.SECONDS)) {
@@ -175,6 +285,26 @@ class SessionTest {
             }
             delegate.updateCheckpoint(player, playedAt);
         }
+    }
+
+    private static void waitForClosed(Session session) throws InterruptedException {
+        for (int attempt = 0; attempt < 100; attempt++) {
+            if (session.state() == SessionState.CLOSED) {
+                return;
+            }
+            Thread.sleep(10);
+        }
+        assertEquals(SessionState.CLOSED, session.state(), "timed out waiting for session close");
+    }
+
+    private static void waitForAccountRelease(SessionManager manager) throws InterruptedException {
+        for (int attempt = 0; attempt < 100; attempt++) {
+            if (manager.findByAccount("user01") == null) {
+                return;
+            }
+            Thread.sleep(10);
+        }
+        assertEquals(null, manager.findByAccount("user01"), "timed out waiting for account release");
     }
 
     private static void waitForBytes(ByteArrayOutputStream output, int expectedBytes) throws InterruptedException {

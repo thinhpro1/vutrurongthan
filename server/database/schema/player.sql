@@ -15,8 +15,8 @@ CREATE TABLE player (
     base_stats JSON NOT NULL,
     current_stats JSON NOT NULL,
 
-    hp BIGINT NOT NULL,
-    mp BIGINT NOT NULL,
+    hp INT NOT NULL,
+    mp INT NOT NULL,
 
     appearance JSON NOT NULL,
 

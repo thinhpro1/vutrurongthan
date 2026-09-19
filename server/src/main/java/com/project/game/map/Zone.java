@@ -151,7 +151,8 @@ public final class Zone {
             }
             Session target = eligible.get(random.nextInt(eligible.size()));
             PlayerProfile player = target.player();
-            long hpAfter = Math.max(0L, player.hp() - monster.damage());
+            int hpAfter = Math.toIntExact(
+                    Math.max(0L, (long) player.hp() - monster.damage()));
             boolean killed = hpAfter == 0L;
             target.bindPlayer(player.withHp(hpAfter));
             if (killed) {

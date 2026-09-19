@@ -113,7 +113,7 @@ class NetworkIntegrationTest {
                 assertTrue(dead != null);
                 long expectedMaxHp = dead.player().currentStats().maxHp();
                 long expectedMaxMp = dead.player().currentStats().maxMp();
-                dead.bindPlayer(dead.player().withHp(10L));
+        dead.bindPlayer(dead.player().withHp(10));
                 random.release.countDown();
 
                 assertMonsterAttack(victim.readServerMessage(), 0, victim.playerInfo().id(), 10L);

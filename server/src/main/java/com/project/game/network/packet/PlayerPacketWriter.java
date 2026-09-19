@@ -12,6 +12,7 @@ import java.util.Objects;
 public final class PlayerPacketWriter {
     public Message addPlayer(PlayerProfile player) {
         Objects.requireNonNull(player, "player");
+        LegacyPlayerCompatibilityValidator.validateAddPlayer(player);
         try {
             MessageWriter writer = new MessageWriter()
                     .writeInt(player.id())
@@ -72,6 +73,7 @@ public final class PlayerPacketWriter {
 
     public Message wakeUpFromDie(PlayerProfile player) {
         Objects.requireNonNull(player, "player");
+        LegacyPlayerCompatibilityValidator.validatePosition(player.x(), player.y());
         if (player.hp() <= 0L) {
             throw new IllegalArgumentException("wake-up player must be alive");
         }

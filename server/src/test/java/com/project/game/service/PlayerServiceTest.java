@@ -73,6 +73,18 @@ class PlayerServiceTest {
     }
 
     @Test
+    void unexpectedRepositoryRuntimeFailureStillReturnsSafeLoadFailure() {
+        TestPlayerRepository repository = new TestPlayerRepository();
+        repository.failFindRuntime(true);
+
+        PlayerService.PlayerLoadResult failure = new PlayerService(repository).load(101L);
+
+        assertFalse(failure.success());
+        assertFalse(failure.found());
+        assertEquals("Hệ thống đang bận, vui lòng thử lại", failure.message());
+    }
+
+    @Test
     void checkpointPersistsUpdatedRuntimeProfile() {
         TestPlayerRepository repository = new TestPlayerRepository();
         PlayerService service = new PlayerService(

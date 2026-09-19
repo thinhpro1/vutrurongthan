@@ -15,8 +15,8 @@ public record PlayerProfile(
         long exp,
         BaseStats baseStats,
         CurrentStats currentStats,
-        long hp,
-        long mp,
+        int hp,
+        int mp,
         Appearance appearance,
         long coin,
         long coinLock,
@@ -49,10 +49,10 @@ public record PlayerProfile(
                 || coin < 0L || coinLock < 0L || diamond < 0 || ruby < 0) {
             throw new IllegalArgumentException("durable player values must be non-negative");
         }
-        if (hp < 0L || hp > currentStats.maxHp()) {
+        if (hp < 0 || hp > currentStats.maxHp()) {
             throw new IllegalArgumentException("hp must be between 0 and current maxHp");
         }
-        if (mp < 0L || mp > currentStats.maxMp()) {
+        if (mp < 0 || mp > currentStats.maxMp()) {
             throw new IllegalArgumentException("mp must be between 0 and current maxMp");
         }
     }
@@ -61,14 +61,14 @@ public record PlayerProfile(
         return withLocation(mapId, zoneId, x, y);
     }
 
-    public PlayerProfile withHp(long hp) {
+    public PlayerProfile withHp(int hp) {
         return new PlayerProfile(
                 id, accountId, name, gender, power, potential, level, exp,
                 baseStats, currentStats, hp, mp, appearance, coin, coinLock,
                 diamond, ruby, mapId, zoneId, x, y);
     }
 
-    public PlayerProfile withMp(long mp) {
+    public PlayerProfile withMp(int mp) {
         return new PlayerProfile(
                 id, accountId, name, gender, power, potential, level, exp,
                 baseStats, currentStats, hp, mp, appearance, coin, coinLock,

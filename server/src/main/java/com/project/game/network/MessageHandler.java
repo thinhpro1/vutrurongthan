@@ -7,6 +7,7 @@ import com.project.game.network.message.Message;
 import com.project.game.network.message.MessageName;
 import com.project.game.network.message.MessageWriter;
 import com.project.game.network.packet.PlayerPacketWriter;
+import com.project.game.network.packet.LegacyPlayerCompatibilityValidator;
 import com.project.game.player.PlayerProfile;
 import com.project.game.service.AuthService;
 import com.project.game.service.IconFingerprint;
@@ -648,6 +649,7 @@ public final class MessageHandler {
     }
 
     private void sendPlayerInfo(PlayerProfile player) throws IOException {
+        LegacyPlayerCompatibilityValidator.validatePlayerInfo(player);
         MessageWriter writer = new MessageWriter()
                 .writeByte(0)
                 .writeInt(player.id())
@@ -663,10 +665,10 @@ public final class MessageHandler {
                 .writeShort(player.appearance().bag())
                 .writeShort(player.appearance().medal())
                 .writeShort(player.appearance().aura())
-                .writeInt(Math.toIntExact(player.baseStats().damage()))
-                .writeInt(Math.toIntExact(player.baseStats().hp()))
-                .writeInt(Math.toIntExact(player.baseStats().mp()))
-                .writeInt(Math.toIntExact(player.baseStats().constitution()))
+                .writeInt(player.baseStats().damage())
+                .writeInt(player.baseStats().hp())
+                .writeInt(player.baseStats().mp())
+                .writeInt(player.baseStats().constitution())
                 .writeLong(10)
                 .writeLong(10)
                 .writeLong(10)
@@ -716,6 +718,7 @@ public final class MessageHandler {
         var map = resourceService.map(player.mapId())
                 .orElseThrow(() -> new IOException(
                         "legacy map bootstrap unavailable for map " + player.mapId()));
+        LegacyPlayerCompatibilityValidator.validateMapInfo(player, map.id());
 
         boolean sendTemplate = !session.hasSentMapTemplate(map.id());
         MessageWriter writer = new MessageWriter().writeShort(map.id());

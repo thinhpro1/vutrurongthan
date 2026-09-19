@@ -11,13 +11,13 @@ public final class PlayerInitialProfileFactory {
     private static final long INITIAL_POTENTIAL = 1L;
     private static final int INITIAL_LEVEL = 1;
     private static final long INITIAL_EXP = 0L;
-    private static final long INITIAL_BASE_HP = 200L;
-    private static final long INITIAL_BASE_MP = 200L;
-    private static final long INITIAL_BASE_DAMAGE = 10L;
-    private static final long INITIAL_BASE_ARMOR = 0L;
+    private static final int INITIAL_BASE_HP = 200;
+    private static final int INITIAL_BASE_MP = 200;
+    private static final int INITIAL_BASE_DAMAGE = 10;
+    private static final int INITIAL_BASE_ARMOR = 0;
     private static final int INITIAL_BASE_CRITICAL = 0;
     private static final int INITIAL_BASE_DODGE = 0;
-    private static final long INITIAL_BASE_CONSTITUTION = 5L;
+    private static final int INITIAL_BASE_CONSTITUTION = 5;
     private static final int INITIAL_BASE_SPEED = 12;
 
     public PlayerProfile create(long accountId, String name, int gender) {

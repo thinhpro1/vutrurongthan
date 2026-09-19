@@ -2,8 +2,12 @@ package com.project.game.player;
 
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.RecordComponent;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PlayerProfileTest {
     @Test
@@ -104,7 +108,7 @@ class PlayerProfileTest {
     @Test
     void revivedAtRestoresVitalsAndChangesOnlyLocation() {
         PlayerProfile original = PlayerProfile.initial(101L, 7, "reviver", 0)
-                .withHp(0L)
+                .withHp(0)
                 .withPotential(123L);
 
         PlayerProfile revived = original.revivedAt(0, 0, 1250, 648);
@@ -137,6 +141,54 @@ class PlayerProfileTest {
                         new BaseStats(200, 200, 10, 0, 0, 0, 5, 12),
                         new CurrentStats(200, 200, 10, 0, 0, 0, 5, 12),
                         201, 200, new Appearance(5, 6, -1, -1, -1, -1, 0),
-                         0, 10_000, 0, 25, 0, 0, 1250, 648));
+                        0, 10_000, 0, 25, 0, 0, 1250, 648));
+    }
+
+    @Test
+    void playerCombatVitalsAndStatsUseIntContract() throws Exception {
+        assertRecordComponentType(BaseStats.class, "hp", int.class);
+        assertRecordComponentType(BaseStats.class, "mp", int.class);
+        assertRecordComponentType(BaseStats.class, "damage", int.class);
+        assertRecordComponentType(BaseStats.class, "armor", int.class);
+        assertRecordComponentType(BaseStats.class, "constitution", int.class);
+        assertRecordComponentType(CurrentStats.class, "maxHp", int.class);
+        assertRecordComponentType(CurrentStats.class, "maxMp", int.class);
+        assertRecordComponentType(CurrentStats.class, "damage", int.class);
+        assertRecordComponentType(CurrentStats.class, "armor", int.class);
+        assertRecordComponentType(CurrentStats.class, "constitution", int.class);
+        assertRecordComponentType(PlayerProfile.class, "hp", int.class);
+        assertRecordComponentType(PlayerProfile.class, "mp", int.class);
+
+        assertFalse(java.util.Arrays.stream(PlayerProfile.class.getDeclaredMethods())
+                .anyMatch(method -> method.getName().equals("withHp")
+                        && method.getParameterTypes()[0] == long.class));
+        assertFalse(java.util.Arrays.stream(PlayerProfile.class.getDeclaredMethods())
+                .anyMatch(method -> method.getName().equals("withMp")
+                        && method.getParameterTypes()[0] == long.class));
+        assertTrue(java.util.Arrays.stream(PlayerProfile.class.getDeclaredMethods())
+                .anyMatch(method -> method.getName().equals("withHp")
+                        && method.getParameterTypes()[0] == int.class));
+    }
+
+    @Test
+    void intStatContractSupportsMaximumIntegerValues() {
+        BaseStats base = new BaseStats(Integer.MAX_VALUE, Integer.MAX_VALUE,
+                Integer.MAX_VALUE, Integer.MAX_VALUE, 0, 0, Integer.MAX_VALUE, 12);
+        CurrentStats current = new CurrentStats(Integer.MAX_VALUE, Integer.MAX_VALUE,
+                Integer.MAX_VALUE, Integer.MAX_VALUE, 0, 0, Integer.MAX_VALUE, 12);
+
+        assertEquals(Integer.MAX_VALUE, base.hp());
+        assertEquals(Integer.MAX_VALUE, current.maxHp());
+    }
+
+    private static void assertRecordComponentType(
+            Class<? extends Record> type, String name, Class<?> expected) {
+        for (RecordComponent component : type.getRecordComponents()) {
+            if (component.getName().equals(name)) {
+                assertEquals(expected, component.getType(), type.getSimpleName() + "." + name);
+                return;
+            }
+        }
+        throw new AssertionError("missing component " + type.getSimpleName() + "." + name);
     }
 }

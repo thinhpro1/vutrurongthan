@@ -46,6 +46,10 @@ public final class PlayerService {
         } catch (PlayerRepositoryException exception) {
             LOGGER.log(Level.WARNING, "PLAYER load repository failure accountId=" + accountId, exception);
             return PlayerLoadResult.failure(SYSTEM_BUSY);
+        } catch (RuntimeException exception) {
+            LOGGER.log(Level.WARNING, "PLAYER load invalid persisted data accountId=" + accountId,
+                    exception);
+            return PlayerLoadResult.failure(SYSTEM_BUSY);
         }
     }
 

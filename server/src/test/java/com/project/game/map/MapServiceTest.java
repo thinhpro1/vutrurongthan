@@ -677,7 +677,7 @@ class MapServiceTest {
     @Test
     void deadPlayerCannotMove() throws Exception {
         MapService maps = mapsWithoutMonsters();
-        Session dead = session(player(1, 0, 0).withHp(0L), maps);
+        Session dead = session(player(1, 0, 0).withHp(0), maps);
         maps.finishLoad(dead);
         drain(dead);
 
@@ -692,7 +692,7 @@ class MapServiceTest {
     @Test
     void deadPlayerCannotTargetOrAttackMonster() throws Exception {
         MapService maps = mapsWithMonsters();
-        Session dead = session(player(1, 1, 0).withHp(0L), maps);
+        Session dead = session(player(1, 1, 0).withHp(0), maps);
         maps.finishLoad(dead);
         drain(dead);
 
@@ -705,7 +705,7 @@ class MapServiceTest {
     @Test
     void deadPlayerCannotUseNormalMapChange() throws Exception {
         MapService maps = mapsWithoutMonsters();
-        Session dead = session(player(1, 0, 0).withHp(0L), maps);
+        Session dead = session(player(1, 0, 0).withHp(0), maps);
         Session observer = session(player(2, 0, 0), maps);
         maps.finishLoad(dead);
         maps.finishLoad(observer);
@@ -722,7 +722,7 @@ class MapServiceTest {
     @Test
     void returnTownFromDeathRemovesSourcePresenceAndRevivesAtDefaultSpawn() throws Exception {
         MapService maps = mapsWithMonsters();
-        Session dead = session(player(1, 1, 0).withHp(0L), maps);
+        Session dead = session(player(1, 1, 0).withHp(0), maps);
         Session observer = session(player(2, 1, 0), maps);
         maps.finishLoad(dead);
         maps.finishLoad(observer);
@@ -761,7 +761,7 @@ class MapServiceTest {
     @Test
     void duplicateReturnTownFromDeathIsHarmless() {
         MapService maps = mapsWithoutMonsters();
-        Session dead = session(player(1, 1, 0).withHp(0L), maps);
+        Session dead = session(player(1, 1, 0).withHp(0), maps);
 
         assertTrue(maps.returnTownFromDeath(dead).isPresent());
         PlayerProfile once = dead.player();
@@ -772,7 +772,7 @@ class MapServiceTest {
     @Test
     void returnTownFromDeathSerializesWithConcurrentJoin() throws Exception {
         MapService maps = mapsWithoutMonsters();
-        Session dead = session(player(1, 1, 0).withHp(0L), maps);
+        Session dead = session(player(1, 1, 0).withHp(0), maps);
         Session observer = session(player(2, 1, 0), maps);
         Session joining = session(player(3, 1, 0), maps);
         maps.finishLoad(dead);
@@ -1282,7 +1282,7 @@ class MapServiceTest {
     void monsterRetaliationCanKillPlayerAtExactDamage() throws Exception {
         MutableClock clock = new MutableClock(1_000_000L);
         MapService maps = mapsWithMonsters(clock, new Random(0));
-        Session target = session(player(1, 1, 0).withHp(10L), maps);
+        Session target = session(player(1, 1, 0).withHp(10), maps);
         maps.finishLoad(target);
         drain(target);
 
@@ -1299,7 +1299,7 @@ class MapServiceTest {
     void monsterRetaliationClampsOverkillToZero() throws Exception {
         MutableClock clock = new MutableClock(1_000_000L);
         MapService maps = mapsWithMonsters(clock, new Random(0));
-        PlayerProfile lowHp = player(1, 1, 0).withHp(5L);
+        PlayerProfile lowHp = player(1, 1, 0).withHp(5);
         Session target = session(lowHp, maps);
         maps.finishLoad(target);
         drain(target);
@@ -1317,7 +1317,7 @@ class MapServiceTest {
     void lethalRetaliationClearsVictimHostilityFromEveryMonster() throws Exception {
         MutableClock clock = new MutableClock(1_000_000L);
         MapService maps = mapsWithMonsters(clock, new Random(0));
-        Session target = session(player(1, 1, 0).withHp(10L), maps);
+        Session target = session(player(1, 1, 0).withHp(10), maps);
         maps.finishLoad(target);
         drain(target);
 
@@ -1343,7 +1343,7 @@ class MapServiceTest {
     void lethalMonsterAttackBroadcastsSelfAndObserverDeathAfterAttack() throws Exception {
         MutableClock clock = new MutableClock(1_000_000L);
         MapService maps = mapsWithMonsters(clock, new Random(0));
-        Session victim = session(player(1, 1, 0).withHp(10L), maps);
+        Session victim = session(player(1, 1, 0).withHp(10), maps);
         Session observer = session(player(2, 1, 0), maps);
         maps.finishLoad(victim);
         maps.finishLoad(observer);

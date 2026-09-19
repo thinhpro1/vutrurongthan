@@ -20,6 +20,7 @@ import java.util.Objects;
 import java.util.Optional;
 
 public final class JdbcPlayerRepository implements PlayerRepository {
+    private static final String PROBE_TABLE_SQL = "SELECT 1 FROM player LIMIT 1";
     private static final String FIND_BY_ACCOUNT_SQL = """
             SELECT id, account_id, name, gender, power, potential, level, exp,
                    base_stats, current_stats, hp, mp, appearance,
@@ -49,6 +50,17 @@ public final class JdbcPlayerRepository implements PlayerRepository {
 
     public JdbcPlayerRepository(DataSource dataSource) {
         this.dataSource = Objects.requireNonNull(dataSource, "dataSource");
+    }
+
+    /** Verifies table availability without reading or deserializing any player row. */
+    public void probeTable() {
+        try (var connection = dataSource.getConnection();
+             PreparedStatement statement = connection.prepareStatement(PROBE_TABLE_SQL);
+             ResultSet ignored = statement.executeQuery()) {
+            // The query itself is the health check. Existing rows are intentionally not mapped.
+        } catch (SQLException exception) {
+            throw new PlayerRepositoryException("failed to probe player table", exception);
+        }
     }
 
     @Override
@@ -125,8 +137,8 @@ public final class JdbcPlayerRepository implements PlayerRepository {
             statement.setLong(index++, player.exp());
             statement.setString(index++, GSON.toJson(player.baseStats()));
             statement.setString(index++, GSON.toJson(player.currentStats()));
-            statement.setLong(index++, player.hp());
-            statement.setLong(index++, player.mp());
+            statement.setInt(index++, player.hp());
+            statement.setInt(index++, player.mp());
             statement.setString(index++, GSON.toJson(player.appearance()));
             statement.setLong(index++, player.coin());
             statement.setLong(index++, player.coinLock());
@@ -147,8 +159,12 @@ public final class JdbcPlayerRepository implements PlayerRepository {
     private static PlayerRecord mapRecord(ResultSet results) throws SQLException {
         JsonObject position = parseObject(results.getString("position"), "position", "mapId", "x", "y");
         int mapId = number(position, "mapId").intValueExact();
+        int id = results.getInt("id");
+        if (id <= 0) {
+            throw new PlayerRepositoryException("persisted player id must be positive");
+        }
         return new PlayerRecord(
-                results.getInt("id"),
+                id,
                 results.getLong("account_id"),
                 results.getString("name"),
                 results.getInt("gender"),
@@ -158,8 +174,8 @@ public final class JdbcPlayerRepository implements PlayerRepository {
                 results.getLong("exp"),
                 baseStats(results.getString("base_stats")),
                 currentStats(results.getString("current_stats")),
-                results.getLong("hp"),
-                results.getLong("mp"),
+                results.getInt("hp"),
+                results.getInt("mp"),
                 appearance(results.getString("appearance")),
                 results.getLong("coin"),
                 results.getLong("coin_lock"),
@@ -181,8 +197,8 @@ public final class JdbcPlayerRepository implements PlayerRepository {
         statement.setLong(index++, player.exp());
         statement.setString(index++, GSON.toJson(player.baseStats()));
         statement.setString(index++, GSON.toJson(player.currentStats()));
-        statement.setLong(index++, player.hp());
-        statement.setLong(index++, player.mp());
+        statement.setInt(index++, player.hp());
+        statement.setInt(index++, player.mp());
         statement.setString(index++, GSON.toJson(player.appearance()));
         statement.setLong(index++, player.coin());
         statement.setLong(index++, player.coinLock());
@@ -211,13 +227,13 @@ public final class JdbcPlayerRepository implements PlayerRepository {
         JsonObject object = parseObject(json, "base_stats",
                 "hp", "mp", "damage", "armor", "critical", "dodge", "constitution", "speed");
         return new BaseStats(
-                number(object, "hp").longValueExact(),
-                number(object, "mp").longValueExact(),
-                number(object, "damage").longValueExact(),
-                number(object, "armor").longValueExact(),
+                number(object, "hp").intValueExact(),
+                number(object, "mp").intValueExact(),
+                number(object, "damage").intValueExact(),
+                number(object, "armor").intValueExact(),
                 number(object, "critical").intValueExact(),
                 number(object, "dodge").intValueExact(),
-                number(object, "constitution").longValueExact(),
+                number(object, "constitution").intValueExact(),
                 number(object, "speed").intValueExact());
     }
 
@@ -225,13 +241,13 @@ public final class JdbcPlayerRepository implements PlayerRepository {
         JsonObject object = parseObject(json, "current_stats",
                 "maxHp", "maxMp", "damage", "armor", "critical", "dodge", "constitution", "speed");
         return new CurrentStats(
-                number(object, "maxHp").longValueExact(),
-                number(object, "maxMp").longValueExact(),
-                number(object, "damage").longValueExact(),
-                number(object, "armor").longValueExact(),
+                number(object, "maxHp").intValueExact(),
+                number(object, "maxMp").intValueExact(),
+                number(object, "damage").intValueExact(),
+                number(object, "armor").intValueExact(),
                 number(object, "critical").intValueExact(),
                 number(object, "dodge").intValueExact(),
-                number(object, "constitution").longValueExact(),
+                number(object, "constitution").intValueExact(),
                 number(object, "speed").intValueExact());
     }
 

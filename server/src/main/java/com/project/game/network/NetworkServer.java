@@ -117,7 +117,7 @@ public final class NetworkServer {
             accountRepository.findByUsername("__startup_probe__");
             JdbcPlayerRepository playerRepository =
                     new JdbcPlayerRepository(databaseManager.dataSource());
-            playerRepository.findByAccountId(1L);
+            playerRepository.probeTable();
             AuthService auth = new AuthService(accountRepository);
             ServerServices services = new ServerServices(
                     auth, resources, maps, new PlayerService(playerRepository));

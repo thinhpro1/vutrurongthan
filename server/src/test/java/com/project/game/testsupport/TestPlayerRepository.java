@@ -17,6 +17,7 @@ public final class TestPlayerRepository implements PlayerRepository {
     private final Map<Long, PlayerRecord> byAccount = new ConcurrentHashMap<>();
     private final Map<String, PlayerRecord> byName = new ConcurrentHashMap<>();
     private volatile boolean failFind;
+    private volatile boolean failFindRuntime;
     private volatile boolean failCreate;
     private volatile boolean failUpdate;
 
@@ -24,6 +25,9 @@ public final class TestPlayerRepository implements PlayerRepository {
     public Optional<PlayerRecord> findByAccountId(long accountId) {
         if (failFind) {
             throw new PlayerRepositoryException("injected find failure");
+        }
+        if (failFindRuntime) {
+            throw new IllegalArgumentException("injected corrupt row failure");
         }
         return Optional.ofNullable(byAccount.get(accountId));
     }
@@ -67,6 +71,10 @@ public final class TestPlayerRepository implements PlayerRepository {
 
     public void failFind(boolean value) {
         failFind = value;
+    }
+
+    public void failFindRuntime(boolean value) {
+        failFindRuntime = value;
     }
 
     public void failCreate(boolean value) {

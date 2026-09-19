@@ -3,7 +3,14 @@ package com.project.game.network.packet;
 import com.project.game.network.message.Message;
 import com.project.game.network.message.MessageName;
 import com.project.game.player.PlayerProfile;
+import com.project.game.resource.LegacyPlayerSkill;
+import com.project.game.resource.LegacySkillOption;
+import com.project.game.resource.LegacySkillPaint;
+import com.project.game.resource.GameResources;
 import org.junit.jupiter.api.Test;
+
+import java.nio.file.Path;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -120,6 +127,150 @@ class PlayerPacketWriterTest {
         assertEquals(-1, reader.readByte()); // old upgrade/levelEquip sentinel
         assertEquals(0, reader.readByte()); // no runtime effects
         assertEquals(0, reader.remaining());
+    }
+
+    @Test
+    void serializesCanonicalPlayerInfoWithActiveSkillWireShape() throws Exception {
+        PlayerProfile player = PlayerProfile.initial(1L, 7, "alpha1", 0);
+        List<LegacyPlayerSkill> skills = GameResources
+                .fromRoots(null, Path.of("resources", "json"))
+                .playerSkills(0);
+
+        Message message = new PlayerPacketWriter().playerInfo(player, skills);
+
+        assertEquals(MessageName.PLAYER_INFO, message.command());
+        var reader = message.reader();
+        assertEquals(0, reader.readByte());
+        assertEquals(player.id(), reader.readInt());
+        assertEquals(player.name(), reader.readUtf());
+        assertEquals(player.gender(), reader.readByte());
+        assertEquals(player.power(), reader.readLong());
+        assertEquals(player.potential(), reader.readLong());
+        assertEquals(player.level(), reader.readShort());
+        assertEquals(1, reader.readShort());
+        assertEquals(player.appearance().head(), reader.readShort());
+        assertEquals(player.appearance().body(), reader.readShort());
+        assertEquals(player.appearance().mount(), reader.readShort());
+        assertEquals(player.appearance().bag(), reader.readShort());
+        assertEquals(player.appearance().medal(), reader.readShort());
+        assertEquals(player.appearance().aura(), reader.readShort());
+        assertEquals(player.baseStats().damage(), reader.readInt());
+        assertEquals(player.baseStats().hp(), reader.readInt());
+        assertEquals(player.baseStats().mp(), reader.readInt());
+        assertEquals(player.baseStats().constitution(), reader.readInt());
+        assertEquals(10L, reader.readLong());
+        assertEquals(10L, reader.readLong());
+        assertEquals(10L, reader.readLong());
+        assertEquals(10L, reader.readLong());
+        assertEquals(player.currentStats().maxHp(), reader.readLong());
+        assertEquals(player.currentStats().maxMp(), reader.readLong());
+        assertEquals(player.hp(), reader.readLong());
+        assertEquals(player.mp(), reader.readLong());
+        assertEquals(player.currentStats().speed(), reader.readByte());
+        assertEquals(0, reader.readByte());
+        assertEquals(0, reader.readShort());
+        assertEquals(1, reader.readByte());
+        assertEquals(player.currentStats().dodge() + "%", reader.readUtf());
+        assertEquals(player.currentStats().critical() + "%", reader.readUtf());
+        assertEquals("0%", reader.readUtf());
+        assertEquals("0%", reader.readUtf());
+        assertEquals("0%", reader.readUtf());
+        assertEquals("0%", reader.readUtf());
+        assertEquals(player.currentStats().damage(), reader.readLong());
+        assertEquals(player.coin(), reader.readLong());
+        assertEquals(player.coinLock(), reader.readLong());
+        assertEquals(player.diamond(), reader.readInt());
+        assertEquals(player.ruby(), reader.readInt());
+        assertEquals(player.appearance().spaceship(), reader.readByte());
+
+        assertEquals(11, reader.readByte());
+        for (LegacyPlayerSkill skill : skills) {
+            assertSkillWire(reader, skill);
+        }
+        assertEquals(6, reader.readByte());
+        assertEquals(player.gender(), reader.readByte());
+        assertEquals(-1, reader.readByte());
+        assertEquals(-1, reader.readByte());
+        assertEquals(-1, reader.readByte());
+        assertEquals(-1, reader.readByte());
+        assertEquals(-1, reader.readByte());
+        assertEquals(player.gender(), reader.readByte());
+        assertEquals(0, reader.readByte());
+        assertEquals(0, reader.remaining());
+    }
+
+    private static void assertSkillWire(com.project.game.network.message.MessageReader reader,
+                                         LegacyPlayerSkill skill) throws Exception {
+        assertEquals(skill.id(), reader.readByte());
+        assertEquals(skill.names().size(), reader.readByte());
+        for (String name : skill.names()) {
+            assertEquals(name, reader.readUtf());
+        }
+        assertEquals(skill.descriptions().size(), reader.readByte());
+        for (String description : skill.descriptions()) {
+            assertEquals(description, reader.readUtf());
+        }
+        assertEquals(skill.type(), reader.readByte());
+        assertEquals(skill.proactive(), reader.readBoolean());
+        assertEquals(skill.icons().size(), reader.readByte());
+        for (int icon : skill.icons()) {
+            assertEquals(icon, reader.readShort());
+        }
+        assertMatrix(reader, skill.dx());
+        assertMatrix(reader, skill.dy());
+        assertEquals(skill.levelRequire(), reader.readShort());
+        assertEquals(skill.maxLevel(), reader.readByte());
+        assertEquals(skill.maxUpgrade(), reader.readByte());
+        assertEquals(skill.pointUpgrade().size(), reader.readByte());
+        for (int point : skill.pointUpgrade()) {
+            assertEquals(point, reader.readInt());
+        }
+        assertMatrixInts(reader, skill.coolDown());
+        assertEquals(skill.typeMana(), reader.readByte());
+        assertMatrixInts(reader, skill.mana());
+        assertEquals(skill.options().size(), reader.readByte());
+        for (LegacySkillOption option : skill.options()) {
+            assertEquals(option.id(), reader.readByte());
+            assertEquals(option.name(), reader.readUtf());
+            assertIntList(reader, option.normal(), true);
+            assertIntList(reader, option.upgrade(), true);
+        }
+        assertEquals(skill.level(), reader.readByte());
+        assertEquals(skill.upgrade(), reader.readByte());
+        assertEquals(skill.point(), reader.readInt());
+        assertEquals(skill.cooldownReduction(), reader.readByte());
+        if (skill.level() > 0 && skill.proactive()) {
+            assertEquals(skill.timeCanUse(), reader.readLong());
+        }
+        assertEquals(skill.paints().size(), reader.readByte());
+        for (LegacySkillPaint paint : skill.paints()) {
+            assertEquals(paint.percent(), reader.readUtf());
+            assertEquals(paint.paintId(), reader.readShort());
+        }
+    }
+
+    private static void assertMatrix(com.project.game.network.message.MessageReader reader,
+                                      List<List<Integer>> matrix) throws Exception {
+        assertEquals(matrix.size(), reader.readByte());
+        for (List<Integer> row : matrix) {
+            assertIntList(reader, row, true);
+        }
+    }
+
+    private static void assertMatrixInts(com.project.game.network.message.MessageReader reader,
+                                         List<List<Integer>> matrix) throws Exception {
+        assertEquals(matrix.size(), reader.readByte());
+        for (List<Integer> row : matrix) {
+            assertIntList(reader, row, false);
+        }
+    }
+
+    private static void assertIntList(com.project.game.network.message.MessageReader reader,
+                                      List<Integer> values, boolean shorts) throws Exception {
+        assertEquals(values.size(), reader.readByte());
+        for (int value : values) {
+            assertEquals(value, shorts ? reader.readShort() : reader.readInt());
+        }
     }
 
     @Test

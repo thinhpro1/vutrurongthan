@@ -1,14 +1,10 @@
 package com.project.game.network.handler;
 
-import com.project.game.monster.LegacyMonsterDartPhase;
 import com.project.game.network.NetworkEventObserver;
 import com.project.game.network.Session;
 import com.project.game.network.message.Message;
-import com.project.game.network.message.MessageName;
-import com.project.game.network.message.MessageWriter;
-import com.project.game.resource.FrameTemplate;
+import com.project.game.network.packet.ResourcePacketWriter;
 import com.project.game.resource.GameResources;
-import com.project.game.resource.IconFingerprint;
 
 import java.io.IOException;
 
@@ -22,6 +18,7 @@ final class ResourceHandler {
     private final Session session;
     private final GameResources resources;
     private final NetworkEventObserver eventObserver;
+    private final ResourcePacketWriter resourcePackets = new ResourcePacketWriter();
 
     ResourceHandler(Session session, GameResources resources, NetworkEventObserver eventObserver) {
         this.session = session;
@@ -55,40 +52,18 @@ final class ResourceHandler {
         int effectVersion = resources.effects().isEmpty()
                 ? NOT_PROVIDED_VERSION : DEV_EFFECT_VERSION;
         int monsterVersion = resources.monsterVersion();
-        MessageWriter writer = new MessageWriter()
-                .writeByte(-1)
-                .writeByte(resources.imageVersion())
-                .writeByte(NOT_PROVIDED_VERSION)
-                .writeByte(NOT_PROVIDED_VERSION)
-                .writeByte(NOT_PROVIDED_VERSION)
-                .writeByte(effectVersion)
-                .writeByte(monsterVersion)
-                .writeByte(NOT_PROVIDED_VERSION)
-                .writeByte(levelVersion)
-                .writeByte(frameVersion)
-                .writeByte(NOT_PROVIDED_VERSION)
-                .writeByte(NOT_PROVIDED_VERSION)
-                .writeByte(NOT_PROVIDED_VERSION)
-                .writeByte(NOT_PROVIDED_VERSION);
-        session.send(new Message(MessageName.UPDATE_DATA, writer.toByteArray()));
+        session.send(resourcePackets.resourceManifest(
+                resources.imageVersion(), effectVersion, monsterVersion,
+                levelVersion, frameVersion));
     }
 
     private void sendIconManifest() throws IOException {
-        var manifest = resources.iconManifest();
-        if (manifest.size() > Short.MAX_VALUE) {
-            throw new IOException("too many icon manifest entries: " + manifest.size());
+        Message packet = resourcePackets.iconManifest(resources.iconManifest());
+        if (packet.payload().length > session.maxPacketSize()) {
+            throw new IOException("icon manifest exceeds max packet size: "
+                    + packet.payload().length);
         }
-        MessageWriter writer = new MessageWriter()
-                .writeByte(12)
-                .writeShort(manifest.size());
-        for (IconFingerprint icon : manifest) {
-            writer.writeShort(icon.iconId()).writeLong(icon.fingerprint());
-        }
-        byte[] payload = writer.toByteArray();
-        if (payload.length > session.maxPacketSize()) {
-            throw new IOException("icon manifest exceeds max packet size: " + payload.length);
-        }
-        session.send(new Message(MessageName.UPDATE_DATA, payload));
+        session.send(packet);
     }
 
     private void sendEffectResource() throws IOException {
@@ -96,26 +71,7 @@ final class ResourceHandler {
         if (effects.isEmpty()) {
             return;
         }
-        if (effects.size() > Short.MAX_VALUE) {
-            throw new IOException("too many legacy movement effects: " + effects.size());
-        }
-        MessageWriter writer = new MessageWriter()
-                .writeByte(3)
-                .writeByte(DEV_EFFECT_VERSION)
-                .writeShort(effects.size());
-        for (var effect : effects) {
-            if (effect.icons().size() > Byte.MAX_VALUE) {
-                throw new IOException("too many icons for legacy effect " + effect.id());
-            }
-            writer.writeShort(effect.id())
-                    .writeShort(effect.dx())
-                    .writeShort(effect.dy())
-                    .writeShort(effect.delay())
-                    .writeByte(effect.icons().size());
-            effect.icons().forEach(writer::writeShort);
-        }
-        writer.writeShort(0);
-        session.send(new Message(MessageName.UPDATE_DATA, writer.toByteArray()));
+        session.send(resourcePackets.effectResource(DEV_EFFECT_VERSION, effects));
     }
 
     private void sendMonsterResource() throws IOException {
@@ -125,54 +81,7 @@ final class ResourceHandler {
         if (version < 0 || darts.isEmpty() || templates.isEmpty()) {
             return;
         }
-        if (darts.size() > Short.MAX_VALUE || templates.size() > Short.MAX_VALUE) {
-            throw new IOException("too many monster resources");
-        }
-        MessageWriter writer = new MessageWriter()
-                .writeByte(4)
-                .writeByte(version)
-                .writeShort(darts.size());
-        for (var dart : darts) {
-            writer.writeShort(dart.id()).writeBoolean(dart.meteorite());
-            writeMonsterDartPhase(writer, dart.light());
-            writeMonsterDartPhase(writer, dart.bullet());
-            writeMonsterDartPhase(writer, dart.explode());
-        }
-        writer.writeShort(templates.size());
-        for (var template : templates) {
-            if (template.iconsMove().size() > Byte.MAX_VALUE) {
-                throw new IOException("too many move icons for monster template " + template.id());
-            }
-            writer.writeShort(template.id())
-                    .writeUtf(template.name())
-                    .writeShort(template.rangeMove())
-                    .writeByte(template.speed())
-                    .writeByte(template.type())
-                    .writeByte(template.dartId())
-                    .writeByte(template.iconsMove().size());
-            for (int icon : template.iconsMove()) {
-                writer.writeShort(icon);
-            }
-            writer.writeShort(template.iconInjure())
-                    .writeShort(template.iconAttack())
-                    .writeShort(template.w())
-                    .writeShort(template.h())
-                    .writeByte(template.dx())
-                    .writeByte(template.dy());
-        }
-        session.send(new Message(MessageName.UPDATE_DATA, writer.toByteArray()));
-    }
-
-    private void writeMonsterDartPhase(MessageWriter writer, LegacyMonsterDartPhase phase)
-            throws IOException {
-        if (phase.icons().size() > Byte.MAX_VALUE) {
-            throw new IOException("too many monster dart phase icons: " + phase.icons().size());
-        }
-        writer.writeByte(phase.icons().size());
-        for (int icon : phase.icons()) {
-            writer.writeShort(icon);
-        }
-        writer.writeShort(phase.dx()).writeShort(phase.dy()).writeShort(phase.delay());
+        session.send(resourcePackets.monsterResource(version, darts, templates));
     }
 
     private void sendLevelResource() throws IOException {
@@ -180,17 +89,7 @@ final class ResourceHandler {
         if (levels.isEmpty()) {
             return;
         }
-        if (levels.size() > Short.MAX_VALUE) {
-            throw new IOException("too many legacy levels: " + levels.size());
-        }
-        MessageWriter writer = new MessageWriter()
-                .writeByte(6)
-                .writeByte(DEV_LEVEL_VERSION)
-                .writeShort(levels.size());
-        for (var level : levels) {
-            writer.writeShort(level.id()).writeUtf(level.name()).writeLong(level.power());
-        }
-        session.send(new Message(MessageName.UPDATE_DATA, writer.toByteArray()));
+        session.send(resourcePackets.levelResource(DEV_LEVEL_VERSION, levels));
     }
 
     private void sendFrameResource() throws IOException {
@@ -198,35 +97,7 @@ final class ResourceHandler {
         if (frames.isEmpty()) {
             return;
         }
-        if (frames.size() > Short.MAX_VALUE) {
-            throw new IOException("too many frame templates: " + frames.size());
-        }
-        MessageWriter writer = new MessageWriter()
-                .writeByte(7)
-                .writeByte(DEV_FRAME_VERSION)
-                .writeShort(frames.size());
-        for (FrameTemplate frame : frames) {
-            writer.writeShort(frame.id())
-                    .writeShort(frame.hpBar())
-                    .writeShort(frame.chat())
-                    .writeByte(frame.dead().size());
-            frame.dead().forEach(writer::writeShort);
-            writer.writeByte(frame.stand().size());
-            frame.stand().forEach(writer::writeShort);
-            writer.writeByte(frame.run().size());
-            frame.run().forEach(writer::writeShort);
-            writer.writeShort(frame.fly())
-                    .writeShort(frame.jump())
-                    .writeShort(frame.fall())
-                    .writeShort(frame.injure())
-                    .writeByte(frame.action().size());
-            frame.action().forEach((actionId, iconId) -> writer.writeByte(actionId).writeShort(iconId));
-            writer.writeShort(frame.dx())
-                    .writeShort(frame.dy())
-                    .writeShort(frame.width())
-                    .writeShort(frame.height());
-        }
-        session.send(new Message(MessageName.UPDATE_DATA, writer.toByteArray()));
+        session.send(resourcePackets.frameResource(DEV_FRAME_VERSION, frames));
     }
 
     void handleRequestIcon(Message message) throws IOException {
@@ -240,14 +111,10 @@ final class ResourceHandler {
             return;
         }
         byte[] bytes = data.get();
-        MessageWriter writer = new MessageWriter()
-                .writeShort(iconId)
-                .writeInt(bytes.length)
-                .writeBytes(bytes);
-        byte[] payload = writer.toByteArray();
-        if (payload.length > session.maxPacketSize()) {
+        Message packet = resourcePackets.icon(iconId, bytes);
+        if (packet.payload().length > session.maxPacketSize()) {
             return;
         }
-        session.send(new Message(MessageName.REQUEST_ICON, payload));
+        session.send(packet);
     }
 }

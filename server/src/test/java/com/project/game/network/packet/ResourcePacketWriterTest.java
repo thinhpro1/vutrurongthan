@@ -1,0 +1,187 @@
+package com.project.game.network.packet;
+
+import com.project.game.monster.LegacyMonsterDart;
+import com.project.game.monster.LegacyMonsterDartPhase;
+import com.project.game.monster.LegacyMonsterTemplate;
+import com.project.game.network.message.Message;
+import com.project.game.network.message.MessageName;
+import com.project.game.resource.FrameTemplate;
+import com.project.game.resource.IconFingerprint;
+import com.project.game.resource.LegacyEffectImage;
+import com.project.game.resource.LegacyLevel;
+import org.junit.jupiter.api.Test;
+
+import java.io.IOException;
+import java.util.List;
+import java.util.Map;
+
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
+class ResourcePacketWriterTest {
+    private final ResourcePacketWriter writer = new ResourcePacketWriter();
+
+    @Test
+    void serializesResourceManifestInLegacyVersionOrder() throws Exception {
+        Message message = writer.resourceManifest(1, 2, 3, 4, 5);
+        assertEquals(MessageName.UPDATE_DATA, message.command());
+        var reader = message.reader();
+        assertEquals(-1, reader.readByte());
+        assertEquals(1, reader.readByte());
+        assertEquals(-1, reader.readByte());
+        assertEquals(-1, reader.readByte());
+        assertEquals(-1, reader.readByte());
+        assertEquals(2, reader.readByte());
+        assertEquals(3, reader.readByte());
+        assertEquals(-1, reader.readByte());
+        assertEquals(4, reader.readByte());
+        assertEquals(5, reader.readByte());
+        assertEquals(-1, reader.readByte());
+        assertEquals(-1, reader.readByte());
+        assertEquals(-1, reader.readByte());
+        assertEquals(-1, reader.readByte());
+        assertEquals(0, reader.remaining());
+    }
+
+    @Test
+    void serializesIconManifestInInputOrder() throws Exception {
+        Message message = writer.iconManifest(List.of(
+                new IconFingerprint(2, 0x0102030405060708L),
+                new IconFingerprint(10, -3L)));
+        var reader = message.reader();
+        assertEquals(12, reader.readByte());
+        assertEquals(2, reader.readShort());
+        assertEquals(2, reader.readShort());
+        assertEquals(0x0102030405060708L, reader.readLong());
+        assertEquals(10, reader.readShort());
+        assertEquals(-3L, reader.readLong());
+        assertEquals(0, reader.remaining());
+    }
+
+    @Test
+    void serializesEffectResourceWithTemplateSentinel() throws Exception {
+        LegacyEffectImage effect = new LegacyEffectImage(17, -2, 3, 40, List.of(9, 10));
+        var reader = writer.effectResource(2, List.of(effect)).reader();
+        assertEquals(3, reader.readByte());
+        assertEquals(2, reader.readByte());
+        assertEquals(1, reader.readShort());
+        assertEquals(17, reader.readShort());
+        assertEquals(-2, reader.readShort());
+        assertEquals(3, reader.readShort());
+        assertEquals(40, reader.readShort());
+        assertEquals(2, reader.readByte());
+        assertEquals(9, reader.readShort());
+        assertEquals(10, reader.readShort());
+        assertEquals(0, reader.readShort());
+        assertEquals(0, reader.remaining());
+    }
+
+    @Test
+    void serializesMonsterDartsAndTemplatesInLegacyShape() throws Exception {
+        LegacyMonsterDartPhase light = new LegacyMonsterDartPhase(List.of(1), 2, 3, 4);
+        LegacyMonsterDartPhase bullet = new LegacyMonsterDartPhase(List.of(5, 6), 7, 8, 9);
+        LegacyMonsterDartPhase explode = new LegacyMonsterDartPhase(List.of(10), 11, 12, 13);
+        LegacyMonsterDart dart = new LegacyMonsterDart(4, true, light, bullet, explode);
+        LegacyMonsterTemplate template = new LegacyMonsterTemplate(
+                8, "bat", 50, 6, 2, 4, List.of(20, 21), 22, 23,
+                24, 25, 26, 27);
+
+        var reader = writer.monsterResource(3, List.of(dart), List.of(template)).reader();
+        assertEquals(4, reader.readByte());
+        assertEquals(3, reader.readByte());
+        assertEquals(1, reader.readShort());
+        assertEquals(4, reader.readShort());
+        assertEquals(true, reader.readBoolean());
+        assertPhase(reader, light);
+        assertPhase(reader, bullet);
+        assertPhase(reader, explode);
+        assertEquals(1, reader.readShort());
+        assertEquals(template.id(), reader.readShort());
+        assertEquals(template.name(), reader.readUtf());
+        assertEquals(template.rangeMove(), reader.readShort());
+        assertEquals(template.speed(), reader.readByte());
+        assertEquals(template.type(), reader.readByte());
+        assertEquals(template.dartId(), reader.readByte());
+        assertEquals(template.iconsMove().size(), reader.readByte());
+        assertEquals(template.iconsMove().get(0), reader.readShort());
+        assertEquals(template.iconsMove().get(1), reader.readShort());
+        assertEquals(template.iconInjure(), reader.readShort());
+        assertEquals(template.iconAttack(), reader.readShort());
+        assertEquals(template.w(), reader.readShort());
+        assertEquals(template.h(), reader.readShort());
+        assertEquals(template.dx(), reader.readByte());
+        assertEquals(template.dy(), reader.readByte());
+        assertEquals(0, reader.remaining());
+    }
+
+    @Test
+    void serializesLevelFrameAndIconPackets() throws Exception {
+        var levelReader = writer.levelResource(0, List.of(new LegacyLevel(2, "level", 99L))).reader();
+        assertEquals(6, levelReader.readByte());
+        assertEquals(0, levelReader.readByte());
+        assertEquals(1, levelReader.readShort());
+        assertEquals(2, levelReader.readShort());
+        assertEquals("level", levelReader.readUtf());
+        assertEquals(99L, levelReader.readLong());
+        assertEquals(0, levelReader.remaining());
+
+        FrameTemplate frame = new FrameTemplate(
+                3, 0, 4, 5, List.of(6), List.of(7), List.of(8),
+                9, 10, 11, 12, Map.of(1, 13), 14, 15, 16, 17);
+        var frameReader = writer.frameResource(1, List.of(frame)).reader();
+        assertEquals(7, frameReader.readByte());
+        assertEquals(1, frameReader.readByte());
+        assertEquals(1, frameReader.readShort());
+        assertEquals(frame.id(), frameReader.readShort());
+        assertEquals(frame.hpBar(), frameReader.readShort());
+        assertEquals(frame.chat(), frameReader.readShort());
+        assertEquals(1, frameReader.readByte());
+        assertEquals(6, frameReader.readShort());
+        assertEquals(1, frameReader.readByte());
+        assertEquals(7, frameReader.readShort());
+        assertEquals(1, frameReader.readByte());
+        assertEquals(8, frameReader.readShort());
+        assertEquals(9, frameReader.readShort());
+        assertEquals(10, frameReader.readShort());
+        assertEquals(11, frameReader.readShort());
+        assertEquals(12, frameReader.readShort());
+        assertEquals(1, frameReader.readByte());
+        assertEquals(1, frameReader.readByte());
+        assertEquals(13, frameReader.readShort());
+        assertEquals(14, frameReader.readShort());
+        assertEquals(15, frameReader.readShort());
+        assertEquals(16, frameReader.readShort());
+        assertEquals(17, frameReader.readShort());
+        assertEquals(0, frameReader.remaining());
+
+        byte[] bytes = {1, 2, 3};
+        var iconReader = writer.icon(77, bytes).reader();
+        assertEquals(77, iconReader.readShort());
+        assertEquals(3, iconReader.readInt());
+        assertArrayEquals(bytes, iconReader.readBytes(3));
+        assertEquals(0, iconReader.remaining());
+    }
+
+    @Test
+    void rejectsCountValuesThatWouldBeTruncated() {
+        LegacyEffectImage effect = new LegacyEffectImage(1, 0, 0, 0,
+                java.util.Collections.nCopies(128, 1));
+        assertThrows(IOException.class, () -> writer.effectResource(1, List.of(effect)));
+        assertThrows(IOException.class, () -> writer.effectResource(1,
+                java.util.Collections.nCopies(Short.MAX_VALUE + 1, effect)));
+        assertThrows(IOException.class, () -> writer.iconManifest(
+                java.util.Collections.nCopies(Short.MAX_VALUE + 1, new IconFingerprint(1, 1L))));
+    }
+
+    private static void assertPhase(com.project.game.network.message.MessageReader reader,
+                                     LegacyMonsterDartPhase phase) throws Exception {
+        assertEquals(phase.icons().size(), reader.readByte());
+        for (int icon : phase.icons()) {
+            assertEquals(icon, reader.readShort());
+        }
+        assertEquals(phase.dx(), reader.readShort());
+        assertEquals(phase.dy(), reader.readShort());
+        assertEquals(phase.delay(), reader.readShort());
+    }
+}

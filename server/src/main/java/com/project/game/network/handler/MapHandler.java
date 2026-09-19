@@ -4,15 +4,14 @@ import com.project.game.map.MapService;
 import com.project.game.network.Session;
 import com.project.game.network.SessionState;
 import com.project.game.network.message.Message;
-import com.project.game.network.message.MessageName;
-import com.project.game.network.message.MessageWriter;
-import com.project.game.network.packet.LegacyPlayerCompatibilityValidator;
+import com.project.game.network.packet.MapPacketWriter;
 import com.project.game.network.packet.PlayerPacketWriter;
 import com.project.game.player.PlayerProfile;
 import com.project.game.player.PlayerService;
 import com.project.game.resource.GameResources;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Optional;
 
 /** Handles map presence, movement, transitions, death return, and MAP_INFO packets. */
@@ -22,6 +21,7 @@ final class MapHandler {
     private final PlayerService playerService;
     private final GameResources resources;
     private final PlayerPacketWriter playerPackets = new PlayerPacketWriter();
+    private final MapPacketWriter mapPackets = new MapPacketWriter();
 
     MapHandler(Session session, MapService mapService, PlayerService playerService,
                GameResources resources) {
@@ -122,75 +122,18 @@ final class MapHandler {
         var map = resources.map(player.mapId())
                 .orElseThrow(() -> new IOException(
                         "legacy map bootstrap unavailable for map " + player.mapId()));
-        LegacyPlayerCompatibilityValidator.validateMapInfo(player, map.id());
-
         boolean sendTemplate = !session.hasSentMapTemplate(map.id());
-        MessageWriter writer = new MessageWriter().writeShort(map.id());
-        if (sendTemplate) {
-            writer.writeShort(map.iconId())
-                    .writeUtf(map.name())
-                    .writeShort(map.row())
-                    .writeShort(map.column())
-                    .writeUtf(map.data());
-
-            for (int imageId : map.imagesBgr()) {
-                writer.writeShort(imageId);
-            }
-            for (var colorRow : map.colorsBgr()) {
-                for (int value : colorRow) {
-                    writer.writeShort(value);
-                }
-            }
-
-            writer.writeBoolean(map.line());
-            if (map.line()) {
-                if (map.dataLine() == null) {
-                    throw new IOException("line map missing dataLine for map " + map.id());
-                }
-                writer.writeUtf(map.dataLine());
-            }
-        }
-
-        writer.writeByte(player.zoneId())
-                .writeShort(player.x())
-                .writeShort(player.y());
-
-        var waypoints = map.waypoints();
-        if (waypoints.size() > Byte.MAX_VALUE) {
-            throw new IOException("too many waypoints for map " + map.id());
-        }
-        writer.writeByte(waypoints.size());
-        for (var waypoint : waypoints) {
+        var waypointTargetNames = new ArrayList<String>(map.waypoints().size());
+        for (var waypoint : map.waypoints()) {
             var target = resources.map(waypoint.goMap())
                     .orElseThrow(() -> new IOException(
                             "waypoint target map unavailable: " + waypoint.goMap()));
-            writer.writeShort(waypoint.x())
-                    .writeShort(waypoint.y())
-                    .writeByte(waypoint.type())
-                    .writeUtf(target.name());
+            waypointTargetNames.add(target.name());
         }
-
-        writer.writeByte(0);
         var monsters = mapService.monsterSnapshots(map.id(), player.zoneId());
-        if (monsters.size() > Byte.MAX_VALUE) {
-            throw new IOException("too many monsters for map " + map.id());
-        }
-        writer.writeByte(monsters.size());
-        for (var monster : monsters) {
-            writer.writeByte(monster.type())
-                    .writeShort(monster.templateId())
-                    .writeInt(monster.id())
-                    .writeShort(monster.level())
-                    .writeByte(monster.levelStatus())
-                    .writeShort(monster.x())
-                    .writeShort(monster.y())
-                    .writeLong(monster.maxHp())
-                    .writeLong(monster.hp())
-                    .writeByte(monster.status());
-        }
-        writer.writeShort(0).writeBoolean(false);
-
-        if (session.send(new Message(MessageName.MAP_INFO, writer.toByteArray())) && sendTemplate) {
+        Message packet = mapPackets.mapInfo(
+                player, map, sendTemplate, waypointTargetNames, monsters);
+        if (session.send(packet) && sendTemplate) {
             session.markMapTemplateSent(map.id());
         }
     }

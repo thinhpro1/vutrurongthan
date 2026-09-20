@@ -3,23 +3,8 @@ package com.project.game.network;
 import com.project.game.network.codec.LegacyPacketCodec;
 import com.project.game.network.transport.ClientTransport;
 import com.project.game.network.transport.LegacyTcpTransport;
-import com.project.game.network.transport.TlsContextFactory;
 import com.project.game.network.transport.TlsTcpTransport;
-import com.project.game.map.MapService;
-import com.project.game.map.ZoneRegistry;
-import com.project.game.combat.CombatService;
-import com.project.game.monster.MonsterRuntimeFactory;
-import com.project.game.monster.MonsterService;
 import com.project.game.monster.MonsterLifecycleScheduler;
-import com.project.game.network.packet.PlayerPacketWriter;
-import com.project.game.network.packet.MonsterPacketWriter;
-import com.project.game.persistence.DatabaseConfig;
-import com.project.game.persistence.DatabaseManager;
-import com.project.game.persistence.account.JdbcAccountRepository;
-import com.project.game.persistence.player.JdbcPlayerRepository;
-import com.project.game.account.AuthService;
-import com.project.game.player.PlayerService;
-import com.project.game.resource.GameResources;
 import com.project.game.service.ServerServices;
 
 import java.io.IOException;
@@ -28,7 +13,6 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLServerSocket;
-import java.util.Properties;
 import java.util.Objects;
 import java.util.logging.Logger;
 
@@ -48,7 +32,6 @@ public final class NetworkServer {
     private final SSLContext tlsContext;
     private final NetworkConfig networkConfig;
     private final NetworkEventObserver eventObserver;
-    private final DatabaseManager databaseManager;
     private final SessionManager sessions = new SessionManager();
     private volatile boolean running;
     private volatile ServerSocket serverSocket;
@@ -57,14 +40,6 @@ public final class NetworkServer {
                          int sendQueueSize, int handshakeTimeoutMillis, byte[] handshakeKey,
                          ServerServices services, SSLContext tlsContext, NetworkConfig networkConfig,
                          NetworkEventObserver eventObserver) {
-        this(host, port, maxSessionsPerIp, maxPacketSize, sendQueueSize, handshakeTimeoutMillis,
-                handshakeKey, services, tlsContext, networkConfig, eventObserver, null);
-    }
-
-    private NetworkServer(String host, int port, int maxSessionsPerIp, int maxPacketSize,
-                          int sendQueueSize, int handshakeTimeoutMillis, byte[] handshakeKey,
-                          ServerServices services, SSLContext tlsContext, NetworkConfig networkConfig,
-                          NetworkEventObserver eventObserver, DatabaseManager databaseManager) {
         if (port < 0 || port > 65535 || maxSessionsPerIp < 1 || maxPacketSize < 1 || sendQueueSize < 1
                 || handshakeTimeoutMillis < 1) {
             throw new IllegalArgumentException("invalid network configuration");
@@ -86,63 +61,6 @@ public final class NetworkServer {
         this.tlsContext = tlsContext;
         this.networkConfig = Objects.requireNonNull(networkConfig, "networkConfig");
         this.eventObserver = Objects.requireNonNull(eventObserver, "eventObserver");
-        this.databaseManager = databaseManager;
-    }
-
-    public static NetworkServer fromSystemProperties() {
-        Properties properties = new Properties();
-        try (var input = NetworkServer.class.getResourceAsStream("/application.properties")) {
-            if (input != null) {
-                properties.load(input);
-            }
-        } catch (IOException exception) {
-            throw new IllegalStateException("cannot load application.properties", exception);
-        }
-        overlaySystemProperties(properties);
-        String transport = properties.getProperty("game.network.transport", "LEGACY_TCP").trim();
-        SSLContext tlsContext;
-        try {
-            tlsContext = switch (transport.toUpperCase(java.util.Locale.ROOT)) {
-                case "LEGACY_TCP" -> null;
-                case "TLS" -> TlsContextFactory.fromProperties(properties);
-                default -> throw new IllegalStateException("unsupported network transport: " + transport);
-            };
-        } catch (IOException | java.security.GeneralSecurityException exception) {
-            throw new IllegalStateException("cannot initialize TLS network transport", exception);
-        }
-        DatabaseManager databaseManager = new DatabaseManager(DatabaseConfig.fromProperties(properties));
-        try {
-            GameResources resources = resourceService(properties);
-            MonsterRuntimeFactory monsterFactory = new MonsterRuntimeFactory(resources);
-            PlayerPacketWriter playerPackets = new PlayerPacketWriter();
-            MonsterPacketWriter monsterPackets = new MonsterPacketWriter();
-            ZoneRegistry zones = new ZoneRegistry(monsterFactory);
-            MapService maps = new MapService(zones, playerPackets);
-            CombatService combat = new CombatService(zones, playerPackets, monsterPackets);
-            MonsterService monsters = new MonsterService(zones, monsterPackets, playerPackets);
-            JdbcAccountRepository accountRepository =
-                    new JdbcAccountRepository(databaseManager.dataSource());
-            accountRepository.findByUsername("__startup_probe__");
-            JdbcPlayerRepository playerRepository =
-                    new JdbcPlayerRepository(databaseManager.dataSource());
-            playerRepository.probeTable();
-            AuthService auth = new AuthService(accountRepository);
-            ServerServices services = new ServerServices(
-                    auth, resources, maps, combat, monsters, new PlayerService(playerRepository));
-            return new NetworkServer(
-                    properties.getProperty("game.network.host", "127.0.0.1"),
-                    integer(properties, "game.network.port", 1707),
-                    integer(properties, "game.network.max-session-per-ip", 20),
-                    integer(properties, "game.network.max-packet-size", 65535),
-                    integer(properties, "game.network.send-queue-size", 256),
-                    integer(properties, "game.network.handshake-timeout-ms", 10000),
-                    "abc".getBytes(java.nio.charset.StandardCharsets.US_ASCII),
-                    services, tlsContext, NetworkConfig.fromProperties(properties),
-                    NetworkEventObserver.NO_OP, databaseManager);
-        } catch (RuntimeException | Error exception) {
-            databaseManager.close();
-            throw exception;
-        }
     }
 
     public void start() throws IOException {
@@ -165,7 +83,6 @@ public final class NetworkServer {
                     exception.addSuppressed(closeException);
                 }
             }
-            closeDatabaseManager();
             throw exception;
         }
         serverSocket = listener;
@@ -180,7 +97,6 @@ public final class NetworkServer {
             } catch (IOException closeException) {
                 exception.addSuppressed(closeException);
             }
-            closeDatabaseManager();
             throw exception;
         }
         LOGGER.info(() -> "Network server listening on " + host + ':' + port
@@ -226,7 +142,6 @@ public final class NetworkServer {
         }
         monsterLifecycleScheduler.stop();
         sessions.closeAll();
-        closeDatabaseManager();
     }
 
     public SessionManager sessions() {
@@ -238,40 +153,4 @@ public final class NetworkServer {
         return listener == null ? 0 : listener.getLocalPort();
     }
 
-    private static int integer(Properties properties, String key, int fallback) {
-        return Integer.parseInt(properties.getProperty(key, Integer.toString(fallback)));
-    }
-
-    private static GameResources resourceService(Properties properties) {
-        String configuredIconRoot = properties.getProperty("game.resource.icon-dir", "").trim();
-        String configuredJsonRoot = properties.getProperty("game.resource.json-dir", "").trim();
-        int imageVersion = integer(properties, "game.resource.image-version", -1);
-        java.nio.file.Path iconRoot = configuredIconRoot.isEmpty()
-                ? null : java.nio.file.Path.of(configuredIconRoot);
-        if (configuredJsonRoot.isEmpty()) {
-            return iconRoot == null
-                    ? GameResources.unavailable()
-                    : GameResources.fromIconRoot(iconRoot, imageVersion);
-        }
-        return GameResources.fromRoots(
-                iconRoot,
-                java.nio.file.Path.of(configuredJsonRoot),
-                imageVersion);
-    }
-
-    static void overlaySystemProperties(Properties properties) {
-        for (String key : System.getProperties().stringPropertyNames()) {
-            if (key.startsWith("game.network.")
-                    || key.startsWith("game.resource.")
-                    || key.startsWith("game.db.")) {
-                properties.setProperty(key, System.getProperty(key));
-            }
-        }
-    }
-
-    private void closeDatabaseManager() {
-        if (databaseManager != null) {
-            databaseManager.close();
-        }
-    }
 }

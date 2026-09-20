@@ -22,29 +22,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class NetworkConfigTest {
     @Test
-    void overlaysOnlySupportedGameSystemPropertyNamespaces() {
-        String dbKey = "game.db.url";
-        String unrelatedKey = "game.other.value";
-        String previousDb = System.getProperty(dbKey);
-        String previousUnrelated = System.getProperty(unrelatedKey);
-        try {
-            System.setProperty(dbKey, "jdbc:mysql://override/rongthanchibi");
-            System.setProperty(unrelatedKey, "must-not-overlay");
-            Properties properties = new Properties();
-            properties.setProperty(dbKey, "jdbc:mysql://baseline/rongthanchibi");
-            properties.setProperty(unrelatedKey, "baseline");
-
-            NetworkServer.overlaySystemProperties(properties);
-
-            assertEquals("jdbc:mysql://override/rongthanchibi", properties.getProperty(dbKey));
-            assertEquals("baseline", properties.getProperty(unrelatedKey));
-        } finally {
-            restoreProperty(dbKey, previousDb);
-            restoreProperty(unrelatedKey, previousUnrelated);
-        }
-    }
-
-    @Test
     void readsClientCompatibilityValuesFromProperties() {
         Properties properties = new Properties();
         properties.setProperty("game.client.version", "0.9.6");
@@ -54,14 +31,6 @@ class NetworkConfigTest {
 
         assertEquals("0.9.6", config.clientVersion());
         assertEquals(2, config.loginVersion());
-    }
-
-    private static void restoreProperty(String key, String value) {
-        if (value == null) {
-            System.clearProperty(key);
-        } else {
-            System.setProperty(key, value);
-        }
     }
 
     @Test

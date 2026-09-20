@@ -5,7 +5,6 @@ import com.project.game.monster.MonsterRuntimeFactory;
 import com.project.game.monster.MonsterSnapshot;
 import com.project.game.monster.RuntimeMonster;
 import com.project.game.network.NetworkConfig;
-import com.project.game.network.NetworkEventObserver;
 import com.project.game.network.Session;
 import com.project.game.network.SessionManager;
 import com.project.game.network.SessionState;
@@ -51,7 +50,7 @@ public static void joinAtBarrier(CyclicBarrier start, GameplayServices maps,
     }
 
     public static PlayerProfile player(int id, int mapId, int zoneId) {
-        return PlayerProfile.initial((long) id, id, "player" + id, 0)
+        return TestPlayerProfiles.initial((long) id, id, "player" + id, 0)
                 .withLocation(mapId, zoneId, 1250, 648)
                 .withHp(100);
     }
@@ -111,7 +110,7 @@ public static void joinAtBarrier(CyclicBarrier start, GameplayServices maps,
         SessionManager manager = new SessionManager();
         Session session = new Session(manager.nextId(), new NoopTransport(), manager,
                 new LegacyPacketCodec(1024), "abc".getBytes(), 8,
-                services, NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
+                services, NetworkConfig.defaults());
         session.bindPlayer(player);
         session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
         session.transition(SessionState.HANDSHAKE_DONE, SessionState.AUTHENTICATED);

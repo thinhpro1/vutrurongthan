@@ -40,8 +40,7 @@ public final class TlsNetworkSelfTest {
                     keystore, "PKCS12", STORE_PASSWORD, "TLSv1.3");
             int port = findFreePort();
             server = new NetworkServer("127.0.0.1", port, 20, 65535, 256, 5000,
-                    KEY, TestServices.serverServices(), serverContext, NetworkConfig.defaults(),
-                    NetworkEventObserver.NO_OP);
+                    KEY, TestServices.serverServices(), serverContext, NetworkConfig.defaults());
             NetworkServer runningServer = server;
             AtomicReference<Throwable> serverFailure = new AtomicReference<>();
             serverThread = Thread.ofVirtual().name("tls-network-self-test-server").start(() -> {

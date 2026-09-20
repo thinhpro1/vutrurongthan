@@ -1,4 +1,5 @@
 package com.project.game.map;
+import com.project.game.testsupport.TestPlayerProfiles;
 
 import com.project.game.testsupport.TestServices;
 
@@ -8,7 +9,6 @@ import com.project.game.monster.MonsterRespawnResult;
 import com.project.game.monster.MonsterSnapshot;
 import com.project.game.monster.RuntimeMonster;
 import com.project.game.network.NetworkConfig;
-import com.project.game.network.NetworkEventObserver;
 import com.project.game.network.Session;
 import com.project.game.network.SessionManager;
 import com.project.game.network.SessionState;
@@ -91,8 +91,8 @@ class ZoneMonsterCombatTest {
     @Test
     void containsRequiresExactSessionIdentity() {
         Zone zone = new Zone(1, 0, List.of());
-        Session first = session(PlayerProfile.initial(1L, 7, "alpha1", 1));
-        Session equivalent = session(PlayerProfile.initial(2L, 7, "alpha2", 1));
+        Session first = session(TestPlayerProfiles.initial(1L, 7, "alpha1", 1));
+        Session equivalent = session(TestPlayerProfiles.initial(2L, 7, "alpha2", 1));
 
         zone.add(first);
 
@@ -121,7 +121,7 @@ class ZoneMonsterCombatTest {
     @Test
     void oneMemberDeathRespawnsOnlyAfterNineSecondDeadline() {
         Zone zone = map1Zone();
-        Session player = session(PlayerProfile.initial(1L, 1, "alpha1", 1));
+        Session player = session(TestPlayerProfiles.initial(1L, 1, "alpha1", 1));
         zone.add(player);
 
         zone.damageMonster(0, 1, 500, NOW).orElseThrow();
@@ -138,8 +138,8 @@ class ZoneMonsterCombatTest {
     @Test
     void respawnDeadlineDoesNotChangeWhenMembershipChangesAfterDeath() {
         Zone zone = map1Zone();
-        Session first = session(PlayerProfile.initial(1L, 1, "alpha1", 1));
-        Session second = session(PlayerProfile.initial(2L, 2, "beta22", 1));
+        Session first = session(TestPlayerProfiles.initial(1L, 1, "alpha1", 1));
+        Session second = session(TestPlayerProfiles.initial(2L, 2, "beta22", 1));
 
         zone.add(first);
         zone.add(second);
@@ -155,13 +155,13 @@ class ZoneMonsterCombatTest {
     @Test
     void joinsAfterDeathDoNotShortenExistingRespawnDeadline() {
         Zone zone = map1Zone();
-        Session first = session(PlayerProfile.initial(1L, 1, "alpha1", 1));
+        Session first = session(TestPlayerProfiles.initial(1L, 1, "alpha1", 1));
         zone.add(first);
 
         zone.damageMonster(0, 1, 500, NOW).orElseThrow();
 
         for (int id = 2; id <= 6; id++) {
-            zone.add(session(PlayerProfile.initial(
+            zone.add(session(TestPlayerProfiles.initial(
                     (long) id, id, "player" + id, 1)));
         }
 
@@ -174,7 +174,7 @@ class ZoneMonsterCombatTest {
     @Test
     void returnsMultipleDueRespawnsOnceInRuntimeOrder() {
         Zone zone = map1Zone();
-        Session first = session(PlayerProfile.initial(1L, 1, "alpha1", 1));
+        Session first = session(TestPlayerProfiles.initial(1L, 1, "alpha1", 1));
         zone.add(first);
 
         zone.damageMonster(0, 1, 500, NOW).orElseThrow();
@@ -307,7 +307,7 @@ class ZoneMonsterCombatTest {
     }
 
     private static Session playerAt(int id, int x, int y) {
-        return session(PlayerProfile.initial((long) id, id, "player" + id, 1)
+        return session(TestPlayerProfiles.initial((long) id, id, "player" + id, 1)
                 .withLocation(1, 0, x, y)
                 .withHp(100));
     }
@@ -322,7 +322,7 @@ class ZoneMonsterCombatTest {
         SessionManager manager = new SessionManager();
         Session session = new Session(manager.nextId(), new NoopTransport(), manager,
                 new LegacyPacketCodec(1024), "abc".getBytes(), 8,
-                TestServices.serverServices(), NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
+                TestServices.serverServices(), NetworkConfig.defaults());
         session.bindPlayer(player);
         return session;
     }

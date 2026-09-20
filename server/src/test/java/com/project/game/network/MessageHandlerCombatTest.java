@@ -1,4 +1,5 @@
 package com.project.game.network;
+import com.project.game.testsupport.TestPlayerProfiles;
 
 import com.project.game.testsupport.TestServices;
 
@@ -137,7 +138,7 @@ class MessageHandlerCombatTest {
                 new MonsterRuntimeFactory(resources));
         ServerServices services = TestServices.serverServices(TestServices.authService(), resources, maps);
         Session session = inGameSession(services,
-                PlayerProfile.initial(1L, 7, "alpha1", 0).withLocation(1, 0, 90, 1008));
+                TestPlayerProfiles.initial(1L, 7, "alpha1", 0).withLocation(1, 0, 90, 1008));
         MessageHandler handler = newHandler(session, services, NetworkConfig.defaults());
         maps.monsterSnapshots(1, 0);
 
@@ -179,7 +180,7 @@ class MessageHandlerCombatTest {
                 new MonsterRuntimeFactory(resources));
         ServerServices services = TestServices.serverServices(TestServices.authService(), resources, maps);
         Session session = inGameSession(services,
-                PlayerProfile.initial(1L, 7, "alpha1", 0).withLocation(1, 0, 90, 1008));
+                TestPlayerProfiles.initial(1L, 7, "alpha1", 0).withLocation(1, 0, 90, 1008));
         MessageHandler handler = newHandler(session, services, NetworkConfig.defaults());
         maps.finishLoad(session);
         try {

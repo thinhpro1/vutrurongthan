@@ -82,10 +82,6 @@ public final class PlayerService {
         }
     }
 
-    public PlayerRepository repository() {
-        return repository;
-    }
-
     public record PlayerLoadResult(boolean success, boolean found, PlayerProfile player, String message) {
         static PlayerLoadResult found(PlayerProfile player) {
             return new PlayerLoadResult(true, true, player, "");

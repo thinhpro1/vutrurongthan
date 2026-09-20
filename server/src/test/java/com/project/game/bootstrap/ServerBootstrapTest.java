@@ -1,8 +1,8 @@
 package com.project.game.bootstrap;
+import com.project.game.testsupport.TestPlayerProfiles;
 
 import com.project.game.account.AuthService;
 import com.project.game.network.NetworkConfig;
-import com.project.game.network.NetworkEventObserver;
 import com.project.game.network.NetworkServer;
 import com.project.game.network.Session;
 import com.project.game.network.SessionManager;
@@ -64,9 +64,8 @@ class ServerBootstrapTest {
         String resourceKey = "game.resource.image-version";
         String dbKey = "game.db.url";
         String clientKey = "game.client.version";
-        String securityKey = "game.security.mode";
         Properties previous = new Properties();
-        for (String key : new String[]{networkKey, resourceKey, dbKey, clientKey, securityKey}) {
+        for (String key : new String[]{networkKey, resourceKey, dbKey, clientKey}) {
             String value = System.getProperty(key);
             if (value != null) {
                 previous.setProperty(key, value);
@@ -77,13 +76,11 @@ class ServerBootstrapTest {
             System.setProperty(resourceKey, "3");
             System.setProperty(dbKey, "jdbc:mysql://override/rongthanchibi");
             System.setProperty(clientKey, "override-client");
-            System.setProperty(securityKey, "override-security");
             Properties properties = new Properties();
             properties.setProperty(networkKey, "1707");
             properties.setProperty(resourceKey, "2");
             properties.setProperty(dbKey, "jdbc:mysql://baseline/rongthanchibi");
             properties.setProperty(clientKey, "baseline-client");
-            properties.setProperty(securityKey, "baseline-security");
 
             ServerBootstrap.overlaySystemProperties(properties);
 
@@ -91,9 +88,8 @@ class ServerBootstrapTest {
             assertEquals("3", properties.getProperty(resourceKey));
             assertEquals("jdbc:mysql://override/rongthanchibi", properties.getProperty(dbKey));
             assertEquals("baseline-client", properties.getProperty(clientKey));
-            assertEquals("baseline-security", properties.getProperty(securityKey));
         } finally {
-            for (String key : new String[]{networkKey, resourceKey, dbKey, clientKey, securityKey}) {
+            for (String key : new String[]{networkKey, resourceKey, dbKey, clientKey}) {
                 restoreProperty(key, previous.getProperty(key));
             }
         }
@@ -235,18 +231,18 @@ class ServerBootstrapTest {
         SessionManager sessions = server.sessions();
         Session session = new Session(sessions.nextId(), new TestTransport(), sessions,
                 new LegacyPacketCodec(1024), "abc".getBytes(java.nio.charset.StandardCharsets.US_ASCII),
-                4, services, NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
+                4, services, NetworkConfig.defaults());
         assertTrue(sessions.tryAdd(session, 1));
         assertTrue(sessions.beginAccountAdmission(session, 10L, "alpha1"));
         sessions.finishAccountAdmission(session, true);
-        session.bindPlayer(PlayerProfile.initial(10L, 1, "alpha1", 0));
+        session.bindPlayer(TestPlayerProfiles.initial(10L, 1, "alpha1", 0));
         return session;
     }
 
     private static NetworkServer networkServer(String host, int port, ServerServices services) {
         return new NetworkServer(host, port, 20, 1024, 8, 1000,
                 "abc".getBytes(java.nio.charset.StandardCharsets.US_ASCII), services, null,
-                NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
+                NetworkConfig.defaults());
     }
 
     private static DatabaseManager databaseManager() {

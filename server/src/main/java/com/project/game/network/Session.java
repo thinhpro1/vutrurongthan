@@ -52,7 +52,7 @@ public final class Session implements AutoCloseable {
 
     public Session(int id, ClientTransport transport, SessionManager manager,
                    LegacyPacketCodec codec, byte[] handshakeKey, int queueSize,
-                   ServerServices services, NetworkConfig networkConfig, NetworkEventObserver eventObserver) {
+                   ServerServices services, NetworkConfig networkConfig) {
         if (queueSize < 1) {
             throw new IllegalArgumentException("queueSize must be positive");
         }
@@ -65,7 +65,7 @@ public final class Session implements AutoCloseable {
         this.sendQueue = new ArrayBlockingQueue<>(queueSize);
         this.mapService = Objects.requireNonNull(services, "services").maps();
         this.playerService = services.players();
-        this.handler = new MessageHandler(this, services, networkConfig, eventObserver);
+        this.handler = new MessageHandler(this, services, networkConfig);
     }
 
     public int id() {

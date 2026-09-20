@@ -56,6 +56,6 @@ class SessionManagerTest {
     private static Session newSession(SessionManager manager) {
         return new Session(manager.nextId(), new TestTransport(), manager,
                 new LegacyPacketCodec(1024), "abc".getBytes(StandardCharsets.US_ASCII), 4,
-                TestServices.serverServices(), NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
+                TestServices.serverServices(), NetworkConfig.defaults());
     }
 }

@@ -1,4 +1,5 @@
 package com.project.game.network;
+import com.project.game.testsupport.TestPlayerProfiles;
 
 import com.project.game.testsupport.TestServices;
 
@@ -45,7 +46,7 @@ class MessageHandlerMapTest {
                 new MonsterPacketWriter(),
                 new MonsterRuntimeFactory(resources));
         ServerServices services = TestServices.serverServices(TestServices.authService(), resources, maps);
-        PlayerProfile start = PlayerProfile.initial(1L, 7, "alpha1", 0)
+        PlayerProfile start = TestPlayerProfiles.initial(1L, 7, "alpha1", 0)
                 .withLocation(0, 0, 4464, 936);
         Session session = inGameSession(services, start);
         MessageHandler handler = newHandler(session, services, NetworkConfig.defaults());
@@ -111,7 +112,7 @@ class MessageHandlerMapTest {
                 new MonsterPacketWriter(),
                 new MonsterRuntimeFactory(resources));
         ServerServices services = TestServices.serverServices(TestServices.authService(), resources, maps);
-        PlayerProfile start = PlayerProfile.initial(1L, 7, "alpha1", 0)
+        PlayerProfile start = TestPlayerProfiles.initial(1L, 7, "alpha1", 0)
                 .withLocation(0, 0, 1250, 648);
         Session session = inGameSession(services, start);
         MessageHandler handler = newHandler(session, services, NetworkConfig.defaults());
@@ -132,7 +133,7 @@ class MessageHandlerMapTest {
                 new MonsterPacketWriter(),
                 new MonsterRuntimeFactory(resources));
         ServerServices services = TestServices.serverServices(TestServices.authService(), resources, maps);
-        PlayerProfile start = PlayerProfile.initial(1L, 7, "alpha1", 0)
+        PlayerProfile start = TestPlayerProfiles.initial(1L, 7, "alpha1", 0)
                 .withLocation(0, 0, 4464, 936);
         Session session = inGameSession(services, start);
         MessageHandler handler = newHandler(session, services, NetworkConfig.defaults());
@@ -159,7 +160,7 @@ class MessageHandlerMapTest {
     void requestChangeMapRejectsNonEmptyPayload() {
         GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"));
         Session session = inGameSession(TestServices.serverServices(TestServices.authService(), resources),
-                PlayerProfile.initial(1L, 7, "alpha1", 0));
+                TestPlayerProfiles.initial(1L, 7, "alpha1", 0));
 
         newHandler(session, resources).onMessage(new Message(
                 MessageName.REQUEST_CHANGE_MAP, new byte[]{1}));
@@ -171,7 +172,7 @@ class MessageHandlerMapTest {
     void mapInfoRevisitUsesCachedTemplateLayout() throws Exception {
         GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"));
         Session session = inGameSession(TestServices.serverServices(TestServices.authService(), resources),
-                PlayerProfile.initial(1L, 7, "alpha1", 0)
+                TestPlayerProfiles.initial(1L, 7, "alpha1", 0)
                         .withLocation(0, 0, 4464, 936));
         MessageHandler handler = newHandler(session, resources);
         session.markMapTemplateSent(0);
@@ -207,8 +208,8 @@ class MessageHandlerMapTest {
                 new MonsterPacketWriter(),
                 new MonsterRuntimeFactory(GameResources.unavailable()));
         ServerServices services = TestServices.serverServices(auth, GameResources.unavailable(), maps);
-        Session first = inGameSession(services, PlayerProfile.initial(1L, 1, "alpha1", 0));
-        Session second = inGameSession(services, PlayerProfile.initial(2L, 2, "beta22", 0));
+        Session first = inGameSession(services, TestPlayerProfiles.initial(1L, 1, "alpha1", 0));
+        Session second = inGameSession(services, TestPlayerProfiles.initial(2L, 2, "beta22", 0));
         MessageHandler firstHandler = newHandler(first, services, NetworkConfig.defaults());
         MessageHandler secondHandler = newHandler(second, services, NetworkConfig.defaults());
 
@@ -269,7 +270,7 @@ class MessageHandlerMapTest {
                 new MonsterPacketWriter(),
                 new MonsterRuntimeFactory(GameResources.unavailable()));
         ServerServices services = TestServices.serverServices(TestServices.authService(), GameResources.unavailable(), maps);
-        Session session = inGameSession(services, PlayerProfile.initial(1L, 7, "alpha1", 0));
+        Session session = inGameSession(services, TestPlayerProfiles.initial(1L, 7, "alpha1", 0));
         MessageHandler handler = newHandler(session, services, NetworkConfig.defaults());
 
         handler.onMessage(new Message(MessageName.FINISH_LOAD_MAP, new byte[]{1}));
@@ -315,7 +316,7 @@ class MessageHandlerMapTest {
     void playerMoveRemainsRejectedBeforeInGame() {
         AuthService auth = TestServices.authService();
         Session session = newSession(auth);
-        session.bindPlayer(PlayerProfile.initial(1L, 7, "alpha1", 0));
+        session.bindPlayer(TestPlayerProfiles.initial(1L, 7, "alpha1", 0));
         session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
         session.transition(SessionState.HANDSHAKE_DONE, SessionState.AUTHENTICATED);
         MessageHandler handler = newHandler(session, auth);

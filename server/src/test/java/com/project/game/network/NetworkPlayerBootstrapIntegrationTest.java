@@ -24,7 +24,7 @@ class NetworkPlayerBootstrapIntegrationTest {
         NetworkServer server = new NetworkServer("127.0.0.1", 0, 2, 262_144, 8, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
                 TestServices.serverServices(TestServices.authService(), resources), null,
-                NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
+                NetworkConfig.defaults());
         AtomicReference<Throwable> serverFailure = new AtomicReference<>();
         Thread serverThread = Thread.ofVirtual().start(() -> {
             try {
@@ -71,7 +71,7 @@ class NetworkPlayerBootstrapIntegrationTest {
         NetworkServer server = new NetworkServer("127.0.0.1", 0, 2, 262_144, 8, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
                 TestServices.serverServices(TestServices.authService(), resources), null,
-                NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
+                NetworkConfig.defaults());
         AtomicReference<Throwable> serverFailure = new AtomicReference<>();
         Thread serverThread = Thread.ofVirtual().start(() -> {
             try {

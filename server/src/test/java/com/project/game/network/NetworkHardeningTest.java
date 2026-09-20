@@ -17,7 +17,6 @@ import java.io.OutputStream;
 import java.io.PipedInputStream;
 import java.io.PipedOutputStream;
 import java.nio.charset.StandardCharsets;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.CountDownLatch;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -34,7 +33,7 @@ class NetworkHardeningTest {
             TestTransport transport = new TestTransport(input, output, "127.0.0.1");
             Session session = new Session(manager.nextId(), transport, manager, new LegacyPacketCodec(1024),
                     "abc".getBytes(StandardCharsets.US_ASCII), 4, TestServices.serverServices(),
-                    NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
+                    NetworkConfig.defaults());
             assertTrue(manager.tryAdd(session, 1));
             session.start();
             try {
@@ -49,35 +48,6 @@ class NetworkHardeningTest {
             } finally {
                 session.close();
             }
-        }
-    }
-
-    @Test
-    void runtimeHandlerFailureClosesTransportAndCleansSessionManager() throws Exception {
-        SessionManager manager = new SessionManager();
-        PipedInputStream input = new PipedInputStream();
-        try (PipedOutputStream client = new PipedOutputStream(input)) {
-            TestTransport transport = new TestTransport(input, new ByteArrayOutputStream(), "127.0.0.1");
-            AtomicBoolean observerCalled = new AtomicBoolean();
-            Session session = new Session(manager.nextId(), transport, manager, new LegacyPacketCodec(1024),
-                    "abc".getBytes(StandardCharsets.US_ASCII), 4,
-                    TestServices.serverServices(TestServices.authService(), GameResources.unavailable()), NetworkConfig.defaults(),
-                    (ignored, type) -> {
-                        observerCalled.set(true);
-                        throw new IllegalStateException("observer failed");
-                    });
-            assertTrue(manager.tryAdd(session, 1));
-            session.start();
-            LegacyPacketCodec codec = new LegacyPacketCodec(1024);
-            codec.writeClient(client, null, false, new Message(MessageName.CONNECT_SERVER));
-            waitForState(session, SessionState.HANDSHAKE_DONE);
-            codec.writeClient(client, new LegacyCipher("abc".getBytes(StandardCharsets.US_ASCII)),
-                    true, new Message(MessageName.UPDATE_DATA, new MessageWriter().writeByte(-1).toByteArray()));
-
-            waitForClosed(session);
-            assertTrue(observerCalled.get());
-            assertTrue(transport.isClosed());
-            assertEquals(0, manager.onlineCount());
         }
     }
 
@@ -103,7 +73,7 @@ class NetworkHardeningTest {
             TestTransport transport = new TestTransport(input, output, "127.0.0.1");
             Session session = new Session(manager.nextId(), transport, manager, new LegacyPacketCodec(1024),
                     "abc".getBytes(StandardCharsets.US_ASCII), 1, TestServices.serverServices(),
-                    NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
+                    NetworkConfig.defaults());
             assertTrue(manager.tryAdd(session, 1));
             session.start();
             assertTrue(session.send(new Message(MessageName.DIALOG_OK)));
@@ -120,7 +90,7 @@ class NetworkHardeningTest {
         return new Session(manager.nextId(), new TestTransport(new java.io.ByteArrayInputStream(new byte[0]),
                 new ByteArrayOutputStream(), ip), manager, new LegacyPacketCodec(1024),
                 "abc".getBytes(StandardCharsets.US_ASCII), queueSize, TestServices.serverServices(),
-                NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
+                NetworkConfig.defaults());
     }
 
     private static void waitForClosed(Session session) throws InterruptedException {

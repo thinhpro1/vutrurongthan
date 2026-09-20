@@ -1,4 +1,5 @@
 package com.project.game.network;
+import com.project.game.testsupport.TestPlayerProfiles;
 
 import com.project.game.testsupport.TestServices;
 
@@ -35,7 +36,7 @@ final class MessageHandlerTestSupport {
     }
 
     static MessageHandler newHandler(Session session, ServerServices services, NetworkConfig config) {
-        return new MessageHandler(session, services, config, NetworkEventObserver.NO_OP);
+        return new MessageHandler(session, services, config);
     }
 
     static Session newSession(AuthService authService) {
@@ -51,13 +52,12 @@ final class MessageHandlerTestSupport {
         return new Session(manager.nextId(), new TestTransport(
                 new ByteArrayInputStream(new byte[0]), new ByteArrayOutputStream(), remoteAddress), manager,
                 new LegacyPacketCodec(maxPacketSize), "abc".getBytes(StandardCharsets.US_ASCII), 4,
-                TestServices.serverServices(authService, GameResources.unavailable()), NetworkConfig.defaults(),
-                NetworkEventObserver.NO_OP);
+                TestServices.serverServices(authService, GameResources.unavailable()), NetworkConfig.defaults());
     }
 
     static Session inGameSessionWithPlayer(AuthService auth) {
         Session session = newSession(auth);
-        session.bindPlayer(PlayerProfile.initial(1L, 7, "alpha1", 0));
+        session.bindPlayer(TestPlayerProfiles.initial(1L, 7, "alpha1", 0));
         session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
         session.transition(SessionState.HANDSHAKE_DONE, SessionState.AUTHENTICATED);
         session.transition(SessionState.AUTHENTICATED, SessionState.IN_GAME);
@@ -68,7 +68,7 @@ final class MessageHandlerTestSupport {
         SessionManager manager = new SessionManager();
         Session session = new Session(manager.nextId(), new TestTransport(), manager,
                 new LegacyPacketCodec(1024), "abc".getBytes(StandardCharsets.US_ASCII), 4,
-                services, NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
+                services, NetworkConfig.defaults());
         session.bindPlayer(player);
         session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
         session.transition(SessionState.HANDSHAKE_DONE, SessionState.AUTHENTICATED);

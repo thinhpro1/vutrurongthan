@@ -1,4 +1,5 @@
 package com.project.game.player;
+import com.project.game.testsupport.TestPlayerProfiles;
 
 import org.junit.jupiter.api.Test;
 
@@ -35,7 +36,7 @@ class PlayerProfileTest {
 
     @Test
     void withPositionChangesOnlyCoordinates() {
-        PlayerProfile original = PlayerProfile.initial(101L, 7, "alpha1", 0);
+        PlayerProfile original = TestPlayerProfiles.initial(101L, 7, "alpha1", 0);
 
         PlayerProfile moved = original.withPosition(1337, 611);
 
@@ -54,7 +55,7 @@ class PlayerProfileTest {
 
     @Test
     void withHpChangesOnlyHp() {
-        PlayerProfile original = PlayerProfile.initial(101L, 7, "alpha1", 0);
+        PlayerProfile original = TestPlayerProfiles.initial(101L, 7, "alpha1", 0);
 
         PlayerProfile injured = original.withHp(90);
 
@@ -74,7 +75,7 @@ class PlayerProfileTest {
 
     @Test
     void withHpValidatesBoundsAndAllowsZero() {
-        PlayerProfile player = PlayerProfile.initial(101L, 1, "alpha1", 0);
+        PlayerProfile player = TestPlayerProfiles.initial(101L, 1, "alpha1", 0);
 
         assertThrows(IllegalArgumentException.class, () -> player.withHp(-1));
         assertThrows(IllegalArgumentException.class,
@@ -84,7 +85,7 @@ class PlayerProfileTest {
 
     @Test
     void withPotentialChangesOnlyPotential() {
-        PlayerProfile before = PlayerProfile.initial(101L, 7, "alpha1", 0);
+        PlayerProfile before = TestPlayerProfiles.initial(101L, 7, "alpha1", 0);
 
         PlayerProfile after = before.withPotential(11L);
 
@@ -107,7 +108,7 @@ class PlayerProfileTest {
 
     @Test
     void revivedAtRestoresVitalsAndChangesOnlyLocation() {
-        PlayerProfile original = PlayerProfile.initial(101L, 7, "reviver", 0)
+        PlayerProfile original = TestPlayerProfiles.initial(101L, 7, "reviver", 0)
                 .withHp(0)
                 .withPotential(123L);
 

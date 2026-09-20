@@ -1,7 +1,6 @@
 package com.project.game.network.handler;
 
 import com.project.game.network.NetworkConfig;
-import com.project.game.network.NetworkEventObserver;
 import com.project.game.network.Session;
 import com.project.game.network.SessionState;
 import com.project.game.network.message.Message;
@@ -25,15 +24,13 @@ public final class MessageHandler {
     private final MapHandler mapHandler;
     private final CombatHandler combatHandler;
 
-    public MessageHandler(Session session, ServerServices services, NetworkConfig networkConfig,
-                          NetworkEventObserver eventObserver) {
+    public MessageHandler(Session session, ServerServices services, NetworkConfig networkConfig) {
         this.session = Objects.requireNonNull(session, "session");
         services = Objects.requireNonNull(services, "services");
         networkConfig = Objects.requireNonNull(networkConfig, "networkConfig");
-        eventObserver = Objects.requireNonNull(eventObserver, "eventObserver");
 
         this.connectionHandler = new ConnectionHandler(session, networkConfig);
-        this.resourceHandler = new ResourceHandler(session, services.resources(), eventObserver);
+        this.resourceHandler = new ResourceHandler(session, services.resources());
         this.mapHandler = new MapHandler(session, services.maps(), services.monsters(),
                 services.players(), services.resources());
         this.playerHandler = new PlayerHandler(session, services.players(), services.resources(), mapHandler);

@@ -17,17 +17,15 @@ import org.junit.jupiter.api.io.TempDir;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.charset.StandardCharsets;
+import java.net.SocketTimeoutException;
 import java.util.List;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static com.project.game.network.NetworkIntegrationTestSupport.*;
 
 class NetworkResourceIntegrationTest {
@@ -39,7 +37,7 @@ class NetworkResourceIntegrationTest {
         NetworkServer server = new NetworkServer("127.0.0.1", 0, 2, 4096, 8, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
                 TestServices.serverServices(TestServices.authService(), resources), null,
-                NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
+                NetworkConfig.defaults());
         AtomicReference<Throwable> serverFailure = new AtomicReference<>();
         Thread serverThread = Thread.ofVirtual().start(() -> {
             try {
@@ -65,7 +63,7 @@ class NetworkResourceIntegrationTest {
         NetworkServer server = new NetworkServer("127.0.0.1", 0, 2, 262_144, 8, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
                 TestServices.serverServices(TestServices.authService(), resources), null,
-                NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
+                NetworkConfig.defaults());
         AtomicReference<Throwable> serverFailure = new AtomicReference<>();
         Thread serverThread = Thread.ofVirtual().start(() -> {
             try {
@@ -159,8 +157,7 @@ class NetworkResourceIntegrationTest {
                 "abc".getBytes(StandardCharsets.US_ASCII),
                 TestServices.serverServices(TestServices.authService(), resources),
                 null,
-                NetworkConfig.defaults(),
-                NetworkEventObserver.NO_OP);
+                NetworkConfig.defaults());
         AtomicReference<Throwable> serverFailure = new AtomicReference<>();
         Thread serverThread = Thread.ofVirtual().start(() -> {
             try {
@@ -240,19 +237,13 @@ class NetworkResourceIntegrationTest {
     }
 
     @Test
-    void javaClientVersionCacheSkipsSecondFrameRequest() throws Exception {
+    void manifestDoesNotPushFrameResourceWithoutRequest() throws Exception {
         GameResources resources = GameResources.fromFrameRoot(
                 Path.of("..", "client", "Assets", "Resources", "Jsons"));
-        AtomicInteger frameUpdateCount = new AtomicInteger();
-        NetworkEventObserver observer = (session, type) -> {
-            if (type == 7) {
-                frameUpdateCount.incrementAndGet();
-            }
-        };
         NetworkServer server = new NetworkServer("127.0.0.1", 0, 2, 4096, 8, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
                 TestServices.serverServices(TestServices.authService(), resources), null,
-                NetworkConfig.defaults(), observer);
+                NetworkConfig.defaults());
         AtomicReference<Throwable> serverFailure = new AtomicReference<>();
         Thread serverThread = Thread.ofVirtual().start(() -> {
             try {
@@ -263,19 +254,13 @@ class NetworkResourceIntegrationTest {
         });
         try {
             waitForPort(server);
-            runFrameBootstrap(server.localPort(), true);
+            runFrameManifestWithoutRequest(server.localPort());
             waitForNoSessions(server);
-            assertEquals(1, frameUpdateCount.get());
-
-            // Model a restart after the client persisted frame version 1.
-            runFrameBootstrap(server.localPort(), false);
-            waitForNoSessions(server);
-            assertEquals(1, frameUpdateCount.get());
         } finally {
             server.stop();
             serverThread.join(1_000);
         }
-        assertNull(serverFailure.get(), "network server failed during frame cache test");
+        assertNull(serverFailure.get(), "network server failed during frame manifest test");
     }
 
     @Test
@@ -285,7 +270,7 @@ class NetworkResourceIntegrationTest {
         NetworkServer server = new NetworkServer("127.0.0.1", 0, 2, 1024, 8, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
                 TestServices.serverServices(TestServices.authService(), GameResources.fromIconRoot(iconRoot)),
-                null, NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
+                null, NetworkConfig.defaults());
         AtomicReference<Throwable> serverFailure = new AtomicReference<>();
         Thread serverThread = Thread.ofVirtual().start(() -> {
             try {
@@ -315,7 +300,7 @@ class NetworkResourceIntegrationTest {
         NetworkServer server = new NetworkServer("127.0.0.1", 0, 2, 1024, 8, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
                 TestServices.serverServices(TestServices.authService(), resources),
-                null, NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
+                null, NetworkConfig.defaults());
         AtomicReference<Throwable> serverFailure = new AtomicReference<>();
         Thread serverThread = Thread.ofVirtual().start(() -> {
             try {
@@ -383,7 +368,7 @@ class NetworkResourceIntegrationTest {
         NetworkServer server = new NetworkServer("127.0.0.1", 0, 2, 262_144, 8, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
                 TestServices.serverServices(TestServices.authService(), GameResources.fromIconRoot(iconRoot)),
-                null, NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
+                null, NetworkConfig.defaults());
         AtomicReference<Throwable> serverFailure = new AtomicReference<>();
         Thread serverThread = Thread.ofVirtual().start(() -> {
             try {
@@ -410,7 +395,7 @@ class NetworkResourceIntegrationTest {
         NetworkServer server = new NetworkServer("127.0.0.1", 0, 2, 262_144, 8, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
                 TestServices.serverServices(TestServices.authService(), GameResources.fromIconRoot(iconRoot)),
-                null, NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
+                null, NetworkConfig.defaults());
         AtomicReference<Throwable> serverFailure = new AtomicReference<>();
         Thread serverThread = Thread.ofVirtual().start(() -> {
             try {
@@ -431,33 +416,12 @@ class NetworkResourceIntegrationTest {
     }
 
     @Test
-    void javaClientCompletesLegacyG1BootstrapAndReconnectsWithoutDuplicateMonsterRequest() throws Exception {
-        AtomicInteger updateCount = new AtomicInteger();
-        AtomicInteger monsterUpdateCount = new AtomicInteger();
-        CountDownLatch firstUpdate = new CountDownLatch(1);
-        CountDownLatch secondUpdate = new CountDownLatch(1);
-        CountDownLatch firstMonsterUpdate = new CountDownLatch(1);
-        CountDownLatch secondMonsterUpdate = new CountDownLatch(1);
-        NetworkEventObserver observer = (session, type) -> {
-            if (type == -1) {
-                if (updateCount.incrementAndGet() == 1) {
-                    firstUpdate.countDown();
-                } else {
-                    secondUpdate.countDown();
-                }
-            } else if (type == 4) {
-                if (monsterUpdateCount.incrementAndGet() == 1) {
-                    firstMonsterUpdate.countDown();
-                } else {
-                    secondMonsterUpdate.countDown();
-                }
-            }
-        };
+    void manifestDoesNotPushMonsterResourceWithoutRequest() throws Exception {
         NetworkServer server = new NetworkServer("127.0.0.1", 0, 2, 1024, 8, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
                 TestServices.serverServices(TestServices.authService(), GameResources.fromFrameRoot(
                         Path.of("resources", "json"))),
-                null, NetworkConfig.defaults(), observer);
+                null, NetworkConfig.defaults());
         AtomicReference<Throwable> serverFailure = new AtomicReference<>();
         Thread serverThread = Thread.ofVirtual().start(() -> {
             try {
@@ -468,117 +432,36 @@ class NetworkResourceIntegrationTest {
         });
         try {
             waitForPort(server);
-            runBootstrap(server.localPort(), true);
-            assertTrue(firstUpdate.await(1, TimeUnit.SECONDS));
-            assertTrue(firstMonsterUpdate.await(1, TimeUnit.SECONDS));
-            waitForNoSessions(server);
-            // Model a restart after the client persisted monster version 1.
-            runBootstrap(server.localPort(), false);
-            assertTrue(secondUpdate.await(1, TimeUnit.SECONDS));
-            assertTrue(!secondMonsterUpdate.await(100, TimeUnit.MILLISECONDS));
+            runMonsterManifestWithoutRequest(server.localPort());
             waitForNoSessions(server);
         } finally {
             server.stop();
             serverThread.join(1_000);
         }
-        assertNull(serverFailure.get(), "network server failed during integration test");
+        assertNull(serverFailure.get(), "network server failed during monster manifest test");
     }
 
-    private static void runBootstrap(int port, boolean requestMonster) throws Exception {
+    private static void runMonsterManifestWithoutRequest(int port) throws Exception {
         LegacyPacketCodec codec = new LegacyPacketCodec(1024);
         try (LegacyTcpTransport transport = LegacyTcpTransport.connect("127.0.0.1", port, 1_000)) {
+            transport.socket().setSoTimeout(100);
             codec.writeClient(transport.output(), null, false, new Message(MessageName.CONNECT_SERVER));
             Message handshake = codec.read(transport.input(), null, false);
             assertEquals(MessageName.SEND_SESSION_KEY, handshake.command());
-            byte[] key = reconstructKey(handshake.payload());
-            LegacyCipher cipher = new LegacyCipher(key);
+            LegacyCipher cipher = new LegacyCipher(reconstructKey(handshake.payload()));
             Message version = codec.readServerResponse(transport.input(), cipher, true);
             assertEquals(MessageName.VERSION_SOURCE, version.command());
             assertEquals("0.9.5", version.reader().readUtf());
+
             codec.writeClient(transport.output(), cipher, true,
                     new Message(MessageName.UPDATE_DATA, new MessageWriter().writeByte(-1).toByteArray()));
             Message manifest = codec.readServerResponse(transport.input(), cipher, true);
             assertEquals(MessageName.UPDATE_DATA, manifest.command());
-            assertEquals(14, manifest.payload().length);
             assertArrayEquals(new byte[]{
                     -1, -1, -1, -1, -1, 2, 1, -1, 0, 1, -1, -1, -1, -1
             }, manifest.payload());
-            int historicalEmptyMonsterVersion = 0;
-            int serverMonsterVersion = Byte.toUnsignedInt(manifest.payload()[6]);
-            assertEquals(1, serverMonsterVersion);
-            assertTrue(serverMonsterVersion != historicalEmptyMonsterVersion);
-            var manifestReader = manifest.reader();
-            assertEquals(-1, manifestReader.readByte());
-            assertEquals(-1, manifestReader.readByte());
-            assertEquals(-1, manifestReader.readByte());
-            assertEquals(-1, manifestReader.readByte());
-            assertEquals(-1, manifestReader.readByte());
-            assertEquals(2, manifestReader.readByte());
-            assertEquals(1, manifestReader.readByte());
-            assertEquals(-1, manifestReader.readByte());
-            assertEquals(0, manifestReader.readByte());
-            assertEquals(1, manifestReader.readByte());
-            assertEquals(-1, manifestReader.readByte());
-            assertEquals(-1, manifestReader.readByte());
-            assertEquals(-1, manifestReader.readByte());
-            assertEquals(-1, manifestReader.readByte());
-            assertEquals(0, manifestReader.remaining());
-
-            if (requestMonster) {
-                codec.writeClient(transport.output(), cipher, true,
-                        new Message(MessageName.UPDATE_DATA, new MessageWriter().writeByte(4).toByteArray()));
-                Message monster = codec.readServerResponse(transport.input(), cipher, true);
-                assertEquals(MessageName.UPDATE_DATA, monster.command());
-                var monsterReader = monster.reader();
-                assertEquals(4, monsterReader.readByte());
-                assertEquals(1, monsterReader.readByte());
-                assertEquals(1, monsterReader.readUnsignedShort());
-                assertEquals(0, monsterReader.readShort());
-                assertFalse(monsterReader.readBoolean());
-                assertEquals(3, monsterReader.readUnsignedByte());
-                assertEquals(2198, monsterReader.readShort());
-                assertEquals(2199, monsterReader.readShort());
-                assertEquals(2200, monsterReader.readShort());
-                assertEquals(0, monsterReader.readShort());
-                assertEquals(0, monsterReader.readShort());
-                assertEquals(30, monsterReader.readShort());
-                assertEquals(3, monsterReader.readUnsignedByte());
-                assertEquals(2190, monsterReader.readShort());
-                assertEquals(2191, monsterReader.readShort());
-                assertEquals(2192, monsterReader.readShort());
-                assertEquals(0, monsterReader.readShort());
-                assertEquals(0, monsterReader.readShort());
-                assertEquals(30, monsterReader.readShort());
-                assertEquals(5, monsterReader.readUnsignedByte());
-                assertEquals(2193, monsterReader.readShort());
-                assertEquals(2194, monsterReader.readShort());
-                assertEquals(2195, monsterReader.readShort());
-                assertEquals(2196, monsterReader.readShort());
-                assertEquals(2197, monsterReader.readShort());
-                assertEquals(0, monsterReader.readShort());
-                assertEquals(0, monsterReader.readShort());
-                assertEquals(20, monsterReader.readShort());
-                assertEquals(1, monsterReader.readUnsignedShort());
-                assertEquals(1, monsterReader.readShort());
-                assertEquals("Hổ nanh kiếm", monsterReader.readUtf());
-                assertEquals(100, monsterReader.readShort());
-                assertEquals(1, monsterReader.readByte());
-                assertEquals(1, monsterReader.readByte());
-                assertEquals(0, monsterReader.readByte());
-                assertEquals(5, monsterReader.readUnsignedByte());
-                assertEquals(11818, monsterReader.readShort());
-                assertEquals(11819, monsterReader.readShort());
-                assertEquals(11820, monsterReader.readShort());
-                assertEquals(11821, monsterReader.readShort());
-                assertEquals(11822, monsterReader.readShort());
-                assertEquals(11824, monsterReader.readShort());
-                assertEquals(11823, monsterReader.readShort());
-                assertEquals(175, monsterReader.readShort());
-                assertEquals(95, monsterReader.readShort());
-                assertEquals(0, monsterReader.readByte());
-                assertEquals(0, monsterReader.readByte());
-                assertEquals(0, monsterReader.remaining());
-            }
+            assertThrows(SocketTimeoutException.class,
+                    () -> codec.readServerResponse(transport.input(), cipher, true));
         }
     }
 
@@ -635,10 +518,10 @@ class NetworkResourceIntegrationTest {
         }
     }
 
-    private static void runFrameBootstrap(int port, boolean requestFrame) throws Exception {
+    private static void runFrameManifestWithoutRequest(int port) throws Exception {
         LegacyPacketCodec codec = new LegacyPacketCodec(4096);
         try (LegacyTcpTransport transport = LegacyTcpTransport.connect("127.0.0.1", port, 1_000)) {
-            transport.socket().setSoTimeout(1_000);
+            transport.socket().setSoTimeout(100);
             codec.writeClient(transport.output(), null, false, new Message(MessageName.CONNECT_SERVER));
             Message handshake = codec.read(transport.input(), null, false);
             assertEquals(MessageName.SEND_SESSION_KEY, handshake.command());
@@ -649,19 +532,12 @@ class NetworkResourceIntegrationTest {
             codec.writeClient(transport.output(), cipher, true,
                     new Message(MessageName.UPDATE_DATA, new MessageWriter().writeByte(-1).toByteArray()));
             Message manifest = codec.readServerResponse(transport.input(), cipher, true);
+            assertEquals(MessageName.UPDATE_DATA, manifest.command());
             assertArrayEquals(new byte[]{
                     -1, -1, -1, -1, -1, -1, -1, -1, -1, 1, -1, -1, -1, -1
             }, manifest.payload());
-
-            if (requestFrame) {
-                codec.writeClient(transport.output(), cipher, true,
-                        new Message(MessageName.UPDATE_DATA, new MessageWriter().writeByte(7).toByteArray()));
-                Message frame = codec.readServerResponse(transport.input(), cipher, true);
-                var reader = frame.reader();
-                assertEquals(7, reader.readByte());
-                assertEquals(1, reader.readByte());
-                assertEquals(9, reader.readUnsignedShort());
-            }
+            assertThrows(SocketTimeoutException.class,
+                    () -> codec.readServerResponse(transport.input(), cipher, true));
         }
     }
 

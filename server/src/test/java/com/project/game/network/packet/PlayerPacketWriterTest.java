@@ -1,4 +1,5 @@
 package com.project.game.network.packet;
+import com.project.game.testsupport.TestPlayerProfiles;
 
 import com.project.game.network.message.Message;
 import com.project.game.network.message.MessageName;
@@ -19,7 +20,7 @@ class PlayerPacketWriterTest {
     @Test
     void usesLegacyCommandIds() {
         PlayerPacketWriter writer = new PlayerPacketWriter();
-        PlayerProfile player = PlayerProfile.initial(1L, 7, "alpha1", 0);
+        PlayerProfile player = TestPlayerProfiles.initial(1L, 7, "alpha1", 0);
 
         assertEquals(MessageName.ADD_PLAYER, writer.addPlayer(player).command());
         assertEquals(MessageName.REMOVE_PLAYER, writer.removePlayer(player.id()).command());
@@ -73,7 +74,7 @@ class PlayerPacketWriterTest {
 
     @Test
     void writesWakeUpFromDiePacketExactly() throws Exception {
-        PlayerProfile player = PlayerProfile.initial(77L, 77, "wake1", 0)
+        PlayerProfile player = TestPlayerProfiles.initial(77L, 77, "wake1", 0)
                 .revivedAt(0, 0, 1250, 648);
 
         Message packet = new PlayerPacketWriter().wakeUpFromDie(player);
@@ -101,7 +102,7 @@ class PlayerPacketWriterTest {
 
     @Test
     void serializesCanonicalNormalPlayerPayload() throws Exception {
-        PlayerProfile player = PlayerProfile.initial(1L, 0x01020304, "alpha1", 0);
+        PlayerProfile player = TestPlayerProfiles.initial(1L, 0x01020304, "alpha1", 0);
         Message message = new PlayerPacketWriter().addPlayer(player);
         var reader = message.reader();
 
@@ -131,7 +132,7 @@ class PlayerPacketWriterTest {
 
     @Test
     void serializesCanonicalPlayerInfoWithActiveSkillWireShape() throws Exception {
-        PlayerProfile player = PlayerProfile.initial(1L, 7, "alpha1", 0);
+        PlayerProfile player = TestPlayerProfiles.initial(1L, 7, "alpha1", 0);
         List<LegacyPlayerSkill> skills = GameResources
                 .fromRoots(null, Path.of("resources", "json"))
                 .playerSkills(0);

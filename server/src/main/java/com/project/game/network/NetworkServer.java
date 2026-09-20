@@ -31,15 +31,13 @@ public final class NetworkServer {
     private final MonsterLifecycleScheduler monsterLifecycleScheduler;
     private final SSLContext tlsContext;
     private final NetworkConfig networkConfig;
-    private final NetworkEventObserver eventObserver;
     private final SessionManager sessions = new SessionManager();
     private volatile boolean running;
     private volatile ServerSocket serverSocket;
 
     public NetworkServer(String host, int port, int maxSessionsPerIp, int maxPacketSize,
                          int sendQueueSize, int handshakeTimeoutMillis, byte[] handshakeKey,
-                         ServerServices services, SSLContext tlsContext, NetworkConfig networkConfig,
-                         NetworkEventObserver eventObserver) {
+                         ServerServices services, SSLContext tlsContext, NetworkConfig networkConfig) {
         if (port < 0 || port > 65535 || maxSessionsPerIp < 1 || maxPacketSize < 1 || sendQueueSize < 1
                 || handshakeTimeoutMillis < 1) {
             throw new IllegalArgumentException("invalid network configuration");
@@ -60,7 +58,6 @@ public final class NetworkServer {
                 MONSTER_LIFECYCLE_PERIOD_MILLIS);
         this.tlsContext = tlsContext;
         this.networkConfig = Objects.requireNonNull(networkConfig, "networkConfig");
-        this.eventObserver = Objects.requireNonNull(eventObserver, "eventObserver");
     }
 
     public void start() throws IOException {
@@ -113,7 +110,7 @@ public final class NetworkServer {
                 }
                 LegacyPacketCodec codec = new LegacyPacketCodec(maxPacketSize);
                 Session session = new Session(sessions.nextId(), transport, sessions, codec, handshakeKey,
-                        sendQueueSize, services, networkConfig, eventObserver);
+                        sendQueueSize, services, networkConfig);
                 if (!sessions.tryAdd(session, maxSessionsPerIp)) {
                     transport.close();
                     continue;

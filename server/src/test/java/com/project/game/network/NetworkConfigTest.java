@@ -53,12 +53,10 @@ class NetworkConfigTest {
         SessionManager manager = new SessionManager();
         Session session = new Session(manager.nextId(), new TestTransport(), manager,
                 new LegacyPacketCodec(1024), "abc".getBytes(StandardCharsets.US_ASCII), 4,
-                TestServices.serverServices(auth, GameResources.unavailable()), NetworkConfig.defaults(),
-                NetworkEventObserver.NO_OP);
+                TestServices.serverServices(auth, GameResources.unavailable()), NetworkConfig.defaults());
         session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
         MessageHandler handler = new MessageHandler(session,
-                TestServices.serverServices(auth, GameResources.unavailable()), new NetworkConfig("0.9.6", 2),
-                NetworkEventObserver.NO_OP);
+                TestServices.serverServices(auth, GameResources.unavailable()), new NetworkConfig("0.9.6", 2));
         MessageWriter login = new MessageWriter().writeUtf("0.9.5").writeUtf("user01")
                 .writeUtf("secret1").writeByte(1);
 

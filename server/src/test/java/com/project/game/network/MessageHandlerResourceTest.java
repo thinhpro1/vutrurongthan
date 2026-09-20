@@ -64,8 +64,7 @@ class MessageHandlerResourceTest {
             byte[] key = "abc".getBytes(StandardCharsets.US_ASCII);
             Session session = new Session(manager.nextId(), new TestTransport(input, output, "127.0.0.1"),
                     manager, new LegacyPacketCodec(262_144), key, 4,
-                    TestServices.serverServices(TestServices.authService(), resources), NetworkConfig.defaults(),
-                    NetworkEventObserver.NO_OP);
+                    TestServices.serverServices(TestServices.authService(), resources), NetworkConfig.defaults());
             try {
                 session.start();
                 session.completeHandshake();
@@ -111,8 +110,7 @@ class MessageHandlerResourceTest {
                     key,
                     4,
                     TestServices.serverServices(TestServices.authService(), resources),
-                    NetworkConfig.defaults(),
-                    NetworkEventObserver.NO_OP);
+                    NetworkConfig.defaults());
             try {
                 session.start();
                 session.completeHandshake();
@@ -161,8 +159,7 @@ class MessageHandlerResourceTest {
             byte[] key = "abc".getBytes(StandardCharsets.US_ASCII);
             Session session = new Session(manager.nextId(), new TestTransport(input, output, "127.0.0.1"),
                     manager, new LegacyPacketCodec(262_144), key, 4,
-                    TestServices.serverServices(TestServices.authService(), resources), NetworkConfig.defaults(),
-                    NetworkEventObserver.NO_OP);
+                    TestServices.serverServices(TestServices.authService(), resources), NetworkConfig.defaults());
             try {
                 session.start();
                 session.completeHandshake();
@@ -395,8 +392,7 @@ class MessageHandlerResourceTest {
                         key,
                         4,
                         TestServices.serverServices(TestServices.authService(), resources),
-                        NetworkConfig.defaults(),
-                        NetworkEventObserver.NO_OP);
+                        NetworkConfig.defaults());
                 try {
                     session.start();
                     session.completeHandshake();
@@ -466,8 +462,7 @@ class MessageHandlerResourceTest {
             byte[] key = "abc".getBytes(StandardCharsets.US_ASCII);
             Session session = new Session(manager.nextId(), new TestTransport(input, output, "127.0.0.1"),
                     manager, new LegacyPacketCodec(262_144), key, 4,
-                    TestServices.serverServices(TestServices.authService(), resources), NetworkConfig.defaults(),
-                    NetworkEventObserver.NO_OP);
+                    TestServices.serverServices(TestServices.authService(), resources), NetworkConfig.defaults());
             try {
                 session.start();
                 session.completeHandshake();
@@ -502,8 +497,7 @@ class MessageHandlerResourceTest {
             byte[] key = "abc".getBytes(StandardCharsets.US_ASCII);
             Session session = new Session(manager.nextId(), new TestTransport(input, output, "127.0.0.1"),
                     manager, new LegacyPacketCodec(262_144), key, 4,
-                    TestServices.serverServices(TestServices.authService(), resources), NetworkConfig.defaults(),
-                    NetworkEventObserver.NO_OP);
+                    TestServices.serverServices(TestServices.authService(), resources), NetworkConfig.defaults());
             try {
                 session.start();
                 session.completeHandshake();

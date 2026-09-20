@@ -96,8 +96,4 @@ public record PlayerProfile(
                 appearance, coin, coinLock, diamond, ruby,
                 mapId, zoneId, x, y);
     }
-
-    public static PlayerProfile initial(long accountId, int id, String name, int gender) {
-        return new PlayerInitialProfileFactory().createWithId(id, accountId, name, gender);
-    }
 }

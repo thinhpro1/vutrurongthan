@@ -194,8 +194,8 @@ final class MonsterLoader {
             int levelStatus = JsonResourceReader.readByteValue(object, "levelStatus");
             int x = JsonResourceReader.readShortValue(object, "x");
             int y = JsonResourceReader.readShortValue(object, "y");
-            long maxHp = JsonResourceReader.readLongStrict(object, "maxHp");
-            long hp = JsonResourceReader.readLongStrict(object, "hp");
+            long maxHp = JsonResourceReader.readStrictLong(object, "maxHp");
+            long hp = JsonResourceReader.readStrictLong(object, "hp");
             int status = JsonResourceReader.readByteValue(object, "status");
             if (!ids.add(id)) {
                 throw new IllegalArgumentException("duplicate MonsterBootstrap runtime id " + id);

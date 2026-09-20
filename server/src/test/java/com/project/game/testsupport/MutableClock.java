@@ -1,4 +1,4 @@
-package com.project.game.test;
+package com.project.game.testsupport;
 
 import java.time.Clock;
 import java.time.Instant;

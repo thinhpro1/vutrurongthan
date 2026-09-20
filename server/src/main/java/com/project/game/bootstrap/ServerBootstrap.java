@@ -7,7 +7,6 @@ import com.project.game.map.ZoneRegistry;
 import com.project.game.monster.MonsterRuntimeFactory;
 import com.project.game.monster.MonsterService;
 import com.project.game.network.NetworkConfig;
-import com.project.game.network.NetworkEventObserver;
 import com.project.game.network.NetworkServer;
 import com.project.game.network.packet.MonsterPacketWriter;
 import com.project.game.network.packet.PlayerPacketWriter;
@@ -73,7 +72,7 @@ public final class ServerBootstrap {
 
         DatabaseManager databaseManager = databaseManagerFactory.get();
         try {
-            GameResources resources = resourceService(properties);
+            GameResources resources = loadResources(properties);
             MonsterRuntimeFactory monsterFactory = new MonsterRuntimeFactory(resources);
             PlayerPacketWriter playerPackets = new PlayerPacketWriter();
             MonsterPacketWriter monsterPackets = new MonsterPacketWriter();
@@ -100,8 +99,7 @@ public final class ServerBootstrap {
                     integer(properties, "game.network.send-queue-size", 256),
                     integer(properties, "game.network.handshake-timeout-ms", 10000),
                     "abc".getBytes(StandardCharsets.US_ASCII),
-                    services, tlsContext, NetworkConfig.fromProperties(properties),
-                    NetworkEventObserver.NO_OP);
+                    services, tlsContext, NetworkConfig.fromProperties(properties));
             return new ServerBootstrap(server, databaseManager);
         } catch (RuntimeException | Error exception) {
             databaseManager.close();
@@ -140,7 +138,7 @@ public final class ServerBootstrap {
         return Integer.parseInt(properties.getProperty(key, Integer.toString(fallback)));
     }
 
-    private static GameResources resourceService(Properties properties) {
+    private static GameResources loadResources(Properties properties) {
         String configuredIconRoot = properties.getProperty("game.resource.icon-dir", "").trim();
         String configuredJsonRoot = properties.getProperty("game.resource.json-dir", "").trim();
         int imageVersion = integer(properties, "game.resource.image-version", -1);

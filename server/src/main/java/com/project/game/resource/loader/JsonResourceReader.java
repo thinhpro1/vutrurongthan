@@ -114,19 +114,6 @@ final class JsonResourceReader {
         }
     }
 
-    static long readLongStrict(JsonObject object, String field) {
-        JsonElement value = required(object, field);
-        if (!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isNumber()) {
-            throw new IllegalArgumentException("resource field " + field + " must be numeric");
-        }
-        try {
-            return new BigDecimal(value.getAsString()).longValueExact();
-        } catch (NumberFormatException | ArithmeticException exception) {
-            throw new IllegalArgumentException("resource field " + field
-                    + " must be a long integer", exception);
-        }
-    }
-
     static boolean readBoolean(JsonObject object, String field) {
         JsonElement value = required(object, field);
         if (!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isBoolean()) {

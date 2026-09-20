@@ -52,7 +52,7 @@ public final class MessageHandler {
         }
         try {
             switch (message.command()) {
-                case MessageName.CONNECT_SERVER -> connectionHandler.handleConnect();
+                case MessageName.CONNECT_SERVER -> connectionHandler.handleConnect(message);
                 case MessageName.UPDATE_DATA -> resourceHandler.handleUpdateData(message);
                 case MessageName.REQUEST_ICON -> resourceHandler.handleRequestIcon(message);
                 case MessageName.LOGIN -> authHandler.handleLogin(message);

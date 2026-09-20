@@ -18,7 +18,10 @@ final class ConnectionHandler {
         this.networkConfig = networkConfig;
     }
 
-    void handleConnect() throws IOException {
+    void handleConnect(Message message) throws IOException {
+        if (message.reader().remaining() != 0) {
+            throw new IOException("trailing connect payload bytes");
+        }
         session.completeHandshake();
         MessageWriter writer = new MessageWriter().writeUtf(networkConfig.clientVersion());
         session.send(new Message(MessageName.VERSION_SOURCE, writer.toByteArray()));

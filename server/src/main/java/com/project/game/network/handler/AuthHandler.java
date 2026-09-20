@@ -91,8 +91,12 @@ final class AuthHandler {
 
     void handleRegister(Message message) throws IOException {
         var reader = message.reader();
-        AuthService.AuthResult result = authService.register(
-                reader.readUtf(), reader.readUtf(), session.remoteAddress());
+        String username = reader.readUtf();
+        String password = reader.readUtf();
+        if (reader.remaining() != 0) {
+            throw new IOException("trailing register payload bytes");
+        }
+        AuthService.AuthResult result = authService.register(username, password, session.remoteAddress());
         sendDialog(result.value());
     }
 

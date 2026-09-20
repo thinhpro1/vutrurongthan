@@ -26,6 +26,33 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class NetworkHardeningTest {
     @Test
+    void closesWhenConnectContainsTrailingBytes() throws Exception {
+        SessionManager manager = new SessionManager();
+        PipedInputStream input = new PipedInputStream();
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        try (PipedOutputStream client = new PipedOutputStream(input)) {
+            TestTransport transport = new TestTransport(input, output, "127.0.0.1");
+            Session session = new Session(manager.nextId(), transport, manager, new LegacyPacketCodec(1024),
+                    "abc".getBytes(StandardCharsets.US_ASCII), 4, TestServices.serverServices(),
+                    NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
+            assertTrue(manager.tryAdd(session, 1));
+            session.start();
+            try {
+                LegacyPacketCodec codec = new LegacyPacketCodec(1024);
+                codec.writeClient(client, null, false, new Message(MessageName.CONNECT_SERVER,
+                        new MessageWriter().writeByte(99).toByteArray()));
+
+                waitForClosed(session);
+
+                assertEquals(0, output.size(), "malformed connect sent handshake bytes");
+                assertEquals(0, manager.onlineCount());
+            } finally {
+                session.close();
+            }
+        }
+    }
+
+    @Test
     void runtimeHandlerFailureClosesTransportAndCleansSessionManager() throws Exception {
         SessionManager manager = new SessionManager();
         PipedInputStream input = new PipedInputStream();

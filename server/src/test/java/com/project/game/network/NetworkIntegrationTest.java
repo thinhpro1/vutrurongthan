@@ -10,7 +10,7 @@ import com.project.game.network.message.MessageName;
 import com.project.game.network.message.MessageWriter;
 import com.project.game.network.transport.LegacyTcpTransport;
 import com.project.game.resource.FrameTemplate;
-import com.project.game.map.MapService;
+import com.project.game.testsupport.GameplayServices;
 import com.project.game.monster.MonsterRuntimeFactory;
 import com.project.game.account.AuthService;
 import com.project.game.resource.IconFingerprint;
@@ -55,7 +55,7 @@ class NetworkIntegrationTest {
         BlockingLifecycleRandom random = new BlockingLifecycleRandom();
         assertTrue(auth.register(victimAccount, "secret1", "127.0.0.1").success());
         assertTrue(auth.register(observerAccount, "secret1", "127.0.0.1").success());
-        MapService maps = new MapService(
+        GameplayServices maps = new GameplayServices(
                 new com.project.game.network.packet.PlayerPacketWriter(),
                 new MonsterPacketWriter(),
                 new MonsterRuntimeFactory(resources),
@@ -318,7 +318,7 @@ class NetworkIntegrationTest {
         AuthService auth = TestServices.authService();
         assertTrue(auth.register("mapzonea", "secret1", "127.0.0.1").success());
         assertTrue(auth.register("mapzoneb", "secret1", "127.0.0.1").success());
-        MapService maps = new MapService(
+        GameplayServices maps = new GameplayServices(
                 new com.project.game.network.packet.PlayerPacketWriter(),
                 new MonsterPacketWriter(),
                 new MonsterRuntimeFactory(resources));
@@ -399,7 +399,7 @@ class NetworkIntegrationTest {
         assertTrue(auth.register("chasetcp1", "secret1", "127.0.0.1").success());
         assertTrue(auth.register("chasetcp2", "secret1", "127.0.0.1").success());
         assertTrue(auth.register("chasetcp3", "secret1", "127.0.0.1").success());
-        MapService maps = new MapService(
+        GameplayServices maps = new GameplayServices(
                 new com.project.game.network.packet.PlayerPacketWriter(),
                 new MonsterPacketWriter(),
                 new MonsterRuntimeFactory(resources),
@@ -497,7 +497,7 @@ class NetworkIntegrationTest {
         AuthService auth = TestServices.authService();
         assertTrue(auth.register("zonea1", "secret1", "127.0.0.1").success());
         assertTrue(auth.register("zoneb1", "secret1", "127.0.0.1").success());
-        MapService maps = new MapService(
+        GameplayServices maps = new GameplayServices(
                 new com.project.game.network.packet.PlayerPacketWriter(),
                 new MonsterPacketWriter(),
                 new MonsterRuntimeFactory(resources));
@@ -561,7 +561,7 @@ class NetworkIntegrationTest {
         MutableClock clock = new MutableClock(1_000_000L);
         assertTrue(auth.register("combatza", "secret1", "127.0.0.1").success());
         assertTrue(auth.register("combatzb", "secret1", "127.0.0.1").success());
-        MapService maps = new MapService(
+        GameplayServices maps = new GameplayServices(
                 new com.project.game.network.packet.PlayerPacketWriter(),
                 new MonsterPacketWriter(),
                 new MonsterRuntimeFactory(resources),
@@ -693,7 +693,7 @@ class NetworkIntegrationTest {
         GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"));
         AuthService auth = TestServices.authService();
         assertTrue(auth.register(accountName, "secret1", "127.0.0.1").success());
-        MapService maps = new MapService(
+        GameplayServices maps = new GameplayServices(
                 new com.project.game.network.packet.PlayerPacketWriter(),
                 new MonsterPacketWriter(),
                 new MonsterRuntimeFactory(resources));
@@ -774,7 +774,7 @@ class NetworkIntegrationTest {
         MutableClock clock = new MutableClock(1_000_000L);
         assertTrue(auth.register("retaliatea", "secret1", "127.0.0.1").success());
         assertTrue(auth.register("retaliateb", "secret1", "127.0.0.1").success());
-        MapService maps = new MapService(
+        GameplayServices maps = new GameplayServices(
                 new com.project.game.network.packet.PlayerPacketWriter(),
                 new MonsterPacketWriter(),
                 new MonsterRuntimeFactory(resources),
@@ -898,7 +898,7 @@ class NetworkIntegrationTest {
         AuthService auth = TestServices.authService();
         MutableClock clock = new MutableClock(1_000_000L);
         assertTrue(auth.register("retaliaterace", "secret1", "127.0.0.1").success());
-        MapService maps = new MapService(
+        GameplayServices maps = new GameplayServices(
                 new com.project.game.network.packet.PlayerPacketWriter(),
                 new MonsterPacketWriter(),
                 new MonsterRuntimeFactory(resources),
@@ -2660,7 +2660,7 @@ class NetworkIntegrationTest {
         assertEquals(y, session.player().y());
     }
 
-    private static void awaitMemberCount(MapService maps, int mapId, int zoneId, int expected)
+    private static void awaitMemberCount(GameplayServices maps, int mapId, int zoneId, int expected)
             throws InterruptedException {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
         while (System.nanoTime() < deadline) {

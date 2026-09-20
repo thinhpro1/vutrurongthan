@@ -6,7 +6,7 @@ import com.project.game.persistence.account.AccountRecord;
 import com.project.game.persistence.account.AccountRepository;
 import com.project.game.persistence.account.AccountRepositoryException;
 
-import com.project.game.map.MapService;
+import com.project.game.testsupport.GameplayServices;
 import com.project.game.map.Zone;
 import com.project.game.network.codec.LegacyPacketCodec;
 import com.project.game.network.codec.LegacyCipher;
@@ -62,7 +62,7 @@ class MessageHandlerTest {
     @Test
     void changesMapOnlyWhenInsideSupportedWaypoint() throws Exception {
         GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"));
-        MapService maps = new MapService(
+        GameplayServices maps = new GameplayServices(
                 new PlayerPacketWriter(),
                 new MonsterPacketWriter(),
                 new MonsterRuntimeFactory(resources));
@@ -128,7 +128,7 @@ class MessageHandlerTest {
     @Test
     void requestChangeMapOutsideWaypointIsNoOp() throws Exception {
         GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"));
-        MapService maps = new MapService(
+        GameplayServices maps = new GameplayServices(
                 new PlayerPacketWriter(),
                 new MonsterPacketWriter(),
                 new MonsterRuntimeFactory(resources));
@@ -149,7 +149,7 @@ class MessageHandlerTest {
     @Test
     void requestChangeMapPreservesAuthoritativeHpChangedBeforeZoneTransition() throws Exception {
         GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"));
-        MapService maps = new MapService(
+        GameplayServices maps = new GameplayServices(
                 new PlayerPacketWriter(),
                 new MonsterPacketWriter(),
                 new MonsterRuntimeFactory(resources));
@@ -224,7 +224,7 @@ class MessageHandlerTest {
     @Test
     void finishLoadRegistersPresenceAndMovementDoesNotAckMover() throws Exception {
         AuthService auth = TestServices.authService();
-        MapService maps = new MapService(
+        GameplayServices maps = new GameplayServices(
                 new PlayerPacketWriter(),
                 new MonsterPacketWriter(),
                 new MonsterRuntimeFactory(GameResources.unavailable()));
@@ -286,7 +286,7 @@ class MessageHandlerTest {
 
     @Test
     void finishLoadMapRejectsTrailingBytes() {
-        MapService maps = new MapService(
+        GameplayServices maps = new GameplayServices(
                 new PlayerPacketWriter(),
                 new MonsterPacketWriter(),
                 new MonsterRuntimeFactory(GameResources.unavailable()));
@@ -411,7 +411,7 @@ class MessageHandlerTest {
     @Test
     void preFinishMapInfoZoneCannotBeTargeted() {
         GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"));
-        MapService maps = new MapService(new PlayerPacketWriter(), new MonsterPacketWriter(),
+        GameplayServices maps = new GameplayServices(new PlayerPacketWriter(), new MonsterPacketWriter(),
                 new MonsterRuntimeFactory(resources));
         ServerServices services = TestServices.serverServices(TestServices.authService(), resources, maps);
         Session session = inGameSession(services,
@@ -1108,7 +1108,7 @@ class MessageHandlerTest {
 
     private static CombatContext combatContext() {
         GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"));
-        MapService maps = new MapService(new PlayerPacketWriter(), new MonsterPacketWriter(),
+        GameplayServices maps = new GameplayServices(new PlayerPacketWriter(), new MonsterPacketWriter(),
                 new MonsterRuntimeFactory(resources));
         ServerServices services = TestServices.serverServices(TestServices.authService(), resources, maps);
         Session session = inGameSession(services,
@@ -1123,7 +1123,7 @@ class MessageHandlerTest {
         return new CombatContext(session, handler, maps);
     }
 
-    private record CombatContext(Session session, MessageHandler handler, MapService maps) {
+    private record CombatContext(Session session, MessageHandler handler, GameplayServices maps) {
     }
 
     private static AuthService registeredAuth() {
@@ -1180,16 +1180,12 @@ class MessageHandlerTest {
         return messages;
     }
 
-    private static Zone zoneFor(MapService maps, int mapId, int zoneId) throws Exception {
-        Field field = MapService.class.getDeclaredField("zones");
-        field.setAccessible(true);
-        for (Object candidate : ((java.util.Map<?, ?>) field.get(maps)).values()) {
-            Zone zone = (Zone) candidate;
-            if (zone.mapId() == mapId && zone.zoneId() == zoneId) {
-                return zone;
-            }
+    private static Zone zoneFor(GameplayServices maps, int mapId, int zoneId) throws Exception {
+        Zone zone = maps.zones().find(mapId, zoneId);
+        if (zone == null) {
+            throw new AssertionError("zone not found map=" + mapId + " zone=" + zoneId);
         }
-        throw new AssertionError("zone not found map=" + mapId + " zone=" + zoneId);
+        return zone;
     }
 
     private static final class BlockingMetadataRepository implements AccountRepository {

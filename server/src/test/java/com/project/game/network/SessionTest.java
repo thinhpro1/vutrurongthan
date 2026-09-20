@@ -13,7 +13,7 @@ import com.project.game.persistence.player.PlayerRecord;
 import com.project.game.persistence.player.PlayerRepository;
 import com.project.game.persistence.player.PlayerRepositoryException;
 import com.project.game.player.PlayerProfile;
-import com.project.game.map.MapService;
+import com.project.game.testsupport.GameplayServices;
 import com.project.game.monster.MonsterRuntimeFactory;
 import com.project.game.network.packet.MonsterPacketWriter;
 import com.project.game.network.packet.PlayerPacketWriter;
@@ -118,11 +118,11 @@ class SessionTest {
         BlockingPlayerRepository repository = new BlockingPlayerRepository(delegate);
         AuthService auth = new AuthService(new TestAccountRepository());
         GameResources resources = GameResources.unavailable();
-        MapService maps = new MapService(new PlayerPacketWriter(), new MonsterPacketWriter(),
+        GameplayServices maps = new GameplayServices(new PlayerPacketWriter(), new MonsterPacketWriter(),
                 new MonsterRuntimeFactory(resources));
         PlayerService players = new PlayerService(repository);
         PlayerProfile player = players.create(101L, "alpha1", 0).player().withHp(77);
-        ServerServices services = new ServerServices(auth, resources, maps, players);
+        ServerServices services = TestServices.serverServices(auth, resources, maps, players);
         SessionManager manager = new SessionManager();
         Session session = new Session(manager.nextId(), new TestTransport(), manager,
                 new LegacyPacketCodec(1024), "abc".getBytes(StandardCharsets.US_ASCII), 4,
@@ -154,9 +154,9 @@ class SessionTest {
         SessionManager manager = new SessionManager();
         Session session = new Session(manager.nextId(), new TestTransport(), manager,
                 new LegacyPacketCodec(1024), "abc".getBytes(StandardCharsets.US_ASCII), 4,
-                new ServerServices(new AuthService(new TestAccountRepository()),
+                TestServices.serverServices(new AuthService(new TestAccountRepository()),
                         GameResources.unavailable(),
-                        new MapService(new PlayerPacketWriter(), new MonsterPacketWriter(),
+                        new GameplayServices(new PlayerPacketWriter(), new MonsterPacketWriter(),
                                 new MonsterRuntimeFactory(GameResources.unavailable())),
                         players),
                 NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
@@ -188,9 +188,9 @@ class SessionTest {
         TestTransport transport = new TestTransport();
         Session session = new Session(manager.nextId(), transport, manager,
                 new LegacyPacketCodec(1024), "abc".getBytes(StandardCharsets.US_ASCII), 4,
-                new ServerServices(new AuthService(new TestAccountRepository()),
+                TestServices.serverServices(new AuthService(new TestAccountRepository()),
                         GameResources.unavailable(),
-                        new MapService(new PlayerPacketWriter(), new MonsterPacketWriter(),
+                        new GameplayServices(new PlayerPacketWriter(), new MonsterPacketWriter(),
                                 new MonsterRuntimeFactory(GameResources.unavailable())),
                         players),
                 NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
@@ -230,9 +230,9 @@ class SessionTest {
         TestTransport transport = new TestTransport();
         Session session = new Session(manager.nextId(), transport, manager,
                 new LegacyPacketCodec(1024), "abc".getBytes(StandardCharsets.US_ASCII), 4,
-                new ServerServices(new AuthService(new TestAccountRepository()),
+                TestServices.serverServices(new AuthService(new TestAccountRepository()),
                         GameResources.unavailable(),
-                        new MapService(new PlayerPacketWriter(), new MonsterPacketWriter(),
+                        new GameplayServices(new PlayerPacketWriter(), new MonsterPacketWriter(),
                                 new MonsterRuntimeFactory(GameResources.unavailable())),
                         players),
                 NetworkConfig.defaults(), NetworkEventObserver.NO_OP);

@@ -5,6 +5,12 @@ import com.project.game.player.PlayerService;
 import com.project.game.resource.GameResources;
 import com.project.game.service.ServerServices;
 import com.project.game.map.MapService;
+import com.project.game.map.ZoneRegistry;
+import com.project.game.combat.CombatService;
+import com.project.game.monster.MonsterRuntimeFactory;
+import com.project.game.monster.MonsterService;
+import com.project.game.network.packet.PlayerPacketWriter;
+import com.project.game.network.packet.MonsterPacketWriter;
 
 import java.util.Map;
 import java.util.WeakHashMap;
@@ -28,18 +34,28 @@ public final class TestServices {
     }
 
     public static ServerServices serverServices(AuthService auth, GameResources resources) {
-        return new ServerServices(auth, resources,
-                new MapService(
-                        new com.project.game.network.packet.PlayerPacketWriter(),
-                        new com.project.game.network.packet.MonsterPacketWriter(),
-                        new com.project.game.monster.MonsterRuntimeFactory(resources)),
+        PlayerPacketWriter playerPackets = new PlayerPacketWriter();
+        MonsterPacketWriter monsterPackets = new MonsterPacketWriter();
+        ZoneRegistry zones = new ZoneRegistry(new MonsterRuntimeFactory(resources));
+        MapService maps = new MapService(zones, playerPackets);
+        CombatService combat = new CombatService(zones, playerPackets, monsterPackets);
+        MonsterService monsters = new MonsterService(zones, monsterPackets, playerPackets);
+        return new ServerServices(auth, resources, maps, combat, monsters,
                 new PlayerService(playerRepository(auth)));
     }
 
     public static ServerServices serverServices(AuthService auth, GameResources resources,
-                                                MapService maps) {
-        return new ServerServices(auth, resources, maps,
+                                                GameplayServices gameplay) {
+        return new ServerServices(auth, resources, gameplay.mapService(),
+                gameplay.combatService(), gameplay.monsterService(),
                 new PlayerService(playerRepository(auth)));
+    }
+
+    public static ServerServices serverServices(AuthService auth, GameResources resources,
+                                                GameplayServices gameplay,
+                                                PlayerService players) {
+        return new ServerServices(auth, resources, gameplay.mapService(),
+                gameplay.combatService(), gameplay.monsterService(), players);
     }
 
     public static PlayerService playerService(AuthService auth) {

@@ -80,7 +80,7 @@ public final class Zone {
         return existing;
     }
 
-    synchronized boolean contains(Session session) {
+    public synchronized boolean contains(Session session) {
         if (session == null || session.player() == null) {
             return false;
         }

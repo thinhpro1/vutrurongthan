@@ -6,7 +6,11 @@ import com.project.game.network.transport.LegacyTcpTransport;
 import com.project.game.network.transport.TlsContextFactory;
 import com.project.game.network.transport.TlsTcpTransport;
 import com.project.game.map.MapService;
+import com.project.game.map.ZoneRegistry;
+import com.project.game.combat.CombatService;
 import com.project.game.monster.MonsterRuntimeFactory;
+import com.project.game.monster.MonsterService;
+import com.project.game.monster.MonsterLifecycleScheduler;
 import com.project.game.network.packet.PlayerPacketWriter;
 import com.project.game.network.packet.MonsterPacketWriter;
 import com.project.game.persistence.DatabaseConfig;
@@ -77,7 +81,7 @@ public final class NetworkServer {
         }
         this.services = Objects.requireNonNull(services, "services");
         this.monsterLifecycleScheduler = new MonsterLifecycleScheduler(
-                this.services.maps()::tickMonsterLifecycle,
+                this.services.monsters()::tickLifecycle,
                 MONSTER_LIFECYCLE_PERIOD_MILLIS);
         this.tlsContext = tlsContext;
         this.networkConfig = Objects.requireNonNull(networkConfig, "networkConfig");
@@ -110,8 +114,12 @@ public final class NetworkServer {
         try {
             GameResources resources = resourceService(properties);
             MonsterRuntimeFactory monsterFactory = new MonsterRuntimeFactory(resources);
-            MapService maps = new MapService(
-                    new PlayerPacketWriter(), new MonsterPacketWriter(), monsterFactory);
+            PlayerPacketWriter playerPackets = new PlayerPacketWriter();
+            MonsterPacketWriter monsterPackets = new MonsterPacketWriter();
+            ZoneRegistry zones = new ZoneRegistry(monsterFactory);
+            MapService maps = new MapService(zones, playerPackets);
+            CombatService combat = new CombatService(zones, playerPackets, monsterPackets);
+            MonsterService monsters = new MonsterService(zones, monsterPackets, playerPackets);
             JdbcAccountRepository accountRepository =
                     new JdbcAccountRepository(databaseManager.dataSource());
             accountRepository.findByUsername("__startup_probe__");
@@ -120,7 +128,7 @@ public final class NetworkServer {
             playerRepository.probeTable();
             AuthService auth = new AuthService(accountRepository);
             ServerServices services = new ServerServices(
-                    auth, resources, maps, new PlayerService(playerRepository));
+                    auth, resources, maps, combat, monsters, new PlayerService(playerRepository));
             return new NetworkServer(
                     properties.getProperty("game.network.host", "127.0.0.1"),
                     integer(properties, "game.network.port", 1707),

@@ -1,4 +1,4 @@
-package com.project.game.network;
+package com.project.game.monster;
 
 import org.junit.jupiter.api.Test;
 

@@ -1,6 +1,6 @@
 package com.project.game.network.handler;
 
-import com.project.game.map.MapService;
+import com.project.game.combat.CombatService;
 import com.project.game.network.Session;
 import com.project.game.network.message.Message;
 import com.project.game.player.PlayerProfile;
@@ -13,12 +13,12 @@ final class CombatHandler {
     }
 
     private final Session session;
-    private final MapService mapService;
+    private final CombatService combatService;
     private PendingMonsterAttack pendingMonsterAttack;
 
-    CombatHandler(Session session, MapService mapService) {
+    CombatHandler(Session session, CombatService combatService) {
         this.session = session;
-        this.mapService = mapService;
+        this.combatService = combatService;
     }
 
     void clearPendingAttack() {
@@ -55,7 +55,7 @@ final class CombatHandler {
         }
 
         PlayerProfile player = session.player();
-        if (player == null || !mapService.canTargetMonster(session, targetId)) {
+        if (player == null || !combatService.canTargetMonster(session, targetId)) {
             return;
         }
 
@@ -107,6 +107,6 @@ final class CombatHandler {
             return;
         }
 
-        mapService.attackMonster(session, targetId, player.currentStats().damage());
+        combatService.attackMonster(session, targetId, player.currentStats().damage());
     }
 }

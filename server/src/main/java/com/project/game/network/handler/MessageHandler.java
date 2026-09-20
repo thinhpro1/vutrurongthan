@@ -34,11 +34,12 @@ public final class MessageHandler {
 
         this.connectionHandler = new ConnectionHandler(session, networkConfig);
         this.resourceHandler = new ResourceHandler(session, services.resources(), eventObserver);
-        this.mapHandler = new MapHandler(session, services.maps(), services.players(), services.resources());
+        this.mapHandler = new MapHandler(session, services.maps(), services.monsters(),
+                services.players(), services.resources());
         this.playerHandler = new PlayerHandler(session, services.players(), services.resources(), mapHandler);
         this.authHandler = new AuthHandler(session, services.auth(), services.players(),
                 networkConfig, playerHandler);
-        this.combatHandler = new CombatHandler(session, services.maps());
+        this.combatHandler = new CombatHandler(session, services.combat());
     }
 
     public void onMessage(Message message) {

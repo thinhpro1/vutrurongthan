@@ -1,6 +1,7 @@
 package com.project.game.network.handler;
 
 import com.project.game.map.MapService;
+import com.project.game.monster.MonsterService;
 import com.project.game.network.Session;
 import com.project.game.network.SessionState;
 import com.project.game.network.message.Message;
@@ -18,15 +19,17 @@ import java.util.Optional;
 final class MapHandler {
     private final Session session;
     private final MapService mapService;
+    private final MonsterService monsterService;
     private final PlayerService playerService;
     private final GameResources resources;
     private final PlayerPacketWriter playerPackets = new PlayerPacketWriter();
     private final MapPacketWriter mapPackets = new MapPacketWriter();
 
-    MapHandler(Session session, MapService mapService, PlayerService playerService,
-               GameResources resources) {
+    MapHandler(Session session, MapService mapService, MonsterService monsterService,
+               PlayerService playerService, GameResources resources) {
         this.session = session;
         this.mapService = mapService;
+        this.monsterService = monsterService;
         this.playerService = playerService;
         this.resources = resources;
     }
@@ -130,7 +133,7 @@ final class MapHandler {
                             "waypoint target map unavailable: " + waypoint.goMap()));
             waypointTargetNames.add(target.name());
         }
-        var monsters = mapService.monsterSnapshots(map.id(), player.zoneId());
+        var monsters = monsterService.monsterSnapshots(map.id(), player.zoneId());
         Message packet = mapPackets.mapInfo(
                 player, map, sendTemplate, waypointTargetNames, monsters);
         if (session.send(packet) && sendTemplate) {

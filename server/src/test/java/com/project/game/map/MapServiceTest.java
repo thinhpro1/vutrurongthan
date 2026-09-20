@@ -1,6 +1,7 @@
 package com.project.game.map;
 
 import com.project.game.testsupport.TestServices;
+import com.project.game.testsupport.GameplayServices;
 
 import com.project.game.network.NetworkConfig;
 import com.project.game.network.NetworkEventObserver;
@@ -53,7 +54,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class MapServiceTest {
     @Test
     void finishLoadExchangesPresenceOnlyWithExistingSameZoneMembers() throws Exception {
-        MapService maps = mapsWithoutMonsters();
+        GameplayServices maps = mapsWithoutMonsters();
         Session first = session(player(1, 0, 0));
         Session second = session(player(2, 0, 0));
 
@@ -68,7 +69,7 @@ class MapServiceTest {
 
     @Test
     void differentZonesDoNotExchangePresence() throws Exception {
-        MapService maps = mapsWithoutMonsters();
+        GameplayServices maps = mapsWithoutMonsters();
         Session first = session(player(1, 0, 0));
         Session second = session(player(2, 0, 1));
 
@@ -83,7 +84,7 @@ class MapServiceTest {
 
     @Test
     void movementIsSentToOtherMembersWithoutMoverAck() throws Exception {
-        MapService maps = mapsWithoutMonsters();
+        GameplayServices maps = mapsWithoutMonsters();
         Session first = session(player(1, 0, 0));
         Session second = session(player(2, 0, 0));
         maps.finishLoad(first);
@@ -109,7 +110,7 @@ class MapServiceTest {
     void movePlayerSerializesWithMonsterHpMutation() throws Exception {
         MutableClock clock = new MutableClock(1_000_000L);
         BlockingRandom random = new BlockingRandom();
-        MapService maps = mapsWithMonsters(clock, random);
+        GameplayServices maps = mapsWithMonsters(clock, random);
         Session player = session(player(1, 1, 0), maps);
         maps.finishLoad(player);
         drain(player);
@@ -146,7 +147,7 @@ class MapServiceTest {
     void serializedLifecycleThenMovementChasesLatestPlayerPosition() throws Exception {
         MutableClock clock = new MutableClock(1_000_000L);
         BlockingRandom random = new BlockingRandom();
-        MapService maps = mapsWithMonsters(clock, random);
+        GameplayServices maps = mapsWithMonsters(clock, random);
         Session player = session(player(1, 1, 0), maps);
         maps.finishLoad(player);
         drain(player);
@@ -185,7 +186,7 @@ class MapServiceTest {
 
     @Test
     void leaveNotifiesOtherMembersOnce() throws Exception {
-        MapService maps = mapsWithoutMonsters();
+        GameplayServices maps = mapsWithoutMonsters();
         Session first = session(player(1, 0, 0));
         Session second = session(player(2, 0, 0));
         maps.finishLoad(first);
@@ -207,7 +208,7 @@ class MapServiceTest {
 
     @Test
     void repeatedFinishLoadDoesNotDuplicateMembershipOrPresence() throws Exception {
-        MapService maps = mapsWithoutMonsters();
+        GameplayServices maps = mapsWithoutMonsters();
         Session first = session(player(1, 0, 0));
 
         maps.finishLoad(first);
@@ -219,7 +220,7 @@ class MapServiceTest {
 
     @Test
     void closedMembersAreNotSentPackets() throws Exception {
-        MapService maps = mapsWithoutMonsters();
+        GameplayServices maps = mapsWithoutMonsters();
         Session first = session(player(1, 0, 0));
         Session second = session(player(2, 0, 0));
         maps.finishLoad(first);
@@ -234,7 +235,7 @@ class MapServiceTest {
 
     @Test
     void simultaneousSameZoneJoinsExchangeOnePresencePacketEach() throws Exception {
-        MapService maps = mapsWithoutMonsters();
+        GameplayServices maps = mapsWithoutMonsters();
         Session first = session(player(1, 0, 0));
         Session second = session(player(2, 0, 0));
         CyclicBarrier start = new CyclicBarrier(3);
@@ -262,7 +263,7 @@ class MapServiceTest {
 
     @Test
     void leaveLastThenRejoinUsesRetainedZoneAndRemainsDiscoverable() throws Exception {
-        MapService maps = mapsWithoutMonsters();
+        GameplayServices maps = mapsWithoutMonsters();
         Session first = session(player(1, 0, 0));
         Session second = session(player(2, 0, 0));
 
@@ -317,7 +318,7 @@ class MapServiceTest {
 
     @Test
     void monsterSnapshotCreatesZoneWithoutJoiningPlayer() {
-        MapService maps = mapsWithMonsters();
+        GameplayServices maps = mapsWithMonsters();
 
         List<MonsterSnapshot> monsters = maps.monsterSnapshots(1, 0);
 
@@ -330,14 +331,14 @@ class MapServiceTest {
 
     @Test
     void mapZeroZoneStartsWithoutRuntimeMonsters() {
-        MapService maps = mapsWithMonsters();
+        GameplayServices maps = mapsWithMonsters();
         assertTrue(maps.monsterSnapshots(0, 0).isEmpty());
         assertEquals(0, maps.memberCount(0, 0));
     }
 
     @Test
     void finishLoadReusesZoneCreatedForMonsterSnapshot() throws Exception {
-        MapService maps = mapsWithMonsters();
+        GameplayServices maps = mapsWithMonsters();
         List<MonsterSnapshot> before = maps.monsterSnapshots(1, 0);
         Session joining = session(player(1, 1, 0), maps);
 
@@ -350,7 +351,7 @@ class MapServiceTest {
 
     @Test
     void differentMap1ZonesStartWithEquivalentSeeds() {
-        MapService maps = mapsWithMonsters();
+        GameplayServices maps = mapsWithMonsters();
         List<MonsterSnapshot> zone0 = maps.monsterSnapshots(1, 0);
         List<MonsterSnapshot> zone1 = maps.monsterSnapshots(1, 1);
 
@@ -361,7 +362,7 @@ class MapServiceTest {
 
     @Test
     void idleMonsterPatrolIsServerAuthoritative() {
-        MapService maps = mapsWithMonsters();
+        GameplayServices maps = mapsWithMonsters();
         maps.monsterSnapshots(1, 0);
         Zone zone = zoneFor(maps, 1, 0);
 
@@ -381,7 +382,7 @@ class MapServiceTest {
 
     @Test
     void nearbyUnhostilePlayerDoesNotRedirectIdlePatrol() throws Exception {
-        MapService maps = mapsWithMonsters();
+        GameplayServices maps = mapsWithMonsters();
         Session player = session(player(1, 1, 0).withPosition(100, 936), maps);
         maps.finishLoad(player);
         drain(player);
@@ -394,7 +395,7 @@ class MapServiceTest {
 
     @Test
     void successfulDamageMakesMonsterChaseHostilePlayer() throws Exception {
-        MapService maps = mapsWithMonsters();
+        GameplayServices maps = mapsWithMonsters();
         Session player = session(player(1, 1, 0).withPosition(1900, 936), maps);
         maps.finishLoad(player);
         drain(player);
@@ -420,7 +421,7 @@ class MapServiceTest {
 
     @Test
     void nearestHostilePlayerWinsAndLowerIdBreaksEqualDistance() throws Exception {
-        MapService maps = mapsWithMonsters();
+        GameplayServices maps = mapsWithMonsters();
         Session lowerId = session(player(7, 1, 0).withPosition(25, 936), maps);
         Session higherId = session(player(8, 1, 0).withPosition(1925, 936), maps);
         maps.finishLoad(lowerId);
@@ -445,7 +446,7 @@ class MapServiceTest {
 
     @Test
     void hostileMonsterStopsInsideAttackRangeButChasesAtExactNineHundred() throws Exception {
-        MapService insideRangeMaps = mapsWithMonsters();
+        GameplayServices insideRangeMaps = mapsWithMonsters();
         Session insideRange = session(player(1, 1, 0).withPosition(1874, 936), insideRangeMaps);
         insideRangeMaps.finishLoad(insideRange);
         drain(insideRange);
@@ -457,7 +458,7 @@ class MapServiceTest {
                 .noneMatch(result -> result.monsterId() == 0));
         assertEquals(975, insideRangeZone.monsterSnapshots().getFirst().x());
 
-        MapService exactRangeMaps = mapsWithMonsters();
+        GameplayServices exactRangeMaps = mapsWithMonsters();
         Session exactRange = session(player(1, 1, 0).withPosition(1875, 936), exactRangeMaps);
         exactRangeMaps.finishLoad(exactRange);
         drain(exactRange);
@@ -474,7 +475,7 @@ class MapServiceTest {
 
     @Test
     void leashDoesNotClearHostilityAndReentryResumesChase() throws Exception {
-        MapService maps = mapsWithMonsters();
+        GameplayServices maps = mapsWithMonsters();
         Session player = session(player(1, 1, 0).withPosition(-300, 936), maps);
         maps.finishLoad(player);
         drain(player);
@@ -500,7 +501,7 @@ class MapServiceTest {
 
     @Test
     void unavailableHostileTargetWalksMonsterBackToPatrolCorridor() throws Exception {
-        MapService maps = mapsWithMonsters();
+        GameplayServices maps = mapsWithMonsters();
         Session player = session(player(1, 1, 0).withPosition(2200, 936), maps);
         maps.finishLoad(player);
         drain(player);
@@ -523,7 +524,7 @@ class MapServiceTest {
 
     @Test
     void chaseBoundaryTransitionReturnsInwardImmediatelyWhenLeashEnds() throws Exception {
-        MapService maps = mapsWithMonsters();
+        GameplayServices maps = mapsWithMonsters();
         Session player = session(player(1, 1, 0).withPosition(1971, 936), maps);
         maps.finishLoad(player);
         drain(player);
@@ -557,7 +558,7 @@ class MapServiceTest {
 
     @Test
     void hostilePlayerJustOutsideLeashDoesNotPinReturningMonster() throws Exception {
-        MapService maps = mapsWithMonsters();
+        GameplayServices maps = mapsWithMonsters();
         Session player = session(
                 player(1, 1, 0).withPosition(2176, 936),
                 maps);
@@ -585,7 +586,7 @@ class MapServiceTest {
 
     @Test
     void concurrentMonsterSnapshotsRemainStableForSameZone() throws Exception {
-        MapService maps = mapsWithMonsters();
+        GameplayServices maps = mapsWithMonsters();
         CyclicBarrier start = new CyclicBarrier(3);
         AtomicReference<List<MonsterSnapshot>> first = new AtomicReference<>();
         AtomicReference<List<MonsterSnapshot>> second = new AtomicReference<>();
@@ -626,7 +627,7 @@ class MapServiceTest {
 
     @Test
     void disconnectCannotFinishWhileJoinPresenceEnqueueIsInProgress() throws Exception {
-        MapService maps = mapsWithoutMonsters();
+        GameplayServices maps = mapsWithoutMonsters();
         Session leaving = session(player(1, 0, 0), maps);
         Session joining = session(player(2, 0, 0), maps);
         maps.finishLoad(leaving);
@@ -653,7 +654,7 @@ class MapServiceTest {
 
     @Test
     void combatCannotCreateZone() {
-        MapService maps = mapsWithMonsters();
+        GameplayServices maps = mapsWithMonsters();
         Session session = session(player(1, 1, 0), maps);
 
         assertEquals(0, zoneRegistrySize(maps));
@@ -664,7 +665,7 @@ class MapServiceTest {
 
     @Test
     void mapInfoCreatedButPreFinishSessionCannotCombat() {
-        MapService maps = mapsWithMonsters();
+        GameplayServices maps = mapsWithMonsters();
         assertEquals(300L, maps.monsterSnapshots(1, 0).getFirst().hp());
         Session session = session(player(1, 1, 0), maps);
 
@@ -676,7 +677,7 @@ class MapServiceTest {
 
     @Test
     void deadPlayerCannotMove() throws Exception {
-        MapService maps = mapsWithoutMonsters();
+        GameplayServices maps = mapsWithoutMonsters();
         Session dead = session(player(1, 0, 0).withHp(0), maps);
         maps.finishLoad(dead);
         drain(dead);
@@ -691,7 +692,7 @@ class MapServiceTest {
 
     @Test
     void deadPlayerCannotTargetOrAttackMonster() throws Exception {
-        MapService maps = mapsWithMonsters();
+        GameplayServices maps = mapsWithMonsters();
         Session dead = session(player(1, 1, 0).withHp(0), maps);
         maps.finishLoad(dead);
         drain(dead);
@@ -704,7 +705,7 @@ class MapServiceTest {
 
     @Test
     void deadPlayerCannotUseNormalMapChange() throws Exception {
-        MapService maps = mapsWithoutMonsters();
+        GameplayServices maps = mapsWithoutMonsters();
         Session dead = session(player(1, 0, 0).withHp(0), maps);
         Session observer = session(player(2, 0, 0), maps);
         maps.finishLoad(dead);
@@ -721,7 +722,7 @@ class MapServiceTest {
 
     @Test
     void returnTownFromDeathRemovesSourcePresenceAndRevivesAtDefaultSpawn() throws Exception {
-        MapService maps = mapsWithMonsters();
+        GameplayServices maps = mapsWithMonsters();
         Session dead = session(player(1, 1, 0).withHp(0), maps);
         Session observer = session(player(2, 1, 0), maps);
         maps.finishLoad(dead);
@@ -750,7 +751,7 @@ class MapServiceTest {
 
     @Test
     void returnTownFromDeathIgnoresLivingPlayer() {
-        MapService maps = mapsWithoutMonsters();
+        GameplayServices maps = mapsWithoutMonsters();
         Session alive = session(player(1, 0, 0), maps);
         PlayerProfile original = alive.player();
 
@@ -760,7 +761,7 @@ class MapServiceTest {
 
     @Test
     void duplicateReturnTownFromDeathIsHarmless() {
-        MapService maps = mapsWithoutMonsters();
+        GameplayServices maps = mapsWithoutMonsters();
         Session dead = session(player(1, 1, 0).withHp(0), maps);
 
         assertTrue(maps.returnTownFromDeath(dead).isPresent());
@@ -771,7 +772,7 @@ class MapServiceTest {
 
     @Test
     void returnTownFromDeathSerializesWithConcurrentJoin() throws Exception {
-        MapService maps = mapsWithoutMonsters();
+        GameplayServices maps = mapsWithoutMonsters();
         Session dead = session(player(1, 1, 0).withHp(0), maps);
         Session observer = session(player(2, 1, 0), maps);
         Session joining = session(player(3, 1, 0), maps);
@@ -801,7 +802,7 @@ class MapServiceTest {
 
     @Test
     void postFinishAttackSendsAuthoritativeInjureToAttacker() throws Exception {
-        MapService maps = mapsWithMonsters();
+        GameplayServices maps = mapsWithMonsters();
         Session attacker = session(player(1, 1, 0), maps);
         maps.finishLoad(attacker);
         drain(attacker);
@@ -820,7 +821,7 @@ class MapServiceTest {
 
     @Test
     void nonKillingHitDoesNotAwardPotential() throws Exception {
-        MapService maps = mapsWithMonsters();
+        GameplayServices maps = mapsWithMonsters();
         Session attacker = session(player(1, 1, 0), maps);
         maps.finishLoad(attacker);
         drain(attacker);
@@ -837,7 +838,7 @@ class MapServiceTest {
 
     @Test
     void killingHitAwardsConfiguredPotentialOnlyToKiller() throws Exception {
-        MapService maps = mapsWithMonsters();
+        GameplayServices maps = mapsWithMonsters();
         Session attacker = session(player(1, 1, 0), maps);
         maps.finishLoad(attacker);
         drain(attacker);
@@ -863,7 +864,7 @@ class MapServiceTest {
 
     @Test
     void killingRewardSaturatesPotentialInsteadOfOverflowing() throws Exception {
-        MapService maps = mapsWithMonsters();
+        GameplayServices maps = mapsWithMonsters();
 
         PlayerProfile nearMax = player(1, 1, 0)
                 .withPotential(Long.MAX_VALUE - 5L);
@@ -890,7 +891,7 @@ class MapServiceTest {
 
     @Test
     void deathBroadcastReachesObserverButRewardPacketDoesNot() throws Exception {
-        MapService maps = mapsWithMonsters();
+        GameplayServices maps = mapsWithMonsters();
         Session killer = session(player(1, 1, 0), maps);
         Session observer = session(player(2, 1, 0), maps);
         maps.finishLoad(killer);
@@ -913,7 +914,7 @@ class MapServiceTest {
 
     @Test
     void deadMonsterCannotAwardDuplicatePotential() throws Exception {
-        MapService maps = mapsWithMonsters();
+        GameplayServices maps = mapsWithMonsters();
         Session attacker = session(player(1, 1, 0), maps);
         maps.finishLoad(attacker);
         drain(attacker);
@@ -931,7 +932,7 @@ class MapServiceTest {
     @Test
     void respawnedMonsterCanAwardPotentialOnANewKill() throws Exception {
         MutableClock clock = new MutableClock(1_000_000L);
-        MapService maps = mapsWithMonsters(clock);
+        GameplayServices maps = mapsWithMonsters(clock);
         Session attacker = session(player(1, 1, 0), maps);
         maps.finishLoad(attacker);
         drain(attacker);
@@ -956,7 +957,7 @@ class MapServiceTest {
 
     @Test
     void movementAndMapChangePreserveRewardedPotential() throws Exception {
-        MapService maps = mapsWithMonsters();
+        GameplayServices maps = mapsWithMonsters();
         Session attacker = session(player(1, 1, 0), maps);
         maps.finishLoad(attacker);
         drain(attacker);
@@ -985,7 +986,7 @@ class MapServiceTest {
 
     @Test
     void sameZoneReceivesIdenticalCombatBroadcast() throws Exception {
-        MapService maps = mapsWithMonsters();
+        GameplayServices maps = mapsWithMonsters();
         Session attacker = session(player(1, 1, 0), maps);
         Session peer = session(player(2, 1, 0), maps);
         maps.finishLoad(attacker);
@@ -1003,7 +1004,7 @@ class MapServiceTest {
 
     @Test
     void crossZoneDoesNotReceiveCombatBroadcast() throws Exception {
-        MapService maps = mapsWithMonsters();
+        GameplayServices maps = mapsWithMonsters();
         Session attacker = session(player(1, 1, 0), maps);
         Session otherZone = session(player(2, 1, 1), maps);
         maps.finishLoad(attacker);
@@ -1019,7 +1020,7 @@ class MapServiceTest {
 
     @Test
     void concurrentLethalAttacksProduceOneDeathBroadcast() throws Exception {
-        MapService maps = mapsWithMonsters();
+        GameplayServices maps = mapsWithMonsters();
         Session first = session(player(1, 1, 0), maps);
         Session second = session(player(2, 1, 0), maps);
         maps.finishLoad(first);
@@ -1073,7 +1074,7 @@ class MapServiceTest {
     @Test
     void respawnTickDoesNotCreateZones() {
         MutableClock clock = new MutableClock(1_000_000L);
-        MapService maps = mapsWithMonsters(clock);
+        GameplayServices maps = mapsWithMonsters(clock);
 
         assertEquals(0, zoneRegistrySize(maps));
         maps.tickMonsterLifecycle();
@@ -1083,7 +1084,7 @@ class MapServiceTest {
     @Test
     void onePlayerMonsterRespawnsOnlyAfterNineSecondDeadline() throws Exception {
         MutableClock clock = new MutableClock(1_000_000L);
-        MapService maps = mapsWithMonsters(clock);
+        GameplayServices maps = mapsWithMonsters(clock);
         Session attacker = session(player(1, 1, 0), maps);
 
         maps.finishLoad(attacker);
@@ -1114,7 +1115,7 @@ class MapServiceTest {
     @Test
     void sameZoneMembersReceiveOneRespawnBroadcastEach() throws Exception {
         MutableClock clock = new MutableClock(1_000_000L);
-        MapService maps = mapsWithMonsters(clock);
+        GameplayServices maps = mapsWithMonsters(clock);
         Session attacker = session(player(1, 1, 0), maps);
         Session peer = session(player(2, 1, 0), maps);
 
@@ -1142,7 +1143,7 @@ class MapServiceTest {
     @Test
     void crossZoneDoesNotReceiveRespawnBroadcast() throws Exception {
         MutableClock clock = new MutableClock(1_000_000L);
-        MapService maps = mapsWithMonsters(clock);
+        GameplayServices maps = mapsWithMonsters(clock);
         Session attacker = session(player(1, 1, 0), maps);
         Session other = session(player(2, 1, 1), maps);
 
@@ -1164,7 +1165,7 @@ class MapServiceTest {
     @Test
     void standingNearMonsterDoesNotAutoAggro() throws Exception {
         MutableClock clock = new MutableClock(1_000_000L);
-        MapService maps = mapsWithMonsters(clock, new Random(12345L));
+        GameplayServices maps = mapsWithMonsters(clock, new Random(12345L));
         Session player = session(player(1, 1, 0), maps);
         maps.finishLoad(player);
         drain(player);
@@ -1179,7 +1180,7 @@ class MapServiceTest {
     @Test
     void monsterLifecycleBroadcastsIdenticalMovementToZoneMembers() throws Exception {
         MutableClock clock = new MutableClock(1_000_000L);
-        MapService maps = mapsWithMonsters(clock, new Random(12345L));
+        GameplayServices maps = mapsWithMonsters(clock, new Random(12345L));
         Session first = session(player(1, 1, 0), maps);
         Session second = session(player(2, 1, 0), maps);
         maps.finishLoad(first);
@@ -1214,7 +1215,7 @@ class MapServiceTest {
     @Test
     void monsterMovementIsBroadcastBeforeSameTickAttack() throws Exception {
         MutableClock clock = new MutableClock(1_000_000L);
-        MapService maps = mapsWithMonsters(clock, new Random(0));
+        GameplayServices maps = mapsWithMonsters(clock, new Random(0));
         Session target = session(player(1, 1, 0).withPosition(1875, 936), maps);
         maps.finishLoad(target);
         drain(target);
@@ -1234,7 +1235,7 @@ class MapServiceTest {
     @Test
     void hostileMonsterAlreadyInsideAttackRangeDoesNotMoveThatTick() throws Exception {
         MutableClock clock = new MutableClock(1_000_000L);
-        MapService maps = mapsWithMonsters(clock, new Random(0));
+        GameplayServices maps = mapsWithMonsters(clock, new Random(0));
         Session target = session(player(1, 1, 0).withPosition(1874, 936), maps);
         maps.finishLoad(target);
         drain(target);
@@ -1255,7 +1256,7 @@ class MapServiceTest {
     @Test
     void retaliationBroadcastsToSameZoneAndMutatesOnlyTargetHp() throws Exception {
         MutableClock clock = new MutableClock(1_000_000L);
-        MapService maps = mapsWithMonsters(clock, new Random(12345L));
+        GameplayServices maps = mapsWithMonsters(clock, new Random(12345L));
         Session attacker = session(player(1, 1, 0), maps);
         Session observer = session(player(2, 1, 0), maps);
         maps.finishLoad(attacker);
@@ -1281,7 +1282,7 @@ class MapServiceTest {
     @Test
     void monsterRetaliationCanKillPlayerAtExactDamage() throws Exception {
         MutableClock clock = new MutableClock(1_000_000L);
-        MapService maps = mapsWithMonsters(clock, new Random(0));
+        GameplayServices maps = mapsWithMonsters(clock, new Random(0));
         Session target = session(player(1, 1, 0).withHp(10), maps);
         maps.finishLoad(target);
         drain(target);
@@ -1298,7 +1299,7 @@ class MapServiceTest {
     @Test
     void monsterRetaliationClampsOverkillToZero() throws Exception {
         MutableClock clock = new MutableClock(1_000_000L);
-        MapService maps = mapsWithMonsters(clock, new Random(0));
+        GameplayServices maps = mapsWithMonsters(clock, new Random(0));
         PlayerProfile lowHp = player(1, 1, 0).withHp(5);
         Session target = session(lowHp, maps);
         maps.finishLoad(target);
@@ -1316,7 +1317,7 @@ class MapServiceTest {
     @Test
     void lethalRetaliationClearsVictimHostilityFromEveryMonster() throws Exception {
         MutableClock clock = new MutableClock(1_000_000L);
-        MapService maps = mapsWithMonsters(clock, new Random(0));
+        GameplayServices maps = mapsWithMonsters(clock, new Random(0));
         Session target = session(player(1, 1, 0).withHp(10), maps);
         maps.finishLoad(target);
         drain(target);
@@ -1342,7 +1343,7 @@ class MapServiceTest {
     @Test
     void lethalMonsterAttackBroadcastsSelfAndObserverDeathAfterAttack() throws Exception {
         MutableClock clock = new MutableClock(1_000_000L);
-        MapService maps = mapsWithMonsters(clock, new Random(0));
+        GameplayServices maps = mapsWithMonsters(clock, new Random(0));
         Session victim = session(player(1, 1, 0).withHp(10), maps);
         Session observer = session(player(2, 1, 0), maps);
         maps.finishLoad(victim);
@@ -1379,7 +1380,7 @@ class MapServiceTest {
     @Test
     void retaliationDoesNotCrossZones() throws Exception {
         MutableClock clock = new MutableClock(1_000_000L);
-        MapService maps = mapsWithMonsters(clock, new Random(12345L));
+        GameplayServices maps = mapsWithMonsters(clock, new Random(12345L));
         Session attacker = session(player(1, 1, 0), maps);
         Session otherZone = session(player(2, 1, 1), maps);
         maps.finishLoad(attacker);
@@ -1401,7 +1402,7 @@ class MapServiceTest {
     @Test
     void retaliationCooldownIsStrictAndRangeUsesCurrentPosition() throws Exception {
         MutableClock clock = new MutableClock(1_000_000L);
-        MapService maps = mapsWithMonsters(clock, new Random(12345L));
+        GameplayServices maps = mapsWithMonsters(clock, new Random(12345L));
         Session attacker = session(player(1, 1, 0), maps);
         maps.finishLoad(attacker);
         drain(attacker);
@@ -1428,7 +1429,7 @@ class MapServiceTest {
     @Test
     void retaliationKillsAtZeroAndRespawnRequiresNewHit() throws Exception {
         MutableClock clock = new MutableClock(1_000_000L);
-        MapService maps = mapsWithMonsters(clock, new Random(12345L));
+        GameplayServices maps = mapsWithMonsters(clock, new Random(12345L));
         Session attacker = session(player(1, 1, 0), maps);
         attacker.bindPlayer(attacker.player().withHp(20));
         maps.finishLoad(attacker);
@@ -1485,7 +1486,7 @@ class MapServiceTest {
     @Test
     void closedMemberDoesNotReceiveRespawnPacket() throws Exception {
         MutableClock clock = new MutableClock(1_000_000L);
-        MapService maps = mapsWithMonsters(clock);
+        GameplayServices maps = mapsWithMonsters(clock);
         Session attacker = session(player(1, 1, 0), maps);
         Session peer = session(player(2, 1, 0), maps);
 
@@ -1509,7 +1510,7 @@ class MapServiceTest {
     @Test
     void emptyRetainedZoneContinuesRespawnLifecycle() throws Exception {
         MutableClock clock = new MutableClock(1_000_000L);
-        MapService maps = mapsWithMonsters(clock);
+        GameplayServices maps = mapsWithMonsters(clock);
         Session attacker = session(player(1, 1, 0), maps);
 
         maps.finishLoad(attacker);
@@ -1531,7 +1532,7 @@ class MapServiceTest {
     @Test
     void respawnedMonsterReentersExistingCombatFlow() throws Exception {
         MutableClock clock = new MutableClock(1_000_000L);
-        MapService maps = mapsWithMonsters(clock);
+        GameplayServices maps = mapsWithMonsters(clock);
         Session attacker = session(player(1, 1, 0), maps);
 
         maps.finishLoad(attacker);
@@ -1554,7 +1555,7 @@ class MapServiceTest {
         assertEquals(0, reader.remaining());
     }
 
-    private static void joinAtBarrier(CyclicBarrier start, MapService maps,
+    private static void joinAtBarrier(CyclicBarrier start, GameplayServices maps,
                                       Session session, AtomicReference<Throwable> failure) {
         try {
             start.await();
@@ -1574,7 +1575,7 @@ class MapServiceTest {
         return session(player, TestServices.serverServices());
     }
 
-    private static void attackAtBarrier(CyclicBarrier start, MapService maps,
+    private static void attackAtBarrier(CyclicBarrier start, GameplayServices maps,
                                         Session session, AtomicBoolean result,
                                         AtomicReference<Throwable> failure) {
         try {
@@ -1591,50 +1592,34 @@ class MapServiceTest {
                         Path.of("resources", "json")));
     }
 
-    private static MapService mapsWithMonsters() {
-        return new MapService(
-                new PlayerPacketWriter(),
-                new MonsterPacketWriter(),
-                monsterFactory());
+    private static GameplayServices mapsWithMonsters() {
+        return new GameplayServices(GameResources.fromFrameRoot(Path.of("resources", "json")));
     }
 
-    private static MapService mapsWithMonsters(Clock clock) {
-        return new MapService(
-                new PlayerPacketWriter(),
-                new MonsterPacketWriter(),
-                monsterFactory(),
-                clock);
+    private static GameplayServices mapsWithMonsters(Clock clock) {
+        return new GameplayServices(GameResources.fromFrameRoot(Path.of("resources", "json")), clock);
     }
 
-    private static MapService mapsWithMonsters(Clock clock, java.util.random.RandomGenerator random) {
-        return new MapService(
-                new PlayerPacketWriter(),
-                new MonsterPacketWriter(),
-                monsterFactory(),
-                clock,
-                random);
+    private static GameplayServices mapsWithMonsters(Clock clock, java.util.random.RandomGenerator random) {
+        return new GameplayServices(GameResources.fromFrameRoot(Path.of("resources", "json")), clock, random);
     }
 
-    private static MapService mapsWithoutMonsters() {
+    private static GameplayServices mapsWithoutMonsters() {
         GameResources resources = GameResources.unavailable();
-        return new MapService(
-                new PlayerPacketWriter(),
-                new MonsterPacketWriter(),
-                new MonsterRuntimeFactory(resources));
+        return new GameplayServices(resources);
     }
 
-    private static int zoneRegistrySize(MapService maps) {
+    private static int zoneRegistrySize(GameplayServices maps) {
         try {
-            Field field = MapService.class.getDeclaredField("zones");
-            field.setAccessible(true);
-            return ((java.util.Map<?, ?>) field.get(maps)).size();
-        } catch (ReflectiveOperationException exception) {
+            return maps.zones().snapshot().size();
+        } catch (RuntimeException exception) {
             throw new AssertionError("unable to inspect zone registry", exception);
         }
     }
 
-    private static Session session(PlayerProfile player, MapService maps) {
-        return session(player, TestServices.serverServices(TestServices.authService(), GameResources.unavailable(), maps));
+    private static Session session(PlayerProfile player, GameplayServices maps) {
+        return session(player, TestServices.serverServices(TestServices.authService(),
+                GameResources.unavailable(), maps));
     }
 
     private static Session session(PlayerProfile player, ServerServices services) {
@@ -1785,35 +1770,22 @@ class MapServiceTest {
     }
 
     @SuppressWarnings("unchecked")
-    private static Zone zoneFor(MapService maps, int mapId, int zoneId) {
-        try {
-            Field zonesField = MapService.class.getDeclaredField("zones");
-            zonesField.setAccessible(true);
-            for (Zone zone : ((java.util.Map<?, Zone>) zonesField.get(maps)).values()) {
-                if (zone.mapId() == mapId && zone.zoneId() == zoneId) {
-                    return zone;
-                }
-            }
+    private static Zone zoneFor(GameplayServices maps, int mapId, int zoneId) {
+        Zone zone = maps.zones().find(mapId, zoneId);
+        if (zone == null) {
             throw new AssertionError("zone not found: " + mapId + "/" + zoneId);
-        } catch (ReflectiveOperationException exception) {
-            throw new AssertionError("unable to inspect zone registry", exception);
         }
+        return zone;
     }
 
     @SuppressWarnings("unchecked")
-    private static List<RuntimeMonster> runtimeMonsters(MapService maps, int mapId, int zoneId) {
+    private static List<RuntimeMonster> runtimeMonsters(GameplayServices maps, int mapId, int zoneId) {
         try {
-            Field zonesField = MapService.class.getDeclaredField("zones");
-            zonesField.setAccessible(true);
-            for (Zone zone : ((java.util.Map<?, Zone>) zonesField.get(maps)).values()) {
-                if (zone.mapId() != mapId || zone.zoneId() != zoneId) {
-                    continue;
-                }
-                Field monstersField = Zone.class.getDeclaredField("monsters");
-                monstersField.setAccessible(true);
-                return List.copyOf(((java.util.Map<Integer, RuntimeMonster>) monstersField.get(zone)).values());
-            }
-            throw new AssertionError("zone not found: " + mapId + "/" + zoneId);
+            Zone zone = maps.zones().find(mapId, zoneId);
+            if (zone == null) throw new AssertionError("zone not found: " + mapId + "/" + zoneId);
+            Field monstersField = Zone.class.getDeclaredField("monsters");
+            monstersField.setAccessible(true);
+            return List.copyOf(((java.util.Map<Integer, RuntimeMonster>) monstersField.get(zone)).values());
         } catch (ReflectiveOperationException exception) {
             throw new AssertionError("unable to inspect zone monsters", exception);
         }

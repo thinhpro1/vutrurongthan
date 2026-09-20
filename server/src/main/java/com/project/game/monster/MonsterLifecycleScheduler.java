@@ -1,4 +1,4 @@
-package com.project.game.network;
+package com.project.game.monster;
 
 import java.util.Objects;
 import java.util.concurrent.Executors;
@@ -7,14 +7,14 @@ import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-final class MonsterLifecycleScheduler {
+public final class MonsterLifecycleScheduler {
     private static final Logger LOGGER = Logger.getLogger(MonsterLifecycleScheduler.class.getName());
 
     private final Runnable tick;
     private final long periodMillis;
     private ScheduledExecutorService executor;
 
-    MonsterLifecycleScheduler(Runnable tick, long periodMillis) {
+    public MonsterLifecycleScheduler(Runnable tick, long periodMillis) {
         this.tick = Objects.requireNonNull(tick, "tick");
         if (periodMillis < 1L) {
             throw new IllegalArgumentException("periodMillis must be positive");
@@ -22,7 +22,7 @@ final class MonsterLifecycleScheduler {
         this.periodMillis = periodMillis;
     }
 
-    synchronized void start() {
+    public synchronized void start() {
         if (executor != null && !executor.isShutdown()) {
             return;
         }
@@ -36,7 +36,7 @@ final class MonsterLifecycleScheduler {
                 periodMillis, periodMillis, TimeUnit.MILLISECONDS);
     }
 
-    synchronized void stop() {
+    public synchronized void stop() {
         ScheduledExecutorService current = executor;
         if (current == null) {
             return;

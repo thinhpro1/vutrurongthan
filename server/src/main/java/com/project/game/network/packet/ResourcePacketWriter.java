@@ -1,15 +1,15 @@
 package com.project.game.network.packet;
 
-import com.project.game.monster.LegacyMonsterDart;
-import com.project.game.monster.LegacyMonsterDartPhase;
-import com.project.game.monster.LegacyMonsterTemplate;
+import com.project.game.monster.MonsterDart;
+import com.project.game.monster.MonsterDart.Phase;
+import com.project.game.monster.MonsterTemplate;
 import com.project.game.network.message.Message;
 import com.project.game.network.message.MessageName;
 import com.project.game.network.message.MessageWriter;
 import com.project.game.resource.FrameTemplate;
 import com.project.game.resource.IconFingerprint;
-import com.project.game.resource.LegacyEffectImage;
-import com.project.game.resource.LegacyLevel;
+import com.project.game.resource.EffectImage;
+import com.project.game.resource.LevelTemplate;
 
 import java.io.IOException;
 import java.util.List;
@@ -54,7 +54,7 @@ public final class ResourcePacketWriter {
         return new Message(MessageName.UPDATE_DATA, writer.toByteArray());
     }
 
-    public Message effectResource(int version, List<LegacyEffectImage> effects)
+    public Message effectResource(int version, List<EffectImage> effects)
             throws IOException {
         Objects.requireNonNull(effects, "effects");
         requireShortCount(effects.size(), "legacy movement effects");
@@ -62,7 +62,7 @@ public final class ResourcePacketWriter {
                 .writeByte(3)
                 .writeByte(version)
                 .writeShort(effects.size());
-        for (LegacyEffectImage effect : effects) {
+        for (EffectImage effect : effects) {
             Objects.requireNonNull(effect, "effect");
             requireByteCount(effect.icons().size(), "icons for legacy effect " + effect.id());
             writer.writeShort(effect.id())
@@ -80,8 +80,8 @@ public final class ResourcePacketWriter {
 
     public Message monsterResource(
             int version,
-            List<LegacyMonsterDart> darts,
-            List<LegacyMonsterTemplate> templates) throws IOException {
+            List<MonsterDart> darts,
+            List<MonsterTemplate> templates) throws IOException {
         Objects.requireNonNull(darts, "darts");
         Objects.requireNonNull(templates, "templates");
         requireShortCount(darts.size(), "monster darts");
@@ -90,7 +90,7 @@ public final class ResourcePacketWriter {
                 .writeByte(4)
                 .writeByte(version)
                 .writeShort(darts.size());
-        for (LegacyMonsterDart dart : darts) {
+        for (MonsterDart dart : darts) {
             Objects.requireNonNull(dart, "dart");
             writer.writeShort(dart.id()).writeBoolean(dart.meteorite());
             writeMonsterDartPhase(writer, dart.light());
@@ -98,7 +98,7 @@ public final class ResourcePacketWriter {
             writeMonsterDartPhase(writer, dart.explode());
         }
         writer.writeShort(templates.size());
-        for (LegacyMonsterTemplate template : templates) {
+        for (MonsterTemplate template : templates) {
             Objects.requireNonNull(template, "template");
             requireByteCount(template.iconsMove().size(),
                     "move icons for monster template " + template.id());
@@ -123,7 +123,7 @@ public final class ResourcePacketWriter {
     }
 
     private static void writeMonsterDartPhase(MessageWriter writer,
-                                                LegacyMonsterDartPhase phase)
+                                                MonsterDart.Phase phase)
             throws IOException {
         Objects.requireNonNull(phase, "phase");
         requireByteCount(phase.icons().size(), "monster dart phase icons");
@@ -136,14 +136,14 @@ public final class ResourcePacketWriter {
                 .writeShort(phase.delay());
     }
 
-    public Message levelResource(int version, List<LegacyLevel> levels) throws IOException {
+    public Message levelResource(int version, List<LevelTemplate> levels) throws IOException {
         Objects.requireNonNull(levels, "levels");
         requireShortCount(levels.size(), "legacy levels");
         MessageWriter writer = new MessageWriter()
                 .writeByte(6)
                 .writeByte(version)
                 .writeShort(levels.size());
-        for (LegacyLevel level : levels) {
+        for (LevelTemplate level : levels) {
             Objects.requireNonNull(level, "level");
             writer.writeShort(level.id()).writeUtf(level.name()).writeLong(level.power());
         }

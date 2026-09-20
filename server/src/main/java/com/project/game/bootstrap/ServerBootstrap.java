@@ -4,10 +4,9 @@ import com.project.game.account.AuthService;
 import com.project.game.combat.CombatService;
 import com.project.game.map.MapService;
 import com.project.game.map.ZoneRegistry;
-import com.project.game.monster.MonsterRuntimeFactory;
+import com.project.game.monster.MonsterFactory;
 import com.project.game.monster.MonsterService;
-import com.project.game.network.NetworkConfig;
-import com.project.game.network.NetworkEventObserver;
+import com.project.game.network.ClientConfig;
 import com.project.game.network.NetworkServer;
 import com.project.game.network.packet.MonsterPacketWriter;
 import com.project.game.network.packet.PlayerPacketWriter;
@@ -18,7 +17,7 @@ import com.project.game.persistence.account.JdbcAccountRepository;
 import com.project.game.persistence.player.JdbcPlayerRepository;
 import com.project.game.player.PlayerService;
 import com.project.game.resource.GameResources;
-import com.project.game.service.ServerServices;
+import com.project.game.network.SessionServices;
 
 import javax.net.ssl.SSLContext;
 import java.io.IOException;
@@ -73,8 +72,8 @@ public final class ServerBootstrap {
 
         DatabaseManager databaseManager = databaseManagerFactory.get();
         try {
-            GameResources resources = resourceService(properties);
-            MonsterRuntimeFactory monsterFactory = new MonsterRuntimeFactory(resources);
+            GameResources resources = loadResources(properties);
+            MonsterFactory monsterFactory = new MonsterFactory(resources);
             PlayerPacketWriter playerPackets = new PlayerPacketWriter();
             MonsterPacketWriter monsterPackets = new MonsterPacketWriter();
             ZoneRegistry zones = new ZoneRegistry(monsterFactory);
@@ -90,7 +89,7 @@ public final class ServerBootstrap {
             playerRepository.probeTable();
 
             AuthService auth = new AuthService(accountRepository);
-            ServerServices services = new ServerServices(
+            SessionServices services = new SessionServices(
                     auth, resources, maps, combat, monsters, new PlayerService(playerRepository));
             NetworkServer server = new NetworkServer(
                     properties.getProperty("game.network.host", "127.0.0.1"),
@@ -100,8 +99,7 @@ public final class ServerBootstrap {
                     integer(properties, "game.network.send-queue-size", 256),
                     integer(properties, "game.network.handshake-timeout-ms", 10000),
                     "abc".getBytes(StandardCharsets.US_ASCII),
-                    services, tlsContext, NetworkConfig.fromProperties(properties),
-                    NetworkEventObserver.NO_OP);
+                    services, tlsContext, ClientConfig.fromProperties(properties));
             return new ServerBootstrap(server, databaseManager);
         } catch (RuntimeException | Error exception) {
             databaseManager.close();
@@ -140,7 +138,7 @@ public final class ServerBootstrap {
         return Integer.parseInt(properties.getProperty(key, Integer.toString(fallback)));
     }
 
-    private static GameResources resourceService(Properties properties) {
+    private static GameResources loadResources(Properties properties) {
         String configuredIconRoot = properties.getProperty("game.resource.icon-dir", "").trim();
         String configuredJsonRoot = properties.getProperty("game.resource.json-dir", "").trim();
         int imageVersion = integer(properties, "game.resource.image-version", -1);

@@ -4,9 +4,7 @@ import com.project.game.network.message.Message;
 import com.project.game.network.message.MessageName;
 import com.project.game.network.message.MessageWriter;
 import com.project.game.player.PlayerProfile;
-import com.project.game.resource.LegacyPlayerSkill;
-import com.project.game.resource.LegacySkillOption;
-import com.project.game.resource.LegacySkillPaint;
+import com.project.game.resource.SkillTemplate;
 
 import java.io.IOException;
 import java.util.List;
@@ -14,11 +12,11 @@ import java.util.Objects;
 
 /** Writes the legacy server-to-client player presence packets. */
 public final class PlayerPacketWriter {
-    public Message playerInfo(PlayerProfile player, List<LegacyPlayerSkill> skills)
+    public Message playerInfo(PlayerProfile player, List<SkillTemplate> skills)
             throws IOException {
         Objects.requireNonNull(player, "player");
         Objects.requireNonNull(skills, "skills");
-        LegacyPlayerCompatibilityValidator.validatePlayerInfo(player);
+        PlayerPacketValidator.validatePlayerInfo(player);
         MessageWriter writer = new MessageWriter()
                 .writeByte(0)
                 .writeInt(player.id())
@@ -63,7 +61,7 @@ public final class PlayerPacketWriter {
                 .writeInt(player.ruby())
                 .writeByte(player.appearance().spaceship());
         writer.writeByte(skills.size());
-        for (LegacyPlayerSkill skill : skills) {
+        for (SkillTemplate skill : skills) {
             writePlayerSkill(writer, skill);
         }
         writer.writeByte(6)
@@ -80,7 +78,7 @@ public final class PlayerPacketWriter {
 
     public Message addPlayer(PlayerProfile player) {
         Objects.requireNonNull(player, "player");
-        LegacyPlayerCompatibilityValidator.validateAddPlayer(player);
+        PlayerPacketValidator.validateAddPlayer(player);
         try {
             MessageWriter writer = new MessageWriter()
                     .writeInt(player.id())
@@ -141,7 +139,7 @@ public final class PlayerPacketWriter {
 
     public Message wakeUpFromDie(PlayerProfile player) {
         Objects.requireNonNull(player, "player");
-        LegacyPlayerCompatibilityValidator.validatePosition(player.x(), player.y());
+        PlayerPacketValidator.validatePosition(player.x(), player.y());
         if (player.hp() <= 0L) {
             throw new IllegalArgumentException("wake-up player must be alive");
         }
@@ -168,7 +166,7 @@ public final class PlayerPacketWriter {
                         .toByteArray());
     }
 
-    private void writePlayerSkill(MessageWriter writer, LegacyPlayerSkill skill)
+    private void writePlayerSkill(MessageWriter writer, SkillTemplate skill)
             throws IOException {
         writer.writeByte(skill.id())
                 .writeByte(skill.names().size());
@@ -222,7 +220,7 @@ public final class PlayerPacketWriter {
             }
         }
         writer.writeByte(skill.options().size());
-        for (LegacySkillOption option : skill.options()) {
+        for (SkillTemplate.Option option : skill.options()) {
             writer.writeByte(option.id())
                     .writeUtf(option.name())
                     .writeByte(option.normal().size());
@@ -242,7 +240,7 @@ public final class PlayerPacketWriter {
             writer.writeLong(skill.timeCanUse());
         }
         writer.writeByte(skill.paints().size());
-        for (LegacySkillPaint paint : skill.paints()) {
+        for (SkillTemplate.Paint paint : skill.paints()) {
             writer.writeUtf(paint.percent())
                     .writeShort(paint.paintId());
         }

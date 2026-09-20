@@ -5,7 +5,7 @@ import com.project.game.network.transport.ClientTransport;
 import com.project.game.network.transport.LegacyTcpTransport;
 import com.project.game.network.transport.TlsTcpTransport;
 import com.project.game.monster.MonsterLifecycleScheduler;
-import com.project.game.service.ServerServices;
+import com.project.game.network.SessionServices;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -27,19 +27,17 @@ public final class NetworkServer {
     private final int sendQueueSize;
     private final int handshakeTimeoutMillis;
     private final byte[] handshakeKey;
-    private final ServerServices services;
+    private final SessionServices services;
     private final MonsterLifecycleScheduler monsterLifecycleScheduler;
     private final SSLContext tlsContext;
-    private final NetworkConfig networkConfig;
-    private final NetworkEventObserver eventObserver;
+    private final ClientConfig networkConfig;
     private final SessionManager sessions = new SessionManager();
     private volatile boolean running;
     private volatile ServerSocket serverSocket;
 
     public NetworkServer(String host, int port, int maxSessionsPerIp, int maxPacketSize,
                          int sendQueueSize, int handshakeTimeoutMillis, byte[] handshakeKey,
-                         ServerServices services, SSLContext tlsContext, NetworkConfig networkConfig,
-                         NetworkEventObserver eventObserver) {
+                         SessionServices services, SSLContext tlsContext, ClientConfig networkConfig) {
         if (port < 0 || port > 65535 || maxSessionsPerIp < 1 || maxPacketSize < 1 || sendQueueSize < 1
                 || handshakeTimeoutMillis < 1) {
             throw new IllegalArgumentException("invalid network configuration");
@@ -60,7 +58,6 @@ public final class NetworkServer {
                 MONSTER_LIFECYCLE_PERIOD_MILLIS);
         this.tlsContext = tlsContext;
         this.networkConfig = Objects.requireNonNull(networkConfig, "networkConfig");
-        this.eventObserver = Objects.requireNonNull(eventObserver, "eventObserver");
     }
 
     public void start() throws IOException {
@@ -113,7 +110,7 @@ public final class NetworkServer {
                 }
                 LegacyPacketCodec codec = new LegacyPacketCodec(maxPacketSize);
                 Session session = new Session(sessions.nextId(), transport, sessions, codec, handshakeKey,
-                        sendQueueSize, services, networkConfig, eventObserver);
+                        sendQueueSize, services, networkConfig);
                 if (!sessions.tryAdd(session, maxSessionsPerIp)) {
                     transport.close();
                     continue;

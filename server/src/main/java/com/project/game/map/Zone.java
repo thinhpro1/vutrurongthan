@@ -1,11 +1,8 @@
 package com.project.game.map;
 
 import com.project.game.monster.MonsterSnapshot;
-import com.project.game.monster.MonsterDamageResult;
-import com.project.game.monster.MonsterAttackResult;
-import com.project.game.monster.MonsterMoveResult;
-import com.project.game.monster.MonsterRespawnResult;
-import com.project.game.monster.RuntimeMonster;
+import com.project.game.monster.MonsterAttack;
+import com.project.game.monster.Monster;
 import com.project.game.network.Session;
 import com.project.game.network.SessionState;
 import com.project.game.player.PlayerProfile;
@@ -25,13 +22,13 @@ public final class Zone {
     private final int mapId;
     private final int zoneId;
     private final ConcurrentHashMap<Integer, Session> members = new ConcurrentHashMap<>();
-    private final LinkedHashMap<Integer, RuntimeMonster> monsters = new LinkedHashMap<>();
+    private final LinkedHashMap<Integer, Monster> monsters = new LinkedHashMap<>();
 
-    public Zone(int mapId, int zoneId, List<RuntimeMonster> monsters) {
+    public Zone(int mapId, int zoneId, List<Monster> monsters) {
         this.mapId = mapId;
         this.zoneId = zoneId;
         Objects.requireNonNull(monsters, "monsters");
-        for (RuntimeMonster monster : monsters) {
+        for (Monster monster : monsters) {
             Objects.requireNonNull(monster, "monster");
             if (this.monsters.putIfAbsent(monster.id(), monster) != null) {
                 throw new IllegalArgumentException(
@@ -101,21 +98,21 @@ public final class Zone {
 
     public synchronized List<MonsterSnapshot> monsterSnapshots() {
         return monsters.values().stream()
-                .map(RuntimeMonster::snapshot)
+                .map(Monster::snapshot)
                 .toList();
     }
 
     public synchronized boolean hasLiveMonster(int monsterId) {
-        RuntimeMonster monster = monsters.get(monsterId);
+        Monster monster = monsters.get(monsterId);
         return monster != null && monster.isAlive();
     }
 
-    public synchronized Optional<MonsterDamageResult> damageMonster(
+    public synchronized Optional<Monster.Damage> damageMonster(
             int monsterId,
             int attackerPlayerId,
             long damage,
             long nowMillis) {
-        RuntimeMonster monster = monsters.get(monsterId);
+        Monster monster = monsters.get(monsterId);
         if (monster == null) {
             return Optional.empty();
         }
@@ -124,12 +121,12 @@ public final class Zone {
         return monster.applyDamage(attackerPlayerId, damage, nowMillis, delay);
     }
 
-    public synchronized List<MonsterAttackResult> attackDueMonsters(
+    public synchronized List<MonsterAttack> attackDueMonsters(
             long nowMillis,
             RandomGenerator random) {
         Objects.requireNonNull(random, "random");
-        List<MonsterAttackResult> attacks = new java.util.ArrayList<>();
-        for (RuntimeMonster monster : monsters.values()) {
+        List<MonsterAttack> attacks = new java.util.ArrayList<>();
+        for (Monster monster : monsters.values()) {
             if (!monster.beginAttackAttemptIfDue(nowMillis)) {
                 continue;
             }
@@ -156,19 +153,19 @@ public final class Zone {
             boolean killed = hpAfter == 0L;
             target.bindPlayer(player.withHp(hpAfter));
             if (killed) {
-                for (RuntimeMonster runtime : monsters.values()) {
+                for (Monster runtime : monsters.values()) {
                     runtime.removeEnemy(player.id());
                 }
             }
-            attacks.add(new MonsterAttackResult(
+            attacks.add(new MonsterAttack(
                     monster.id(), player.id(), monster.damage(), hpAfter, killed));
         }
         return List.copyOf(attacks);
     }
 
-    public synchronized List<MonsterMoveResult> moveMonsters() {
-        List<MonsterMoveResult> moves = new ArrayList<>();
-        for (RuntimeMonster monster : monsters.values()) {
+    public synchronized List<Monster.Move> moveMonsters() {
+        List<Monster.Move> moves = new ArrayList<>();
+        for (Monster monster : monsters.values()) {
             if (!monster.isAlive()) {
                 continue;
             }
@@ -180,7 +177,7 @@ public final class Zone {
             }
 
             Session target = nearestChaseTarget(monster, chaseEligible);
-            Optional<MonsterMoveResult> moved = target == null
+            Optional<Monster.Move> moved = target == null
                     ? monster.patrolOrReturn()
                     : monster.moveToward(target.player().x());
             moved.ifPresent(moves::add);
@@ -188,7 +185,7 @@ public final class Zone {
         return List.copyOf(moves);
     }
 
-    public synchronized List<MonsterRespawnResult> respawnDueMonsters(long nowMillis) {
+    public synchronized List<Monster.Respawn> respawnDueMonsters(long nowMillis) {
         return monsters.values().stream()
                 .map(monster -> monster.respawnIfDue(nowMillis))
                 .flatMap(Optional::stream)
@@ -209,7 +206,7 @@ public final class Zone {
     }
 
     private Session nearestChaseTarget(
-            RuntimeMonster monster,
+            Monster monster,
             List<Session> chaseEligible) {
         MonsterSnapshot snapshot = monster.snapshot();
         return chaseEligible.stream()
@@ -220,7 +217,7 @@ public final class Zone {
                 .orElse(null);
     }
 
-    private List<Session> chaseEligibleMembers(RuntimeMonster monster) {
+    private List<Session> chaseEligibleMembers(Monster monster) {
         return hostileLivingMembers(monster).stream()
                 .filter(member -> Math.abs(
                         (long) member.player().x() - monster.xFirst())
@@ -228,7 +225,7 @@ public final class Zone {
                 .toList();
     }
 
-    private List<Session> hostileLivingMembers(RuntimeMonster monster) {
+    private List<Session> hostileLivingMembers(Monster monster) {
         return monster.enemyPlayerIds().stream()
                 .map(members::get)
                 .filter(Objects::nonNull)

@@ -1,4 +1,5 @@
 package com.project.game.network;
+import com.project.game.testsupport.TestPlayerProfiles;
 
 import com.project.game.testsupport.TestServices;
 
@@ -9,9 +10,9 @@ import com.project.game.network.message.MessageName;
 import com.project.game.network.message.MessageWriter;
 import com.project.game.network.packet.PlayerPacketWriter;
 import com.project.game.network.packet.MonsterPacketWriter;
-import com.project.game.monster.MonsterRuntimeFactory;
+import com.project.game.monster.MonsterFactory;
 import com.project.game.resource.GameResources;
-import com.project.game.service.ServerServices;
+import com.project.game.network.SessionServices;
 import com.project.game.player.PlayerProfile;
 import org.junit.jupiter.api.Test;
 
@@ -134,11 +135,11 @@ class MessageHandlerCombatTest {
     void preFinishMapInfoZoneCannotBeTargeted() {
         GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"));
         GameplayServices maps = new GameplayServices(new PlayerPacketWriter(), new MonsterPacketWriter(),
-                new MonsterRuntimeFactory(resources));
-        ServerServices services = TestServices.serverServices(TestServices.authService(), resources, maps);
+                new MonsterFactory(resources));
+        SessionServices services = TestServices.serverServices(TestServices.authService(), resources, maps);
         Session session = inGameSession(services,
-                PlayerProfile.initial(1L, 7, "alpha1", 0).withLocation(1, 0, 90, 1008));
-        MessageHandler handler = newHandler(session, services, NetworkConfig.defaults());
+                TestPlayerProfiles.initial(1L, 7, "alpha1", 0).withLocation(1, 0, 90, 1008));
+        MessageHandler handler = newHandler(session, services, ClientConfig.defaults());
         maps.monsterSnapshots(1, 0);
 
         handler.onMessage(prepareMonster(7, 0));
@@ -176,11 +177,11 @@ class MessageHandlerCombatTest {
     private static CombatContext combatContext() {
         GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"));
         GameplayServices maps = new GameplayServices(new PlayerPacketWriter(), new MonsterPacketWriter(),
-                new MonsterRuntimeFactory(resources));
-        ServerServices services = TestServices.serverServices(TestServices.authService(), resources, maps);
+                new MonsterFactory(resources));
+        SessionServices services = TestServices.serverServices(TestServices.authService(), resources, maps);
         Session session = inGameSession(services,
-                PlayerProfile.initial(1L, 7, "alpha1", 0).withLocation(1, 0, 90, 1008));
-        MessageHandler handler = newHandler(session, services, NetworkConfig.defaults());
+                TestPlayerProfiles.initial(1L, 7, "alpha1", 0).withLocation(1, 0, 90, 1008));
+        MessageHandler handler = newHandler(session, services, ClientConfig.defaults());
         maps.finishLoad(session);
         try {
             drainMessages(session);

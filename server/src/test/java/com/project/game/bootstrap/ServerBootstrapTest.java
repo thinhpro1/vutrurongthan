@@ -1,8 +1,8 @@
 package com.project.game.bootstrap;
+import com.project.game.testsupport.TestPlayerProfiles;
 
 import com.project.game.account.AuthService;
-import com.project.game.network.NetworkConfig;
-import com.project.game.network.NetworkEventObserver;
+import com.project.game.network.ClientConfig;
 import com.project.game.network.NetworkServer;
 import com.project.game.network.Session;
 import com.project.game.network.SessionManager;
@@ -16,7 +16,7 @@ import com.project.game.persistence.player.PlayerRepository;
 import com.project.game.player.PlayerProfile;
 import com.project.game.player.PlayerService;
 import com.project.game.resource.GameResources;
-import com.project.game.service.ServerServices;
+import com.project.game.network.SessionServices;
 import com.project.game.testsupport.GameplayServices;
 import com.project.game.testsupport.TestAccountRepository;
 import com.project.game.testsupport.TestServices;
@@ -64,9 +64,8 @@ class ServerBootstrapTest {
         String resourceKey = "game.resource.image-version";
         String dbKey = "game.db.url";
         String clientKey = "game.client.version";
-        String securityKey = "game.security.mode";
         Properties previous = new Properties();
-        for (String key : new String[]{networkKey, resourceKey, dbKey, clientKey, securityKey}) {
+        for (String key : new String[]{networkKey, resourceKey, dbKey, clientKey}) {
             String value = System.getProperty(key);
             if (value != null) {
                 previous.setProperty(key, value);
@@ -77,13 +76,11 @@ class ServerBootstrapTest {
             System.setProperty(resourceKey, "3");
             System.setProperty(dbKey, "jdbc:mysql://override/rongthanchibi");
             System.setProperty(clientKey, "override-client");
-            System.setProperty(securityKey, "override-security");
             Properties properties = new Properties();
             properties.setProperty(networkKey, "1707");
             properties.setProperty(resourceKey, "2");
             properties.setProperty(dbKey, "jdbc:mysql://baseline/rongthanchibi");
             properties.setProperty(clientKey, "baseline-client");
-            properties.setProperty(securityKey, "baseline-security");
 
             ServerBootstrap.overlaySystemProperties(properties);
 
@@ -91,9 +88,8 @@ class ServerBootstrapTest {
             assertEquals("3", properties.getProperty(resourceKey));
             assertEquals("jdbc:mysql://override/rongthanchibi", properties.getProperty(dbKey));
             assertEquals("baseline-client", properties.getProperty(clientKey));
-            assertEquals("baseline-security", properties.getProperty(securityKey));
         } finally {
-            for (String key : new String[]{networkKey, resourceKey, dbKey, clientKey, securityKey}) {
+            for (String key : new String[]{networkKey, resourceKey, dbKey, clientKey}) {
                 restoreProperty(key, previous.getProperty(key));
             }
         }
@@ -140,7 +136,7 @@ class ServerBootstrapTest {
                 checkpointSawOpenDatabase.set(!isClosed(manager));
             }
         };
-        ServerServices services = servicesWithPlayerRepository(repository);
+        SessionServices services = servicesWithPlayerRepository(repository);
         try (ServerSocket occupied = new ServerSocket(0)) {
             NetworkServer server = networkServer("127.0.0.1", occupied.getLocalPort(), services);
             Session session = addPlayerSession(server, services);
@@ -178,7 +174,7 @@ class ServerBootstrapTest {
                 checkpointSawOpenDatabase.set(!isClosed(manager));
             }
         };
-        ServerServices services = servicesWithPlayerRepository(repository);
+        SessionServices services = servicesWithPlayerRepository(repository);
         NetworkServer server = networkServer("127.0.0.1", 0, services);
         Session session = addPlayerSession(server, services);
         ServerBootstrap bootstrap = new ServerBootstrap(server, manager);
@@ -210,7 +206,7 @@ class ServerBootstrapTest {
                 checkpointCount.incrementAndGet();
             }
         };
-        ServerServices services = servicesWithPlayerRepository(repository);
+        SessionServices services = servicesWithPlayerRepository(repository);
         NetworkServer server = networkServer("127.0.0.1", 0, services);
         Session session = addPlayerSession(server, services);
         ServerBootstrap bootstrap = new ServerBootstrap(server, manager);
@@ -223,7 +219,7 @@ class ServerBootstrapTest {
         assertTrue(isClosed(manager));
     }
 
-    private static ServerServices servicesWithPlayerRepository(PlayerRepository repository) {
+    private static SessionServices servicesWithPlayerRepository(PlayerRepository repository) {
         GameResources resources = GameResources.unavailable();
         GameplayServices gameplay = new GameplayServices(resources);
         return TestServices.serverServices(
@@ -231,22 +227,22 @@ class ServerBootstrapTest {
                 new PlayerService(repository));
     }
 
-    private static Session addPlayerSession(NetworkServer server, ServerServices services) {
+    private static Session addPlayerSession(NetworkServer server, SessionServices services) {
         SessionManager sessions = server.sessions();
         Session session = new Session(sessions.nextId(), new TestTransport(), sessions,
                 new LegacyPacketCodec(1024), "abc".getBytes(java.nio.charset.StandardCharsets.US_ASCII),
-                4, services, NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
+                4, services, ClientConfig.defaults());
         assertTrue(sessions.tryAdd(session, 1));
         assertTrue(sessions.beginAccountAdmission(session, 10L, "alpha1"));
         sessions.finishAccountAdmission(session, true);
-        session.bindPlayer(PlayerProfile.initial(10L, 1, "alpha1", 0));
+        session.bindPlayer(TestPlayerProfiles.initial(10L, 1, "alpha1", 0));
         return session;
     }
 
-    private static NetworkServer networkServer(String host, int port, ServerServices services) {
+    private static NetworkServer networkServer(String host, int port, SessionServices services) {
         return new NetworkServer(host, port, 20, 1024, 8, 1000,
                 "abc".getBytes(java.nio.charset.StandardCharsets.US_ASCII), services, null,
-                NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
+                ClientConfig.defaults());
     }
 
     private static DatabaseManager databaseManager() {

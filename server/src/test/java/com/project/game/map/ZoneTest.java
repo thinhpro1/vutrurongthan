@@ -1,14 +1,14 @@
 package com.project.game.map;
+import com.project.game.testsupport.TestPlayerProfiles;
 
 import com.project.game.testsupport.TestServices;
-import com.project.game.network.NetworkConfig;
-import com.project.game.network.NetworkEventObserver;
+import com.project.game.network.ClientConfig;
 import com.project.game.network.Session;
 import com.project.game.network.SessionManager;
 import com.project.game.network.codec.LegacyPacketCodec;
 import com.project.game.network.transport.ClientTransport;
 import com.project.game.player.PlayerProfile;
-import com.project.game.service.ServerServices;
+import com.project.game.network.SessionServices;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
@@ -27,7 +27,7 @@ class ZoneTest {
     @Test
     void startsEmptyAndTracksBoundPlayer() {
         Zone zone = new Zone(0, 0, List.of());
-        Session session = session(PlayerProfile.initial(1L, 7, "alpha1", 0));
+        Session session = session(TestPlayerProfiles.initial(1L, 7, "alpha1", 0));
 
         assertEquals(0, zone.size());
         assertTrue(zone.add(session));
@@ -41,7 +41,7 @@ class ZoneTest {
     @Test
     void duplicateSameSessionIsIdempotent() {
         Zone zone = new Zone(0, 0, List.of());
-        Session session = session(PlayerProfile.initial(1L, 7, "alpha1", 0));
+        Session session = session(TestPlayerProfiles.initial(1L, 7, "alpha1", 0));
 
         assertTrue(zone.add(session));
         assertFalse(zone.add(session));
@@ -51,8 +51,8 @@ class ZoneTest {
     @Test
     void differentSessionCannotReplaceSamePlayerId() {
         Zone zone = new Zone(0, 0, List.of());
-        Session first = session(PlayerProfile.initial(1L, 7, "alpha1", 0));
-        Session second = session(PlayerProfile.initial(2L, 7, "alpha2", 0));
+        Session first = session(TestPlayerProfiles.initial(1L, 7, "alpha1", 0));
+        Session second = session(TestPlayerProfiles.initial(2L, 7, "alpha2", 0));
 
         assertTrue(zone.add(first));
         assertFalse(zone.add(second));
@@ -62,7 +62,7 @@ class ZoneTest {
     @Test
     void snapshotIsImmutable() {
         Zone zone = new Zone(0, 0, List.of());
-        zone.add(session(PlayerProfile.initial(1L, 7, "alpha1", 0)));
+        zone.add(session(TestPlayerProfiles.initial(1L, 7, "alpha1", 0)));
 
         List<Session> snapshot = zone.snapshot();
         assertThrows(UnsupportedOperationException.class, snapshot::clear);
@@ -75,7 +75,7 @@ class ZoneTest {
     }
 
     @Test
-    void requiresExplicitRuntimeMonsterSeed() {
+    void requiresExplicitMonsterSeed() {
         assertThrows(
                 NoSuchMethodException.class,
                 () -> Zone.class.getConstructor(int.class, int.class));
@@ -84,8 +84,8 @@ class ZoneTest {
     @Test
     void atomicallyReturnsExistingMembersWhileAddingNewMember() {
         Zone zone = new Zone(0, 0, List.of());
-        Session first = session(PlayerProfile.initial(1L, 1, "alpha1", 0));
-        Session second = session(PlayerProfile.initial(2L, 2, "beta22", 0));
+        Session first = session(TestPlayerProfiles.initial(1L, 1, "alpha1", 0));
+        Session second = session(TestPlayerProfiles.initial(2L, 2, "beta22", 0));
         zone.add(first);
 
         List<Session> existing = zone.addAndSnapshot(second);
@@ -99,7 +99,7 @@ class ZoneTest {
         SessionManager manager = new SessionManager();
         Session session = new Session(manager.nextId(), new NoopTransport(), manager,
                 new LegacyPacketCodec(1024), "abc".getBytes(), 8,
-                TestServices.serverServices(), NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
+                TestServices.serverServices(), ClientConfig.defaults());
         if (player != null) {
             session.bindPlayer(player);
         }

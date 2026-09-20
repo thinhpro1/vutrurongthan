@@ -56,6 +56,21 @@ class MessageHandlerAuthTest {
     }
 
     @Test
+    void closesWhenRegisterContainsTrailingBytes() throws Exception {
+        TestAccountRepository repository = new TestAccountRepository();
+        AuthService auth = new AuthService(repository);
+        Session session = newSession(auth);
+        session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
+        Message register = new Message(MessageName.REGISTER_USER,
+                new MessageWriter().writeUtf("user01").writeUtf("secret1").writeByte(99).toByteArray());
+
+        newHandler(session, auth).onMessage(register);
+
+        assertEquals(SessionState.CLOSED, session.state());
+        assertEquals(0, repository.accountCount());
+    }
+
+    @Test
     void validLoginBindsThenUpdatesMetadataThenAuthenticates() throws Exception {
         TestAccountRepository repository = new TestAccountRepository();
         AuthService auth = new AuthService(repository);

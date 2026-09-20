@@ -1,12 +1,11 @@
 package com.project.game.network.handler;
 
-import com.project.game.network.NetworkConfig;
-import com.project.game.network.NetworkEventObserver;
+import com.project.game.network.ClientConfig;
 import com.project.game.network.Session;
 import com.project.game.network.SessionState;
 import com.project.game.network.message.Message;
 import com.project.game.network.message.MessageName;
-import com.project.game.service.ServerServices;
+import com.project.game.network.SessionServices;
 
 import java.io.IOException;
 import java.util.Objects;
@@ -25,15 +24,13 @@ public final class MessageHandler {
     private final MapHandler mapHandler;
     private final CombatHandler combatHandler;
 
-    public MessageHandler(Session session, ServerServices services, NetworkConfig networkConfig,
-                          NetworkEventObserver eventObserver) {
+    public MessageHandler(Session session, SessionServices services, ClientConfig networkConfig) {
         this.session = Objects.requireNonNull(session, "session");
         services = Objects.requireNonNull(services, "services");
         networkConfig = Objects.requireNonNull(networkConfig, "networkConfig");
-        eventObserver = Objects.requireNonNull(eventObserver, "eventObserver");
 
         this.connectionHandler = new ConnectionHandler(session, networkConfig);
-        this.resourceHandler = new ResourceHandler(session, services.resources(), eventObserver);
+        this.resourceHandler = new ResourceHandler(session, services.resources());
         this.mapHandler = new MapHandler(session, services.maps(), services.monsters(),
                 services.players(), services.resources());
         this.playerHandler = new PlayerHandler(session, services.players(), services.resources(), mapHandler);
@@ -52,7 +49,7 @@ public final class MessageHandler {
         }
         try {
             switch (message.command()) {
-                case MessageName.CONNECT_SERVER -> connectionHandler.handleConnect();
+                case MessageName.CONNECT_SERVER -> connectionHandler.handleConnect(message);
                 case MessageName.UPDATE_DATA -> resourceHandler.handleUpdateData(message);
                 case MessageName.REQUEST_ICON -> resourceHandler.handleRequestIcon(message);
                 case MessageName.LOGIN -> authHandler.handleLogin(message);

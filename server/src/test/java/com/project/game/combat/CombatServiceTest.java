@@ -10,8 +10,7 @@ import com.project.game.network.transport.*;
 import com.project.game.player.*;
 import com.project.game.account.*;
 import com.project.game.resource.*;
-import com.project.game.service.*;
-import com.project.game.test.MutableClock;
+import com.project.game.testsupport.MutableClock;
 import com.project.game.testsupport.GameplayServices;
 import org.junit.jupiter.api.Test;
 
@@ -32,7 +31,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class CombatServiceTest {
     @Test
     void targetingAndAttackingDoNotCreateAbsentZones() {
-        ZoneRegistry zones = new ZoneRegistry(new MonsterRuntimeFactory(GameResources.unavailable()));
+        ZoneRegistry zones = new ZoneRegistry(new MonsterFactory(GameResources.unavailable()));
         CombatService combat = new CombatService(
                 zones, new PlayerPacketWriter(), new MonsterPacketWriter());
 

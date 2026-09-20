@@ -4,7 +4,7 @@ import com.project.game.combat.CombatService;
 import com.project.game.map.MapService;
 import com.project.game.map.Zone;
 import com.project.game.map.ZoneRegistry;
-import com.project.game.monster.MonsterRuntimeFactory;
+import com.project.game.monster.MonsterFactory;
 import com.project.game.monster.MonsterService;
 import com.project.game.monster.MonsterSnapshot;
 import com.project.game.network.Session;
@@ -27,14 +27,14 @@ public final class GameplayServices {
 
     public GameplayServices(PlayerPacketWriter playerPackets,
                              MonsterPacketWriter monsterPackets,
-                             MonsterRuntimeFactory monsterFactory) {
+                             MonsterFactory monsterFactory) {
         this(new ZoneRegistry(monsterFactory), playerPackets, monsterPackets,
                 Clock.systemUTC(), RandomGenerator.getDefault());
     }
 
     public GameplayServices(PlayerPacketWriter playerPackets,
                              MonsterPacketWriter monsterPackets,
-                             MonsterRuntimeFactory monsterFactory,
+                             MonsterFactory monsterFactory,
                              Clock clock) {
         this(new ZoneRegistry(monsterFactory), playerPackets, monsterPackets,
                 clock, RandomGenerator.getDefault());
@@ -42,7 +42,7 @@ public final class GameplayServices {
 
     public GameplayServices(PlayerPacketWriter playerPackets,
                              MonsterPacketWriter monsterPackets,
-                             MonsterRuntimeFactory monsterFactory,
+                             MonsterFactory monsterFactory,
                              Clock clock,
                              RandomGenerator random) {
         this(new ZoneRegistry(monsterFactory), playerPackets, monsterPackets, clock, random);
@@ -59,7 +59,7 @@ public final class GameplayServices {
     public GameplayServices(GameResources resources, Clock clock, RandomGenerator random) {
         PlayerPacketWriter playerPackets = new PlayerPacketWriter();
         MonsterPacketWriter monsterPackets = new MonsterPacketWriter();
-        initialize(new ZoneRegistry(new MonsterRuntimeFactory(resources)), playerPackets,
+        initialize(new ZoneRegistry(new MonsterFactory(resources)), playerPackets,
                 monsterPackets, clock, random);
     }
 

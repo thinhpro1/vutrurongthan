@@ -2,8 +2,8 @@ package com.project.game.resource.loader;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import com.project.game.map.LegacyMapTemplate;
-import com.project.game.map.LegacyWaypoint;
+import com.project.game.map.MapTemplate;
+import com.project.game.map.Waypoint;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -22,7 +22,7 @@ final class MapLoader {
     private MapLoader() {
     }
 
-    static Map<Integer, LegacyMapTemplate> load(Path root, boolean required) {
+    static Map<Integer, MapTemplate> load(Path root, boolean required) {
         Path normalizedRoot = root.toAbsolutePath().normalize();
         Path source = normalizedRoot.resolve("MapBootstrap.json").normalize();
         if (!source.startsWith(normalizedRoot)
@@ -33,7 +33,7 @@ final class MapLoader {
             return Map.of();
         }
         JsonObject rootObject = JsonResourceReader.readObject(root, "MapBootstrap.json");
-        Map<Integer, LegacyMapTemplate> loaded = new HashMap<>();
+        Map<Integer, MapTemplate> loaded = new HashMap<>();
         for (Map.Entry<String, JsonElement> entry : rootObject.entrySet()) {
             int key = JsonResourceReader.parseId(entry.getKey(), "map");
             if (!SUPPORTED_MAP_IDS.contains(key)) {
@@ -42,7 +42,7 @@ final class MapLoader {
             if (!entry.getValue().isJsonObject()) {
                 throw new IllegalArgumentException("Map" + key + " must be an object");
             }
-            LegacyMapTemplate map = readMap(entry.getValue().getAsJsonObject());
+            MapTemplate map = readMap(entry.getValue().getAsJsonObject());
             if (map.id() != key) {
                 throw new IllegalArgumentException("Map" + key + " key/id mismatch");
             }
@@ -58,7 +58,7 @@ final class MapLoader {
         return Collections.unmodifiableMap(loaded);
     }
 
-    private static LegacyMapTemplate readMap(JsonObject value) {
+    private static MapTemplate readMap(JsonObject value) {
         JsonResourceReader.requireExactFields(value,
                 Set.of("id", "iconId", "name", "row", "column", "data",
                         "imagesBgr", "colorsBgr", "isLine", "dataLine", "waypoints"),
@@ -68,7 +68,7 @@ final class MapLoader {
             throw new IllegalArgumentException("MapBootstrap map field isLine must be boolean");
         }
         int mapId = JsonResourceReader.readInt(value, "id");
-        return new LegacyMapTemplate(
+        return new MapTemplate(
                 mapId,
                 JsonResourceReader.readInt(value, "iconId"),
                 JsonResourceReader.readString(value, "name"),
@@ -82,7 +82,7 @@ final class MapLoader {
                 readWaypoints(value, mapId));
     }
 
-    private static void validateMap(LegacyMapTemplate map) {
+    private static void validateMap(MapTemplate map) {
         if (!SUPPORTED_MAP_IDS.contains(map.id())) {
             throw new IllegalArgumentException("unsupported map id " + map.id());
         }
@@ -119,12 +119,12 @@ final class MapLoader {
         }
     }
 
-    private static List<LegacyWaypoint> readWaypoints(JsonObject mapObject, int ownerMapId) {
+    private static List<Waypoint> readWaypoints(JsonObject mapObject, int ownerMapId) {
         JsonElement value = JsonResourceReader.required(mapObject, "waypoints");
         if (!value.isJsonArray()) {
             throw new IllegalArgumentException("Map" + ownerMapId + " waypoints must be an array");
         }
-        List<LegacyWaypoint> waypoints = new ArrayList<>(value.getAsJsonArray().size());
+        List<Waypoint> waypoints = new ArrayList<>(value.getAsJsonArray().size());
         Set<Integer> ids = new HashSet<>();
         for (int index = 0; index < value.getAsJsonArray().size(); index++) {
             JsonElement element = value.getAsJsonArray().get(index);
@@ -150,19 +150,19 @@ final class MapLoader {
                 throw new IllegalArgumentException("Map" + ownerMapId
                         + " waypoint " + id + " type must be 0..2");
             }
-            waypoints.add(new LegacyWaypoint(id, goMap, x, y, goX, goY, type));
+            waypoints.add(new Waypoint(id, goMap, x, y, goX, goY, type));
         }
         return List.copyOf(waypoints);
     }
 
-    private static void validateWaypointTopology(Map<Integer, LegacyMapTemplate> maps) {
-        LegacyWaypoint map0Waypoint = requireSingleWaypoint(maps.get(0), 2, 1, 1);
-        LegacyWaypoint map1Waypoint = requireSingleWaypoint(maps.get(1), 3, 0, 0);
+    private static void validateWaypointTopology(Map<Integer, MapTemplate> maps) {
+        Waypoint map0Waypoint = requireSingleWaypoint(maps.get(0), 2, 1, 1);
+        Waypoint map1Waypoint = requireSingleWaypoint(maps.get(1), 3, 0, 0);
         if (map0Waypoint.goMap() != 1 || map1Waypoint.goMap() != 0) {
             throw new IllegalArgumentException("MapBootstrap waypoint topology must be Map0 <-> Map1");
         }
-        for (LegacyMapTemplate map : maps.values()) {
-            for (LegacyWaypoint waypoint : map.waypoints()) {
+        for (MapTemplate map : maps.values()) {
+            for (Waypoint waypoint : map.waypoints()) {
                 if (!maps.containsKey(waypoint.goMap())) {
                     throw new IllegalArgumentException("waypoint target map unavailable: "
                             + waypoint.goMap());
@@ -171,13 +171,13 @@ final class MapLoader {
         }
     }
 
-    private static LegacyWaypoint requireSingleWaypoint(
-            LegacyMapTemplate map, int id, int goMap, int type) {
+    private static Waypoint requireSingleWaypoint(
+            MapTemplate map, int id, int goMap, int type) {
         if (map == null || map.waypoints().size() != 1) {
             throw new IllegalArgumentException("Map" + (map == null ? "?" : map.id())
                     + " must contain exactly one supported waypoint");
         }
-        LegacyWaypoint waypoint = map.waypoints().getFirst();
+        Waypoint waypoint = map.waypoints().getFirst();
         if (waypoint.id() != id || waypoint.goMap() != goMap || waypoint.type() != type) {
             throw new IllegalArgumentException("Map" + map.id() + " has unsupported waypoint topology");
         }

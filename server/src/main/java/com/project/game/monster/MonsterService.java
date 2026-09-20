@@ -48,11 +48,11 @@ public final class MonsterService {
         long nowMillis = clock.millis();
         for (Zone zone : zones.snapshot()) {
             synchronized (zone) {
-                List<MonsterMoveResult> moved = zone.moveMonsters();
-                List<MonsterRespawnResult> respawned = zone.respawnDueMonsters(nowMillis);
-                List<MonsterAttackResult> attacks = zone.attackDueMonsters(nowMillis, random);
+                List<Monster.Move> moved = zone.moveMonsters();
+                List<Monster.Respawn> respawned = zone.respawnDueMonsters(nowMillis);
+                List<MonsterAttack> attacks = zone.attackDueMonsters(nowMillis, random);
                 List<Session> members = zone.snapshot();
-                for (MonsterMoveResult result : moved) {
+                for (Monster.Move result : moved) {
                     Message packet = monsterPackets.move(result);
                     for (Session member : members) {
                         if (member.state() != SessionState.CLOSED) {
@@ -60,7 +60,7 @@ public final class MonsterService {
                         }
                     }
                 }
-                for (MonsterRespawnResult result : respawned) {
+                for (Monster.Respawn result : respawned) {
                     Message packet = monsterPackets.respawn(result);
                     for (Session member : members) {
                         if (member.state() != SessionState.CLOSED) {
@@ -68,7 +68,7 @@ public final class MonsterService {
                         }
                     }
                 }
-                for (MonsterAttackResult result : attacks) {
+                for (MonsterAttack result : attacks) {
                     Message packet = monsterPackets.attackPlayer(result);
                     for (Session member : members) {
                         if (member.state() != SessionState.CLOSED) {

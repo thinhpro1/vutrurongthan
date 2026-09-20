@@ -1,7 +1,8 @@
 package com.project.game.network.packet;
+import com.project.game.testsupport.TestPlayerProfiles;
 
-import com.project.game.map.LegacyMapTemplate;
-import com.project.game.map.LegacyWaypoint;
+import com.project.game.map.MapTemplate;
+import com.project.game.map.Waypoint;
 import com.project.game.monster.MonsterSnapshot;
 import com.project.game.network.message.Message;
 import com.project.game.network.message.MessageName;
@@ -20,11 +21,11 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 class MapPacketWriterTest {
     @Test
     void serializesCanonicalMap0TemplateAndRuntimeState() throws Exception {
-        LegacyMapTemplate map = GameResources
+        MapTemplate map = GameResources
                 .fromRoots(null, Path.of("resources", "json"))
                 .map(0)
                 .orElseThrow();
-        PlayerProfile player = PlayerProfile.initial(1L, 7, "alpha1", 0)
+        PlayerProfile player = TestPlayerProfiles.initial(1L, 7, "alpha1", 0)
                 .withLocation(0, 3, 1234, 567);
         List<String> targets = map.waypoints().stream()
                 .map(waypoint -> "target-" + waypoint.goMap())
@@ -60,7 +61,7 @@ class MapPacketWriterTest {
         assertEquals(player.y(), reader.readShort());
         assertEquals(map.waypoints().size(), reader.readByte());
         for (int index = 0; index < map.waypoints().size(); index++) {
-            LegacyWaypoint waypoint = map.waypoints().get(index);
+            Waypoint waypoint = map.waypoints().get(index);
             assertEquals(waypoint.x(), reader.readShort());
             assertEquals(waypoint.y(), reader.readShort());
             assertEquals(waypoint.type(), reader.readByte());
@@ -85,11 +86,11 @@ class MapPacketWriterTest {
 
     @Test
     void cachedMapInfoOmitsTemplateButKeepsRuntimeLayout() throws Exception {
-        LegacyMapTemplate map = new LegacyMapTemplate(
+        MapTemplate map = new MapTemplate(
                 4, 5, "cached", 1, 1, "data", List.of(6),
                 List.of(List.of(7)), false, null,
-                List.of(new LegacyWaypoint(1, 2, 100, 200, 300, 400, 0)));
-        PlayerProfile player = PlayerProfile.initial(1L, 7, "alpha1", 0)
+                List.of(new Waypoint(1, 2, 100, 200, 300, 400, 0)));
+        PlayerProfile player = TestPlayerProfiles.initial(1L, 7, "alpha1", 0)
                 .withLocation(4, 2, 123, 456);
 
         Message message = new MapPacketWriter().mapInfo(
@@ -114,9 +115,9 @@ class MapPacketWriterTest {
 
     @Test
     void rejectsWaypointNameCountMismatch() {
-        LegacyMapTemplate map = simpleMap(List.of(
-                new LegacyWaypoint(1, 2, 10, 20, 30, 40, 0)));
-        PlayerProfile player = PlayerProfile.initial(1L, 7, "alpha1", 0)
+        MapTemplate map = simpleMap(List.of(
+                new Waypoint(1, 2, 10, 20, 30, 40, 0)));
+        PlayerProfile player = TestPlayerProfiles.initial(1L, 7, "alpha1", 0)
                 .withLocation(4, 0, 1, 2);
 
         assertThrows(IllegalArgumentException.class, () ->
@@ -125,12 +126,12 @@ class MapPacketWriterTest {
 
     @Test
     void rejectsTooManyWaypointsAndMonsters() {
-        List<LegacyWaypoint> waypoints = new ArrayList<>();
+        List<Waypoint> waypoints = new ArrayList<>();
         for (int index = 0; index < 128; index++) {
-            waypoints.add(new LegacyWaypoint(index, 2, 10, 20, 30, 40, 0));
+            waypoints.add(new Waypoint(index, 2, 10, 20, 30, 40, 0));
         }
-        LegacyMapTemplate map = simpleMap(waypoints);
-        PlayerProfile player = PlayerProfile.initial(1L, 7, "alpha1", 0)
+        MapTemplate map = simpleMap(waypoints);
+        PlayerProfile player = TestPlayerProfiles.initial(1L, 7, "alpha1", 0)
                 .withLocation(4, 0, 1, 2);
         List<String> names = waypoints.stream().map(ignored -> "target").toList();
         List<MonsterSnapshot> monsters = new ArrayList<>();
@@ -141,25 +142,25 @@ class MapPacketWriterTest {
 
         assertThrows(IOException.class, () ->
                 new MapPacketWriter().mapInfo(player, map, false, names, List.of()));
-        LegacyMapTemplate smallMap = simpleMap(List.of());
+        MapTemplate smallMap = simpleMap(List.of());
         assertThrows(IOException.class, () ->
                 new MapPacketWriter().mapInfo(player, smallMap, false, List.of(), monsters));
     }
 
     @Test
     void rejectsLineMapWithoutDataLine() {
-        LegacyMapTemplate map = new LegacyMapTemplate(
+        MapTemplate map = new MapTemplate(
                 4, 5, "line", 1, 1, "data", List.of(), List.of(),
                 true, null, List.of());
-        PlayerProfile player = PlayerProfile.initial(1L, 7, "alpha1", 0)
+        PlayerProfile player = TestPlayerProfiles.initial(1L, 7, "alpha1", 0)
                 .withLocation(4, 0, 1, 2);
 
         assertThrows(IOException.class, () ->
                 new MapPacketWriter().mapInfo(player, map, true, List.of(), List.of()));
     }
 
-    private static LegacyMapTemplate simpleMap(List<LegacyWaypoint> waypoints) {
-        return new LegacyMapTemplate(
+    private static MapTemplate simpleMap(List<Waypoint> waypoints) {
+        return new MapTemplate(
                 4, 5, "simple", 1, 1, "data", List.of(), List.of(),
                 false, null, waypoints);
     }

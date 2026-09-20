@@ -2,7 +2,7 @@ package com.project.game.resource.loader;
 
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonParser;
-import com.project.game.resource.LegacyEffectImage;
+import com.project.game.resource.EffectImage;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -23,18 +23,18 @@ class EffectLoaderTest {
         var effects = EffectLoader.load(Path.of("resources", "json"), true);
 
         assertEquals(List.of(6, 7, 13, 17),
-                effects.stream().map(LegacyEffectImage::id).toList());
+                effects.stream().map(EffectImage::id).toList());
         assertEquals(4, effects.size());
         assertTrue(effects.stream().allMatch(effect -> !effect.icons().isEmpty()));
         assertTrue(effects.stream().allMatch(effect -> effect.icons().size() <= Byte.MAX_VALUE));
 
-        assertEquals(new LegacyEffectImage(6, 0, 0, 100, List.of(71, 72)),
+        assertEquals(new EffectImage(6, 0, 0, 100, List.of(71, 72)),
                 effects.get(0));
-        assertEquals(new LegacyEffectImage(7, 0, 0, 100, List.of(68, 69, 70)),
+        assertEquals(new EffectImage(7, 0, 0, 100, List.of(68, 69, 70)),
                 effects.get(1));
-        assertEquals(new LegacyEffectImage(
+        assertEquals(new EffectImage(
                 13, 0, 0, 100, List.of(971, 972, 973)), effects.get(2));
-        assertEquals(new LegacyEffectImage(
+        assertEquals(new EffectImage(
                 17, 0, -10, 50, List.of(1911, 1912, 1913, 1914)), effects.get(3));
         for (var effect : effects) {
             assertTrue(effect.id() >= Short.MIN_VALUE && effect.id() <= Short.MAX_VALUE);

@@ -7,7 +7,7 @@ import com.project.game.network.message.Message;
 import com.project.game.network.transport.ClientTransport;
 import com.project.game.player.PlayerProfile;
 import com.project.game.map.MapService;
-import com.project.game.service.ServerServices;
+import com.project.game.network.SessionServices;
 import com.project.game.player.PlayerService;
 
 import java.io.IOException;
@@ -52,7 +52,7 @@ public final class Session implements AutoCloseable {
 
     public Session(int id, ClientTransport transport, SessionManager manager,
                    LegacyPacketCodec codec, byte[] handshakeKey, int queueSize,
-                   ServerServices services, NetworkConfig networkConfig, NetworkEventObserver eventObserver) {
+                   SessionServices services, ClientConfig networkConfig) {
         if (queueSize < 1) {
             throw new IllegalArgumentException("queueSize must be positive");
         }
@@ -65,7 +65,7 @@ public final class Session implements AutoCloseable {
         this.sendQueue = new ArrayBlockingQueue<>(queueSize);
         this.mapService = Objects.requireNonNull(services, "services").maps();
         this.playerService = services.players();
-        this.handler = new MessageHandler(this, services, networkConfig, eventObserver);
+        this.handler = new MessageHandler(this, services, networkConfig);
     }
 
     public int id() {

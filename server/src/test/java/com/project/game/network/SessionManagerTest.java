@@ -2,7 +2,7 @@ package com.project.game.network;
 
 import com.project.game.testsupport.TestServices;
 import com.project.game.network.codec.LegacyPacketCodec;
-import com.project.game.service.ServerServices;
+import com.project.game.network.SessionServices;
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
@@ -56,6 +56,6 @@ class SessionManagerTest {
     private static Session newSession(SessionManager manager) {
         return new Session(manager.nextId(), new TestTransport(), manager,
                 new LegacyPacketCodec(1024), "abc".getBytes(StandardCharsets.US_ASCII), 4,
-                TestServices.serverServices(), NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
+                TestServices.serverServices(), ClientConfig.defaults());
     }
 }

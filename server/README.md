@@ -1,78 +1,60 @@
-# Rongthan network server (new project)
+# Rongthan Java Server
 
-Đây là project network mới độc lập theo `04_NETWORK_IMPLEMENTATION_PLAN_V2_4.md`.
-Nó không import và không ghi đè `../server/src` legacy.
+Server game Java 21 dùng Maven, tương thích với binary protocol hiện có của Unity client. Server dùng plain Java, JDBC và MySQL, không cần application framework.
 
-Đã triển khai các gate N0–N12 ở mức `LEGACY_DEV`:
+## Luồng chạy
 
-- message primitives big-endian và UTF-8 tương thích Unity cũ;
-- continuous legacy XOR cipher;
-- framing 2-byte và special 3-byte cho `VERSION_SOURCE`, `REQUEST_ICON`, `UPDATE_DATA`;
-- `ClientTransport`/`LegacyTcpTransport`;
-- session state, session manager, bounded outbound queue;
-- TCP accept loop và bootstrap `CONNECT_SERVER → key → VERSION_SOURCE`;
-- state validation cơ bản và protocol tests.
-- Java 21 virtual threads cho reader/writer mỗi session;
-- Java integration client cho N9;
-- auth-ready N11: PBKDF2, MySQL-backed register/login, duplicate-account guard, create player;
-- protocol-violation counter và hardening giới hạn packet/session.
-- N13 TLS 1.3 transport tùy chọn, keystore lấy từ cấu hình ngoài repo và password từ environment.
+```text
+GameApplication
+→ ServerBootstrap
+→ NetworkServer
+→ Session
+→ MessageHandler và các feature handler
+→ account và gameplay services
+→ runtime models
+→ repositories/JDBC khi cần persistence
+```
 
-`pom.xml` yêu cầu Java 21. IDE cần chọn platform `JDK_21` trỏ tới
-`C:\Program Files\Java\jdk-21` trước khi reload/index project.
+`ServerBootstrap` nạp cấu hình và static resources, mở database đã cấu hình, rồi nối các thành phần network và gameplay. `Session` quản lý connection state và luồng message. Handler chuyển xử lý tới account, map, combat, monster và resource. Account và player được lưu qua JDBC repositories; membership trong zone và trạng thái monster đang chạy là runtime state.
 
-## Chạy test
+## Build và chạy
+
+Cần JDK 21. Chạy từ thư mục này:
 
 ```powershell
-$env:JAVA_HOME = 'C:\Program Files\Java\jdk-21'
 mvn test
-& "$env:JAVA_HOME\bin\java.exe" -cp "target/test-classes;target/classes" com.project.game.network.ProtocolSelfTest
-& "$env:JAVA_HOME\bin\java.exe" -cp "target/test-classes;target/classes" com.project.game.network.transport.TlsTransportSelfTest
-& "$env:JAVA_HOME\bin\java.exe" -cp "target/test-classes;target/classes" com.project.game.network.TlsNetworkSelfTest
-& "$env:JAVA_HOME\bin\java.exe" -cp "target/test-classes;target/classes" com.project.game.network.ProtocolIntegrationClient 127.0.0.1 1707
+mvn -q package
+java -cp target/classes com.project.game.GameApplication
 ```
 
-Để bật phục vụ icon từ thư mục local (chỉ dành cho DEV), chạy server với:
+Maven test suite thông thường bao gồm TLS tests và không cần MySQL. Server khi chạy cần database đã cấu hình cùng hai bảng `account` và `player`. Mặc định server nghe tại `127.0.0.1:1707` qua `LEGACY_TCP`.
+
+## Kiểm tra protocol với server thật
+
+Khi server đang chạy, `ProtocolIntegrationClient` có thể kiểm tra kết nối và luồng player. Chạy `mvn test-compile` hoặc `mvn test` để tạo test classes trước.
 
 ```powershell
-java '-Dgame.resource.icon-dir=../client/Assets/Resources/SmallImages' -cp target/classes com.project.game.GameApplication
+& "$env:JAVA_HOME\bin\java.exe" -cp "target/test-classes;target/classes" com.project.game.network.ProtocolIntegrationClient 127.0.0.1 1707
+& "$env:JAVA_HOME\bin\java.exe" -cp "target/test-classes;target/classes" com.project.game.network.ProtocolIntegrationClient 127.0.0.1 1707 codex01 secret1
 ```
 
-Legacy image cache versioning:
+## Static resources và icon
 
-- `game.resource.image-version` controls the Unity persistent icon-cache namespace.
-- Valid configured values are `1..127`; `-1` is reserved for unavailable image resources.
-- Increment the version whenever any served `resources/icon/*.png` content changes, and do not reuse an older value while clients may retain its cache.
-- Changing only the version intentionally forces one redownload per needed icon.
+Mặc định `game.resource.json-dir` là `resources/json`. Xem [hướng dẫn JSON resources](resources/json/README.md) để biết các file Java runtime loader sử dụng. Thư mục icon mặc định là `resources/icon`.
 
-For example, to publish the next icon namespace:
+`game.resource.icon-dir` chọn thư mục icon; `game.resource.image-version` chọn image capability server gửi trong resource manifest. Khi có icon directory, giá trị hợp lệ là `1..127`; `-1` biểu thị icon resources không khả dụng. Image version mặc định là `2`, hỗ trợ per-icon fingerprint manifest mà client yêu cầu bằng `UPDATE_DATA` type `12`. Lệnh tải icon vẫn là `REQUEST_ICON` (`-22`).
+
+Ở version 2, fingerprint cho biết icon nào đã đổi nên thay PNG thông thường không cần tăng image version. Hãy khởi động lại server sau khi thay PNG vì catalog ghi nhận fingerprint lúc khởi động. Ví dụ:
 
 ```powershell
 java '-Dgame.resource.icon-dir=../client/Assets/Resources/SmallImages' '-Dgame.resource.image-version=2' -cp target/classes com.project.game.GameApplication
 ```
 
-Icon Resource V2:
+## Lưu account và player
 
-- `image-version=2` means per-icon manifest capability.
-- Do not increment `image-version` for normal PNG changes.
-- Restart the server after changing PNGs.
-- New clients request `UPDATE_DATA` type `12` for the per-icon manifest.
-- Only changed icon fingerprints create cache misses.
-- `REQUEST_ICON` `-22` remains unchanged.
+`REGISTER` và `LOGIN` dùng bảng MySQL `account`; player được lưu trong bảng `player`. Áp dụng `database/schema/account.sql`, sau đó `database/schema/player.sql` vào database đã cấu hình. Ứng dụng không tự chạy các schema tham khảo này. Server kiểm tra hai bảng khi khởi động. Inventory, skill progression và quest state hiện chưa thuộc phạm vi persistence. `zoneId` của player chỉ tồn tại trong runtime; vị trí bền vững lưu `mapId`, `x` và `y`. `exp` là tổng kinh nghiệm tích lũy, không có cột `max_exp`.
 
-Account and player persistence:
-
-- `REGISTER` and `LOGIN` use the MySQL `account` table through `AccountRepository`.
-- Account credentials and the single player row per account survive a server restart.
-- Apply `database/schema/account.sql` first, then `database/schema/player.sql` to the configured
-  MySQL database. The application does not execute either reference schema automatically.
-- Normal server startup requires the configured database, `account` table, and `player` table;
-  startup fails when any required table is unavailable. There is no production in-memory
-  account/player fallback.
-- The local `root` account currently has no password, so empty-password mode is explicitly
-  enabled. This avoids relying on PowerShell preserving an empty environment variable.
-- Normal `mvn test` is MySQL-independent. Real DB integration remains opt-in and requires the
-  `rongthanchibi` database plus both tables:
+Cấu hình JDBC URL, username và tên biến môi trường mật khẩu qua `game.db.url`, `game.db.username` và `game.db.password-env`. Biến mật khẩu mặc định là `GAME_DB_PASSWORD`. Real MySQL tests là opt-in, cần database `rongthanchibi` cùng hai bảng trên. Với database local không có mật khẩu:
 
 ```powershell
 mvn `
@@ -84,8 +66,7 @@ mvn `
   test
 ```
 
-For a password-protected local `root` account, keep the password outside the repository and
-disable empty-password mode explicitly:
+Với database có mật khẩu, giữ mật khẩu ngoài repository:
 
 ```powershell
 $env:GAME_DB_PASSWORD = 'your-local-password'
@@ -99,30 +80,9 @@ mvn `
   test
 ```
 
-The JDBC URL and username can be overridden with `-Dgame.db.url` and
-`-Dgame.db.username`. Player `zoneId` is runtime-only; durable position stores only
-`mapId`, `x`, and `y`. `exp` is total accumulated EXP and there is no `max_exp` column.
+## TLS 1.3 tùy chọn
 
-## Chạy server
-
-```powershell
-mvn -q package
-java -cp target/classes com.project.game.GameApplication
-```
-
-Test cả auth/create-player:
-
-```powershell
-& "$env:JAVA_HOME\bin\java.exe" -cp "target/test-classes;target/classes" com.project.game.network.ProtocolIntegrationClient 127.0.0.1 1707 codex01 secret1
-```
-
-Mặc định server nghe `127.0.0.1:1707`. Account và player dùng MySQL; inventory, skill và
-quest chưa nằm trong phạm vi persistence V1. Runtime zone membership vẫn chỉ nằm trong bộ nhớ.
-
-## Bật TLS 1.3
-
-Không đưa certificate/private key vào repository. Tạo keystore PKCS12 bên ngoài project,
-sau đó chạy server với các system property và environment variable sau:
+Để certificate và private key bên ngoài repository. Cấu hình PKCS12 keystore và truyền mật khẩu qua environment variable:
 
 ```powershell
 $env:GAME_TLS_KEYSTORE_PASSWORD = 'your-keystore-password'
@@ -132,5 +92,4 @@ $env:GAME_TLS_KEYSTORE_PASSWORD = 'your-keystore-password'
   '-cp' target/classes com.project.game.GameApplication
 ```
 
-Các packet bên trong TLS vẫn dùng framing legacy và XOR hiện có. Client Unity sẽ được
-chuyển sang `SslStream` ở gate client/security tương ứng; N13 hiện mới hoàn tất Java server transport.
+Keystore type mặc định là `PKCS12`, TLS protocol mặc định là `TLSv1.3`; cấu hình lần lượt bằng `game.network.tls.keystore-type` và `game.network.tls.protocol`. Packet bên trong TLS vẫn dùng legacy framing và cipher. Client kết nối cần hỗ trợ TLS khi server chạy ở chế độ này.

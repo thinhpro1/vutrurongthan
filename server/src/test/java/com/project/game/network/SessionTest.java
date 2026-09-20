@@ -6,7 +6,7 @@ import com.project.game.network.codec.LegacyCipher;
 import com.project.game.network.message.Message;
 import com.project.game.network.message.MessageName;
 import com.project.game.network.transport.ClientTransport;
-import com.project.game.service.ServerServices;
+import com.project.game.network.SessionServices;
 import com.project.game.account.AuthService;
 import com.project.game.player.PlayerService;
 import com.project.game.persistence.player.PlayerRecord;
@@ -14,7 +14,7 @@ import com.project.game.persistence.player.PlayerRepository;
 import com.project.game.persistence.player.PlayerRepositoryException;
 import com.project.game.player.PlayerProfile;
 import com.project.game.testsupport.GameplayServices;
-import com.project.game.monster.MonsterRuntimeFactory;
+import com.project.game.monster.MonsterFactory;
 import com.project.game.network.packet.MonsterPacketWriter;
 import com.project.game.network.packet.PlayerPacketWriter;
 import com.project.game.resource.GameResources;
@@ -70,7 +70,7 @@ class SessionTest {
         };
         Session session = new Session(manager.nextId(), transport, manager,
                 new LegacyPacketCodec(1024), "abc".getBytes(StandardCharsets.US_ASCII), 4,
-                TestServices.serverServices(), NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
+                TestServices.serverServices(), ClientConfig.defaults());
         assertTrue(manager.tryAdd(session, 1));
 
         assertThrows(IOException.class, session::start);
@@ -88,7 +88,7 @@ class SessionTest {
             SessionManager manager = new SessionManager();
             Session session = new Session(manager.nextId(), new TestTransport(input, output, "127.0.0.1"), manager,
                     new LegacyPacketCodec(1024), "abc".getBytes(StandardCharsets.US_ASCII), 8,
-                    TestServices.serverServices(), NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
+                    TestServices.serverServices(), ClientConfig.defaults());
             List<Message> expected = List.of(
                     new Message(MessageName.DIALOG_OK, new byte[]{1}),
                     new Message(MessageName.START_CREATE_PLAYER_SCREEN, new byte[]{2, 3}),
@@ -119,14 +119,14 @@ class SessionTest {
         AuthService auth = new AuthService(new TestAccountRepository());
         GameResources resources = GameResources.unavailable();
         GameplayServices maps = new GameplayServices(new PlayerPacketWriter(), new MonsterPacketWriter(),
-                new MonsterRuntimeFactory(resources));
+                new MonsterFactory(resources));
         PlayerService players = new PlayerService(repository);
         PlayerProfile player = players.create(101L, "alpha1", 0).player().withHp(77);
-        ServerServices services = TestServices.serverServices(auth, resources, maps, players);
+        SessionServices services = TestServices.serverServices(auth, resources, maps, players);
         SessionManager manager = new SessionManager();
         Session session = new Session(manager.nextId(), new TestTransport(), manager,
                 new LegacyPacketCodec(1024), "abc".getBytes(StandardCharsets.US_ASCII), 4,
-                services, NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
+                services, ClientConfig.defaults());
         assertTrue(manager.beginAccountAdmission(session, 101L, "user01"));
         manager.finishAccountAdmission(session, true);
         session.bindPlayer(player);
@@ -157,9 +157,9 @@ class SessionTest {
                 TestServices.serverServices(new AuthService(new TestAccountRepository()),
                         GameResources.unavailable(),
                         new GameplayServices(new PlayerPacketWriter(), new MonsterPacketWriter(),
-                                new MonsterRuntimeFactory(GameResources.unavailable())),
+                                new MonsterFactory(GameResources.unavailable())),
                         players),
-                NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
+                ClientConfig.defaults());
         assertTrue(manager.tryAdd(session, 1));
         assertTrue(manager.beginAccountAdmission(session, 101L, "user01"));
         manager.finishAccountAdmission(session, true);
@@ -191,9 +191,9 @@ class SessionTest {
                 TestServices.serverServices(new AuthService(new TestAccountRepository()),
                         GameResources.unavailable(),
                         new GameplayServices(new PlayerPacketWriter(), new MonsterPacketWriter(),
-                                new MonsterRuntimeFactory(GameResources.unavailable())),
+                                new MonsterFactory(GameResources.unavailable())),
                         players),
-                NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
+                ClientConfig.defaults());
         assertTrue(manager.tryAdd(session, 1));
         assertTrue(manager.beginAccountAdmission(session, 101L, "user01"));
         manager.finishAccountAdmission(session, true);
@@ -233,9 +233,9 @@ class SessionTest {
                 TestServices.serverServices(new AuthService(new TestAccountRepository()),
                         GameResources.unavailable(),
                         new GameplayServices(new PlayerPacketWriter(), new MonsterPacketWriter(),
-                                new MonsterRuntimeFactory(GameResources.unavailable())),
+                                new MonsterFactory(GameResources.unavailable())),
                         players),
-                NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
+                ClientConfig.defaults());
         assertTrue(manager.tryAdd(session, 1));
         assertTrue(manager.beginAccountAdmission(session, 101L, "user01"));
         manager.finishAccountAdmission(session, true);

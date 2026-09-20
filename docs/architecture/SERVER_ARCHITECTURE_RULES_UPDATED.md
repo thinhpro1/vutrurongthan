@@ -2,7 +2,7 @@
 
 > **Status:** Authoritative server architecture contract  
 > **Scope:** `server/**`  
-> **Baseline:** `3a6eab9de2f2a88c0040faf944b416169cce7a89`
+> **Baseline:** `97202d13e8dee3f723767962746571b12d0d928c` — final production cleanup commit
 >
 > Mục tiêu của tài liệu này là giữ server **dễ tìm code, dễ đọc, dễ sửa và khó phá nhầm** khi project lớn dần.
 > Readability quan trọng hơn việc ép code tuân thủ 100% một Design Pattern.
@@ -127,62 +127,78 @@ Cây dưới đây mô tả **shape/ownership mong muốn**, không phải check
 
 ```text
 com.project.game/
-│
 ├── GameApplication.java
-├── bootstrap/
-│   └── ServerBootstrap.java
-│
 ├── account/
 │   └── AuthService.java
-│
+├── bootstrap/
+│   └── ServerBootstrap.java
+├── combat/
+│   └── CombatService.java
 ├── player/
+│   ├── Appearance.java
+│   ├── BaseStats.java
+│   ├── CurrentStats.java
 │   ├── PlayerProfile.java
 │   ├── PlayerProfileFactory.java
 │   └── PlayerService.java
-│
 ├── map/
 │   ├── MapTemplate.java
 │   ├── Waypoint.java
 │   ├── Zone.java
 │   ├── ZoneRegistry.java
 │   └── MapService.java
-│
 ├── monster/
 │   ├── Monster.java
-│   ├── MonsterTemplate.java
-│   ├── MonsterSpawn.java
+│   ├── MonsterAttack.java
+│   ├── MonsterCombatTemplate.java
 │   ├── MonsterDart.java
 │   ├── MonsterFactory.java
+│   ├── MonsterLifecycleScheduler.java
 │   ├── MonsterService.java
-│   └── MonsterLifecycleScheduler.java
-│
-├── combat/
-│   └── CombatService.java
-│
+│   ├── MonsterSnapshot.java
+│   ├── MonsterSpawn.java
+│   └── MonsterTemplate.java
 ├── resource/
+│   ├── EffectImage.java
+│   ├── FrameTemplate.java
 │   ├── GameResources.java
 │   ├── IconCatalog.java
-│   ├── FrameTemplate.java
+│   ├── IconFingerprint.java
+│   ├── LevelTemplate.java
+│   ├── SkillTemplate.java
 │   └── loader/
+│       ├── EffectLoader.java
+│       ├── FrameLoader.java
 │       ├── GameResourcesLoader.java
 │       ├── JsonResourceReader.java
+│       ├── LevelLoader.java
 │       ├── MapLoader.java
+│       ├── MonsterCombatLoader.java
 │       ├── MonsterLoader.java
-│       └── ...
-│
+│       └── SkillLoader.java
 ├── network/
-│   ├── NetworkServer.java
 │   ├── ClientConfig.java
+│   ├── NetworkServer.java
 │   ├── Session.java
 │   ├── SessionManager.java
-│   ├── SessionState.java
 │   ├── SessionServices.java
-│   ├── handler/
-│   ├── packet/
-│   ├── message/
+│   ├── SessionState.java
 │   ├── codec/
+│   │   ├── LegacyCipher.java
+│   │   └── LegacyPacketCodec.java
+│   ├── handler/
+│   ├── message/
+│   ├── packet/
+│   │   ├── MapPacketWriter.java
+│   │   ├── MonsterPacketWriter.java
+│   │   ├── PlayerPacketValidator.java
+│   │   ├── PlayerPacketWriter.java
+│   │   └── ResourcePacketWriter.java
 │   └── transport/
-│
+│       ├── ClientTransport.java
+│       ├── LegacyTcpTransport.java
+│       ├── TlsContextFactory.java
+│       └── TlsTcpTransport.java
 └── persistence/
     ├── DatabaseConfig.java
     ├── DatabaseManager.java
@@ -190,7 +206,7 @@ com.project.game/
     └── player/
 ```
 
-Các tên ở cây trên là **direction cho cleanup/future code**. Nếu production hiện tại còn tên transitional thì refactor phải làm theo phase riêng và giữ behavior.
+Các tên ở cây trên mô tả ownership hiện tại ở mức đại diện; đây không phải checklist file inventory. Package `service/` không còn trong production.
 
 Không tạo package chỉ để làm cây đối xứng.
 
@@ -794,31 +810,15 @@ PlayerUseCaseExecutor
 PlayerPersistenceGateway
 WorldInteractionFacade
 ClientCompatibilityConfiguration
-MonsterRuntimeFactory
 ```
 
 ## 16.1 Dùng context của package, không lặp lại context vào tên
 
-Trong `monster/`:
+Trong `monster/`, `MonsterFactory` nêu factory của feature.
 
-```text
-MonsterFactory        ✅
-MonsterRuntimeFactory ❌ nếu không có factory khác cần phân biệt
-```
+Trong `network/packet/`, `PlayerPacketValidator` nêu trực tiếp trách nhiệm.
 
-Trong `network/packet/`:
-
-```text
-PlayerPacketValidator              ✅
-LegacyPlayerCompatibilityValidator ❌ nếu mục đích thật chỉ là validate wire range
-```
-
-Trong `resource/`:
-
-```text
-IconCatalog         ✅
-IconResourceCatalog ⚠ chỉ giữ khi cần phân biệt với catalog khác
-```
+Trong `resource/`, `IconCatalog` mô tả collection dùng cho lookup.
 
 ## 16.2 Ý nghĩa suffix/prefix
 
@@ -853,32 +853,7 @@ LegacyCipher
 LegacyTcpTransport
 ```
 
-Không dùng `Legacy` chỉ vì dữ liệu có nguồn gốc từ client/server cũ nếu type đó hiện là model chính duy nhất:
-
-```text
-LegacyMapTemplate     → MapTemplate
-LegacyWaypoint        → Waypoint
-LegacyMonsterTemplate → MonsterTemplate
-```
-
-Không dùng `Runtime` chỉ để nói object đang sống trong memory nếu tên domain đã đủ:
-
-```text
-RuntimeMonster        → Monster
-MonsterRuntimeFactory → MonsterFactory
-```
-
-Không dùng `Initial` khi method/owner đã nói rõ creation intent:
-
-```text
-PlayerInitialProfileFactory → PlayerProfileFactory
-```
-
-Không dùng `Compatibility` nếu responsibility cụ thể hơn có thể đặt tên trực tiếp:
-
-```text
-LegacyPlayerCompatibilityValidator → PlayerPacketValidator
-```
+Không thêm các qualifier này chỉ vì dữ liệu bắt nguồn từ client hoặc server cũ, object đang sống trong memory, hay type được tạo lúc khởi tạo. Dùng tên trực tiếp khi không có ambiguity, ví dụ `MapTemplate`, `Waypoint`, `MonsterTemplate`, `Monster`, `MonsterFactory`, `PlayerProfileFactory`, và `PlayerPacketValidator`.
 
 ## 16.4 Tên phải scale sang mọi feature
 
@@ -998,15 +973,7 @@ Nếu các type không có một owner tự nhiên thì giữ top-level; nếu c
 
 ## 17.4 Result/value naming
 
-Không mặc định tạo:
-
-```text
-MonsterDamageResult.java
-MonsterMoveResult.java
-MonsterRespawnResult.java
-NpcInteractionResult.java
-BossPhaseResult.java
-```
+Không mặc định tạo một top-level file cho result nhỏ chỉ thuộc một owner.
 
 Nếu result chỉ thuộc một owner, ưu tiên tên ngắn dưới owner:
 

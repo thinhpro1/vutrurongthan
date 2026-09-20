@@ -2,10 +2,10 @@ package com.project.game.resource.loader;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import com.project.game.monster.LegacyMonsterDart;
-import com.project.game.monster.LegacyMonsterDartPhase;
-import com.project.game.monster.LegacyMonsterSpawn;
-import com.project.game.monster.LegacyMonsterTemplate;
+import com.project.game.monster.MonsterDart;
+import com.project.game.monster.MonsterDart.Phase;
+import com.project.game.monster.MonsterSpawn;
+import com.project.game.monster.MonsterTemplate;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -57,12 +57,12 @@ final class MonsterLoader {
                     "MonsterBootstrap.json mapSpawns must contain exactly maps 0 and 1");
         }
 
-        LegacyMonsterDart dart = readMonsterDart(dartsValue.getAsJsonArray().get(0));
-        LegacyMonsterTemplate template = readMonsterTemplate(
+        MonsterDart dart = readMonsterDart(dartsValue.getAsJsonArray().get(0));
+        MonsterTemplate template = readMonsterTemplate(
                 templatesValue.getAsJsonArray().get(0), dart);
-        List<LegacyMonsterSpawn> map0 = readMonsterSpawns(
+        List<MonsterSpawn> map0 = readMonsterSpawns(
                 mapSpawnsObject.get("0"), 0, template);
-        List<LegacyMonsterSpawn> map1 = readMonsterSpawns(
+        List<MonsterSpawn> map1 = readMonsterSpawns(
                 mapSpawnsObject.get("1"), 1, template);
         if (!map0.isEmpty()) {
             throw new IllegalArgumentException("MonsterBootstrap Map0 must contain no monsters");
@@ -72,7 +72,7 @@ final class MonsterLoader {
         }
         List<Integer> expectedX = List.of(975, 1348, 1800, 2250, 2600, 2950);
         for (int index = 0; index < map1.size(); index++) {
-            LegacyMonsterSpawn spawn = map1.get(index);
+            MonsterSpawn spawn = map1.get(index);
             if (spawn.id() != index || spawn.x() != expectedX.get(index)
                     || spawn.y() != 936 || spawn.type() != 0 || spawn.templateId() != 1
                     || spawn.level() != 2 || spawn.levelStatus() != 0
@@ -82,14 +82,14 @@ final class MonsterLoader {
             }
         }
 
-        Map<Integer, List<LegacyMonsterSpawn>> spawns = new HashMap<>();
+        Map<Integer, List<MonsterSpawn>> spawns = new HashMap<>();
         spawns.put(0, map0);
         spawns.put(1, map1);
         return new LoadedMonsters(1, List.of(dart), List.of(template),
                 Collections.unmodifiableMap(spawns));
     }
 
-    private static LegacyMonsterDart readMonsterDart(JsonElement value) {
+    private static MonsterDart readMonsterDart(JsonElement value) {
         if (!value.isJsonObject()) {
             throw new IllegalArgumentException("MonsterBootstrap dart must be an object");
         }
@@ -102,9 +102,9 @@ final class MonsterLoader {
         if (id != 0 || meteorite) {
             throw new IllegalArgumentException("MonsterBootstrap dart must be id 0 and non-meteorite");
         }
-        LegacyMonsterDartPhase light = readMonsterDartPhase(object, "light");
-        LegacyMonsterDartPhase bullet = readMonsterDartPhase(object, "bullet");
-        LegacyMonsterDartPhase explode = readMonsterDartPhase(object, "explode");
+        MonsterDart.Phase light = readMonsterDartPhase(object, "light");
+        MonsterDart.Phase bullet = readMonsterDartPhase(object, "bullet");
+        MonsterDart.Phase explode = readMonsterDartPhase(object, "explode");
         if (!light.icons().equals(List.of(2198, 2199, 2200)) || light.dx() != 0
                 || light.dy() != 0 || light.delay() != 30
                 || !bullet.icons().equals(List.of(2190, 2191, 2192)) || bullet.dx() != 0
@@ -113,10 +113,10 @@ final class MonsterLoader {
                 || explode.dx() != 0 || explode.dy() != 0 || explode.delay() != 20) {
             throw new IllegalArgumentException("MonsterBootstrap dart 0 is not canonical");
         }
-        return new LegacyMonsterDart(id, meteorite, light, bullet, explode);
+        return new MonsterDart(id, meteorite, light, bullet, explode);
     }
 
-    private static LegacyMonsterDartPhase readMonsterDartPhase(JsonObject parent, String field) {
+    private static MonsterDart.Phase readMonsterDartPhase(JsonObject parent, String field) {
         JsonObject object = JsonResourceReader.requiredObject(parent, field);
         JsonResourceReader.requireExactFields(object,
                 Set.of("icons", "dx", "dy", "delay"),
@@ -125,14 +125,14 @@ final class MonsterLoader {
         if (icons.size() > Byte.MAX_VALUE) {
             throw new IllegalArgumentException("too many icons for MonsterBootstrap dart " + field);
         }
-        return new LegacyMonsterDartPhase(icons,
+        return new MonsterDart.Phase(icons,
                 JsonResourceReader.readShortValue(object, "dx"),
                 JsonResourceReader.readShortValue(object, "dy"),
                 JsonResourceReader.readShortValue(object, "delay"));
     }
 
-    private static LegacyMonsterTemplate readMonsterTemplate(JsonElement value,
-                                                               LegacyMonsterDart dart) {
+    private static MonsterTemplate readMonsterTemplate(JsonElement value,
+                                                               MonsterDart dart) {
         if (!value.isJsonObject()) {
             throw new IllegalArgumentException("MonsterBootstrap template must be an object");
         }
@@ -164,17 +164,17 @@ final class MonsterLoader {
                 || dx != 0 || dy != 0 || dart.id() != dartId) {
             throw new IllegalArgumentException("MonsterBootstrap template 1 is not canonical");
         }
-        return new LegacyMonsterTemplate(id, name, rangeMove, speed, type, dartId,
+        return new MonsterTemplate(id, name, rangeMove, speed, type, dartId,
                 iconsMove, iconInjure, iconAttack, width, height, dx, dy);
     }
 
-    private static List<LegacyMonsterSpawn> readMonsterSpawns(JsonElement value, int mapId,
-                                                                LegacyMonsterTemplate template) {
+    private static List<MonsterSpawn> readMonsterSpawns(JsonElement value, int mapId,
+                                                                MonsterTemplate template) {
         if (!value.isJsonArray()) {
             throw new IllegalArgumentException(
                     "MonsterBootstrap map " + mapId + " spawns must be an array");
         }
-        List<LegacyMonsterSpawn> result = new java.util.ArrayList<>(value.getAsJsonArray().size());
+        List<MonsterSpawn> result = new java.util.ArrayList<>(value.getAsJsonArray().size());
         Set<Integer> ids = new HashSet<>();
         for (int index = 0; index < value.getAsJsonArray().size(); index++) {
             JsonElement element = value.getAsJsonArray().get(index);
@@ -194,8 +194,8 @@ final class MonsterLoader {
             int levelStatus = JsonResourceReader.readByteValue(object, "levelStatus");
             int x = JsonResourceReader.readShortValue(object, "x");
             int y = JsonResourceReader.readShortValue(object, "y");
-            long maxHp = JsonResourceReader.readLongStrict(object, "maxHp");
-            long hp = JsonResourceReader.readLongStrict(object, "hp");
+            long maxHp = JsonResourceReader.readStrictLong(object, "maxHp");
+            long hp = JsonResourceReader.readStrictLong(object, "hp");
             int status = JsonResourceReader.readByteValue(object, "status");
             if (!ids.add(id)) {
                 throw new IllegalArgumentException("duplicate MonsterBootstrap runtime id " + id);
@@ -204,7 +204,7 @@ final class MonsterLoader {
                 throw new IllegalArgumentException("MonsterBootstrap spawn references missing template "
                         + templateId);
             }
-            result.add(new LegacyMonsterSpawn(type, templateId, id, level, levelStatus,
+            result.add(new MonsterSpawn(type, templateId, id, level, levelStatus,
                     x, y, maxHp, hp, status));
         }
         return List.copyOf(result);
@@ -212,9 +212,9 @@ final class MonsterLoader {
 
     record LoadedMonsters(
             int version,
-            List<LegacyMonsterDart> darts,
-            List<LegacyMonsterTemplate> templates,
-            Map<Integer, List<LegacyMonsterSpawn>> spawns
+            List<MonsterDart> darts,
+            List<MonsterTemplate> templates,
+            Map<Integer, List<MonsterSpawn>> spawns
     ) {
     }
 }

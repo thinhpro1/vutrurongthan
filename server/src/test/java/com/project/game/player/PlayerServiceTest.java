@@ -1,6 +1,6 @@
 package com.project.game.player;
 
-import com.project.game.player.PlayerInitialProfileFactory;
+import com.project.game.player.PlayerProfileFactory;
 import com.project.game.player.PlayerProfile;
 import com.project.game.testsupport.TestPlayerRepository;
 import org.junit.jupiter.api.Test;
@@ -89,7 +89,7 @@ class PlayerServiceTest {
         TestPlayerRepository repository = new TestPlayerRepository();
         PlayerService service = new PlayerService(
                 repository,
-                new PlayerInitialProfileFactory(),
+                new PlayerProfileFactory(),
                 Clock.fixed(Instant.parse("2026-01-02T03:04:05Z"), ZoneOffset.UTC));
         PlayerProfile created = service.create(101L, "alpha1", 0).player();
         PlayerProfile changed = created.withHp(77).withPotential(99).withLocation(1, 0, 90, 1008);

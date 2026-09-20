@@ -8,7 +8,7 @@ import com.project.game.network.message.MessageName;
 import com.project.game.network.message.MessageWriter;
 import com.project.game.account.AuthService;
 import com.project.game.resource.GameResources;
-import com.project.game.service.ServerServices;
+import com.project.game.network.SessionServices;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayOutputStream;
@@ -17,7 +17,6 @@ import java.io.OutputStream;
 import java.io.PipedInputStream;
 import java.io.PipedOutputStream;
 import java.nio.charset.StandardCharsets;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.CountDownLatch;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -26,31 +25,29 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class NetworkHardeningTest {
     @Test
-    void runtimeHandlerFailureClosesTransportAndCleansSessionManager() throws Exception {
+    void closesWhenConnectContainsTrailingBytes() throws Exception {
         SessionManager manager = new SessionManager();
         PipedInputStream input = new PipedInputStream();
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
         try (PipedOutputStream client = new PipedOutputStream(input)) {
-            TestTransport transport = new TestTransport(input, new ByteArrayOutputStream(), "127.0.0.1");
-            AtomicBoolean observerCalled = new AtomicBoolean();
+            TestTransport transport = new TestTransport(input, output, "127.0.0.1");
             Session session = new Session(manager.nextId(), transport, manager, new LegacyPacketCodec(1024),
-                    "abc".getBytes(StandardCharsets.US_ASCII), 4,
-                    TestServices.serverServices(TestServices.authService(), GameResources.unavailable()), NetworkConfig.defaults(),
-                    (ignored, type) -> {
-                        observerCalled.set(true);
-                        throw new IllegalStateException("observer failed");
-                    });
+                    "abc".getBytes(StandardCharsets.US_ASCII), 4, TestServices.serverServices(),
+                    ClientConfig.defaults());
             assertTrue(manager.tryAdd(session, 1));
             session.start();
-            LegacyPacketCodec codec = new LegacyPacketCodec(1024);
-            codec.writeClient(client, null, false, new Message(MessageName.CONNECT_SERVER));
-            waitForState(session, SessionState.HANDSHAKE_DONE);
-            codec.writeClient(client, new LegacyCipher("abc".getBytes(StandardCharsets.US_ASCII)),
-                    true, new Message(MessageName.UPDATE_DATA, new MessageWriter().writeByte(-1).toByteArray()));
+            try {
+                LegacyPacketCodec codec = new LegacyPacketCodec(1024);
+                codec.writeClient(client, null, false, new Message(MessageName.CONNECT_SERVER,
+                        new MessageWriter().writeByte(99).toByteArray()));
 
-            waitForClosed(session);
-            assertTrue(observerCalled.get());
-            assertTrue(transport.isClosed());
-            assertEquals(0, manager.onlineCount());
+                waitForClosed(session);
+
+                assertEquals(0, output.size(), "malformed connect sent handshake bytes");
+                assertEquals(0, manager.onlineCount());
+            } finally {
+                session.close();
+            }
         }
     }
 
@@ -76,7 +73,7 @@ class NetworkHardeningTest {
             TestTransport transport = new TestTransport(input, output, "127.0.0.1");
             Session session = new Session(manager.nextId(), transport, manager, new LegacyPacketCodec(1024),
                     "abc".getBytes(StandardCharsets.US_ASCII), 1, TestServices.serverServices(),
-                    NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
+                    ClientConfig.defaults());
             assertTrue(manager.tryAdd(session, 1));
             session.start();
             assertTrue(session.send(new Message(MessageName.DIALOG_OK)));
@@ -93,7 +90,7 @@ class NetworkHardeningTest {
         return new Session(manager.nextId(), new TestTransport(new java.io.ByteArrayInputStream(new byte[0]),
                 new ByteArrayOutputStream(), ip), manager, new LegacyPacketCodec(1024),
                 "abc".getBytes(StandardCharsets.US_ASCII), queueSize, TestServices.serverServices(),
-                NetworkConfig.defaults(), NetworkEventObserver.NO_OP);
+                ClientConfig.defaults());
     }
 
     private static void waitForClosed(Session session) throws InterruptedException {

@@ -4,9 +4,7 @@ import com.project.game.testsupport.TestPlayerProfiles;
 import com.project.game.network.message.Message;
 import com.project.game.network.message.MessageName;
 import com.project.game.player.PlayerProfile;
-import com.project.game.resource.LegacyPlayerSkill;
-import com.project.game.resource.LegacySkillOption;
-import com.project.game.resource.LegacySkillPaint;
+import com.project.game.resource.SkillTemplate;
 import com.project.game.resource.GameResources;
 import org.junit.jupiter.api.Test;
 
@@ -133,7 +131,7 @@ class PlayerPacketWriterTest {
     @Test
     void serializesCanonicalPlayerInfoWithActiveSkillWireShape() throws Exception {
         PlayerProfile player = TestPlayerProfiles.initial(1L, 7, "alpha1", 0);
-        List<LegacyPlayerSkill> skills = GameResources
+        List<SkillTemplate> skills = GameResources
                 .fromRoots(null, Path.of("resources", "json"))
                 .playerSkills(0);
 
@@ -185,7 +183,7 @@ class PlayerPacketWriterTest {
         assertEquals(player.appearance().spaceship(), reader.readByte());
 
         assertEquals(11, reader.readByte());
-        for (LegacyPlayerSkill skill : skills) {
+        for (SkillTemplate skill : skills) {
             assertSkillWire(reader, skill);
         }
         assertEquals(6, reader.readByte());
@@ -201,7 +199,7 @@ class PlayerPacketWriterTest {
     }
 
     private static void assertSkillWire(com.project.game.network.message.MessageReader reader,
-                                         LegacyPlayerSkill skill) throws Exception {
+                                         SkillTemplate skill) throws Exception {
         assertEquals(skill.id(), reader.readByte());
         assertEquals(skill.names().size(), reader.readByte());
         for (String name : skill.names()) {
@@ -230,7 +228,7 @@ class PlayerPacketWriterTest {
         assertEquals(skill.typeMana(), reader.readByte());
         assertMatrixInts(reader, skill.mana());
         assertEquals(skill.options().size(), reader.readByte());
-        for (LegacySkillOption option : skill.options()) {
+        for (SkillTemplate.Option option : skill.options()) {
             assertEquals(option.id(), reader.readByte());
             assertEquals(option.name(), reader.readUtf());
             assertIntList(reader, option.normal(), true);
@@ -244,7 +242,7 @@ class PlayerPacketWriterTest {
             assertEquals(skill.timeCanUse(), reader.readLong());
         }
         assertEquals(skill.paints().size(), reader.readByte());
-        for (LegacySkillPaint paint : skill.paints()) {
+        for (SkillTemplate.Paint paint : skill.paints()) {
             assertEquals(paint.percent(), reader.readUtf());
             assertEquals(paint.paintId(), reader.readShort());
         }

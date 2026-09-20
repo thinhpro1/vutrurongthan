@@ -58,7 +58,7 @@ class NetworkResourceIntegrationTest {
     }
 
     @Test
-    void javaClientLoadsLegacyLevelResource() throws Exception {
+    void clientLoadsLevelResourcePacket() throws Exception {
         GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"));
         NetworkServer server = new NetworkServer("127.0.0.1", 0, 2, 262_144, 8, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),

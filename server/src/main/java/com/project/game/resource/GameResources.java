@@ -29,13 +29,13 @@ public final class GameResources {
             Map.of(),
             Map.of());
 
-    private final IconResourceCatalog iconCatalog;
+    private final IconCatalog iconCatalog;
     private final int imageVersion;
     private final List<FrameTemplate> frames;
-    private final Map<Integer, List<LegacyPlayerSkill>> playerSkills;
+    private final Map<Integer, List<SkillTemplate>> playerSkills;
     private final Map<Integer, MapTemplate> maps;
-    private final List<LegacyLevel> levels;
-    private final List<LegacyEffectImage> effects;
+    private final List<LevelTemplate> levels;
+    private final List<EffectImage> effects;
     private final int monsterVersion;
     private final List<MonsterDart> monsterDarts;
     private final List<MonsterTemplate> monsterTemplates;
@@ -43,13 +43,13 @@ public final class GameResources {
     private final Map<Integer, MonsterCombatTemplate> monsterCombatTemplates;
 
     public GameResources(
-            IconResourceCatalog iconCatalog,
+            IconCatalog iconCatalog,
             int imageVersion,
             List<FrameTemplate> frames,
-            Map<Integer, List<LegacyPlayerSkill>> playerSkills,
+            Map<Integer, List<SkillTemplate>> playerSkills,
             Map<Integer, MapTemplate> maps,
-            List<LegacyLevel> levels,
-            List<LegacyEffectImage> effects,
+            List<LevelTemplate> levels,
+            List<EffectImage> effects,
             int monsterVersion,
             List<MonsterDart> monsterDarts,
             List<MonsterTemplate> monsterTemplates,
@@ -112,7 +112,7 @@ public final class GameResources {
         return frames;
     }
 
-    public List<LegacyPlayerSkill> playerSkills(int gender) {
+    public List<SkillTemplate> playerSkills(int gender) {
         return playerSkills.getOrDefault(gender, List.of());
     }
 
@@ -120,11 +120,11 @@ public final class GameResources {
         return Optional.ofNullable(maps.get(mapId));
     }
 
-    public List<LegacyLevel> levels() {
+    public List<LevelTemplate> levels() {
         return levels;
     }
 
-    public List<LegacyEffectImage> effects() {
+    public List<EffectImage> effects() {
         return effects;
     }
 

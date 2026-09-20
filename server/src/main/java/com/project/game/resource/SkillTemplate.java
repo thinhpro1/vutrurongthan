@@ -4,7 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
-public record LegacyPlayerSkill(
+public record SkillTemplate(
         int id,
         List<String> names,
         List<String> descriptions,
@@ -20,15 +20,15 @@ public record LegacyPlayerSkill(
         List<List<Integer>> coolDown,
         int typeMana,
         List<List<Integer>> mana,
-        List<LegacySkillOption> options,
+        List<SkillTemplate.Option> options,
         int level,
         int upgrade,
         int point,
         int cooldownReduction,
         long timeCanUse,
-        List<LegacySkillPaint> paints
+        List<SkillTemplate.Paint> paints
 ) {
-    public LegacyPlayerSkill {
+    public SkillTemplate {
         names = immutableStrings(names);
         descriptions = immutableStrings(descriptions);
         icons = List.copyOf(Objects.requireNonNull(icons, "icons"));
@@ -53,4 +53,21 @@ public record LegacyPlayerSkill(
         }
         return List.copyOf(copy);
     }
-}
+    public record Option(
+            int id,
+            String name,
+            List<Integer> normal,
+            List<Integer> upgrade
+    ) {
+        public Option {
+            Objects.requireNonNull(name, "name");
+            normal = List.copyOf(Objects.requireNonNull(normal, "normal"));
+            upgrade = List.copyOf(Objects.requireNonNull(upgrade, "upgrade"));
+        }
+    }
+
+    public record Paint(String percent, int paintId) {
+        public Paint {
+            Objects.requireNonNull(percent, "percent");
+        }
+    }}

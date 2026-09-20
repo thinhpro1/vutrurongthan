@@ -8,8 +8,8 @@ import com.project.game.network.message.MessageName;
 import com.project.game.network.message.MessageWriter;
 import com.project.game.resource.FrameTemplate;
 import com.project.game.resource.IconFingerprint;
-import com.project.game.resource.LegacyEffectImage;
-import com.project.game.resource.LegacyLevel;
+import com.project.game.resource.EffectImage;
+import com.project.game.resource.LevelTemplate;
 
 import java.io.IOException;
 import java.util.List;
@@ -54,7 +54,7 @@ public final class ResourcePacketWriter {
         return new Message(MessageName.UPDATE_DATA, writer.toByteArray());
     }
 
-    public Message effectResource(int version, List<LegacyEffectImage> effects)
+    public Message effectResource(int version, List<EffectImage> effects)
             throws IOException {
         Objects.requireNonNull(effects, "effects");
         requireShortCount(effects.size(), "legacy movement effects");
@@ -62,7 +62,7 @@ public final class ResourcePacketWriter {
                 .writeByte(3)
                 .writeByte(version)
                 .writeShort(effects.size());
-        for (LegacyEffectImage effect : effects) {
+        for (EffectImage effect : effects) {
             Objects.requireNonNull(effect, "effect");
             requireByteCount(effect.icons().size(), "icons for legacy effect " + effect.id());
             writer.writeShort(effect.id())
@@ -136,14 +136,14 @@ public final class ResourcePacketWriter {
                 .writeShort(phase.delay());
     }
 
-    public Message levelResource(int version, List<LegacyLevel> levels) throws IOException {
+    public Message levelResource(int version, List<LevelTemplate> levels) throws IOException {
         Objects.requireNonNull(levels, "levels");
         requireShortCount(levels.size(), "legacy levels");
         MessageWriter writer = new MessageWriter()
                 .writeByte(6)
                 .writeByte(version)
                 .writeShort(levels.size());
-        for (LegacyLevel level : levels) {
+        for (LevelTemplate level : levels) {
             Objects.requireNonNull(level, "level");
             writer.writeShort(level.id()).writeUtf(level.name()).writeLong(level.power());
         }

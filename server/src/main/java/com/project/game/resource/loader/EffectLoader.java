@@ -2,7 +2,7 @@ package com.project.game.resource.loader;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import com.project.game.resource.LegacyEffectImage;
+import com.project.game.resource.EffectImage;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -17,7 +17,7 @@ final class EffectLoader {
     private EffectLoader() {
     }
 
-    static List<LegacyEffectImage> load(Path root, boolean required) {
+    static List<EffectImage> load(Path root, boolean required) {
         Path normalizedRoot = root.toAbsolutePath().normalize();
         Path source = normalizedRoot.resolve("EffectBootstrap.json").normalize();
         if (!source.startsWith(normalizedRoot)
@@ -42,7 +42,7 @@ final class EffectLoader {
             throw new IllegalArgumentException("EffectBootstrap.json must contain exactly 4 images");
         }
 
-        List<LegacyEffectImage> loaded = new ArrayList<>(imagesValue.getAsJsonArray().size());
+        List<EffectImage> loaded = new ArrayList<>(imagesValue.getAsJsonArray().size());
         Set<Integer> ids = new HashSet<>();
         for (int index = 0; index < imagesValue.getAsJsonArray().size(); index++) {
             JsonElement element = imagesValue.getAsJsonArray().get(index);
@@ -86,7 +86,7 @@ final class EffectLoader {
                 throw new IllegalArgumentException(
                         "EffectBootstrap image 17 does not match canonical death effect");
             }
-            loaded.add(new LegacyEffectImage(id, dx, dy, delay, icons));
+            loaded.add(new EffectImage(id, dx, dy, delay, icons));
         }
         return List.copyOf(loaded);
     }

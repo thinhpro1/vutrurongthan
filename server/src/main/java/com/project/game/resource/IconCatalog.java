@@ -15,8 +15,8 @@ import java.util.logging.Logger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public final class IconResourceCatalog {
-    private static final Logger LOGGER = Logger.getLogger(IconResourceCatalog.class.getName());
+public final class IconCatalog {
+    private static final Logger LOGGER = Logger.getLogger(IconCatalog.class.getName());
     private static final Pattern CANONICAL_ICON = Pattern.compile("(0|[1-9][0-9]*)\\.png");
 
     private record Entry(Path path, long fingerprint) {
@@ -26,15 +26,15 @@ public final class IconResourceCatalog {
     private final Map<Integer, Entry> entries;
     private final ConcurrentHashMap<Integer, byte[]> bytesById = new ConcurrentHashMap<>();
 
-    private IconResourceCatalog(List<IconFingerprint> manifest, Map<Integer, Entry> entries) {
+    private IconCatalog(List<IconFingerprint> manifest, Map<Integer, Entry> entries) {
         this.manifest = List.copyOf(manifest);
         this.entries = Map.copyOf(entries);
     }
 
-    public static IconResourceCatalog fromRoot(Path root) {
+    public static IconCatalog fromRoot(Path root) {
         Path normalizedRoot = Objects.requireNonNull(root, "root").toAbsolutePath().normalize();
         if (!Files.isDirectory(normalizedRoot)) {
-            return new IconResourceCatalog(List.of(), Map.of());
+            return new IconCatalog(List.of(), Map.of());
         }
 
         Map<Integer, Entry> loaded = new HashMap<>();
@@ -52,7 +52,7 @@ public final class IconResourceCatalog {
         for (int id : ids) {
             manifest.add(new IconFingerprint(id, loaded.get(id).fingerprint()));
         }
-        return new IconResourceCatalog(manifest, loaded);
+        return new IconCatalog(manifest, loaded);
     }
 
     public List<IconFingerprint> manifest() {

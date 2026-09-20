@@ -13,7 +13,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-class IconResourceCatalogTest {
+class IconCatalogTest {
     @Test
     void buildsSortedPerIconManifest(@TempDir Path root) throws Exception {
         Files.write(root.resolve("10.png"), new byte[]{1, 2, 3});
@@ -21,7 +21,7 @@ class IconResourceCatalogTest {
         Files.write(root.resolve("005.png"), new byte[]{9});
         Files.write(root.resolve("note.txt"), new byte[]{9});
 
-        IconResourceCatalog catalog = IconResourceCatalog.fromRoot(root);
+        IconCatalog catalog = IconCatalog.fromRoot(root);
 
         assertEquals(List.of(2, 10), catalog.manifest().stream()
                 .map(IconFingerprint::iconId)
@@ -38,7 +38,7 @@ class IconResourceCatalogTest {
         Files.write(root.resolve("abc.png"), new byte[]{5});
         Files.write(root.resolve("5.jpg"), new byte[]{6});
 
-        IconResourceCatalog catalog = IconResourceCatalog.fromRoot(root);
+        IconCatalog catalog = IconCatalog.fromRoot(root);
 
         assertEquals(List.of(0, 32767), catalog.manifest().stream()
                 .map(IconFingerprint::iconId)
@@ -50,13 +50,13 @@ class IconResourceCatalogTest {
         Files.write(root.resolve("2.png"), new byte[]{1});
         Files.write(root.resolve("10.png"), new byte[]{2});
 
-        IconResourceCatalog first = IconResourceCatalog.fromRoot(root);
+        IconCatalog first = IconCatalog.fromRoot(root);
         long first2 = fingerprint(first, 2);
         long first10 = fingerprint(first, 10);
 
         Files.write(root.resolve("10.png"), new byte[]{3});
 
-        IconResourceCatalog second = IconResourceCatalog.fromRoot(root);
+        IconCatalog second = IconCatalog.fromRoot(root);
 
         assertEquals(first2, fingerprint(second, 2));
         assertNotEquals(first10, fingerprint(second, 10));
@@ -66,7 +66,7 @@ class IconResourceCatalogTest {
     void unknownIconReturnsEmpty(@TempDir Path root) throws Exception {
         Files.write(root.resolve("5.png"), new byte[]{1, 2, 3});
 
-        assertTrue(IconResourceCatalog.fromRoot(root).loadIcon(6).isEmpty());
+        assertTrue(IconCatalog.fromRoot(root).loadIcon(6).isEmpty());
     }
 
     @Test
@@ -74,7 +74,7 @@ class IconResourceCatalogTest {
         byte[] expected = new byte[]{1, 2, 3, 4};
         Path icon = root.resolve("5.png");
         Files.write(icon, expected);
-        IconResourceCatalog catalog = IconResourceCatalog.fromRoot(root);
+        IconCatalog catalog = IconCatalog.fromRoot(root);
 
         assertArrayEquals(expected, catalog.loadIcon(5).orElseThrow());
         Files.delete(icon);
@@ -86,7 +86,7 @@ class IconResourceCatalogTest {
     void mutationBeforeFirstLoadIsRejected(@TempDir Path root) throws Exception {
         Path icon = root.resolve("5.png");
         Files.write(icon, new byte[]{1, 2, 3});
-        IconResourceCatalog catalog = IconResourceCatalog.fromRoot(root);
+        IconCatalog catalog = IconCatalog.fromRoot(root);
         Files.write(icon, new byte[]{4, 5, 6});
 
         assertTrue(catalog.loadIcon(5).isEmpty());
@@ -94,13 +94,13 @@ class IconResourceCatalogTest {
 
     @Test
     void absentRootProducesEmptyCatalog(@TempDir Path root) {
-        IconResourceCatalog catalog = IconResourceCatalog.fromRoot(root.resolve("missing"));
+        IconCatalog catalog = IconCatalog.fromRoot(root.resolve("missing"));
 
         assertTrue(catalog.manifest().isEmpty());
         assertTrue(catalog.loadIcon(5).isEmpty());
     }
 
-    private static long fingerprint(IconResourceCatalog catalog, int iconId) {
+    private static long fingerprint(IconCatalog catalog, int iconId) {
         return catalog.manifest().stream()
                 .filter(icon -> icon.iconId() == iconId)
                 .findFirst()

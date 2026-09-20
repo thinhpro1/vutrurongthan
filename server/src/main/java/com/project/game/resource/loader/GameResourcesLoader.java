@@ -6,10 +6,10 @@ import com.project.game.monster.MonsterDart;
 import com.project.game.monster.MonsterSpawn;
 import com.project.game.monster.MonsterTemplate;
 import com.project.game.resource.GameResources;
-import com.project.game.resource.IconResourceCatalog;
-import com.project.game.resource.LegacyEffectImage;
-import com.project.game.resource.LegacyLevel;
-import com.project.game.resource.LegacyPlayerSkill;
+import com.project.game.resource.IconCatalog;
+import com.project.game.resource.EffectImage;
+import com.project.game.resource.LevelTemplate;
+import com.project.game.resource.SkillTemplate;
 import com.project.game.resource.FrameTemplate;
 
 import java.nio.file.Path;
@@ -23,7 +23,7 @@ public final class GameResourcesLoader {
 
     public static GameResources fromIconRoot(Path iconRoot, int imageVersion) {
         Objects.requireNonNull(iconRoot, "iconRoot");
-        IconResourceCatalog catalog = IconResourceCatalog.fromRoot(iconRoot);
+        IconCatalog catalog = IconCatalog.fromRoot(iconRoot);
         return new GameResources(catalog, requireLegacyImageVersion(imageVersion),
                 List.of(), Map.of(), Map.of(), List.of(), List.of(), -1,
                 List.of(), List.of(), Map.of(), Map.of());
@@ -35,7 +35,7 @@ public final class GameResourcesLoader {
 
     public static GameResources fromRoots(Path jsonRoot, Path iconRoot, int imageVersion) {
         Objects.requireNonNull(jsonRoot, "jsonRoot");
-        IconResourceCatalog catalog = iconRoot == null ? null : IconResourceCatalog.fromRoot(iconRoot);
+        IconCatalog catalog = iconRoot == null ? null : IconCatalog.fromRoot(iconRoot);
         int configuredImageVersion = iconRoot == null ? -1 : requireLegacyImageVersion(imageVersion);
         return loadJson(jsonRoot, true, catalog, configuredImageVersion);
     }
@@ -43,14 +43,14 @@ public final class GameResourcesLoader {
     private static GameResources loadJson(
             Path jsonRoot,
             boolean required,
-            IconResourceCatalog iconCatalog,
+            IconCatalog iconCatalog,
             int imageVersion) {
         List<FrameTemplate> frames = FrameLoader.load(jsonRoot);
-        Map<Integer, List<LegacyPlayerSkill>> playerSkills =
-                PlayerSkillLoader.load(jsonRoot, required);
+        Map<Integer, List<SkillTemplate>> playerSkills =
+                SkillLoader.load(jsonRoot, required);
         Map<Integer, MapTemplate> maps = MapLoader.load(jsonRoot, required);
-        List<LegacyLevel> levels = LevelLoader.load(jsonRoot, required);
-        List<LegacyEffectImage> effects = EffectLoader.load(jsonRoot, required);
+        List<LevelTemplate> levels = LevelLoader.load(jsonRoot, required);
+        List<EffectImage> effects = EffectLoader.load(jsonRoot, required);
         MonsterLoader.LoadedMonsters monsters = MonsterLoader.load(jsonRoot, required);
         Map<Integer, MonsterCombatTemplate> combat =
                 MonsterCombatLoader.load(jsonRoot, required);

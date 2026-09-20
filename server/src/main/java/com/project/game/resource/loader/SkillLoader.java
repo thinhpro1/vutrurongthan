@@ -2,9 +2,7 @@ package com.project.game.resource.loader;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import com.project.game.resource.LegacyPlayerSkill;
-import com.project.game.resource.LegacySkillOption;
-import com.project.game.resource.LegacySkillPaint;
+import com.project.game.resource.SkillTemplate;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -15,7 +13,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-final class PlayerSkillLoader {
+final class SkillLoader {
     private static final Set<Integer> REQUIRED_PLAYER_SKILL_IDS = Set.of(
             0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17,
             30, 31, 32, 33, 34, 35, 36);
@@ -24,10 +22,10 @@ final class PlayerSkillLoader {
             List.of(1, 4, 7, 10, 13, 16, 30, 31, 32, 34, 36),
             List.of(2, 5, 8, 11, 14, 17, 30, 31, 32, 35, 36));
 
-    private PlayerSkillLoader() {
+    private SkillLoader() {
     }
 
-    static Map<Integer, List<LegacyPlayerSkill>> load(Path root, boolean required) {
+    static Map<Integer, List<SkillTemplate>> load(Path root, boolean required) {
         Path normalizedRoot = root.toAbsolutePath().normalize();
         Path source = normalizedRoot.resolve("PlayerSkillBootstrap.json").normalize();
         if (!source.startsWith(normalizedRoot)
@@ -43,7 +41,7 @@ final class PlayerSkillLoader {
         JsonObject templateObject = JsonResourceReader.requiredObject(rootObject, "templates");
 
         Set<Integer> templateIds = new HashSet<>();
-        Map<Integer, LegacyPlayerSkill> templates = new HashMap<>();
+        Map<Integer, SkillTemplate> templates = new HashMap<>();
         for (Map.Entry<String, JsonElement> entry : templateObject.entrySet()) {
             int id = JsonResourceReader.parseId(entry.getKey(), "skill template");
             if (!templateIds.add(id) || !REQUIRED_PLAYER_SKILL_IDS.contains(id)) {
@@ -52,7 +50,7 @@ final class PlayerSkillLoader {
             if (!entry.getValue().isJsonObject()) {
                 throw new IllegalArgumentException("skill template " + id + " must be an object");
             }
-            LegacyPlayerSkill skill = readSkill(entry.getValue().getAsJsonObject());
+            SkillTemplate skill = readSkill(entry.getValue().getAsJsonObject());
             if (skill.id() != id) {
                 throw new IllegalArgumentException("skill template key/id mismatch for " + id);
             }
@@ -63,7 +61,7 @@ final class PlayerSkillLoader {
                     "PlayerSkillBootstrap.json must contain exactly the 25 approved templates");
         }
 
-        Map<Integer, List<LegacyPlayerSkill>> byGender = new HashMap<>();
+        Map<Integer, List<SkillTemplate>> byGender = new HashMap<>();
         for (int gender = 0; gender < PLAYER_SKILL_IDS.size(); gender++) {
             String key = Integer.toString(gender);
             JsonElement idsValue = genderObject.get(key);
@@ -74,9 +72,9 @@ final class PlayerSkillLoader {
             if (!expectedIds.equals(PLAYER_SKILL_IDS.get(gender))) {
                 throw new IllegalArgumentException("invalid fresh skill list for gender " + gender);
             }
-            List<LegacyPlayerSkill> skills = new ArrayList<>(expectedIds.size());
+            List<SkillTemplate> skills = new ArrayList<>(expectedIds.size());
             for (int id : expectedIds) {
-                LegacyPlayerSkill skill = templates.get(id);
+                SkillTemplate skill = templates.get(id);
                 if (skill == null) {
                     throw new IllegalArgumentException("gender " + gender
                             + " references missing skill " + id);
@@ -88,8 +86,8 @@ final class PlayerSkillLoader {
         return Map.copyOf(byGender);
     }
 
-    private static LegacyPlayerSkill readSkill(JsonObject value) {
-        return new LegacyPlayerSkill(
+    private static SkillTemplate readSkill(JsonObject value) {
+        return new SkillTemplate(
                 JsonResourceReader.readInt(value, "id"),
                 JsonResourceReader.readStringList(value, "names"),
                 JsonResourceReader.readStringList(value, "descriptions"),
@@ -114,18 +112,18 @@ final class PlayerSkillLoader {
                 readPaints(value, "initialPaints"));
     }
 
-    private static List<LegacySkillOption> readOptions(JsonObject object, String field) {
+    private static List<SkillTemplate.Option> readOptions(JsonObject object, String field) {
         JsonElement value = JsonResourceReader.required(object, field);
         if (!value.isJsonArray()) {
             throw new IllegalArgumentException("skill field " + field + " must be an array");
         }
-        List<LegacySkillOption> options = new ArrayList<>(value.getAsJsonArray().size());
+        List<SkillTemplate.Option> options = new ArrayList<>(value.getAsJsonArray().size());
         for (JsonElement element : value.getAsJsonArray()) {
             if (!element.isJsonObject()) {
                 throw new IllegalArgumentException("skill option must be an object");
             }
             JsonObject option = element.getAsJsonObject();
-            options.add(new LegacySkillOption(
+            options.add(new SkillTemplate.Option(
                     JsonResourceReader.readInt(option, "id"),
                     JsonResourceReader.readString(option, "name"),
                     JsonResourceReader.readIntList(option, "normal"),
@@ -134,12 +132,12 @@ final class PlayerSkillLoader {
         return options;
     }
 
-    private static List<LegacySkillPaint> readPaints(JsonObject object, String field) {
+    private static List<SkillTemplate.Paint> readPaints(JsonObject object, String field) {
         JsonElement value = JsonResourceReader.required(object, field);
         if (!value.isJsonArray()) {
             throw new IllegalArgumentException("skill field " + field + " must be an array");
         }
-        List<LegacySkillPaint> paints = new ArrayList<>(value.getAsJsonArray().size());
+        List<SkillTemplate.Paint> paints = new ArrayList<>(value.getAsJsonArray().size());
         double previousPercent = 0d;
         int paintIndex = 0;
         for (JsonElement element : value.getAsJsonArray()) {
@@ -165,7 +163,7 @@ final class PlayerSkillLoader {
                                 + " percent must be strictly increasing and within (0,100]: "
                                 + percent);
             }
-            paints.add(new LegacySkillPaint(percent,
+            paints.add(new SkillTemplate.Paint(percent,
                     JsonResourceReader.readInt(paint, "paintId")));
             previousPercent = cumulativePercent;
             paintIndex++;

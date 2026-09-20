@@ -55,7 +55,7 @@ class MessageHandlerResourceTest {
     }
 
     @Test
-    void serializesExactLegacyLevelResource() throws Exception {
+    void serializesExactLevelTemplateResource() throws Exception {
         GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"));
         PipedInputStream input = new PipedInputStream();
         try (PipedOutputStream inputWriter = new PipedOutputStream(input)) {

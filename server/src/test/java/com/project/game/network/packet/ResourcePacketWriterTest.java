@@ -7,8 +7,8 @@ import com.project.game.network.message.Message;
 import com.project.game.network.message.MessageName;
 import com.project.game.resource.FrameTemplate;
 import com.project.game.resource.IconFingerprint;
-import com.project.game.resource.LegacyEffectImage;
-import com.project.game.resource.LegacyLevel;
+import com.project.game.resource.EffectImage;
+import com.project.game.resource.LevelTemplate;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -58,7 +58,7 @@ class ResourcePacketWriterTest {
     @Test
     void rejectsLevelCountThatWouldBeTruncated() {
         assertThrows(IOException.class, () -> writer.levelResource(
-                1, Collections.nCopies(Short.MAX_VALUE + 1, new LegacyLevel(1, "level", 1L))));
+                1, Collections.nCopies(Short.MAX_VALUE + 1, new LevelTemplate(1, "level", 1L))));
     }
 
     @Test
@@ -106,7 +106,7 @@ class ResourcePacketWriterTest {
 
     @Test
     void serializesEffectResourceWithTemplateSentinel() throws Exception {
-        LegacyEffectImage effect = new LegacyEffectImage(17, -2, 3, 40, List.of(9, 10));
+        EffectImage effect = new EffectImage(17, -2, 3, 40, List.of(9, 10));
         var reader = writer.effectResource(2, List.of(effect)).reader();
         assertEquals(3, reader.readByte());
         assertEquals(2, reader.readByte());
@@ -162,7 +162,7 @@ class ResourcePacketWriterTest {
 
     @Test
     void serializesLevelFrameAndIconPackets() throws Exception {
-        var levelReader = writer.levelResource(0, List.of(new LegacyLevel(2, "level", 99L))).reader();
+        var levelReader = writer.levelResource(0, List.of(new LevelTemplate(2, "level", 99L))).reader();
         assertEquals(6, levelReader.readByte());
         assertEquals(0, levelReader.readByte());
         assertEquals(1, levelReader.readShort());
@@ -210,7 +210,7 @@ class ResourcePacketWriterTest {
 
     @Test
     void rejectsCountValuesThatWouldBeTruncated() {
-        LegacyEffectImage effect = new LegacyEffectImage(1, 0, 0, 0,
+        EffectImage effect = new EffectImage(1, 0, 0, 0,
                 java.util.Collections.nCopies(128, 1));
         assertThrows(IOException.class, () -> writer.effectResource(1, List.of(effect)));
         assertThrows(IOException.class, () -> writer.effectResource(1,

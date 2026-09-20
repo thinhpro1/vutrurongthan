@@ -2,7 +2,7 @@ package com.project.game.resource.loader;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonParser;
-import com.project.game.resource.LegacyLevel;
+import com.project.game.resource.LevelTemplate;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -19,14 +19,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class LevelLoaderTest {
     @Test
-    void loadsExactLegacyLevels() throws Exception {
+    void loadsExactLevelTemplates() throws Exception {
         var levels = LevelLoader.load(Path.of("resources", "json"), true);
 
         assertEquals(102, levels.size());
-        assertEquals(new LegacyLevel(0, "Tân binh", 0L), levels.get(0));
-        assertEquals(new LegacyLevel(1, "Tân binh", 1L), levels.get(1));
-        assertEquals(new LegacyLevel(2, "Tân binh", 100L), levels.get(2));
-        assertEquals(new LegacyLevel(
+        assertEquals(new LevelTemplate(0, "Tân binh", 0L), levels.get(0));
+        assertEquals(new LevelTemplate(1, "Tân binh", 1L), levels.get(1));
+        assertEquals(new LevelTemplate(2, "Tân binh", 100L), levels.get(2));
+        assertEquals(new LevelTemplate(
                 101, "Thần # cấp 5", 6_000_000_000_000_000L), levels.get(101));
 
         for (int id = 0; id < levels.size(); id++) {
@@ -41,7 +41,7 @@ class LevelLoaderTest {
     }
 
     @Test
-    void rejectsNonIncreasingLegacyLevelPower(@TempDir Path root) throws IOException {
+    void rejectsNonIncreasingLevelTemplatePower(@TempDir Path root) throws IOException {
         var bootstrap = JsonParser.parseString(
                 Files.readString(Path.of("resources", "json", "LevelBootstrap.json")))
                 .getAsJsonObject();
@@ -57,7 +57,7 @@ class LevelLoaderTest {
         assertTrue(failure.getMessage().contains("increasing"));
     }
 
-    private static String levelTableSha256(java.util.List<LegacyLevel> levels)
+    private static String levelTableSha256(java.util.List<LevelTemplate> levels)
             throws Exception {
         MessageDigest digest = MessageDigest.getInstance("SHA-256");
         StringBuilder canonical = new StringBuilder();

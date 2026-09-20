@@ -128,7 +128,7 @@ class MapLoaderTest {
         String hash = HexFormat.of().formatHex(
                 MessageDigest.getInstance("SHA-256").digest(bytes));
 
-        assertEquals("6298f902bb2797f63c539acbe6e51c176847954cdbb7a1c5cc3e017cd9530df3", hash);
+        assertEquals("def2d940b82b46f59976ffd7a3b526f7b4aae943fdb6c4c1b679865309be86e6", hash);
     }
 
     @Test

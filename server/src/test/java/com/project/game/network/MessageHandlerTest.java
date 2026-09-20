@@ -1046,6 +1046,21 @@ class MessageHandlerTest {
         assertEquals(0, session.queuedMessages());
     }
 
+    @Test
+    void oversizedIconManifestClosesSession(@TempDir Path root) throws IOException {
+        Files.write(root.resolve("2.png"), new byte[]{1});
+        Files.write(root.resolve("10.png"), new byte[]{2});
+        Session session = newSession(TestServices.authService(), 9);
+        session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
+
+        newHandler(session, GameResources.fromIconRoot(root)).onMessage(
+                new Message(MessageName.UPDATE_DATA,
+                        new MessageWriter().writeByte(12).toByteArray()));
+
+        assertEquals(SessionState.CLOSED, session.state());
+        assertEquals(0, session.queuedMessages());
+    }
+
     private static MessageHandler newHandler(Session session, AuthService authService) {
         return newHandler(session, TestServices.serverServices(authService, GameResources.unavailable()),
                 NetworkConfig.defaults());

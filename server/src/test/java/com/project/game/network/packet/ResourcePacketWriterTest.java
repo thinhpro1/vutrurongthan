@@ -10,8 +10,11 @@ import com.project.game.resource.IconFingerprint;
 import com.project.game.resource.LegacyEffectImage;
 import com.project.game.resource.LegacyLevel;
 import org.junit.jupiter.api.Test;
+import sun.misc.Unsafe;
 
 import java.io.IOException;
+import java.lang.reflect.Field;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -21,6 +24,74 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class ResourcePacketWriterTest {
     private final ResourcePacketWriter writer = new ResourcePacketWriter();
+
+    @Test
+    void rejectsMonsterDartCountThatWouldBeTruncated() {
+        assertThrows(IOException.class, () -> writer.monsterResource(
+                1, Collections.nCopies(Short.MAX_VALUE + 1, validDart()), List.of()));
+    }
+
+    @Test
+    void rejectsMonsterTemplateCountThatWouldBeTruncated() {
+        assertThrows(IOException.class, () -> writer.monsterResource(
+                1, List.of(), Collections.nCopies(Short.MAX_VALUE + 1, validTemplate())));
+    }
+
+    @Test
+    void rejectsMonsterDartPhaseIconCountThatWouldBeTruncated() {
+        LegacyMonsterDartPhase overflowing = new LegacyMonsterDartPhase(
+                Collections.nCopies(Byte.MAX_VALUE + 1, 1), 0, 0, 0);
+        LegacyMonsterDart dart = new LegacyMonsterDart(
+                1, false, overflowing, validPhase(), validPhase());
+
+        assertThrows(IOException.class, () -> writer.monsterResource(1, List.of(dart), List.of()));
+    }
+
+    @Test
+    void rejectsMonsterMoveIconCountThatWouldBeTruncated() {
+        LegacyMonsterTemplate overflowing = new LegacyMonsterTemplate(
+                1, "bat", 1, 1, 1, 1,
+                Collections.nCopies(Byte.MAX_VALUE + 1, 1), 1, 1,
+                1, 1, 1, 1);
+
+        assertThrows(IOException.class, () -> writer.monsterResource(1, List.of(), List.of(overflowing)));
+    }
+
+    @Test
+    void rejectsLevelCountThatWouldBeTruncated() {
+        assertThrows(IOException.class, () -> writer.levelResource(
+                1, Collections.nCopies(Short.MAX_VALUE + 1, new LegacyLevel(1, "level", 1L))));
+    }
+
+    @Test
+    void rejectsFrameCountThatWouldBeTruncated() {
+        assertThrows(IOException.class, () -> writer.frameResource(
+                1, Collections.nCopies(Short.MAX_VALUE + 1, validFrame())));
+    }
+
+    @Test
+    void rejectsDeadFrameIconCountThatWouldBeTruncated() {
+        assertThrows(IOException.class, () -> writer.frameResource(1,
+                List.of(frameWithOversized("dead"))));
+    }
+
+    @Test
+    void rejectsStandFrameIconCountThatWouldBeTruncated() {
+        assertThrows(IOException.class, () -> writer.frameResource(1,
+                List.of(frameWithOversized("stand"))));
+    }
+
+    @Test
+    void rejectsRunFrameIconCountThatWouldBeTruncated() {
+        assertThrows(IOException.class, () -> writer.frameResource(1,
+                List.of(frameWithOversized("run"))));
+    }
+
+    @Test
+    void rejectsFrameActionCountThatWouldBeTruncated() {
+        assertThrows(IOException.class, () -> writer.frameResource(1,
+                List.of(frameWithOversized("action"))));
+    }
 
     @Test
     void serializesResourceManifestInLegacyVersionOrder() throws Exception {
@@ -183,5 +254,70 @@ class ResourcePacketWriterTest {
         assertEquals(phase.dx(), reader.readShort());
         assertEquals(phase.dy(), reader.readShort());
         assertEquals(phase.delay(), reader.readShort());
+    }
+
+    private static LegacyMonsterDart validDart() {
+        return new LegacyMonsterDart(1, false, validPhase(), validPhase(), validPhase());
+    }
+
+    private static LegacyMonsterDartPhase validPhase() {
+        return new LegacyMonsterDartPhase(List.of(1), 0, 0, 0);
+    }
+
+    private static LegacyMonsterTemplate validTemplate() {
+        return new LegacyMonsterTemplate(
+                1, "bat", 1, 1, 1, 1, List.of(1),
+                1, 1, 1, 1, 1, 1);
+    }
+
+    private static FrameTemplate validFrame() {
+        return new FrameTemplate(
+                1, 0, 1, 1, List.of(1, 2, 3), List.of(1, 2, 3), List.of(1, 2, 3),
+                1, 1, 1, 1, Map.of(1, 1), 1, 1, 1, 1);
+    }
+
+    private static FrameTemplate frameWithOversized(String field) {
+        try {
+            // FrameTemplate validates these counts in its constructor. Inflate only the
+            // immutable backing collections so the writer's defensive IOException guards
+            // are still exercised without changing the production model.
+            FrameTemplate frame = validFrame();
+            if ("dead".equals(field)) {
+                inflateImmutableList(frame.dead());
+            } else if ("stand".equals(field)) {
+                inflateImmutableList(frame.stand());
+            } else if ("run".equals(field)) {
+                inflateImmutableList(frame.run());
+            } else if ("action".equals(field)) {
+                inflateActionMap(frame.action());
+            }
+            return frame;
+        } catch (ReflectiveOperationException exception) {
+            throw new AssertionError("unable to create defensive frame fixture", exception);
+        }
+    }
+
+    private static Unsafe unsafe() throws ReflectiveOperationException {
+        Field field = Unsafe.class.getDeclaredField("theUnsafe");
+        field.setAccessible(true);
+        return (Unsafe) field.get(null);
+    }
+
+    private static void inflateImmutableList(List<Integer> values)
+            throws ReflectiveOperationException {
+        Field elements = values.getClass().getDeclaredField("elements");
+        unsafe().putObject(values, unsafe().objectFieldOffset(elements),
+                Collections.nCopies(Byte.MAX_VALUE + 1, 1).toArray());
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void inflateActionMap(Map<Integer, Integer> values)
+            throws ReflectiveOperationException {
+        Field mapField = values.getClass().getDeclaredField("m");
+        Map<Integer, Integer> delegate = (Map<Integer, Integer>) unsafe().getObject(
+                values, unsafe().objectFieldOffset(mapField));
+        for (int index = 0; index <= Byte.MAX_VALUE; index++) {
+            delegate.put(index, 1);
+        }
     }
 }

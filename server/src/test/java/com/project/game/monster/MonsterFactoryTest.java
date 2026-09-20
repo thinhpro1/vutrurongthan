@@ -14,24 +14,24 @@ import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-class MonsterRuntimeFactoryTest {
+class MonsterFactoryTest {
     private static GameResources resources() {
         return GameResources.fromFrameRoot(
                 Path.of("resources", "json"));
     }
 
     @Test
-    void createsCanonicalRuntimeMonstersForSupportedMaps() {
-        MonsterRuntimeFactory factory =
-                new MonsterRuntimeFactory(resources());
+    void createsCanonicalMonstersForSupportedMaps() {
+        MonsterFactory factory =
+                new MonsterFactory(resources());
 
         assertTrue(factory.createForMap(0).isEmpty());
 
-        List<RuntimeMonster> map1 = factory.createForMap(1);
+        List<Monster> map1 = factory.createForMap(1);
         assertEquals(6, map1.size());
 
         List<MonsterSnapshot> snapshots =
-                map1.stream().map(RuntimeMonster::snapshot).toList();
+                map1.stream().map(Monster::snapshot).toList();
 
         assertEquals(
                 List.of(0, 1, 2, 3, 4, 5),
@@ -57,15 +57,15 @@ class MonsterRuntimeFactoryTest {
 
     @Test
     void createsFreshRuntimeObjectsForEverySeedRequest() {
-        MonsterRuntimeFactory factory =
-                new MonsterRuntimeFactory(resources());
+        MonsterFactory factory =
+                new MonsterFactory(resources());
 
-        List<RuntimeMonster> first = factory.createForMap(1);
-        List<RuntimeMonster> second = factory.createForMap(1);
+        List<Monster> first = factory.createForMap(1);
+        List<Monster> second = factory.createForMap(1);
 
         assertEquals(
-                first.stream().map(RuntimeMonster::snapshot).toList(),
-                second.stream().map(RuntimeMonster::snapshot).toList());
+                first.stream().map(Monster::snapshot).toList(),
+                second.stream().map(Monster::snapshot).toList());
 
         for (int i = 0; i < first.size(); i++) {
             assertNotSame(first.get(i), second.get(i));
@@ -80,7 +80,7 @@ class MonsterRuntimeFactoryTest {
 
         GameResources resources = GameResources.fromFrameRoot(root);
         IllegalStateException failure = assertThrows(IllegalStateException.class,
-                () -> new MonsterRuntimeFactory(resources).createForMap(1));
+                () -> new MonsterFactory(resources).createForMap(1));
         assertTrue(failure.getMessage().contains("missing monster combat template 1"));
     }
 }

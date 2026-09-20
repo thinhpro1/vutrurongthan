@@ -1,8 +1,9 @@
 package com.project.game.combat;
 
+import com.project.game.monster.Monster;
+
 import com.project.game.map.Zone;
 import com.project.game.map.ZoneRegistry;
-import com.project.game.monster.MonsterDamageResult;
 import com.project.game.network.Session;
 import com.project.game.network.SessionState;
 import com.project.game.network.message.Message;
@@ -89,7 +90,7 @@ public final class CombatService {
                 return false;
             }
 
-            MonsterDamageResult combat = result.orElseThrow();
+            Monster.Damage combat = result.orElseThrow();
             PlayerProfile rewarded = null;
             if (combat.killed() && combat.potentialReward() > 0L) {
                 PlayerProfile rewardCurrent = session.player();

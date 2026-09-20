@@ -1,7 +1,7 @@
 package com.project.game.monster;
 
 /** Immutable static monster instance sent in MAP_INFO. */
-public record LegacyMonsterSpawn(
+public record MonsterSpawn(
         int type,
         int templateId,
         int id,

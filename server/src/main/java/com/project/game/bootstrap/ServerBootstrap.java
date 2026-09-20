@@ -4,7 +4,7 @@ import com.project.game.account.AuthService;
 import com.project.game.combat.CombatService;
 import com.project.game.map.MapService;
 import com.project.game.map.ZoneRegistry;
-import com.project.game.monster.MonsterRuntimeFactory;
+import com.project.game.monster.MonsterFactory;
 import com.project.game.monster.MonsterService;
 import com.project.game.network.ClientConfig;
 import com.project.game.network.NetworkServer;
@@ -73,7 +73,7 @@ public final class ServerBootstrap {
         DatabaseManager databaseManager = databaseManagerFactory.get();
         try {
             GameResources resources = loadResources(properties);
-            MonsterRuntimeFactory monsterFactory = new MonsterRuntimeFactory(resources);
+            MonsterFactory monsterFactory = new MonsterFactory(resources);
             PlayerPacketWriter playerPackets = new PlayerPacketWriter();
             MonsterPacketWriter monsterPackets = new MonsterPacketWriter();
             ZoneRegistry zones = new ZoneRegistry(monsterFactory);

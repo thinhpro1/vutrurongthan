@@ -2,7 +2,7 @@ package com.project.game.resource.loader;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import com.project.game.monster.LegacyMonsterCombatTemplate;
+import com.project.game.monster.MonsterCombatTemplate;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -18,7 +18,7 @@ final class MonsterCombatLoader {
     private MonsterCombatLoader() {
     }
 
-    static Map<Integer, LegacyMonsterCombatTemplate> load(Path root, boolean required) {
+    static Map<Integer, MonsterCombatTemplate> load(Path root, boolean required) {
         Path normalizedRoot = root.toAbsolutePath().normalize();
         Path source = normalizedRoot.resolve("MonsterCombatBootstrap.json").normalize();
         if (!source.startsWith(normalizedRoot)
@@ -42,7 +42,7 @@ final class MonsterCombatLoader {
         }
 
         Set<Integer> ids = new HashSet<>();
-        Map<Integer, LegacyMonsterCombatTemplate> loaded = new HashMap<>();
+        Map<Integer, MonsterCombatTemplate> loaded = new HashMap<>();
         for (int index = 0; index < templatesValue.getAsJsonArray().size(); index++) {
             JsonElement element = templatesValue.getAsJsonArray().get(index);
             if (!element.isJsonObject()) {
@@ -79,7 +79,7 @@ final class MonsterCombatLoader {
                                 + " potentialReward must be non-negative");
             }
             loaded.put(templateId,
-                    new LegacyMonsterCombatTemplate(templateId, damage, potentialReward));
+                    new MonsterCombatTemplate(templateId, damage, potentialReward));
         }
         if (!ids.equals(REQUIRED_TEMPLATE_IDS)) {
             throw new IllegalArgumentException(

@@ -31,7 +31,7 @@ class MonsterServiceMovementTest {
         Zone zone = zoneFor(maps, 1, 0);
 
         MonsterSnapshot before = zone.monsterSnapshots().getFirst();
-        List<MonsterMoveResult> moves = zone.moveMonsters();
+        List<Monster.Move> moves = zone.moveMonsters();
         MonsterSnapshot after = zone.monsterSnapshots().getFirst();
 
         assertEquals(975, before.x());
@@ -71,7 +71,7 @@ class MonsterServiceMovementTest {
         drain(player);
 
         MonsterSnapshot before = zone.monsterSnapshots().getFirst();
-        List<MonsterMoveResult> moves = zone.moveMonsters();
+        List<Monster.Move> moves = zone.moveMonsters();
         MonsterSnapshot after = zone.monsterSnapshots().getFirst();
 
         assertEquals(979, before.x());
@@ -99,7 +99,7 @@ class MonsterServiceMovementTest {
         drain(higherId);
 
         Zone zone = zoneFor(maps, 1, 0);
-        MonsterMoveResult move = zone.moveMonsters().stream()
+        Monster.Move move = zone.moveMonsters().stream()
                 .filter(result -> result.monsterId() == 0)
                 .findFirst()
                 .orElseThrow();
@@ -130,7 +130,7 @@ class MonsterServiceMovementTest {
         drain(exactRange);
 
         Zone exactRangeZone = zoneFor(exactRangeMaps, 1, 0);
-        MonsterMoveResult move = exactRangeZone.moveMonsters().stream()
+        Monster.Move move = exactRangeZone.moveMonsters().stream()
                 .filter(result -> result.monsterId() == 0)
                 .findFirst()
                 .orElseThrow();
@@ -147,7 +147,7 @@ class MonsterServiceMovementTest {
         drain(player);
 
         Zone zone = zoneFor(maps, 1, 0);
-        RuntimeMonster monster = runtimeMonsters(maps, 1, 0).getFirst();
+        Monster monster = runtimeMonsters(maps, 1, 0).getFirst();
         assertTrue(monster.hasEnemy(player.player().id()));
         zone.moveMonsters();
         assertEquals(979, monster.snapshot().x());
@@ -155,7 +155,7 @@ class MonsterServiceMovementTest {
 
         assertTrue(maps.mapService().movePlayer(player, 1975, 936));
         drain(player);
-        MonsterMoveResult resumed = zone.moveMonsters().stream()
+        Monster.Move resumed = zone.moveMonsters().stream()
                 .filter(result -> result.monsterId() == 0)
                 .findFirst()
                 .orElseThrow();
@@ -172,12 +172,12 @@ class MonsterServiceMovementTest {
         assertTrue(maps.combatService().attackMonster(player, 0, 10));
         drain(player);
 
-        RuntimeMonster monster = runtimeMonsters(maps, 1, 0).getFirst();
+        Monster monster = runtimeMonsters(maps, 1, 0).getFirst();
         setIntField(monster, "x", 1200);
         setIntField(monster, "moveDir", 1);
         Zone zone = zoneFor(maps, 1, 0);
 
-        MonsterMoveResult returning = zone.moveMonsters().stream()
+        Monster.Move returning = zone.moveMonsters().stream()
                 .filter(result -> result.monsterId() == 0)
                 .findFirst()
                 .orElseThrow();
@@ -196,12 +196,12 @@ class MonsterServiceMovementTest {
         assertTrue(maps.combatService().attackMonster(player, 0, 10));
         drain(player);
 
-        RuntimeMonster monster = runtimeMonsters(maps, 1, 0).getFirst();
+        Monster monster = runtimeMonsters(maps, 1, 0).getFirst();
         setIntField(monster, "x", 1071);
         setIntField(monster, "moveDir", 1);
         Zone zone = zoneFor(maps, 1, 0);
 
-        MonsterMoveResult chase = zone.moveMonsters().stream()
+        Monster.Move chase = zone.moveMonsters().stream()
                 .filter(result -> result.monsterId() == 0)
                 .findFirst()
                 .orElseThrow();
@@ -211,7 +211,7 @@ class MonsterServiceMovementTest {
         assertTrue(maps.mapService().movePlayer(player, 2176, 936));
         drain(player);
 
-        MonsterMoveResult returning = zone.moveMonsters().stream()
+        Monster.Move returning = zone.moveMonsters().stream()
                 .filter(result -> result.monsterId() == 0)
                 .findFirst()
                 .orElseThrow();
@@ -232,12 +232,12 @@ class MonsterServiceMovementTest {
         assertTrue(maps.combatService().attackMonster(player, 0, 10));
         drain(player);
 
-        RuntimeMonster monster = runtimeMonsters(maps, 1, 0).getFirst();
+        Monster monster = runtimeMonsters(maps, 1, 0).getFirst();
         setIntField(monster, "x", 1300);
         setIntField(monster, "moveDir", 1);
 
         Zone zone = zoneFor(maps, 1, 0);
-        MonsterMoveResult move = zone.moveMonsters().stream()
+        Monster.Move move = zone.moveMonsters().stream()
                 .filter(result -> result.monsterId() == 0)
                 .findFirst()
                 .orElseThrow();

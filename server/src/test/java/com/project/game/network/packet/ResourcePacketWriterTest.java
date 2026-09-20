@@ -1,8 +1,8 @@
 package com.project.game.network.packet;
 
-import com.project.game.monster.LegacyMonsterDart;
-import com.project.game.monster.LegacyMonsterDartPhase;
-import com.project.game.monster.LegacyMonsterTemplate;
+import com.project.game.monster.MonsterDart;
+import com.project.game.monster.MonsterDart.Phase;
+import com.project.game.monster.MonsterTemplate;
 import com.project.game.network.message.Message;
 import com.project.game.network.message.MessageName;
 import com.project.game.resource.FrameTemplate;
@@ -37,9 +37,9 @@ class ResourcePacketWriterTest {
 
     @Test
     void rejectsMonsterDartPhaseIconCountThatWouldBeTruncated() {
-        LegacyMonsterDartPhase overflowing = new LegacyMonsterDartPhase(
+        MonsterDart.Phase overflowing = new MonsterDart.Phase(
                 Collections.nCopies(Byte.MAX_VALUE + 1, 1), 0, 0, 0);
-        LegacyMonsterDart dart = new LegacyMonsterDart(
+        MonsterDart dart = new MonsterDart(
                 1, false, overflowing, validPhase(), validPhase());
 
         assertThrows(IOException.class, () -> writer.monsterResource(1, List.of(dart), List.of()));
@@ -47,7 +47,7 @@ class ResourcePacketWriterTest {
 
     @Test
     void rejectsMonsterMoveIconCountThatWouldBeTruncated() {
-        LegacyMonsterTemplate overflowing = new LegacyMonsterTemplate(
+        MonsterTemplate overflowing = new MonsterTemplate(
                 1, "bat", 1, 1, 1, 1,
                 Collections.nCopies(Byte.MAX_VALUE + 1, 1), 1, 1,
                 1, 1, 1, 1);
@@ -124,11 +124,11 @@ class ResourcePacketWriterTest {
 
     @Test
     void serializesMonsterDartsAndTemplatesInLegacyShape() throws Exception {
-        LegacyMonsterDartPhase light = new LegacyMonsterDartPhase(List.of(1), 2, 3, 4);
-        LegacyMonsterDartPhase bullet = new LegacyMonsterDartPhase(List.of(5, 6), 7, 8, 9);
-        LegacyMonsterDartPhase explode = new LegacyMonsterDartPhase(List.of(10), 11, 12, 13);
-        LegacyMonsterDart dart = new LegacyMonsterDart(4, true, light, bullet, explode);
-        LegacyMonsterTemplate template = new LegacyMonsterTemplate(
+        MonsterDart.Phase light = new MonsterDart.Phase(List.of(1), 2, 3, 4);
+        MonsterDart.Phase bullet = new MonsterDart.Phase(List.of(5, 6), 7, 8, 9);
+        MonsterDart.Phase explode = new MonsterDart.Phase(List.of(10), 11, 12, 13);
+        MonsterDart dart = new MonsterDart(4, true, light, bullet, explode);
+        MonsterTemplate template = new MonsterTemplate(
                 8, "bat", 50, 6, 2, 4, List.of(20, 21), 22, 23,
                 24, 25, 26, 27);
 
@@ -220,7 +220,7 @@ class ResourcePacketWriterTest {
     }
 
     private static void assertPhase(com.project.game.network.message.MessageReader reader,
-                                     LegacyMonsterDartPhase phase) throws Exception {
+                                     MonsterDart.Phase phase) throws Exception {
         assertEquals(phase.icons().size(), reader.readByte());
         for (int icon : phase.icons()) {
             assertEquals(icon, reader.readShort());
@@ -230,16 +230,16 @@ class ResourcePacketWriterTest {
         assertEquals(phase.delay(), reader.readShort());
     }
 
-    private static LegacyMonsterDart validDart() {
-        return new LegacyMonsterDart(1, false, validPhase(), validPhase(), validPhase());
+    private static MonsterDart validDart() {
+        return new MonsterDart(1, false, validPhase(), validPhase(), validPhase());
     }
 
-    private static LegacyMonsterDartPhase validPhase() {
-        return new LegacyMonsterDartPhase(List.of(1), 0, 0, 0);
+    private static MonsterDart.Phase validPhase() {
+        return new MonsterDart.Phase(List.of(1), 0, 0, 0);
     }
 
-    private static LegacyMonsterTemplate validTemplate() {
-        return new LegacyMonsterTemplate(
+    private static MonsterTemplate validTemplate() {
+        return new MonsterTemplate(
                 1, "bat", 1, 1, 1, 1, List.of(1),
                 1, 1, 1, 1, 1, 1);
     }

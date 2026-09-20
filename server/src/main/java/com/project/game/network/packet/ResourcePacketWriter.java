@@ -1,8 +1,8 @@
 package com.project.game.network.packet;
 
-import com.project.game.monster.LegacyMonsterDart;
-import com.project.game.monster.LegacyMonsterDartPhase;
-import com.project.game.monster.LegacyMonsterTemplate;
+import com.project.game.monster.MonsterDart;
+import com.project.game.monster.MonsterDart.Phase;
+import com.project.game.monster.MonsterTemplate;
 import com.project.game.network.message.Message;
 import com.project.game.network.message.MessageName;
 import com.project.game.network.message.MessageWriter;
@@ -80,8 +80,8 @@ public final class ResourcePacketWriter {
 
     public Message monsterResource(
             int version,
-            List<LegacyMonsterDart> darts,
-            List<LegacyMonsterTemplate> templates) throws IOException {
+            List<MonsterDart> darts,
+            List<MonsterTemplate> templates) throws IOException {
         Objects.requireNonNull(darts, "darts");
         Objects.requireNonNull(templates, "templates");
         requireShortCount(darts.size(), "monster darts");
@@ -90,7 +90,7 @@ public final class ResourcePacketWriter {
                 .writeByte(4)
                 .writeByte(version)
                 .writeShort(darts.size());
-        for (LegacyMonsterDart dart : darts) {
+        for (MonsterDart dart : darts) {
             Objects.requireNonNull(dart, "dart");
             writer.writeShort(dart.id()).writeBoolean(dart.meteorite());
             writeMonsterDartPhase(writer, dart.light());
@@ -98,7 +98,7 @@ public final class ResourcePacketWriter {
             writeMonsterDartPhase(writer, dart.explode());
         }
         writer.writeShort(templates.size());
-        for (LegacyMonsterTemplate template : templates) {
+        for (MonsterTemplate template : templates) {
             Objects.requireNonNull(template, "template");
             requireByteCount(template.iconsMove().size(),
                     "move icons for monster template " + template.id());
@@ -123,7 +123,7 @@ public final class ResourcePacketWriter {
     }
 
     private static void writeMonsterDartPhase(MessageWriter writer,
-                                                LegacyMonsterDartPhase phase)
+                                                MonsterDart.Phase phase)
             throws IOException {
         Objects.requireNonNull(phase, "phase");
         requireByteCount(phase.icons().size(), "monster dart phase icons");

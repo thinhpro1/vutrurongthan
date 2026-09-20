@@ -14,7 +14,7 @@ import com.project.game.persistence.player.PlayerRepository;
 import com.project.game.persistence.player.PlayerRepositoryException;
 import com.project.game.player.PlayerProfile;
 import com.project.game.testsupport.GameplayServices;
-import com.project.game.monster.MonsterRuntimeFactory;
+import com.project.game.monster.MonsterFactory;
 import com.project.game.network.packet.MonsterPacketWriter;
 import com.project.game.network.packet.PlayerPacketWriter;
 import com.project.game.resource.GameResources;
@@ -119,7 +119,7 @@ class SessionTest {
         AuthService auth = new AuthService(new TestAccountRepository());
         GameResources resources = GameResources.unavailable();
         GameplayServices maps = new GameplayServices(new PlayerPacketWriter(), new MonsterPacketWriter(),
-                new MonsterRuntimeFactory(resources));
+                new MonsterFactory(resources));
         PlayerService players = new PlayerService(repository);
         PlayerProfile player = players.create(101L, "alpha1", 0).player().withHp(77);
         SessionServices services = TestServices.serverServices(auth, resources, maps, players);
@@ -157,7 +157,7 @@ class SessionTest {
                 TestServices.serverServices(new AuthService(new TestAccountRepository()),
                         GameResources.unavailable(),
                         new GameplayServices(new PlayerPacketWriter(), new MonsterPacketWriter(),
-                                new MonsterRuntimeFactory(GameResources.unavailable())),
+                                new MonsterFactory(GameResources.unavailable())),
                         players),
                 ClientConfig.defaults());
         assertTrue(manager.tryAdd(session, 1));
@@ -191,7 +191,7 @@ class SessionTest {
                 TestServices.serverServices(new AuthService(new TestAccountRepository()),
                         GameResources.unavailable(),
                         new GameplayServices(new PlayerPacketWriter(), new MonsterPacketWriter(),
-                                new MonsterRuntimeFactory(GameResources.unavailable())),
+                                new MonsterFactory(GameResources.unavailable())),
                         players),
                 ClientConfig.defaults());
         assertTrue(manager.tryAdd(session, 1));
@@ -233,7 +233,7 @@ class SessionTest {
                 TestServices.serverServices(new AuthService(new TestAccountRepository()),
                         GameResources.unavailable(),
                         new GameplayServices(new PlayerPacketWriter(), new MonsterPacketWriter(),
-                                new MonsterRuntimeFactory(GameResources.unavailable())),
+                                new MonsterFactory(GameResources.unavailable())),
                         players),
                 ClientConfig.defaults());
         assertTrue(manager.tryAdd(session, 1));

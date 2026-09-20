@@ -1,9 +1,8 @@
 package com.project.game.network.packet;
 
-import com.project.game.monster.MonsterDamageResult;
-import com.project.game.monster.MonsterAttackResult;
-import com.project.game.monster.MonsterMoveResult;
-import com.project.game.monster.MonsterRespawnResult;
+import com.project.game.monster.Monster;
+
+import com.project.game.monster.MonsterAttack;
 import com.project.game.network.message.Message;
 import com.project.game.network.message.MessageName;
 import com.project.game.network.message.MessageWriter;
@@ -11,7 +10,7 @@ import com.project.game.network.message.MessageWriter;
 import java.util.Objects;
 
 public final class MonsterPacketWriter {
-    public Message injure(MonsterDamageResult result) {
+    public Message injure(Monster.Damage result) {
         Objects.requireNonNull(result, "result");
         if (result.killed()) {
             throw new IllegalArgumentException("killed result requires startDie");
@@ -26,7 +25,7 @@ public final class MonsterPacketWriter {
                         .toByteArray());
     }
 
-    public Message startDie(MonsterDamageResult result) {
+    public Message startDie(Monster.Damage result) {
         Objects.requireNonNull(result, "result");
         if (!result.killed()) {
             throw new IllegalArgumentException("live result requires injure");
@@ -40,7 +39,7 @@ public final class MonsterPacketWriter {
                         .toByteArray());
     }
 
-    public Message respawn(MonsterRespawnResult result) {
+    public Message respawn(Monster.Respawn result) {
         Objects.requireNonNull(result, "result");
         return new Message(
                 MessageName.MONSTER_RESPAWN,
@@ -51,7 +50,7 @@ public final class MonsterPacketWriter {
                         .toByteArray());
     }
 
-    public Message attackPlayer(MonsterAttackResult result) {
+    public Message attackPlayer(MonsterAttack result) {
         Objects.requireNonNull(result, "result");
         return new Message(
                 MessageName.MONSTER_ATTACK,
@@ -63,7 +62,7 @@ public final class MonsterPacketWriter {
                         .toByteArray());
     }
 
-    public Message move(MonsterMoveResult result) {
+    public Message move(Monster.Move result) {
         Objects.requireNonNull(result, "result");
         if (result.dir() != -1 && result.dir() != 1) {
             throw new IllegalArgumentException("monster move dir must be -1 or 1");

@@ -1,10 +1,10 @@
 package com.project.game.resource;
 
 import com.project.game.map.MapTemplate;
-import com.project.game.monster.LegacyMonsterCombatTemplate;
-import com.project.game.monster.LegacyMonsterDart;
-import com.project.game.monster.LegacyMonsterSpawn;
-import com.project.game.monster.LegacyMonsterTemplate;
+import com.project.game.monster.MonsterCombatTemplate;
+import com.project.game.monster.MonsterDart;
+import com.project.game.monster.MonsterSpawn;
+import com.project.game.monster.MonsterTemplate;
 import com.project.game.resource.loader.GameResourcesLoader;
 
 import java.nio.file.Path;
@@ -37,10 +37,10 @@ public final class GameResources {
     private final List<LegacyLevel> levels;
     private final List<LegacyEffectImage> effects;
     private final int monsterVersion;
-    private final List<LegacyMonsterDart> monsterDarts;
-    private final List<LegacyMonsterTemplate> monsterTemplates;
-    private final Map<Integer, List<LegacyMonsterSpawn>> monsterSpawns;
-    private final Map<Integer, LegacyMonsterCombatTemplate> monsterCombatTemplates;
+    private final List<MonsterDart> monsterDarts;
+    private final List<MonsterTemplate> monsterTemplates;
+    private final Map<Integer, List<MonsterSpawn>> monsterSpawns;
+    private final Map<Integer, MonsterCombatTemplate> monsterCombatTemplates;
 
     public GameResources(
             IconResourceCatalog iconCatalog,
@@ -51,10 +51,10 @@ public final class GameResources {
             List<LegacyLevel> levels,
             List<LegacyEffectImage> effects,
             int monsterVersion,
-            List<LegacyMonsterDart> monsterDarts,
-            List<LegacyMonsterTemplate> monsterTemplates,
-            Map<Integer, List<LegacyMonsterSpawn>> monsterSpawns,
-            Map<Integer, LegacyMonsterCombatTemplate> monsterCombatTemplates) {
+            List<MonsterDart> monsterDarts,
+            List<MonsterTemplate> monsterTemplates,
+            Map<Integer, List<MonsterSpawn>> monsterSpawns,
+            Map<Integer, MonsterCombatTemplate> monsterCombatTemplates) {
         this.iconCatalog = iconCatalog;
         this.imageVersion = imageVersion;
         this.frames = List.copyOf(Objects.requireNonNull(frames, "frames"));
@@ -132,19 +132,19 @@ public final class GameResources {
         return monsterVersion;
     }
 
-    public List<LegacyMonsterDart> monsterDarts() {
+    public List<MonsterDart> monsterDarts() {
         return monsterDarts;
     }
 
-    public List<LegacyMonsterTemplate> monsterTemplates() {
+    public List<MonsterTemplate> monsterTemplates() {
         return monsterTemplates;
     }
 
-    public List<LegacyMonsterSpawn> monstersForMap(int mapId) {
+    public List<MonsterSpawn> monstersForMap(int mapId) {
         return monsterSpawns.getOrDefault(mapId, List.of());
     }
 
-    public Optional<LegacyMonsterCombatTemplate> monsterCombatTemplate(int templateId) {
+    public Optional<MonsterCombatTemplate> monsterCombatTemplate(int templateId) {
         return Optional.ofNullable(monsterCombatTemplates.get(templateId));
     }
 

@@ -10,7 +10,7 @@ import com.project.game.network.message.MessageName;
 import com.project.game.network.message.MessageWriter;
 import com.project.game.network.transport.LegacyTcpTransport;
 import com.project.game.testsupport.GameplayServices;
-import com.project.game.monster.MonsterRuntimeFactory;
+import com.project.game.monster.MonsterFactory;
 import com.project.game.account.AuthService;
 import com.project.game.resource.GameResources;
 import com.project.game.testsupport.MutableClock;
@@ -46,7 +46,7 @@ class NetworkGameplayIntegrationTest {
         GameplayServices maps = new GameplayServices(
                 new com.project.game.network.packet.PlayerPacketWriter(),
                 new MonsterPacketWriter(),
-                new MonsterRuntimeFactory(resources),
+                new MonsterFactory(resources),
                 clock,
                 random);
         NetworkServer server = new NetworkServer(
@@ -309,7 +309,7 @@ class NetworkGameplayIntegrationTest {
         GameplayServices maps = new GameplayServices(
                 new com.project.game.network.packet.PlayerPacketWriter(),
                 new MonsterPacketWriter(),
-                new MonsterRuntimeFactory(resources));
+                new MonsterFactory(resources));
         NetworkServer server = new NetworkServer("127.0.0.1", 0, 4, 262_144, 16, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
                 TestServices.serverServices(auth, resources, maps), null,
@@ -390,7 +390,7 @@ class NetworkGameplayIntegrationTest {
         GameplayServices maps = new GameplayServices(
                 new com.project.game.network.packet.PlayerPacketWriter(),
                 new MonsterPacketWriter(),
-                new MonsterRuntimeFactory(resources),
+                new MonsterFactory(resources),
                 clock,
                 new Random(12345L));
         NetworkServer server = new NetworkServer(
@@ -488,7 +488,7 @@ class NetworkGameplayIntegrationTest {
         GameplayServices maps = new GameplayServices(
                 new com.project.game.network.packet.PlayerPacketWriter(),
                 new MonsterPacketWriter(),
-                new MonsterRuntimeFactory(resources));
+                new MonsterFactory(resources));
         NetworkServer server = new NetworkServer(
                 "127.0.0.1", 0, 4, 262_144, 16, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
@@ -552,7 +552,7 @@ class NetworkGameplayIntegrationTest {
         GameplayServices maps = new GameplayServices(
                 new com.project.game.network.packet.PlayerPacketWriter(),
                 new MonsterPacketWriter(),
-                new MonsterRuntimeFactory(resources),
+                new MonsterFactory(resources),
                 clock);
         NetworkServer server = new NetworkServer(
                 "127.0.0.1", 0, 4, 262_144, 16, 1_000,
@@ -684,7 +684,7 @@ class NetworkGameplayIntegrationTest {
         GameplayServices maps = new GameplayServices(
                 new com.project.game.network.packet.PlayerPacketWriter(),
                 new MonsterPacketWriter(),
-                new MonsterRuntimeFactory(resources));
+                new MonsterFactory(resources));
         NetworkServer server = new NetworkServer(
                 "127.0.0.1", 0, 4, 262_144, 16, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
@@ -765,7 +765,7 @@ class NetworkGameplayIntegrationTest {
         GameplayServices maps = new GameplayServices(
                 new com.project.game.network.packet.PlayerPacketWriter(),
                 new MonsterPacketWriter(),
-                new MonsterRuntimeFactory(resources),
+                new MonsterFactory(resources),
                 clock,
                 new Random(12345L));
         NetworkServer server = new NetworkServer(
@@ -889,7 +889,7 @@ class NetworkGameplayIntegrationTest {
         GameplayServices maps = new GameplayServices(
                 new com.project.game.network.packet.PlayerPacketWriter(),
                 new MonsterPacketWriter(),
-                new MonsterRuntimeFactory(resources),
+                new MonsterFactory(resources),
                 clock,
                 new Random(12345L));
         NetworkServer server = new NetworkServer(

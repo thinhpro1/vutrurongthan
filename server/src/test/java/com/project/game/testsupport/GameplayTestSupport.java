@@ -1,9 +1,9 @@
 package com.project.game.testsupport;
 
 import com.project.game.map.Zone;
-import com.project.game.monster.MonsterRuntimeFactory;
+import com.project.game.monster.MonsterFactory;
 import com.project.game.monster.MonsterSnapshot;
-import com.project.game.monster.RuntimeMonster;
+import com.project.game.monster.Monster;
 import com.project.game.network.ClientConfig;
 import com.project.game.network.Session;
 import com.project.game.network.SessionManager;
@@ -70,8 +70,8 @@ public static void joinAtBarrier(CyclicBarrier start, GameplayServices maps,
         }
     }
 
-    public static MonsterRuntimeFactory monsterFactory() {
-        return new MonsterRuntimeFactory(
+    public static MonsterFactory monsterFactory() {
+        return new MonsterFactory(
                 GameResources.fromFrameRoot(
                         Path.of("resources", "json")));
     }
@@ -118,9 +118,9 @@ public static void joinAtBarrier(CyclicBarrier start, GameplayServices maps,
         return session;
     }
 
-    public static void setIntField(RuntimeMonster monster, String fieldName, int value)
+    public static void setIntField(Monster monster, String fieldName, int value)
             throws Exception {
-        Field field = RuntimeMonster.class.getDeclaredField(fieldName);
+        Field field = Monster.class.getDeclaredField(fieldName);
         field.setAccessible(true);
         field.setInt(monster, value);
     }
@@ -263,13 +263,13 @@ public static void joinAtBarrier(CyclicBarrier start, GameplayServices maps,
     }
 
     @SuppressWarnings("unchecked")
-    public static List<RuntimeMonster> runtimeMonsters(GameplayServices maps, int mapId, int zoneId) {
+    public static List<Monster> runtimeMonsters(GameplayServices maps, int mapId, int zoneId) {
         try {
             Zone zone = maps.zones().find(mapId, zoneId);
             if (zone == null) throw new AssertionError("zone not found: " + mapId + "/" + zoneId);
             Field monstersField = Zone.class.getDeclaredField("monsters");
             monstersField.setAccessible(true);
-            return List.copyOf(((java.util.Map<Integer, RuntimeMonster>) monstersField.get(zone)).values());
+            return List.copyOf(((java.util.Map<Integer, Monster>) monstersField.get(zone)).values());
         } catch (ReflectiveOperationException exception) {
             throw new AssertionError("unable to inspect zone monsters", exception);
         }

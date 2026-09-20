@@ -1,6 +1,6 @@
 package com.project.game.map;
 
-import com.project.game.monster.MonsterRuntimeFactory;
+import com.project.game.monster.MonsterFactory;
 
 import java.util.List;
 import java.util.Objects;
@@ -11,10 +11,10 @@ public final class ZoneRegistry {
     private record ZoneKey(int mapId, int zoneId) {
     }
 
-    private final MonsterRuntimeFactory monsterFactory;
+    private final MonsterFactory monsterFactory;
     private final ConcurrentHashMap<ZoneKey, Zone> zones = new ConcurrentHashMap<>();
 
-    public ZoneRegistry(MonsterRuntimeFactory monsterFactory) {
+    public ZoneRegistry(MonsterFactory monsterFactory) {
         this.monsterFactory = Objects.requireNonNull(monsterFactory, "monsterFactory");
     }
 

@@ -7,7 +7,7 @@ import com.project.game.network.SessionServices;
 import com.project.game.map.MapService;
 import com.project.game.map.ZoneRegistry;
 import com.project.game.combat.CombatService;
-import com.project.game.monster.MonsterRuntimeFactory;
+import com.project.game.monster.MonsterFactory;
 import com.project.game.monster.MonsterService;
 import com.project.game.network.packet.PlayerPacketWriter;
 import com.project.game.network.packet.MonsterPacketWriter;
@@ -36,7 +36,7 @@ public final class TestServices {
     public static SessionServices serverServices(AuthService auth, GameResources resources) {
         PlayerPacketWriter playerPackets = new PlayerPacketWriter();
         MonsterPacketWriter monsterPackets = new MonsterPacketWriter();
-        ZoneRegistry zones = new ZoneRegistry(new MonsterRuntimeFactory(resources));
+        ZoneRegistry zones = new ZoneRegistry(new MonsterFactory(resources));
         MapService maps = new MapService(zones, playerPackets);
         CombatService combat = new CombatService(zones, playerPackets, monsterPackets);
         MonsterService monsters = new MonsterService(zones, monsterPackets, playerPackets);

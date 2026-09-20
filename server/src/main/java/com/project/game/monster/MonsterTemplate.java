@@ -3,7 +3,7 @@ package com.project.game.monster;
 import java.util.List;
 
 /** Immutable client-visible monster template. */
-public record LegacyMonsterTemplate(
+public record MonsterTemplate(
         int id,
         String name,
         int rangeMove,
@@ -18,7 +18,7 @@ public record LegacyMonsterTemplate(
         int dx,
         int dy
 ) {
-    public LegacyMonsterTemplate {
+    public MonsterTemplate {
         iconsMove = List.copyOf(iconsMove);
     }
 }

@@ -11,7 +11,7 @@ import com.project.game.network.message.MessageName;
 import com.project.game.network.message.MessageWriter;
 import com.project.game.network.packet.PlayerPacketWriter;
 import com.project.game.network.packet.MonsterPacketWriter;
-import com.project.game.monster.MonsterRuntimeFactory;
+import com.project.game.monster.MonsterFactory;
 import com.project.game.account.AuthService;
 import com.project.game.resource.GameResources;
 import com.project.game.network.SessionServices;
@@ -44,7 +44,7 @@ class MessageHandlerMapTest {
         GameplayServices maps = new GameplayServices(
                 new PlayerPacketWriter(),
                 new MonsterPacketWriter(),
-                new MonsterRuntimeFactory(resources));
+                new MonsterFactory(resources));
         SessionServices services = TestServices.serverServices(TestServices.authService(), resources, maps);
         PlayerProfile start = TestPlayerProfiles.initial(1L, 7, "alpha1", 0)
                 .withLocation(0, 0, 4464, 936);
@@ -110,7 +110,7 @@ class MessageHandlerMapTest {
         GameplayServices maps = new GameplayServices(
                 new PlayerPacketWriter(),
                 new MonsterPacketWriter(),
-                new MonsterRuntimeFactory(resources));
+                new MonsterFactory(resources));
         SessionServices services = TestServices.serverServices(TestServices.authService(), resources, maps);
         PlayerProfile start = TestPlayerProfiles.initial(1L, 7, "alpha1", 0)
                 .withLocation(0, 0, 1250, 648);
@@ -131,7 +131,7 @@ class MessageHandlerMapTest {
         GameplayServices maps = new GameplayServices(
                 new PlayerPacketWriter(),
                 new MonsterPacketWriter(),
-                new MonsterRuntimeFactory(resources));
+                new MonsterFactory(resources));
         SessionServices services = TestServices.serverServices(TestServices.authService(), resources, maps);
         PlayerProfile start = TestPlayerProfiles.initial(1L, 7, "alpha1", 0)
                 .withLocation(0, 0, 4464, 936);
@@ -206,7 +206,7 @@ class MessageHandlerMapTest {
         GameplayServices maps = new GameplayServices(
                 new PlayerPacketWriter(),
                 new MonsterPacketWriter(),
-                new MonsterRuntimeFactory(GameResources.unavailable()));
+                new MonsterFactory(GameResources.unavailable()));
         SessionServices services = TestServices.serverServices(auth, GameResources.unavailable(), maps);
         Session first = inGameSession(services, TestPlayerProfiles.initial(1L, 1, "alpha1", 0));
         Session second = inGameSession(services, TestPlayerProfiles.initial(2L, 2, "beta22", 0));
@@ -268,7 +268,7 @@ class MessageHandlerMapTest {
         GameplayServices maps = new GameplayServices(
                 new PlayerPacketWriter(),
                 new MonsterPacketWriter(),
-                new MonsterRuntimeFactory(GameResources.unavailable()));
+                new MonsterFactory(GameResources.unavailable()));
         SessionServices services = TestServices.serverServices(TestServices.authService(), GameResources.unavailable(), maps);
         Session session = inGameSession(services, TestPlayerProfiles.initial(1L, 7, "alpha1", 0));
         MessageHandler handler = newHandler(session, services, ClientConfig.defaults());

@@ -1,9 +1,9 @@
 package com.project.game.monster;
 
-public record MonsterDamageResult(
+public record MonsterAttack(
         int monsterId,
+        int playerId,
         long damage,
         long hpAfter,
-        boolean killed,
-        long potentialReward
+        boolean killed
 ) {}

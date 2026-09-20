@@ -31,7 +31,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class CombatServiceTest {
     @Test
     void targetingAndAttackingDoNotCreateAbsentZones() {
-        ZoneRegistry zones = new ZoneRegistry(new MonsterRuntimeFactory(GameResources.unavailable()));
+        ZoneRegistry zones = new ZoneRegistry(new MonsterFactory(GameResources.unavailable()));
         CombatService combat = new CombatService(
                 zones, new PlayerPacketWriter(), new MonsterPacketWriter());
 

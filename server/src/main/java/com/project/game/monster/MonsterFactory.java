@@ -8,30 +8,30 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
-public final class MonsterRuntimeFactory {
+public final class MonsterFactory {
     private final GameResources resources;
 
-    public MonsterRuntimeFactory(GameResources resources) {
+    public MonsterFactory(GameResources resources) {
         this.resources = Objects.requireNonNull(resources, "resources");
     }
 
-    public List<RuntimeMonster> createForMap(int mapId) {
-        Map<Integer, LegacyMonsterTemplate> movementById =
+    public List<Monster> createForMap(int mapId) {
+        Map<Integer, MonsterTemplate> movementById =
                 resources.monsterTemplates().stream()
                         .collect(Collectors.toUnmodifiableMap(
-                                LegacyMonsterTemplate::id,
+                                MonsterTemplate::id,
                                 template -> template));
         return resources.monstersForMap(mapId).stream()
                 .map(spawn -> {
-                    LegacyMonsterCombatTemplate combat = resources
+                    MonsterCombatTemplate combat = resources
                             .monsterCombatTemplate(spawn.templateId())
                             .orElseThrow(() -> new IllegalStateException(
                                     "missing monster combat template " + spawn.templateId()));
-                    LegacyMonsterTemplate movement = Optional.ofNullable(
+                    MonsterTemplate movement = Optional.ofNullable(
                                     movementById.get(spawn.templateId()))
                             .orElseThrow(() -> new IllegalStateException(
                                     "missing monster movement template " + spawn.templateId()));
-                    return new RuntimeMonster(spawn, combat, movement);
+                    return new Monster(spawn, combat, movement);
                 })
                 .toList();
     }

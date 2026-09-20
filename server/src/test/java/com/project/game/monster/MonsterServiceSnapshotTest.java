@@ -26,7 +26,7 @@ class MonsterServiceSnapshotTest {
 
     @Test
     void snapshotsCreateRuntimeZoneButLifecycleTickOnlyVisitsExistingZones() {
-        ZoneRegistry zones = new ZoneRegistry(new MonsterRuntimeFactory(
+        ZoneRegistry zones = new ZoneRegistry(new MonsterFactory(
                 GameResources.fromFrameRoot(Path.of("resources", "json"))));
         MonsterService monsters = new MonsterService(
                 zones, new MonsterPacketWriter(), new PlayerPacketWriter());
@@ -55,7 +55,7 @@ class MonsterServiceSnapshotTest {
     }
 
     @Test
-    void mapZeroZoneStartsWithoutRuntimeMonsters() {
+    void mapZeroZoneStartsWithoutMonsters() {
         GameplayServices maps = mapsWithMonsters();
         assertTrue(maps.monsterService().monsterSnapshots(0, 0).isEmpty());
         assertEquals(0, maps.mapService().memberCount(0, 0));

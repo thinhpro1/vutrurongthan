@@ -1,10 +1,10 @@
 package com.project.game.resource.loader;
 
 import com.project.game.map.MapTemplate;
-import com.project.game.monster.LegacyMonsterCombatTemplate;
-import com.project.game.monster.LegacyMonsterDart;
-import com.project.game.monster.LegacyMonsterSpawn;
-import com.project.game.monster.LegacyMonsterTemplate;
+import com.project.game.monster.MonsterCombatTemplate;
+import com.project.game.monster.MonsterDart;
+import com.project.game.monster.MonsterSpawn;
+import com.project.game.monster.MonsterTemplate;
 import com.project.game.resource.GameResources;
 import com.project.game.resource.IconResourceCatalog;
 import com.project.game.resource.LegacyEffectImage;
@@ -52,7 +52,7 @@ public final class GameResourcesLoader {
         List<LegacyLevel> levels = LevelLoader.load(jsonRoot, required);
         List<LegacyEffectImage> effects = EffectLoader.load(jsonRoot, required);
         MonsterLoader.LoadedMonsters monsters = MonsterLoader.load(jsonRoot, required);
-        Map<Integer, LegacyMonsterCombatTemplate> combat =
+        Map<Integer, MonsterCombatTemplate> combat =
                 MonsterCombatLoader.load(jsonRoot, required);
         return new GameResources(
                 iconCatalog,

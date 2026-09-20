@@ -5,7 +5,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Optional;
 
-public final class RuntimeMonster {
+public final class Monster {
     private static final int STATUS_LIVE = 0;
     private static final int STATUS_DIE = 1;
     private static final int MOVE_TYPE_RUN = 1;
@@ -36,9 +36,9 @@ public final class RuntimeMonster {
     private final LinkedHashMap<Integer, Long> enemies = new LinkedHashMap<>();
     private long lastAttackAtMillis;
 
-    RuntimeMonster(LegacyMonsterSpawn spawn,
-                   LegacyMonsterCombatTemplate combat,
-                   LegacyMonsterTemplate movement) {
+    Monster(MonsterSpawn spawn,
+                   MonsterCombatTemplate combat,
+                   MonsterTemplate movement) {
         Objects.requireNonNull(spawn, "spawn");
         Objects.requireNonNull(combat, "combat");
         Objects.requireNonNull(movement, "movement");
@@ -140,7 +140,7 @@ public final class RuntimeMonster {
         return true;
     }
 
-    public Optional<MonsterDamageResult> applyDamage(
+    public Optional<Monster.Damage> applyDamage(
             int attackerPlayerId,
             long damage,
             long nowMillis,
@@ -159,14 +159,14 @@ public final class RuntimeMonster {
 
         hp = hpAfter;
 
-        enemies.merge(attackerPlayerId, damage, RuntimeMonster::saturatingAdd);
+        enemies.merge(attackerPlayerId, damage, Monster::saturatingAdd);
 
         if (killed) {
             status = STATUS_DIE;
             respawnAtMillis = deadline;
         }
 
-        return Optional.of(new MonsterDamageResult(
+        return Optional.of(new Monster.Damage(
                 id,
                 damage,
                 hp,
@@ -174,7 +174,7 @@ public final class RuntimeMonster {
                 killed ? potentialReward : 0L));
     }
 
-    public Optional<MonsterRespawnResult> respawnIfDue(long nowMillis) {
+    public Optional<Monster.Respawn> respawnIfDue(long nowMillis) {
         if (status != STATUS_DIE
                 || respawnAtMillis == NO_RESPAWN
                 || nowMillis <= respawnAtMillis) {
@@ -190,10 +190,10 @@ public final class RuntimeMonster {
         lastAttackAtMillis = 0L;
         moveDir = INITIAL_MOVE_DIR;
 
-        return Optional.of(new MonsterRespawnResult(id, levelStatus, hp));
+        return Optional.of(new Monster.Respawn(id, levelStatus, hp));
     }
 
-    public Optional<MonsterMoveResult> moveToward(int targetX) {
+    public Optional<Monster.Move> moveToward(int targetX) {
         if (!isAlive() || moveType != MOVE_TYPE_RUN) {
             return Optional.empty();
         }
@@ -211,10 +211,10 @@ public final class RuntimeMonster {
         y = yFirst;
         moveDir = direction;
 
-        return Optional.of(new MonsterMoveResult(id, x, y, moveDir));
+        return Optional.of(new Monster.Move(id, x, y, moveDir));
     }
 
-    public Optional<MonsterMoveResult> patrolOrReturn() {
+    public Optional<Monster.Move> patrolOrReturn() {
         if (!isAlive() || moveType != MOVE_TYPE_RUN) {
             return Optional.empty();
         }
@@ -260,7 +260,7 @@ public final class RuntimeMonster {
         if (x == beforeX && y == beforeY) {
             return Optional.empty();
         }
-        return Optional.of(new MonsterMoveResult(id, x, y, moveDir));
+        return Optional.of(new Monster.Move(id, x, y, moveDir));
     }
 
     public MonsterSnapshot snapshot() {
@@ -298,4 +298,23 @@ public final class RuntimeMonster {
         }
         return start + delay;
     }
-}
+    public record Damage(
+            int monsterId,
+            long damage,
+            long hpAfter,
+            boolean killed,
+            long potentialReward
+    ) {}
+
+    public record Move(
+            int monsterId,
+            int x,
+            int y,
+            int dir
+    ) {}
+
+    public record Respawn(
+            int monsterId,
+            int levelStatus,
+            long hp
+    ) {}}

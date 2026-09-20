@@ -75,7 +75,7 @@ class ZoneTest {
     }
 
     @Test
-    void requiresExplicitRuntimeMonsterSeed() {
+    void requiresExplicitMonsterSeed() {
         assertThrows(
                 NoSuchMethodException.class,
                 () -> Zone.class.getConstructor(int.class, int.class));

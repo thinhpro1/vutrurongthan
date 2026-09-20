@@ -1,6 +1,6 @@
 package com.project.game.map;
 
-import com.project.game.monster.MonsterRuntimeFactory;
+import com.project.game.monster.MonsterFactory;
 import com.project.game.resource.GameResources;
 import org.junit.jupiter.api.Test;
 
@@ -46,7 +46,7 @@ class ZoneRegistryTest {
     }
 
     private static ZoneRegistry registry() {
-        return new ZoneRegistry(new MonsterRuntimeFactory(
+        return new ZoneRegistry(new MonsterFactory(
                 GameResources.fromFrameRoot(java.nio.file.Path.of("resources", "json"))));
     }
 }

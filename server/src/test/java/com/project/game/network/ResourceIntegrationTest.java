@@ -26,9 +26,9 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static com.project.game.network.NetworkIntegrationTestSupport.*;
+import static com.project.game.network.IntegrationTestSupport.*;
 
-class NetworkResourceIntegrationTest {
+class ResourceIntegrationTest {
 
     @Test
     void javaClientReceivesLegacyFrameDefinitionsInUnityFieldOrder() throws Exception {

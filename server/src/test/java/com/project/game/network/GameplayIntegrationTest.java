@@ -29,9 +29,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static com.project.game.network.NetworkIntegrationTestSupport.*;
+import static com.project.game.network.IntegrationTestSupport.*;
 
-class NetworkGameplayIntegrationTest {
+class GameplayIntegrationTest {
 
     @Test
     void javaClientDiesToMonsterAndReturnsTown() throws Exception {

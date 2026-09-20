@@ -1,5 +1,7 @@
 package com.project.game.network;
 
+import org.junit.jupiter.api.Test;
+
 import com.project.game.testsupport.TestServices;
 import com.project.game.network.codec.LegacyCipher;
 import com.project.game.network.codec.LegacyPacketCodec;
@@ -23,15 +25,13 @@ import java.security.cert.X509Certificate;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
-/** N13 executable smoke test for TLS plus the unchanged legacy packet protocol. */
-public final class TlsNetworkSelfTest {
+/** Verifies the legacy packet handshake over a TLS network connection. */
+final class TlsNetworkIntegrationTest {
     private static final byte[] KEY = "abc".getBytes(StandardCharsets.US_ASCII);
     private static final char[] STORE_PASSWORD = "self-test-password".toCharArray();
 
-    private TlsNetworkSelfTest() {
-    }
-
-    public static void main(String[] args) throws Exception {
+    @Test
+    void completesTlsHandshakeAndVersionExchange() throws Exception {
         Path keystore = createTemporaryKeystore();
         NetworkServer server = null;
         Thread serverThread = null;
@@ -43,7 +43,7 @@ public final class TlsNetworkSelfTest {
                     KEY, TestServices.serverServices(), serverContext, ClientConfig.defaults());
             NetworkServer runningServer = server;
             AtomicReference<Throwable> serverFailure = new AtomicReference<>();
-            serverThread = Thread.ofVirtual().name("tls-network-self-test-server").start(() -> {
+            serverThread = Thread.ofVirtual().name("tls-network-integration-server").start(() -> {
                 try {
                     runningServer.start();
                 } catch (Throwable failure) {
@@ -71,7 +71,6 @@ public final class TlsNetworkSelfTest {
             if (serverFailure.get() != null) {
                 throw new AssertionError("TLS network server failed", serverFailure.get());
             }
-            System.out.println("TlsNetworkSelfTest: PASS");
         } finally {
             if (server != null) {
                 server.stop();

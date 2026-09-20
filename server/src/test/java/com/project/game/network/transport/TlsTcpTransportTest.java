@@ -1,7 +1,8 @@
 package com.project.game.network.transport;
 
+import org.junit.jupiter.api.Test;
+
 import javax.net.ssl.SSLContext;
-import javax.net.ssl.SSLSocketFactory;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
 import java.io.IOException;
@@ -14,26 +15,23 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * N13 executable self-test for the TLS transport.
+ * Verifies encrypted transport between loopback TLS sockets.
  *
  * <p>The certificate is generated in a temporary PKCS12 keystore and is never
  * stored in the repository. The client trust manager is intentionally unsafe
  * because this is only a local transport test.</p>
  */
-public final class TlsTransportSelfTest {
+final class TlsTcpTransportTest {
     private static final char[] STORE_PASSWORD = "self-test-password".toCharArray();
 
-    private TlsTransportSelfTest() {
-    }
-
-    public static void main(String[] args) throws Exception {
+    @Test
+    void transportsDataOverTls() throws Exception {
         Path keystore = createTemporaryKeystore();
         try {
             SSLContext serverContext = TlsContextFactory.fromKeyStore(
                     keystore, "PKCS12", STORE_PASSWORD, "TLSv1.3");
             SSLContext clientContext = trustAllClientContext();
             runEcho(serverContext, clientContext);
-            System.out.println("TlsTransportSelfTest: PASS");
         } finally {
             Files.deleteIfExists(keystore);
         }
@@ -44,7 +42,7 @@ public final class TlsTransportSelfTest {
                 .createServerSocket(0, 16, java.net.InetAddress.getLoopbackAddress())) {
             var sslServer = (javax.net.ssl.SSLServerSocket) server;
             AtomicReference<Throwable> serverFailure = new AtomicReference<>();
-            Thread worker = Thread.ofVirtual().name("tls-self-test-server").start(() -> {
+            Thread worker = Thread.ofVirtual().name("tls-transport-test-server").start(() -> {
                 try (TlsTcpTransport transport = TlsTcpTransport.accept(sslServer, 5000)) {
                     int value = transport.input().read();
                     if (value != 0x2A) {

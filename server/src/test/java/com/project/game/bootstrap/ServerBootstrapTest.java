@@ -6,6 +6,7 @@ import com.project.game.network.NetworkEventObserver;
 import com.project.game.network.NetworkServer;
 import com.project.game.network.Session;
 import com.project.game.network.SessionManager;
+import com.project.game.network.SessionState;
 import com.project.game.network.codec.LegacyPacketCodec;
 import com.project.game.network.transport.ClientTransport;
 import com.project.game.persistence.DatabaseConfig;
@@ -36,11 +37,13 @@ import java.time.Instant;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 import java.util.logging.Logger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -117,14 +120,38 @@ class ServerBootstrapTest {
 
     @Test
     void closesDatabaseManagerWhenNetworkServerStartFails() throws Exception {
+        DatabaseManager manager = databaseManager();
+        AtomicBoolean checkpointCalled = new AtomicBoolean();
+        AtomicBoolean checkpointSawOpenDatabase = new AtomicBoolean();
+        PlayerRepository repository = new PlayerRepository() {
+            @Override
+            public Optional<PlayerRecord> findByAccountId(long accountId) {
+                return Optional.empty();
+            }
+
+            @Override
+            public PlayerRecord create(PlayerRecord initialWithoutId) {
+                throw new UnsupportedOperationException("not used by this test");
+            }
+
+            @Override
+            public void updateCheckpoint(PlayerProfile player, Instant playedAt) {
+                checkpointCalled.set(true);
+                checkpointSawOpenDatabase.set(!isClosed(manager));
+            }
+        };
+        ServerServices services = servicesWithPlayerRepository(repository);
         try (ServerSocket occupied = new ServerSocket(0)) {
-            NetworkServer server = networkServer("127.0.0.1", occupied.getLocalPort(),
-                    TestServices.serverServices());
-            DatabaseManager manager = databaseManager();
+            NetworkServer server = networkServer("127.0.0.1", occupied.getLocalPort(), services);
+            Session session = addPlayerSession(server, services);
             ServerBootstrap bootstrap = new ServerBootstrap(server, manager);
 
             assertThrows(IOException.class, bootstrap::start);
 
+            assertEquals(0, server.localPort());
+            assertEquals(SessionState.CLOSED, session.state());
+            assertTrue(checkpointCalled.get());
+            assertTrue(checkpointSawOpenDatabase.get());
             assertTrue(isClosed(manager));
         }
     }
@@ -151,12 +178,60 @@ class ServerBootstrapTest {
                 checkpointSawOpenDatabase.set(!isClosed(manager));
             }
         };
+        ServerServices services = servicesWithPlayerRepository(repository);
+        NetworkServer server = networkServer("127.0.0.1", 0, services);
+        Session session = addPlayerSession(server, services);
+        ServerBootstrap bootstrap = new ServerBootstrap(server, manager);
+
+        bootstrap.stop();
+
+        assertTrue(checkpointCalled.get());
+        assertTrue(checkpointSawOpenDatabase.get());
+        assertTrue(isClosed(manager));
+    }
+
+    @Test
+    void repeatedStopIsHarmless() {
+        DatabaseManager manager = databaseManager();
+        AtomicInteger checkpointCount = new AtomicInteger();
+        PlayerRepository repository = new PlayerRepository() {
+            @Override
+            public Optional<PlayerRecord> findByAccountId(long accountId) {
+                return Optional.empty();
+            }
+
+            @Override
+            public PlayerRecord create(PlayerRecord initialWithoutId) {
+                throw new UnsupportedOperationException("not used by this test");
+            }
+
+            @Override
+            public void updateCheckpoint(PlayerProfile player, Instant playedAt) {
+                checkpointCount.incrementAndGet();
+            }
+        };
+        ServerServices services = servicesWithPlayerRepository(repository);
+        NetworkServer server = networkServer("127.0.0.1", 0, services);
+        Session session = addPlayerSession(server, services);
+        ServerBootstrap bootstrap = new ServerBootstrap(server, manager);
+
+        bootstrap.stop();
+
+        assertDoesNotThrow(bootstrap::stop);
+        assertEquals(SessionState.CLOSED, session.state());
+        assertEquals(1, checkpointCount.get());
+        assertTrue(isClosed(manager));
+    }
+
+    private static ServerServices servicesWithPlayerRepository(PlayerRepository repository) {
         GameResources resources = GameResources.unavailable();
         GameplayServices gameplay = new GameplayServices(resources);
-        ServerServices services = TestServices.serverServices(
+        return TestServices.serverServices(
                 new AuthService(new TestAccountRepository()), resources, gameplay,
                 new PlayerService(repository));
-        NetworkServer server = networkServer("127.0.0.1", 0, services);
+    }
+
+    private static Session addPlayerSession(NetworkServer server, ServerServices services) {
         SessionManager sessions = server.sessions();
         Session session = new Session(sessions.nextId(), new TestTransport(), sessions,
                 new LegacyPacketCodec(1024), "abc".getBytes(java.nio.charset.StandardCharsets.US_ASCII),
@@ -165,13 +240,7 @@ class ServerBootstrapTest {
         assertTrue(sessions.beginAccountAdmission(session, 10L, "alpha1"));
         sessions.finishAccountAdmission(session, true);
         session.bindPlayer(PlayerProfile.initial(10L, 1, "alpha1", 0));
-        ServerBootstrap bootstrap = new ServerBootstrap(server, manager);
-
-        bootstrap.stop();
-
-        assertTrue(checkpointCalled.get());
-        assertTrue(checkpointSawOpenDatabase.get());
-        assertTrue(isClosed(manager));
+        return session;
     }
 
     private static NetworkServer networkServer(String host, int port, ServerServices services) {

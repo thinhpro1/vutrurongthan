@@ -32,6 +32,7 @@ import java.util.function.Supplier;
 public final class ServerBootstrap {
     private final NetworkServer server;
     private final DatabaseManager databaseManager;
+    private boolean stopped;
 
     ServerBootstrap(NetworkServer server, DatabaseManager databaseManager) {
         this.server = Objects.requireNonNull(server, "server");
@@ -112,12 +113,22 @@ public final class ServerBootstrap {
         try {
             server.start();
         } catch (IOException | RuntimeException | Error exception) {
-            databaseManager.close();
+            try {
+                stop();
+            } catch (RuntimeException | Error cleanupFailure) {
+                if (cleanupFailure != exception) {
+                    exception.addSuppressed(cleanupFailure);
+                }
+            }
             throw exception;
         }
     }
 
-    public void stop() {
+    public synchronized void stop() {
+        if (stopped) {
+            return;
+        }
+        stopped = true;
         try {
             server.stop();
         } finally {

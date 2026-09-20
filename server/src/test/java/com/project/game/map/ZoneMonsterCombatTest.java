@@ -6,6 +6,7 @@ import com.project.game.monster.MonsterRuntimeFactory;
 import com.project.game.monster.MonsterAttackResult;
 import com.project.game.monster.MonsterRespawnResult;
 import com.project.game.monster.MonsterSnapshot;
+import com.project.game.monster.RuntimeMonster;
 import com.project.game.network.NetworkConfig;
 import com.project.game.network.NetworkEventObserver;
 import com.project.game.network.Session;
@@ -57,6 +58,34 @@ class ZoneMonsterCombatTest {
         assertEquals(0L, lethal.hpAfter());
         assertFalse(zone.hasLiveMonster(0));
         assertTrue(zone.damageMonster(0, 8, 10, NOW + 2).isEmpty());
+    }
+
+    @Test
+    void zoneOwnsOrderedMonsterSnapshots() {
+        Zone zone = map1Zone();
+
+        List<MonsterSnapshot> snapshots = zone.monsterSnapshots();
+        assertEquals(6, snapshots.size());
+        assertEquals(
+                List.of(0, 1, 2, 3, 4, 5),
+                snapshots.stream().map(MonsterSnapshot::id).toList());
+        assertEquals(
+                List.of(975, 1348, 1800, 2250, 2600, 2950),
+                snapshots.stream().map(MonsterSnapshot::x).toList());
+    }
+
+    @Test
+    void zoneRejectsDuplicateMonsterRuntimeIds() {
+        MonsterRuntimeFactory factory = new MonsterRuntimeFactory(
+                GameResources.fromFrameRoot(Path.of("resources", "json")));
+        List<RuntimeMonster> runtimes = factory.createForMap(1);
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new Zone(
+                        1,
+                        0,
+                        List.of(runtimes.getFirst(), runtimes.getFirst())));
     }
 
     @Test

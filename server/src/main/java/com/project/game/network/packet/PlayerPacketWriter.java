@@ -18,7 +18,7 @@ public final class PlayerPacketWriter {
             throws IOException {
         Objects.requireNonNull(player, "player");
         Objects.requireNonNull(skills, "skills");
-        LegacyPlayerCompatibilityValidator.validatePlayerInfo(player);
+        PlayerPacketValidator.validatePlayerInfo(player);
         MessageWriter writer = new MessageWriter()
                 .writeByte(0)
                 .writeInt(player.id())
@@ -80,7 +80,7 @@ public final class PlayerPacketWriter {
 
     public Message addPlayer(PlayerProfile player) {
         Objects.requireNonNull(player, "player");
-        LegacyPlayerCompatibilityValidator.validateAddPlayer(player);
+        PlayerPacketValidator.validateAddPlayer(player);
         try {
             MessageWriter writer = new MessageWriter()
                     .writeInt(player.id())
@@ -141,7 +141,7 @@ public final class PlayerPacketWriter {
 
     public Message wakeUpFromDie(PlayerProfile player) {
         Objects.requireNonNull(player, "player");
-        LegacyPlayerCompatibilityValidator.validatePosition(player.x(), player.y());
+        PlayerPacketValidator.validatePosition(player.x(), player.y());
         if (player.hp() <= 0L) {
             throw new IllegalArgumentException("wake-up player must be alive");
         }

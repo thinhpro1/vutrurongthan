@@ -2,7 +2,7 @@ package com.project.game.bootstrap;
 import com.project.game.testsupport.TestPlayerProfiles;
 
 import com.project.game.account.AuthService;
-import com.project.game.network.NetworkConfig;
+import com.project.game.network.ClientConfig;
 import com.project.game.network.NetworkServer;
 import com.project.game.network.Session;
 import com.project.game.network.SessionManager;
@@ -16,7 +16,7 @@ import com.project.game.persistence.player.PlayerRepository;
 import com.project.game.player.PlayerProfile;
 import com.project.game.player.PlayerService;
 import com.project.game.resource.GameResources;
-import com.project.game.service.ServerServices;
+import com.project.game.network.SessionServices;
 import com.project.game.testsupport.GameplayServices;
 import com.project.game.testsupport.TestAccountRepository;
 import com.project.game.testsupport.TestServices;
@@ -136,7 +136,7 @@ class ServerBootstrapTest {
                 checkpointSawOpenDatabase.set(!isClosed(manager));
             }
         };
-        ServerServices services = servicesWithPlayerRepository(repository);
+        SessionServices services = servicesWithPlayerRepository(repository);
         try (ServerSocket occupied = new ServerSocket(0)) {
             NetworkServer server = networkServer("127.0.0.1", occupied.getLocalPort(), services);
             Session session = addPlayerSession(server, services);
@@ -174,7 +174,7 @@ class ServerBootstrapTest {
                 checkpointSawOpenDatabase.set(!isClosed(manager));
             }
         };
-        ServerServices services = servicesWithPlayerRepository(repository);
+        SessionServices services = servicesWithPlayerRepository(repository);
         NetworkServer server = networkServer("127.0.0.1", 0, services);
         Session session = addPlayerSession(server, services);
         ServerBootstrap bootstrap = new ServerBootstrap(server, manager);
@@ -206,7 +206,7 @@ class ServerBootstrapTest {
                 checkpointCount.incrementAndGet();
             }
         };
-        ServerServices services = servicesWithPlayerRepository(repository);
+        SessionServices services = servicesWithPlayerRepository(repository);
         NetworkServer server = networkServer("127.0.0.1", 0, services);
         Session session = addPlayerSession(server, services);
         ServerBootstrap bootstrap = new ServerBootstrap(server, manager);
@@ -219,7 +219,7 @@ class ServerBootstrapTest {
         assertTrue(isClosed(manager));
     }
 
-    private static ServerServices servicesWithPlayerRepository(PlayerRepository repository) {
+    private static SessionServices servicesWithPlayerRepository(PlayerRepository repository) {
         GameResources resources = GameResources.unavailable();
         GameplayServices gameplay = new GameplayServices(resources);
         return TestServices.serverServices(
@@ -227,11 +227,11 @@ class ServerBootstrapTest {
                 new PlayerService(repository));
     }
 
-    private static Session addPlayerSession(NetworkServer server, ServerServices services) {
+    private static Session addPlayerSession(NetworkServer server, SessionServices services) {
         SessionManager sessions = server.sessions();
         Session session = new Session(sessions.nextId(), new TestTransport(), sessions,
                 new LegacyPacketCodec(1024), "abc".getBytes(java.nio.charset.StandardCharsets.US_ASCII),
-                4, services, NetworkConfig.defaults());
+                4, services, ClientConfig.defaults());
         assertTrue(sessions.tryAdd(session, 1));
         assertTrue(sessions.beginAccountAdmission(session, 10L, "alpha1"));
         sessions.finishAccountAdmission(session, true);
@@ -239,10 +239,10 @@ class ServerBootstrapTest {
         return session;
     }
 
-    private static NetworkServer networkServer(String host, int port, ServerServices services) {
+    private static NetworkServer networkServer(String host, int port, SessionServices services) {
         return new NetworkServer(host, port, 20, 1024, 8, 1000,
                 "abc".getBytes(java.nio.charset.StandardCharsets.US_ASCII), services, null,
-                NetworkConfig.defaults());
+                ClientConfig.defaults());
     }
 
     private static DatabaseManager databaseManager() {

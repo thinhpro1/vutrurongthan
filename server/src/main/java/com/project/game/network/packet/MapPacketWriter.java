@@ -1,6 +1,6 @@
 package com.project.game.network.packet;
 
-import com.project.game.map.LegacyMapTemplate;
+import com.project.game.map.MapTemplate;
 import com.project.game.monster.MonsterSnapshot;
 import com.project.game.network.message.Message;
 import com.project.game.network.message.MessageName;
@@ -15,7 +15,7 @@ import java.util.Objects;
 public final class MapPacketWriter {
     public Message mapInfo(
             PlayerProfile player,
-            LegacyMapTemplate map,
+            MapTemplate map,
             boolean includeTemplate,
             List<String> waypointTargetNames,
             List<MonsterSnapshot> monsters) throws IOException {
@@ -33,7 +33,7 @@ public final class MapPacketWriter {
         if (monsters.size() > Byte.MAX_VALUE) {
             throw new IOException("too many monsters for map " + map.id());
         }
-        LegacyPlayerCompatibilityValidator.validateMapInfo(player, map.id());
+        PlayerPacketValidator.validateMapInfo(player, map.id());
 
         MessageWriter writer = new MessageWriter().writeShort(map.id());
         if (includeTemplate) {

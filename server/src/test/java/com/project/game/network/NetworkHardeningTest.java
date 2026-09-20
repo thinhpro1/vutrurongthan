@@ -8,7 +8,7 @@ import com.project.game.network.message.MessageName;
 import com.project.game.network.message.MessageWriter;
 import com.project.game.account.AuthService;
 import com.project.game.resource.GameResources;
-import com.project.game.service.ServerServices;
+import com.project.game.network.SessionServices;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayOutputStream;
@@ -33,7 +33,7 @@ class NetworkHardeningTest {
             TestTransport transport = new TestTransport(input, output, "127.0.0.1");
             Session session = new Session(manager.nextId(), transport, manager, new LegacyPacketCodec(1024),
                     "abc".getBytes(StandardCharsets.US_ASCII), 4, TestServices.serverServices(),
-                    NetworkConfig.defaults());
+                    ClientConfig.defaults());
             assertTrue(manager.tryAdd(session, 1));
             session.start();
             try {
@@ -73,7 +73,7 @@ class NetworkHardeningTest {
             TestTransport transport = new TestTransport(input, output, "127.0.0.1");
             Session session = new Session(manager.nextId(), transport, manager, new LegacyPacketCodec(1024),
                     "abc".getBytes(StandardCharsets.US_ASCII), 1, TestServices.serverServices(),
-                    NetworkConfig.defaults());
+                    ClientConfig.defaults());
             assertTrue(manager.tryAdd(session, 1));
             session.start();
             assertTrue(session.send(new Message(MessageName.DIALOG_OK)));
@@ -90,7 +90,7 @@ class NetworkHardeningTest {
         return new Session(manager.nextId(), new TestTransport(new java.io.ByteArrayInputStream(new byte[0]),
                 new ByteArrayOutputStream(), ip), manager, new LegacyPacketCodec(1024),
                 "abc".getBytes(StandardCharsets.US_ASCII), queueSize, TestServices.serverServices(),
-                NetworkConfig.defaults());
+                ClientConfig.defaults());
     }
 
     private static void waitForClosed(Session session) throws InterruptedException {

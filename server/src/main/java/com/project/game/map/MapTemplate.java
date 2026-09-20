@@ -2,7 +2,7 @@ package com.project.game.map;
 
 import java.util.List;
 
-public record LegacyMapTemplate(
+public record MapTemplate(
         int id,
         int iconId,
         String name,
@@ -13,6 +13,6 @@ public record LegacyMapTemplate(
         List<List<Integer>> colorsBgr,
         boolean line,
         String dataLine,
-        List<LegacyWaypoint> waypoints
+        List<Waypoint> waypoints
 ) {
 }

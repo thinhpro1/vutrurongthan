@@ -3,7 +3,7 @@ package com.project.game.persistence.player;
 import com.project.game.persistence.DatabaseConfig;
 import com.project.game.persistence.DatabaseManager;
 import com.project.game.persistence.account.JdbcAccountRepository;
-import com.project.game.player.PlayerInitialProfileFactory;
+import com.project.game.player.PlayerProfileFactory;
 import com.project.game.player.PlayerService;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
@@ -32,7 +32,7 @@ class JdbcPlayerRepositoryIntegrationTest {
             long accountId = new JdbcAccountRepository(manager.dataSource())
                     .create(username, new byte[32], new byte[16], "127.0.0.1");
             PlayerRecord initial = PlayerRecord.withoutId(
-                    new PlayerInitialProfileFactory().create(accountId, "alpha1", 0));
+                    new PlayerProfileFactory().create(accountId, "alpha1", 0));
             JdbcPlayerRepository repository = new JdbcPlayerRepository(manager.dataSource());
             PlayerRecord created = repository.create(initial);
 

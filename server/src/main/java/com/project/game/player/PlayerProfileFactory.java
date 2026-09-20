@@ -5,7 +5,7 @@ import java.util.Objects;
 import java.util.regex.Pattern;
 
 /** Single Java-code boundary for fresh-player gameplay initialization. */
-public final class PlayerInitialProfileFactory {
+public final class PlayerProfileFactory {
     private static final Pattern PLAYER_NAME = Pattern.compile("^[a-z0-9]{5,10}$");
     private static final long INITIAL_POWER = 1L;
     private static final long INITIAL_POTENTIAL = 1L;

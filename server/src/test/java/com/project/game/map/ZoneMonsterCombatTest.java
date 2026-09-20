@@ -8,7 +8,7 @@ import com.project.game.monster.MonsterAttackResult;
 import com.project.game.monster.MonsterRespawnResult;
 import com.project.game.monster.MonsterSnapshot;
 import com.project.game.monster.RuntimeMonster;
-import com.project.game.network.NetworkConfig;
+import com.project.game.network.ClientConfig;
 import com.project.game.network.Session;
 import com.project.game.network.SessionManager;
 import com.project.game.network.SessionState;
@@ -16,7 +16,7 @@ import com.project.game.network.codec.LegacyPacketCodec;
 import com.project.game.network.transport.ClientTransport;
 import com.project.game.player.PlayerProfile;
 import com.project.game.resource.GameResources;
-import com.project.game.service.ServerServices;
+import com.project.game.network.SessionServices;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
@@ -322,7 +322,7 @@ class ZoneMonsterCombatTest {
         SessionManager manager = new SessionManager();
         Session session = new Session(manager.nextId(), new NoopTransport(), manager,
                 new LegacyPacketCodec(1024), "abc".getBytes(), 8,
-                TestServices.serverServices(), NetworkConfig.defaults());
+                TestServices.serverServices(), ClientConfig.defaults());
         session.bindPlayer(player);
         return session;
     }

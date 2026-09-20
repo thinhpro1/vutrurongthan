@@ -6,7 +6,7 @@ import com.project.game.network.codec.LegacyCipher;
 import com.project.game.network.message.Message;
 import com.project.game.network.message.MessageName;
 import com.project.game.network.transport.ClientTransport;
-import com.project.game.service.ServerServices;
+import com.project.game.network.SessionServices;
 import com.project.game.account.AuthService;
 import com.project.game.player.PlayerService;
 import com.project.game.persistence.player.PlayerRecord;
@@ -70,7 +70,7 @@ class SessionTest {
         };
         Session session = new Session(manager.nextId(), transport, manager,
                 new LegacyPacketCodec(1024), "abc".getBytes(StandardCharsets.US_ASCII), 4,
-                TestServices.serverServices(), NetworkConfig.defaults());
+                TestServices.serverServices(), ClientConfig.defaults());
         assertTrue(manager.tryAdd(session, 1));
 
         assertThrows(IOException.class, session::start);
@@ -88,7 +88,7 @@ class SessionTest {
             SessionManager manager = new SessionManager();
             Session session = new Session(manager.nextId(), new TestTransport(input, output, "127.0.0.1"), manager,
                     new LegacyPacketCodec(1024), "abc".getBytes(StandardCharsets.US_ASCII), 8,
-                    TestServices.serverServices(), NetworkConfig.defaults());
+                    TestServices.serverServices(), ClientConfig.defaults());
             List<Message> expected = List.of(
                     new Message(MessageName.DIALOG_OK, new byte[]{1}),
                     new Message(MessageName.START_CREATE_PLAYER_SCREEN, new byte[]{2, 3}),
@@ -122,11 +122,11 @@ class SessionTest {
                 new MonsterRuntimeFactory(resources));
         PlayerService players = new PlayerService(repository);
         PlayerProfile player = players.create(101L, "alpha1", 0).player().withHp(77);
-        ServerServices services = TestServices.serverServices(auth, resources, maps, players);
+        SessionServices services = TestServices.serverServices(auth, resources, maps, players);
         SessionManager manager = new SessionManager();
         Session session = new Session(manager.nextId(), new TestTransport(), manager,
                 new LegacyPacketCodec(1024), "abc".getBytes(StandardCharsets.US_ASCII), 4,
-                services, NetworkConfig.defaults());
+                services, ClientConfig.defaults());
         assertTrue(manager.beginAccountAdmission(session, 101L, "user01"));
         manager.finishAccountAdmission(session, true);
         session.bindPlayer(player);
@@ -159,7 +159,7 @@ class SessionTest {
                         new GameplayServices(new PlayerPacketWriter(), new MonsterPacketWriter(),
                                 new MonsterRuntimeFactory(GameResources.unavailable())),
                         players),
-                NetworkConfig.defaults());
+                ClientConfig.defaults());
         assertTrue(manager.tryAdd(session, 1));
         assertTrue(manager.beginAccountAdmission(session, 101L, "user01"));
         manager.finishAccountAdmission(session, true);
@@ -193,7 +193,7 @@ class SessionTest {
                         new GameplayServices(new PlayerPacketWriter(), new MonsterPacketWriter(),
                                 new MonsterRuntimeFactory(GameResources.unavailable())),
                         players),
-                NetworkConfig.defaults());
+                ClientConfig.defaults());
         assertTrue(manager.tryAdd(session, 1));
         assertTrue(manager.beginAccountAdmission(session, 101L, "user01"));
         manager.finishAccountAdmission(session, true);
@@ -235,7 +235,7 @@ class SessionTest {
                         new GameplayServices(new PlayerPacketWriter(), new MonsterPacketWriter(),
                                 new MonsterRuntimeFactory(GameResources.unavailable())),
                         players),
-                NetworkConfig.defaults());
+                ClientConfig.defaults());
         assertTrue(manager.tryAdd(session, 1));
         assertTrue(manager.beginAccountAdmission(session, 101L, "user01"));
         manager.finishAccountAdmission(session, true);

@@ -12,7 +12,7 @@ import com.project.game.network.message.MessageName;
 import com.project.game.network.message.MessageWriter;
 import com.project.game.account.AuthService;
 import com.project.game.resource.GameResources;
-import com.project.game.service.ServerServices;
+import com.project.game.network.SessionServices;
 import com.project.game.player.PlayerProfile;
 
 import java.io.ByteArrayInputStream;
@@ -28,14 +28,14 @@ final class MessageHandlerTestSupport {
 
     static MessageHandler newHandler(Session session, AuthService authService) {
         return newHandler(session, TestServices.serverServices(authService, GameResources.unavailable()),
-                NetworkConfig.defaults());
+                ClientConfig.defaults());
     }
 
     static MessageHandler newHandler(Session session, GameResources resources) {
-        return newHandler(session, TestServices.serverServices(TestServices.authService(), resources), NetworkConfig.defaults());
+        return newHandler(session, TestServices.serverServices(TestServices.authService(), resources), ClientConfig.defaults());
     }
 
-    static MessageHandler newHandler(Session session, ServerServices services, NetworkConfig config) {
+    static MessageHandler newHandler(Session session, SessionServices services, ClientConfig config) {
         return new MessageHandler(session, services, config);
     }
 
@@ -52,7 +52,7 @@ final class MessageHandlerTestSupport {
         return new Session(manager.nextId(), new TestTransport(
                 new ByteArrayInputStream(new byte[0]), new ByteArrayOutputStream(), remoteAddress), manager,
                 new LegacyPacketCodec(maxPacketSize), "abc".getBytes(StandardCharsets.US_ASCII), 4,
-                TestServices.serverServices(authService, GameResources.unavailable()), NetworkConfig.defaults());
+                TestServices.serverServices(authService, GameResources.unavailable()), ClientConfig.defaults());
     }
 
     static Session inGameSessionWithPlayer(AuthService auth) {
@@ -64,11 +64,11 @@ final class MessageHandlerTestSupport {
         return session;
     }
 
-    static Session inGameSession(ServerServices services, PlayerProfile player) {
+    static Session inGameSession(SessionServices services, PlayerProfile player) {
         SessionManager manager = new SessionManager();
         Session session = new Session(manager.nextId(), new TestTransport(), manager,
                 new LegacyPacketCodec(1024), "abc".getBytes(StandardCharsets.US_ASCII), 4,
-                services, NetworkConfig.defaults());
+                services, ClientConfig.defaults());
         session.bindPlayer(player);
         session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
         session.transition(SessionState.HANDSHAKE_DONE, SessionState.AUTHENTICATED);

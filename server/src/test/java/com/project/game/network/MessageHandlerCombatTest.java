@@ -12,7 +12,7 @@ import com.project.game.network.packet.PlayerPacketWriter;
 import com.project.game.network.packet.MonsterPacketWriter;
 import com.project.game.monster.MonsterRuntimeFactory;
 import com.project.game.resource.GameResources;
-import com.project.game.service.ServerServices;
+import com.project.game.network.SessionServices;
 import com.project.game.player.PlayerProfile;
 import org.junit.jupiter.api.Test;
 
@@ -136,10 +136,10 @@ class MessageHandlerCombatTest {
         GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"));
         GameplayServices maps = new GameplayServices(new PlayerPacketWriter(), new MonsterPacketWriter(),
                 new MonsterRuntimeFactory(resources));
-        ServerServices services = TestServices.serverServices(TestServices.authService(), resources, maps);
+        SessionServices services = TestServices.serverServices(TestServices.authService(), resources, maps);
         Session session = inGameSession(services,
                 TestPlayerProfiles.initial(1L, 7, "alpha1", 0).withLocation(1, 0, 90, 1008));
-        MessageHandler handler = newHandler(session, services, NetworkConfig.defaults());
+        MessageHandler handler = newHandler(session, services, ClientConfig.defaults());
         maps.monsterSnapshots(1, 0);
 
         handler.onMessage(prepareMonster(7, 0));
@@ -178,10 +178,10 @@ class MessageHandlerCombatTest {
         GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"));
         GameplayServices maps = new GameplayServices(new PlayerPacketWriter(), new MonsterPacketWriter(),
                 new MonsterRuntimeFactory(resources));
-        ServerServices services = TestServices.serverServices(TestServices.authService(), resources, maps);
+        SessionServices services = TestServices.serverServices(TestServices.authService(), resources, maps);
         Session session = inGameSession(services,
                 TestPlayerProfiles.initial(1L, 7, "alpha1", 0).withLocation(1, 0, 90, 1008));
-        MessageHandler handler = newHandler(session, services, NetworkConfig.defaults());
+        MessageHandler handler = newHandler(session, services, ClientConfig.defaults());
         maps.finishLoad(session);
         try {
             drainMessages(session);

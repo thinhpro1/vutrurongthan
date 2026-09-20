@@ -4,8 +4,8 @@ import com.project.game.player.Appearance;
 import com.project.game.player.PlayerProfile;
 
 /** Validates values before they are narrowed to the legacy signed wire fields. */
-public final class LegacyPlayerCompatibilityValidator {
-    private LegacyPlayerCompatibilityValidator() {
+public final class PlayerPacketValidator {
+    private PlayerPacketValidator() {
     }
 
     public static void validateAddPlayer(PlayerProfile player) {

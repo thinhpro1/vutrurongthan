@@ -1,4 +1,4 @@
-package com.project.game.service;
+package com.project.game.network;
 
 import com.project.game.account.AuthService;
 import com.project.game.combat.CombatService;
@@ -10,9 +10,9 @@ import com.project.game.resource.GameResources;
 import java.util.Objects;
 
 /** Shared coarse services used by one accepted legacy session. */
-public record ServerServices(AuthService auth, GameResources resources, MapService maps,
+public record SessionServices(AuthService auth, GameResources resources, MapService maps,
                              CombatService combat, MonsterService monsters, PlayerService players) {
-    public ServerServices {
+    public SessionServices {
         Objects.requireNonNull(auth, "auth");
         Objects.requireNonNull(resources, "resources");
         Objects.requireNonNull(maps, "maps");

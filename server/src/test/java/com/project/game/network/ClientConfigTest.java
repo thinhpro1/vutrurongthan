@@ -10,7 +10,7 @@ import com.project.game.network.message.MessageName;
 import com.project.game.network.message.MessageWriter;
 import com.project.game.account.AuthService;
 import com.project.game.resource.GameResources;
-import com.project.game.service.ServerServices;
+import com.project.game.network.SessionServices;
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
@@ -20,14 +20,14 @@ import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-class NetworkConfigTest {
+class ClientConfigTest {
     @Test
     void readsClientCompatibilityValuesFromProperties() {
         Properties properties = new Properties();
         properties.setProperty("game.client.version", "0.9.6");
         properties.setProperty("game.client.login-version", "2");
 
-        NetworkConfig config = NetworkConfig.fromProperties(properties);
+        ClientConfig config = ClientConfig.fromProperties(properties);
 
         assertEquals("0.9.6", config.clientVersion());
         assertEquals(2, config.loginVersion());
@@ -36,7 +36,7 @@ class NetworkConfigTest {
     @Test
     void defaultResourceRootsStayUnderServerResources() throws IOException {
         Properties properties = new Properties();
-        try (InputStream input = NetworkConfigTest.class.getResourceAsStream("/application.properties")) {
+        try (InputStream input = ClientConfigTest.class.getResourceAsStream("/application.properties")) {
             properties.load(input);
         }
 
@@ -53,10 +53,10 @@ class NetworkConfigTest {
         SessionManager manager = new SessionManager();
         Session session = new Session(manager.nextId(), new TestTransport(), manager,
                 new LegacyPacketCodec(1024), "abc".getBytes(StandardCharsets.US_ASCII), 4,
-                TestServices.serverServices(auth, GameResources.unavailable()), NetworkConfig.defaults());
+                TestServices.serverServices(auth, GameResources.unavailable()), ClientConfig.defaults());
         session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
         MessageHandler handler = new MessageHandler(session,
-                TestServices.serverServices(auth, GameResources.unavailable()), new NetworkConfig("0.9.6", 2));
+                TestServices.serverServices(auth, GameResources.unavailable()), new ClientConfig("0.9.6", 2));
         MessageWriter login = new MessageWriter().writeUtf("0.9.5").writeUtf("user01")
                 .writeUtf("secret1").writeByte(1);
 

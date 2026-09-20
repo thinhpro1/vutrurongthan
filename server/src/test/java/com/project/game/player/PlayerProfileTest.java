@@ -13,7 +13,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class PlayerProfileTest {
     @Test
     void freshPlayerUsesJavaInitializationDefaults() {
-        PlayerProfile player = new PlayerInitialProfileFactory().createWithId(
+        PlayerProfile player = new PlayerProfileFactory().createWithId(
                 1, 101L, "alpha1", 0);
 
         assertEquals(101L, player.accountId());

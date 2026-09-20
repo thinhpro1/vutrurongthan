@@ -2,13 +2,13 @@ package com.project.game.map;
 import com.project.game.testsupport.TestPlayerProfiles;
 
 import com.project.game.testsupport.TestServices;
-import com.project.game.network.NetworkConfig;
+import com.project.game.network.ClientConfig;
 import com.project.game.network.Session;
 import com.project.game.network.SessionManager;
 import com.project.game.network.codec.LegacyPacketCodec;
 import com.project.game.network.transport.ClientTransport;
 import com.project.game.player.PlayerProfile;
-import com.project.game.service.ServerServices;
+import com.project.game.network.SessionServices;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
@@ -99,7 +99,7 @@ class ZoneTest {
         SessionManager manager = new SessionManager();
         Session session = new Session(manager.nextId(), new NoopTransport(), manager,
                 new LegacyPacketCodec(1024), "abc".getBytes(), 8,
-                TestServices.serverServices(), NetworkConfig.defaults());
+                TestServices.serverServices(), ClientConfig.defaults());
         if (player != null) {
             session.bindPlayer(player);
         }

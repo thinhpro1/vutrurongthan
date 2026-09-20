@@ -1,6 +1,6 @@
 package com.project.game.resource;
 
-import com.project.game.map.LegacyMapTemplate;
+import com.project.game.map.MapTemplate;
 import com.project.game.monster.LegacyMonsterCombatTemplate;
 import com.project.game.monster.LegacyMonsterDart;
 import com.project.game.monster.LegacyMonsterSpawn;
@@ -33,7 +33,7 @@ public final class GameResources {
     private final int imageVersion;
     private final List<FrameTemplate> frames;
     private final Map<Integer, List<LegacyPlayerSkill>> playerSkills;
-    private final Map<Integer, LegacyMapTemplate> maps;
+    private final Map<Integer, MapTemplate> maps;
     private final List<LegacyLevel> levels;
     private final List<LegacyEffectImage> effects;
     private final int monsterVersion;
@@ -47,7 +47,7 @@ public final class GameResources {
             int imageVersion,
             List<FrameTemplate> frames,
             Map<Integer, List<LegacyPlayerSkill>> playerSkills,
-            Map<Integer, LegacyMapTemplate> maps,
+            Map<Integer, MapTemplate> maps,
             List<LegacyLevel> levels,
             List<LegacyEffectImage> effects,
             int monsterVersion,
@@ -116,7 +116,7 @@ public final class GameResources {
         return playerSkills.getOrDefault(gender, List.of());
     }
 
-    public Optional<LegacyMapTemplate> map(int mapId) {
+    public Optional<MapTemplate> map(int mapId) {
         return Optional.ofNullable(maps.get(mapId));
     }
 

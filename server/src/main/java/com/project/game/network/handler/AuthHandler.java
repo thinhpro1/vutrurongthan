@@ -1,7 +1,7 @@
 package com.project.game.network.handler;
 
 import com.project.game.account.AuthService;
-import com.project.game.network.NetworkConfig;
+import com.project.game.network.ClientConfig;
 import com.project.game.network.Session;
 import com.project.game.network.SessionState;
 import com.project.game.network.message.Message;
@@ -17,11 +17,11 @@ final class AuthHandler {
     private final Session session;
     private final AuthService authService;
     private final PlayerService playerService;
-    private final NetworkConfig networkConfig;
+    private final ClientConfig networkConfig;
     private final PlayerHandler playerHandler;
 
     AuthHandler(Session session, AuthService authService, PlayerService playerService,
-                NetworkConfig networkConfig, PlayerHandler playerHandler) {
+                ClientConfig networkConfig, PlayerHandler playerHandler) {
         this.session = session;
         this.authService = authService;
         this.playerService = playerService;

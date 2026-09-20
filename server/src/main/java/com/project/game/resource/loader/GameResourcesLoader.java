@@ -1,6 +1,6 @@
 package com.project.game.resource.loader;
 
-import com.project.game.map.LegacyMapTemplate;
+import com.project.game.map.MapTemplate;
 import com.project.game.monster.LegacyMonsterCombatTemplate;
 import com.project.game.monster.LegacyMonsterDart;
 import com.project.game.monster.LegacyMonsterSpawn;
@@ -48,7 +48,7 @@ public final class GameResourcesLoader {
         List<FrameTemplate> frames = FrameLoader.load(jsonRoot);
         Map<Integer, List<LegacyPlayerSkill>> playerSkills =
                 PlayerSkillLoader.load(jsonRoot, required);
-        Map<Integer, LegacyMapTemplate> maps = MapLoader.load(jsonRoot, required);
+        Map<Integer, MapTemplate> maps = MapLoader.load(jsonRoot, required);
         List<LegacyLevel> levels = LevelLoader.load(jsonRoot, required);
         List<LegacyEffectImage> effects = EffectLoader.load(jsonRoot, required);
         MonsterLoader.LoadedMonsters monsters = MonsterLoader.load(jsonRoot, required);

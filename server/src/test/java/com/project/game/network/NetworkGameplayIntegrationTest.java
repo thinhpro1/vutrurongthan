@@ -53,7 +53,7 @@ class NetworkGameplayIntegrationTest {
                 "127.0.0.1", 0, 4, 262_144, 16, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
                 TestServices.serverServices(auth, resources, maps), null,
-                NetworkConfig.defaults());
+                ClientConfig.defaults());
         AtomicReference<Throwable> serverFailure = new AtomicReference<>();
         Thread serverThread = Thread.ofVirtual().start(() -> {
             try {
@@ -196,7 +196,7 @@ class NetworkGameplayIntegrationTest {
                 "127.0.0.1", 0, 2, 262_144, 8, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
                 TestServices.serverServices(auth, resources), null,
-                NetworkConfig.defaults());
+                ClientConfig.defaults());
         AtomicReference<Throwable> serverFailure = new AtomicReference<>();
         Thread serverThread = Thread.ofVirtual().start(() -> {
             try {
@@ -239,7 +239,7 @@ class NetworkGameplayIntegrationTest {
         NetworkServer server = new NetworkServer("127.0.0.1", 0, 2, 262_144, 8, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
                 TestServices.serverServices(auth, resources), null,
-                NetworkConfig.defaults());
+                ClientConfig.defaults());
         AtomicReference<Throwable> serverFailure = new AtomicReference<>();
         Thread serverThread = Thread.ofVirtual().start(() -> {
             try {
@@ -313,7 +313,7 @@ class NetworkGameplayIntegrationTest {
         NetworkServer server = new NetworkServer("127.0.0.1", 0, 4, 262_144, 16, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
                 TestServices.serverServices(auth, resources, maps), null,
-                NetworkConfig.defaults());
+                ClientConfig.defaults());
         AtomicReference<Throwable> serverFailure = new AtomicReference<>();
         Thread serverThread = Thread.ofVirtual().start(() -> {
             try {
@@ -397,7 +397,7 @@ class NetworkGameplayIntegrationTest {
                 "127.0.0.1", 0, 4, 262_144, 16, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
                 TestServices.serverServices(auth, resources, maps), null,
-                NetworkConfig.defaults());
+                ClientConfig.defaults());
         AtomicReference<Throwable> serverFailure = new AtomicReference<>();
         Thread serverThread = Thread.ofVirtual().start(() -> {
             try {
@@ -493,7 +493,7 @@ class NetworkGameplayIntegrationTest {
                 "127.0.0.1", 0, 4, 262_144, 16, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
                 TestServices.serverServices(auth, resources, maps), null,
-                NetworkConfig.defaults());
+                ClientConfig.defaults());
         AtomicReference<Throwable> serverFailure = new AtomicReference<>();
         Thread serverThread = Thread.ofVirtual().start(() -> {
             try {
@@ -558,7 +558,7 @@ class NetworkGameplayIntegrationTest {
                 "127.0.0.1", 0, 4, 262_144, 16, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
                 TestServices.serverServices(auth, resources, maps), null,
-                NetworkConfig.defaults());
+                ClientConfig.defaults());
         AtomicReference<Throwable> serverFailure = new AtomicReference<>();
         Thread serverThread = Thread.ofVirtual().start(() -> {
             try {
@@ -689,7 +689,7 @@ class NetworkGameplayIntegrationTest {
                 "127.0.0.1", 0, 4, 262_144, 16, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
                 TestServices.serverServices(auth, resources, maps), null,
-                NetworkConfig.defaults());
+                ClientConfig.defaults());
         AtomicReference<Throwable> serverFailure = new AtomicReference<>();
         Thread serverThread = Thread.ofVirtual().start(() -> {
             try {
@@ -772,7 +772,7 @@ class NetworkGameplayIntegrationTest {
                 "127.0.0.1", 0, 4, 262_144, 16, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
                 TestServices.serverServices(auth, resources, maps), null,
-                NetworkConfig.defaults());
+                ClientConfig.defaults());
         AtomicReference<Throwable> serverFailure = new AtomicReference<>();
         Thread serverThread = Thread.ofVirtual().start(() -> {
             try {
@@ -896,7 +896,7 @@ class NetworkGameplayIntegrationTest {
                 "127.0.0.1", 0, 2, 262_144, 8, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
                 TestServices.serverServices(auth, resources, maps), null,
-                NetworkConfig.defaults());
+                ClientConfig.defaults());
         AtomicReference<Throwable> serverFailure = new AtomicReference<>();
         Thread serverThread = Thread.ofVirtual().start(() -> {
             try {
@@ -961,7 +961,7 @@ class NetworkGameplayIntegrationTest {
                 "abc".getBytes(StandardCharsets.US_ASCII),
                 TestServices.serverServices(auth, resources),
                 null,
-                NetworkConfig.defaults());
+                ClientConfig.defaults());
         AtomicReference<Throwable> serverFailure = new AtomicReference<>();
         Thread serverThread = Thread.ofVirtual().start(() -> {
             try {

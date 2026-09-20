@@ -4,7 +4,7 @@ import com.project.game.persistence.player.DuplicatePlayerException;
 import com.project.game.persistence.player.PlayerRecord;
 import com.project.game.persistence.player.PlayerRepository;
 import com.project.game.persistence.player.PlayerRepositoryException;
-import com.project.game.player.PlayerInitialProfileFactory;
+import com.project.game.player.PlayerProfileFactory;
 import com.project.game.player.PlayerProfile;
 
 import java.time.Clock;
@@ -20,14 +20,14 @@ public final class PlayerService {
     private static final String SYSTEM_BUSY = "Hệ thống đang bận, vui lòng thử lại";
 
     private final PlayerRepository repository;
-    private final PlayerInitialProfileFactory initialFactory;
+    private final PlayerProfileFactory initialFactory;
     private final Clock clock;
 
     public PlayerService(PlayerRepository repository) {
-        this(repository, new PlayerInitialProfileFactory(), Clock.systemUTC());
+        this(repository, new PlayerProfileFactory(), Clock.systemUTC());
     }
 
-    public PlayerService(PlayerRepository repository, PlayerInitialProfileFactory initialFactory,
+    public PlayerService(PlayerRepository repository, PlayerProfileFactory initialFactory,
                           Clock clock) {
         this.repository = Objects.requireNonNull(repository, "repository");
         this.initialFactory = Objects.requireNonNull(initialFactory, "initialFactory");

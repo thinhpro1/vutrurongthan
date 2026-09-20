@@ -1,6 +1,6 @@
 package com.project.game.network.handler;
 
-import com.project.game.network.NetworkConfig;
+import com.project.game.network.ClientConfig;
 import com.project.game.network.Session;
 import com.project.game.network.message.Message;
 import com.project.game.network.message.MessageName;
@@ -11,9 +11,9 @@ import java.io.IOException;
 /** Handles the legacy connection handshake and version response. */
 final class ConnectionHandler {
     private final Session session;
-    private final NetworkConfig networkConfig;
+    private final ClientConfig networkConfig;
 
-    ConnectionHandler(Session session, NetworkConfig networkConfig) {
+    ConnectionHandler(Session session, ClientConfig networkConfig) {
         this.session = session;
         this.networkConfig = networkConfig;
     }

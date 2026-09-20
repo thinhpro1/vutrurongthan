@@ -1,11 +1,11 @@
 package com.project.game.network.handler;
 
-import com.project.game.network.NetworkConfig;
+import com.project.game.network.ClientConfig;
 import com.project.game.network.Session;
 import com.project.game.network.SessionState;
 import com.project.game.network.message.Message;
 import com.project.game.network.message.MessageName;
-import com.project.game.service.ServerServices;
+import com.project.game.network.SessionServices;
 
 import java.io.IOException;
 import java.util.Objects;
@@ -24,7 +24,7 @@ public final class MessageHandler {
     private final MapHandler mapHandler;
     private final CombatHandler combatHandler;
 
-    public MessageHandler(Session session, ServerServices services, NetworkConfig networkConfig) {
+    public MessageHandler(Session session, SessionServices services, ClientConfig networkConfig) {
         this.session = Objects.requireNonNull(session, "session");
         services = Objects.requireNonNull(services, "services");
         networkConfig = Objects.requireNonNull(networkConfig, "networkConfig");

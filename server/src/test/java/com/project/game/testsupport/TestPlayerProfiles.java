@@ -1,10 +1,10 @@
 package com.project.game.testsupport;
 
-import com.project.game.player.PlayerInitialProfileFactory;
+import com.project.game.player.PlayerProfileFactory;
 import com.project.game.player.PlayerProfile;
 
 public final class TestPlayerProfiles {
-    private static final PlayerInitialProfileFactory FACTORY = new PlayerInitialProfileFactory();
+    private static final PlayerProfileFactory FACTORY = new PlayerProfileFactory();
 
     private TestPlayerProfiles() {
     }

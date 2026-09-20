@@ -1,7 +1,7 @@
 package com.project.game.map;
 
 /** A canonical legacy map transition point and its destination spawn. */
-public record LegacyWaypoint(
+public record Waypoint(
         int id,
         int goMap,
         int x,

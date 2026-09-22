@@ -5,7 +5,6 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.project.game.map.MapData;
-import com.project.game.map.MapTemplate;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -16,7 +15,6 @@ import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.util.HexFormat;
 import java.util.List;
-import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -29,12 +27,10 @@ class MapDataLoaderTest {
     private static final MapDataLoader LOADER = new MapDataLoader();
 
     @Test
-    void loadsProductionMapsAndMatchesLegacyStaticFixture() throws Exception {
-        Map<Integer, MapTemplate> legacy = MapLoader.load(Path.of("resources", "json"), true);
-
-        assertMatchesLegacy(LOADER.load(PRODUCTION_MAP_ROOT, 1), 1, legacy.get(0),
+    void loadsProductionMapsAndPinsReviewedStaticFidelity() throws Exception {
+        assertProductionGridMap(LOADER.load(PRODUCTION_MAP_ROOT, 1), 1, 0,
                 "9d27d23a843599772be153cc4c94ca4b19d30403c66cb07457afb2df467a1229");
-        assertMatchesLegacy(LOADER.load(PRODUCTION_MAP_ROOT, 2), 2, legacy.get(1),
+        assertProductionGridMap(LOADER.load(PRODUCTION_MAP_ROOT, 2), 2, 1,
                 "12ab5df64139502d93e61d4049bae5a5ed0639a0bb70623312b082f449ce7365");
     }
 
@@ -255,23 +251,23 @@ class MapDataLoaderTest {
         assertRejected(root, shortPlatform);
     }
 
-    private static void assertMatchesLegacy(
-            MapData actual, int expectedId, MapTemplate legacy, String expectedHash) throws Exception {
+    private static void assertProductionGridMap(
+            MapData actual, int expectedId, int expectedTerrain, String expectedHash) throws Exception {
         assertEquals(expectedId, actual.id());
-        assertEquals(legacy.iconId(), actual.terrain());
-        assertEquals(legacy.row(), actual.row());
-        assertEquals(legacy.column(), actual.column());
-        assertEquals(legacy.column() * MapData.TILE_SIZE, actual.width());
-        assertEquals(legacy.row() * MapData.TILE_SIZE, actual.height());
-        assertEquals(List.copyOf(legacy.colorsBgr().get(0)), actual.background().skyColor());
+        assertEquals(expectedTerrain, actual.terrain());
+        assertEquals(20, actual.row());
+        assertEquals(62, actual.column());
+        assertEquals(4464, actual.width());
+        assertEquals(1440, actual.height());
+        assertEquals(List.of(128, 213, 242), actual.background().skyColor());
         assertEquals(3, actual.background().layers().size());
-        for (int index = 0; index < 3; index++) {
-            MapData.Layer layer = actual.background().layers().get(index);
-            assertEquals(legacy.imagesBgr().get(index), layer.image());
-            assertEquals(List.copyOf(legacy.colorsBgr().get(index + 1)), layer.fillColor());
-        }
+        assertEquals(51, actual.background().layers().get(0).image());
+        assertEquals(List.of(141, 185, 128), actual.background().layers().get(0).fillColor());
+        assertEquals(52, actual.background().layers().get(1).image());
+        assertEquals(List.of(90, 154, 64), actual.background().layers().get(1).fillColor());
+        assertEquals(53, actual.background().layers().get(2).image());
+        assertEquals(List.of(69, 153, 51), actual.background().layers().get(2).fillColor());
         assertEquals(MapData.CollisionType.GRID, actual.collision().type());
-        assertEquals(legacy.data(), actual.collision().data());
         assertTrue(actual.collision().lines().isEmpty());
         assertEquals(expectedHash, HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
                 .digest(actual.collision().data().getBytes(StandardCharsets.UTF_8))));

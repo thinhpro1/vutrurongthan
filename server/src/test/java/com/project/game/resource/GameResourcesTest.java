@@ -106,6 +106,16 @@ class GameResourcesTest {
     }
 
     @Test
+    void fromFrameRootDoesNotInspectLegacyMapBootstrap(@TempDir Path root) throws IOException {
+        Files.copy(Path.of("resources", "json", "Frame.json"), root.resolve("Frame.json"));
+        Files.writeString(root.resolve("MapBootstrap.json"), "not-json");
+
+        GameResources resources = GameResources.fromFrameRoot(root);
+
+        assertTrue(resources.map(0).isEmpty());
+    }
+
+    @Test
     void fromRootsRequiresAllSupportedBootstraps(@TempDir Path root) throws IOException {
         Files.copy(Path.of("resources", "json", "Frame.json"), root.resolve("Frame.json"));
 

@@ -4,6 +4,7 @@ import com.project.game.testsupport.TestPlayerProfiles;
 import com.project.game.testsupport.TestServices;
 
 import com.project.game.testsupport.GameplayServices;
+import com.project.game.testsupport.MapTestSupport;
 import com.project.game.map.Zone;
 import com.project.game.network.handler.MessageHandler;
 import com.project.game.network.message.Message;
@@ -40,7 +41,8 @@ class MessageHandlerMapTest {
 
     @Test
     void changesMapOnlyWhenInsideSupportedWaypoint() throws Exception {
-        GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"));
+        GameResources resources = GameResources.fromFrameRoot(
+                Path.of("resources", "json"), MapTestSupport.canonicalMaps());
         GameplayServices maps = new GameplayServices(
                 new PlayerPacketWriter(),
                 new MonsterPacketWriter(),
@@ -106,7 +108,8 @@ class MessageHandlerMapTest {
 
     @Test
     void requestChangeMapOutsideWaypointIsNoOp() throws Exception {
-        GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"));
+        GameResources resources = GameResources.fromFrameRoot(
+                Path.of("resources", "json"), MapTestSupport.canonicalMaps());
         GameplayServices maps = new GameplayServices(
                 new PlayerPacketWriter(),
                 new MonsterPacketWriter(),
@@ -127,7 +130,8 @@ class MessageHandlerMapTest {
 
     @Test
     void requestChangeMapPreservesAuthoritativeHpChangedBeforeZoneTransition() throws Exception {
-        GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"));
+        GameResources resources = GameResources.fromFrameRoot(
+                Path.of("resources", "json"), MapTestSupport.canonicalMaps());
         GameplayServices maps = new GameplayServices(
                 new PlayerPacketWriter(),
                 new MonsterPacketWriter(),
@@ -158,7 +162,8 @@ class MessageHandlerMapTest {
 
     @Test
     void requestChangeMapRejectsNonEmptyPayload() {
-        GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"));
+        GameResources resources = GameResources.fromFrameRoot(
+                Path.of("resources", "json"), MapTestSupport.canonicalMaps());
         Session session = inGameSession(TestServices.serverServices(TestServices.authService(), resources),
                 TestPlayerProfiles.initial(1L, 7, "alpha1", 0));
 
@@ -170,7 +175,8 @@ class MessageHandlerMapTest {
 
     @Test
     void mapInfoRevisitUsesCachedTemplateLayout() throws Exception {
-        GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"));
+        GameResources resources = GameResources.fromFrameRoot(
+                Path.of("resources", "json"), MapTestSupport.canonicalMaps());
         Session session = inGameSession(TestServices.serverServices(TestServices.authService(), resources),
                 TestPlayerProfiles.initial(1L, 7, "alpha1", 0)
                         .withLocation(0, 0, 4464, 936));

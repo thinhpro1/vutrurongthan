@@ -1,6 +1,7 @@
 package com.project.game.resource.loader;
 
 import com.project.game.map.MapData;
+import com.project.game.map.MapTemplate;
 import com.project.game.map.Waypoint;
 import com.project.game.persistence.map.MapRepository;
 import org.junit.jupiter.api.Test;
@@ -12,11 +13,13 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import java.util.ArrayList;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class MapCatalogLoaderTest {
     private static final Path PRODUCTION_MAP_ROOT = Path.of("resources", "maps");
@@ -32,7 +35,7 @@ class MapCatalogLoaderTest {
                         waypoint(21, 0, 1, 10, 20, 0, 30, 40),
                         waypoint(30, 1, 0, 0, 0, 0, 4464, 1440)));
 
-        Map<Integer, MapCatalogLoader.LoadedMap> catalog =
+        Map<Integer, MapTemplate> catalog =
                 MapCatalogLoader.load(repository, PRODUCTION_MAP_ROOT);
 
         assertEquals(1, repository.mapCalls);
@@ -66,7 +69,7 @@ class MapCatalogLoaderTest {
                         map(11, "Second", "ONLINE", "EARTH", 1, 1, 1, 1, true)),
                 List.of());
 
-        Map<Integer, MapCatalogLoader.LoadedMap> catalog =
+        Map<Integer, MapTemplate> catalog =
                 MapCatalogLoader.load(repository, PRODUCTION_MAP_ROOT);
 
         assertSame(catalog.get(10).data(), catalog.get(11).data());
@@ -80,7 +83,7 @@ class MapCatalogLoaderTest {
                         map(99, "Disabled", "OFFLINE", "COLD", 1, 1, 1, 999, false)),
                 List.of());
 
-        Map<Integer, MapCatalogLoader.LoadedMap> catalog =
+        Map<Integer, MapTemplate> catalog =
                 MapCatalogLoader.load(repository, PRODUCTION_MAP_ROOT);
 
         assertEquals(1, catalog.size());
@@ -95,7 +98,7 @@ class MapCatalogLoaderTest {
                         map(1, "Disabled", "OFFLINE", "COLD", 1, 1, 1, 999, false)),
                 List.of(waypoint(7, 1, 0, 0, 0, 0, 0, 0)));
 
-        Map<Integer, MapCatalogLoader.LoadedMap> catalog =
+        Map<Integer, MapTemplate> catalog =
                 MapCatalogLoader.load(repository, PRODUCTION_MAP_ROOT);
 
         assertEquals(List.of(), catalog.get(0).waypoints());
@@ -164,6 +167,54 @@ class MapCatalogLoaderTest {
         Files.writeString(root.resolve("1.json"), "{}", StandardCharsets.UTF_8);
         assertThrows(IllegalArgumentException.class,
                 () -> MapCatalogLoader.load(repository(List.of(map), List.of()), root));
+    }
+
+    @Test
+    void rejectsEnabledPlatformCollisionBeforeGameplayComposition(@TempDir Path root) throws IOException {
+        Files.writeString(root.resolve("1.json"), """
+                {
+                  "terrain": 0,
+                  "row": 1,
+                  "column": 1,
+                  "background": {
+                    "skyColor": [0, 0, 0],
+                    "layers": [
+                      {"image": -1, "fillColor": [0, 0, 0]},
+                      {"image": -1, "fillColor": [0, 0, 0]},
+                      {"image": -1, "fillColor": [0, 0, 0]}
+                    ]
+                  },
+                  "collision": {
+                    "type": "LINE",
+                    "lines": [
+                      {"type": "PLATFORM", "points": [[0, 0], [72, 0]]}
+                    ]
+                  }
+                }
+                """, StandardCharsets.UTF_8);
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                () -> MapCatalogLoader.load(repository(
+                        List.of(map(0, "Platform map", "ONLINE", "EARTH", 1, 1, 1, 1, true)),
+                        List.of()), root));
+
+        assertTrue(exception.getMessage().contains("PLATFORM"));
+    }
+
+    @Test
+    void MapTemplateCopiesWaypointsAndRejectsNullOwnedObjects() {
+        MapData data = MapDataLoader.load(PRODUCTION_MAP_ROOT, 1);
+        List<Waypoint> waypoints = new ArrayList<>();
+        waypoints.add(new Waypoint(1, 0, 0, 0, 0, 0, 0));
+
+        MapTemplate template = new MapTemplate(
+                0, "Map0", "ONLINE", "EARTH", 1, 1, 1, 1, data, waypoints);
+        waypoints.clear();
+
+        assertEquals(1, template.waypoints().size());
+        assertThrows(NullPointerException.class, () -> new MapTemplate(
+                0, "Map0", "ONLINE", "EARTH", 1, 1, 1, 1, data,
+                new ArrayList<>(List.of((Waypoint) null))));
     }
 
     @Test

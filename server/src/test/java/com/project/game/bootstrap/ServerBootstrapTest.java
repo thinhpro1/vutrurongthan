@@ -11,6 +11,7 @@ import com.project.game.network.codec.LegacyPacketCodec;
 import com.project.game.network.transport.ClientTransport;
 import com.project.game.persistence.DatabaseConfig;
 import com.project.game.persistence.DatabaseManager;
+import com.project.game.persistence.map.MapRepository;
 import com.project.game.persistence.player.PlayerRecord;
 import com.project.game.persistence.player.PlayerRepository;
 import com.project.game.player.PlayerProfile;
@@ -28,13 +29,18 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.lang.reflect.Proxy;
 import java.net.ServerSocket;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.Driver;
 import java.sql.DriverManager;
 import java.sql.DriverPropertyInfo;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
 import java.util.Optional;
+import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -44,6 +50,7 @@ import java.util.logging.Logger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -97,9 +104,7 @@ class ServerBootstrapTest {
 
     @Test
     void closesDatabaseManagerWhenBootstrapCompositionFailsAfterDatabaseCreation() {
-        Properties properties = new Properties();
-        properties.setProperty("game.resource.icon-dir", "");
-        properties.setProperty("game.resource.json-dir", "");
+        Properties properties = startupProperties();
         properties.setProperty("game.resource.image-version", "not-a-number");
         AtomicReference<DatabaseManager> createdManager = new AtomicReference<>();
         Supplier<DatabaseManager> managerFactory = () -> {
@@ -108,10 +113,97 @@ class ServerBootstrapTest {
             return manager;
         };
 
-        assertThrows(NumberFormatException.class,
-                () -> ServerBootstrap.fromProperties(properties, managerFactory));
+        assertThrows(NumberFormatException.class, () -> ServerBootstrap.fromProperties(
+                properties, managerFactory, ignored -> mapRepository(canonicalMapRows())));
 
         assertTrue(isClosed(createdManager.get()));
+    }
+
+    @Test
+    void loadsMapCatalogBeforeReturningBootstrapAndLeavesNetworkStartExplicit() {
+        AtomicReference<DatabaseManager> createdManager = new AtomicReference<>();
+        ServerBootstrap bootstrap = ServerBootstrap.fromProperties(
+                startupProperties(), () -> {
+                    DatabaseManager manager = databaseManager();
+                    createdManager.set(manager);
+                    return manager;
+                }, ignored -> mapRepository(canonicalMapRows()));
+
+        assertFalse(isClosed(createdManager.get()));
+
+        bootstrap.stop();
+        assertTrue(isClosed(createdManager.get()));
+    }
+
+    @Test
+    void emptyEnabledMapCatalogFailsBeforeNetworkConstructionAndClosesDatabase() {
+        AtomicReference<DatabaseManager> createdManager = new AtomicReference<>();
+        IllegalStateException failure = assertThrows(IllegalStateException.class,
+                () -> ServerBootstrap.fromProperties(
+                        startupProperties(), () -> {
+                            DatabaseManager manager = databaseManager();
+                            createdManager.set(manager);
+                            return manager;
+                        }, ignored -> mapRepository(List.of())));
+
+        assertEquals("enabled map catalog is empty", failure.getMessage());
+        assertTrue(isClosed(createdManager.get()));
+    }
+
+    @Test
+    void missingEnabledMapZeroFailsBeforeNetworkConstructionAndClosesDatabase() {
+        AtomicReference<DatabaseManager> createdManager = new AtomicReference<>();
+        IllegalStateException failure = assertThrows(IllegalStateException.class,
+                () -> ServerBootstrap.fromProperties(
+                        startupProperties(), () -> {
+                            DatabaseManager manager = databaseManager();
+                            createdManager.set(manager);
+                            return manager;
+                        }, ignored -> mapRepository(List.of(
+                                new MapRepository.MapRow(
+                                        1, "Bờ sông Pu", "OFFLINE", "NAMEK", 1, 3, 40, 2, true)))));
+
+        assertEquals("enabled map 0 is required", failure.getMessage());
+        assertTrue(isClosed(createdManager.get()));
+    }
+
+    @Test
+    void mapCatalogFailureClosesDatabaseBeforeNetworkConstruction() {
+        AtomicReference<DatabaseManager> createdManager = new AtomicReference<>();
+        IllegalStateException failure = assertThrows(IllegalStateException.class,
+                () -> ServerBootstrap.fromProperties(
+                        startupProperties(), () -> {
+                            DatabaseManager manager = databaseManager();
+                            createdManager.set(manager);
+                            return manager;
+                        }, ignored -> new MapRepository() {
+                            @Override
+                            public List<MapRow> findAllMaps() {
+                                throw new IllegalStateException("map catalog failure");
+                            }
+
+                            @Override
+                            public List<WaypointRow> findAllWaypoints() {
+                                return List.of();
+                            }
+                        }));
+
+        assertEquals("map catalog failure", failure.getMessage());
+        assertTrue(isClosed(createdManager.get()));
+    }
+
+    @Test
+    void honorsConfiguredMapDataDirectory(@org.junit.jupiter.api.io.TempDir Path mapRoot)
+            throws Exception {
+        Files.copy(Path.of("resources", "maps", "1.json"), mapRoot.resolve("1.json"));
+        Properties properties = startupProperties();
+        properties.setProperty("game.resource.map-dir", mapRoot.toString());
+
+        ServerBootstrap bootstrap = ServerBootstrap.fromProperties(
+                properties, ServerBootstrapTest::databaseManager,
+                ignored -> mapRepository(canonicalMapRows()));
+
+        assertDoesNotThrow(bootstrap::stop);
     }
 
     @Test
@@ -245,6 +337,36 @@ class ServerBootstrapTest {
                 ClientConfig.defaults());
     }
 
+    private static Properties startupProperties() {
+        Properties properties = new Properties();
+        properties.setProperty("game.network.host", "127.0.0.1");
+        properties.setProperty("game.network.port", "0");
+        properties.setProperty("game.resource.icon-dir", "");
+        properties.setProperty("game.resource.json-dir", "resources/json");
+        properties.setProperty("game.resource.map-dir", "resources/maps");
+        properties.setProperty("game.resource.image-version", "2");
+        return properties;
+    }
+
+    private static List<MapRepository.MapRow> canonicalMapRows() {
+        return List.of(new MapRepository.MapRow(
+                0, "Núi Paozu", "ONLINE", "EARTH", 1, 3, 40, 1, true));
+    }
+
+    private static MapRepository mapRepository(List<MapRepository.MapRow> maps) {
+        return new MapRepository() {
+            @Override
+            public List<MapRow> findAllMaps() {
+                return maps;
+            }
+
+            @Override
+            public List<WaypointRow> findAllWaypoints() {
+                return List.of();
+            }
+        };
+    }
+
     private static DatabaseManager databaseManager() {
         Properties properties = new Properties();
         properties.setProperty("game.db.url", TEST_JDBC_URL);
@@ -296,6 +418,23 @@ class ServerBootstrapTest {
                 return null;
             }
             AtomicBoolean closed = new AtomicBoolean();
+            ResultSet emptyResultSet = (ResultSet) Proxy.newProxyInstance(
+                    ResultSet.class.getClassLoader(),
+                    new Class<?>[]{ResultSet.class},
+                    (proxy, method, arguments) -> switch (method.getName()) {
+                        case "next" -> false;
+                        case "close" -> null;
+                        default -> defaultValue(method.getReturnType());
+                    });
+            PreparedStatement statement = (PreparedStatement) Proxy.newProxyInstance(
+                    PreparedStatement.class.getClassLoader(),
+                    new Class<?>[]{PreparedStatement.class},
+                    (proxy, method, arguments) -> switch (method.getName()) {
+                        case "executeQuery" -> emptyResultSet;
+                        case "close", "setString", "setLong", "setInt", "setBytes",
+                                "setTimestamp" -> null;
+                        default -> defaultValue(method.getReturnType());
+                    });
             return (Connection) Proxy.newProxyInstance(
                     Connection.class.getClassLoader(),
                     new Class<?>[]{Connection.class},
@@ -308,6 +447,7 @@ class ServerBootstrapTest {
                         case "isValid" -> true;
                         case "getAutoCommit" -> true;
                         case "getTransactionIsolation" -> Connection.TRANSACTION_READ_COMMITTED;
+                        case "prepareStatement" -> statement;
                         case "equals" -> proxy == arguments[0];
                         case "hashCode" -> System.identityHashCode(proxy);
                         case "toString" -> "LifecycleTestConnection";
@@ -347,6 +487,9 @@ class ServerBootstrapTest {
     }
 
     private static Object defaultValue(Class<?> type) {
+        if (type == void.class) {
+            return null;
+        }
         if (!type.isPrimitive()) {
             return null;
         }

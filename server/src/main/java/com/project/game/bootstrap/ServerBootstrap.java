@@ -14,9 +14,13 @@ import com.project.game.network.transport.TlsContextFactory;
 import com.project.game.persistence.DatabaseConfig;
 import com.project.game.persistence.DatabaseManager;
 import com.project.game.persistence.account.JdbcAccountRepository;
+import com.project.game.persistence.map.JdbcMapRepository;
+import com.project.game.persistence.map.MapRepository;
 import com.project.game.persistence.player.JdbcPlayerRepository;
 import com.project.game.player.PlayerService;
 import com.project.game.resource.GameResources;
+import com.project.game.map.MapTemplate;
+import com.project.game.resource.loader.MapCatalogLoader;
 import com.project.game.network.SessionServices;
 
 import javax.net.ssl.SSLContext;
@@ -25,7 +29,10 @@ import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Properties;
+import java.util.Map;
+import java.nio.file.Path;
 import java.util.function.Supplier;
+import java.util.function.Function;
 
 /** Creates the application services and owns their shared database lifecycle. */
 public final class ServerBootstrap {
@@ -55,8 +62,17 @@ public final class ServerBootstrap {
     static ServerBootstrap fromProperties(
             Properties properties,
             Supplier<DatabaseManager> databaseManagerFactory) {
+        return fromProperties(properties, databaseManagerFactory,
+                manager -> new JdbcMapRepository(manager.dataSource()));
+    }
+
+    static ServerBootstrap fromProperties(
+            Properties properties,
+            Supplier<DatabaseManager> databaseManagerFactory,
+            Function<DatabaseManager, MapRepository> mapRepositoryFactory) {
         Objects.requireNonNull(properties, "properties");
         Objects.requireNonNull(databaseManagerFactory, "databaseManagerFactory");
+        Objects.requireNonNull(mapRepositoryFactory, "mapRepositoryFactory");
 
         String transport = properties.getProperty("game.network.transport", "LEGACY_TCP").trim();
         SSLContext tlsContext;
@@ -72,7 +88,13 @@ public final class ServerBootstrap {
 
         DatabaseManager databaseManager = databaseManagerFactory.get();
         try {
-            GameResources resources = loadResources(properties);
+            MapRepository mapRepository = Objects.requireNonNull(
+                    mapRepositoryFactory.apply(databaseManager), "mapRepository");
+            Path mapDataRoot = requiredPath(properties, "game.resource.map-dir");
+            Map<Integer, MapTemplate> mapCatalog =
+                    MapCatalogLoader.load(mapRepository, mapDataRoot);
+            requireEnabledMaps(mapCatalog);
+            GameResources resources = loadResources(properties, mapCatalog);
             MonsterFactory monsterFactory = new MonsterFactory(resources);
             PlayerPacketWriter playerPackets = new PlayerPacketWriter();
             MonsterPacketWriter monsterPackets = new MonsterPacketWriter();
@@ -138,21 +160,39 @@ public final class ServerBootstrap {
         return Integer.parseInt(properties.getProperty(key, Integer.toString(fallback)));
     }
 
-    private static GameResources loadResources(Properties properties) {
+    private static GameResources loadResources(
+            Properties properties, Map<Integer, MapTemplate> maps) {
         String configuredIconRoot = properties.getProperty("game.resource.icon-dir", "").trim();
         String configuredJsonRoot = properties.getProperty("game.resource.json-dir", "").trim();
         int imageVersion = integer(properties, "game.resource.image-version", -1);
         java.nio.file.Path iconRoot = configuredIconRoot.isEmpty()
                 ? null : java.nio.file.Path.of(configuredIconRoot);
         if (configuredJsonRoot.isEmpty()) {
-            return iconRoot == null
-                    ? GameResources.unavailable()
-                    : GameResources.fromIconRoot(iconRoot, imageVersion);
+            throw new IllegalStateException(
+                    "game.resource.json-dir must be configured for normal startup");
         }
         return GameResources.fromRoots(
                 iconRoot,
                 java.nio.file.Path.of(configuredJsonRoot),
-                imageVersion);
+                imageVersion,
+                maps);
+    }
+
+    private static Path requiredPath(Properties properties, String key) {
+        String configured = properties.getProperty(key, "").trim();
+        if (configured.isEmpty()) {
+            throw new IllegalStateException(key + " must be configured for normal startup");
+        }
+        return Path.of(configured);
+    }
+
+    private static void requireEnabledMaps(Map<Integer, MapTemplate> maps) {
+        if (maps.isEmpty()) {
+            throw new IllegalStateException("enabled map catalog is empty");
+        }
+        if (!maps.containsKey(0)) {
+            throw new IllegalStateException("enabled map 0 is required");
+        }
     }
 
     static void overlaySystemProperties(Properties properties) {

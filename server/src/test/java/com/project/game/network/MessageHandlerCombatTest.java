@@ -4,6 +4,7 @@ import com.project.game.testsupport.TestPlayerProfiles;
 import com.project.game.testsupport.TestServices;
 
 import com.project.game.testsupport.GameplayServices;
+import com.project.game.testsupport.MapTestSupport;
 import com.project.game.network.handler.MessageHandler;
 import com.project.game.network.message.Message;
 import com.project.game.network.message.MessageName;
@@ -133,7 +134,8 @@ class MessageHandlerCombatTest {
 
     @Test
     void preFinishMapInfoZoneCannotBeTargeted() {
-        GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"));
+        GameResources resources = GameResources.fromFrameRoot(
+                Path.of("resources", "json"), MapTestSupport.canonicalMaps());
         GameplayServices maps = new GameplayServices(new PlayerPacketWriter(), new MonsterPacketWriter(),
                 new MonsterFactory(resources));
         SessionServices services = TestServices.serverServices(TestServices.authService(), resources, maps);
@@ -175,7 +177,8 @@ class MessageHandlerCombatTest {
     }
 
     private static CombatContext combatContext() {
-        GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"));
+        GameResources resources = GameResources.fromFrameRoot(
+                Path.of("resources", "json"), MapTestSupport.canonicalMaps());
         GameplayServices maps = new GameplayServices(new PlayerPacketWriter(), new MonsterPacketWriter(),
                 new MonsterFactory(resources));
         SessionServices services = TestServices.serverServices(TestServices.authService(), resources, maps);

@@ -1,6 +1,7 @@
 package com.project.game.network;
 
 import com.project.game.testsupport.TestServices;
+import com.project.game.testsupport.MapTestSupport;
 
 import com.project.game.resource.GameResources;
 import org.junit.jupiter.api.Test;
@@ -20,7 +21,8 @@ class PlayerBootstrapIntegrationTest {
 
     @Test
     void javaClientCreatesFreshPlayerAndParsesLegacyMapZero() throws Exception {
-        GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"));
+        GameResources resources = GameResources.fromFrameRoot(
+                Path.of("resources", "json"), MapTestSupport.canonicalMaps());
         NetworkServer server = new NetworkServer("127.0.0.1", 0, 2, 262_144, 8, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
                 TestServices.serverServices(TestServices.authService(), resources), null,
@@ -67,7 +69,8 @@ class PlayerBootstrapIntegrationTest {
 
     @Test
     void javaClientRelogsExistingPlayerAndReceivesLegacyMapZero() throws Exception {
-        GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"));
+        GameResources resources = GameResources.fromFrameRoot(
+                Path.of("resources", "json"), MapTestSupport.canonicalMaps());
         NetworkServer server = new NetworkServer("127.0.0.1", 0, 2, 262_144, 8, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
                 TestServices.serverServices(TestServices.authService(), resources), null,

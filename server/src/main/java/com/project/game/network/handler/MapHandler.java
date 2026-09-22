@@ -75,7 +75,7 @@ final class MapHandler {
 
         var map = resources.map(player.mapId())
                 .orElseThrow(() -> new IOException(
-                        "legacy map bootstrap unavailable for map " + player.mapId()));
+                        "map unavailable: " + player.mapId()));
         var waypoint = map.waypoints().stream()
                 .filter(candidate -> candidate.contains(player.x(), player.y()))
                 .findFirst()
@@ -124,7 +124,7 @@ final class MapHandler {
     void sendMapInfo(PlayerProfile player) throws IOException {
         var map = resources.map(player.mapId())
                 .orElseThrow(() -> new IOException(
-                        "legacy map bootstrap unavailable for map " + player.mapId()));
+                        "map unavailable: " + player.mapId()));
         boolean sendTemplate = !session.hasSentMapTemplate(map.id());
         var waypointTargetNames = new ArrayList<String>(map.waypoints().size());
         for (var waypoint : map.waypoints()) {

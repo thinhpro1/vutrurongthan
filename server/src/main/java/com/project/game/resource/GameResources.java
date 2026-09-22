@@ -13,7 +13,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
-/** Immutable catalog of already-loaded legacy resource data. */
+/** Immutable catalog of already-loaded static game resources. */
 public final class GameResources {
     private static final GameResources UNAVAILABLE = new GameResources(
             null,
@@ -88,12 +88,23 @@ public final class GameResources {
                 Objects.requireNonNull(jsonRoot, "jsonRoot"));
     }
 
+    public static GameResources fromFrameRoot(
+            Path jsonRoot, Map<Integer, MapTemplate> maps) {
+        return GameResourcesLoader.fromFrameRoot(
+                Objects.requireNonNull(jsonRoot, "jsonRoot"), maps);
+    }
+
     public static GameResources fromRoots(Path iconRoot, Path jsonRoot) {
         return GameResourcesLoader.fromRoots(jsonRoot, iconRoot, iconRoot == null ? -1 : 1);
     }
 
     public static GameResources fromRoots(Path iconRoot, Path jsonRoot, int imageVersion) {
         return GameResourcesLoader.fromRoots(jsonRoot, iconRoot, imageVersion);
+    }
+
+    public static GameResources fromRoots(
+            Path iconRoot, Path jsonRoot, int imageVersion, Map<Integer, MapTemplate> maps) {
+        return GameResourcesLoader.fromRoots(jsonRoot, iconRoot, imageVersion, maps);
     }
 
     public int imageVersion() {

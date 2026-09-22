@@ -1,6 +1,7 @@
 package com.project.game.resource.loader;
 
 import com.project.game.map.MapData;
+import com.project.game.map.MapTemplate;
 import com.project.game.map.Waypoint;
 import com.project.game.persistence.map.MapRepository;
 
@@ -24,7 +25,7 @@ public final class MapCatalogLoader {
     private MapCatalogLoader() {
     }
 
-    public static Map<Integer, LoadedMap> load(MapRepository repository, Path mapDataRoot) {
+    public static Map<Integer, MapTemplate> load(MapRepository repository, Path mapDataRoot) {
         Objects.requireNonNull(repository, "repository");
         Objects.requireNonNull(mapDataRoot, "mapDataRoot");
 
@@ -42,15 +43,16 @@ public final class MapCatalogLoader {
 
         Map<Integer, MapData> dataById = new HashMap<>();
         Map<Integer, List<Waypoint>> waypointsByMap = new HashMap<>();
-        Map<Integer, LoadedMap> enabledMaps = new LinkedHashMap<>();
+        Map<Integer, MapTemplate> enabledMaps = new LinkedHashMap<>();
         for (MapRepository.MapRow row : rowsById.values()) {
             if (!row.enabled()) {
                 continue;
             }
             MapData data = dataById.computeIfAbsent(
                     row.data(), dataId -> MapDataLoader.load(mapDataRoot, dataId));
+            rejectPlatformCollision(row, data);
             waypointsByMap.put(row.id(), new ArrayList<>());
-            enabledMaps.put(row.id(), new LoadedMap(
+            enabledMaps.put(row.id(), new MapTemplate(
                     row.id(), row.name(), row.type(), row.planet(), row.minZone(), row.maxZone(),
                     row.maxPlayer(), row.data(), data, List.of()));
         }
@@ -85,13 +87,13 @@ public final class MapCatalogLoader {
                     row.id(), row.goMap(), row.x(), row.y(), row.goX(), row.goY(), row.type()));
         }
 
-        Map<Integer, LoadedMap> composed = new LinkedHashMap<>();
+        Map<Integer, MapTemplate> composed = new LinkedHashMap<>();
         for (MapRepository.MapRow row : rowsById.values()) {
             if (!row.enabled()) {
                 continue;
             }
-            LoadedMap loaded = enabledMaps.get(row.id());
-            composed.put(row.id(), new LoadedMap(
+            MapTemplate loaded = enabledMaps.get(row.id());
+            composed.put(row.id(), new MapTemplate(
                     loaded.id(), loaded.name(), loaded.type(), loaded.planet(), loaded.minZone(),
                     loaded.maxZone(), loaded.maxPlayer(), loaded.dataId(), loaded.data(),
                     waypointsByMap.get(row.id())));
@@ -145,6 +147,15 @@ public final class MapCatalogLoader {
         requireRange(row.type(), 0, 2, "waypoint type");
     }
 
+    private static void rejectPlatformCollision(MapRepository.MapRow row, MapData data) {
+        if (data.collision().lines().stream()
+                .anyMatch(line -> line.type() == MapData.LineType.PLATFORM)) {
+            throw new IllegalArgumentException(
+                    "map " + row.id() + " uses PLATFORM collision; "
+                            + "PLATFORM requires the later Unity LINE collision cutover");
+        }
+    }
+
     private static void validateCoordinates(
             MapRepository.WaypointRow row, MapData ownerData, MapData targetData) {
         if (row.x() > ownerData.width() || row.y() > ownerData.height()) {
@@ -163,24 +174,4 @@ public final class MapCatalogLoader {
         }
     }
 
-    public record LoadedMap(
-            int id,
-            String name,
-            String type,
-            String planet,
-            int minZone,
-            int maxZone,
-            int maxPlayer,
-            int dataId,
-            MapData data,
-            List<Waypoint> waypoints
-    ) {
-        public LoadedMap {
-            Objects.requireNonNull(name, "name");
-            Objects.requireNonNull(type, "type");
-            Objects.requireNonNull(planet, "planet");
-            Objects.requireNonNull(data, "data");
-            waypoints = List.copyOf(Objects.requireNonNull(waypoints, "waypoints"));
-        }
-    }
 }

@@ -10,6 +10,7 @@ import com.project.game.network.message.MessageName;
 import com.project.game.network.message.MessageWriter;
 import com.project.game.network.transport.LegacyTcpTransport;
 import com.project.game.testsupport.GameplayServices;
+import com.project.game.testsupport.MapTestSupport;
 import com.project.game.monster.MonsterFactory;
 import com.project.game.account.AuthService;
 import com.project.game.resource.GameResources;
@@ -37,7 +38,8 @@ class GameplayIntegrationTest {
     void javaClientDiesToMonsterAndReturnsTown() throws Exception {
         String victimAccount = "deathrevivea";
         String observerAccount = "deathreviveb";
-        GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"));
+        GameResources resources = GameResources.fromFrameRoot(
+                Path.of("resources", "json"), MapTestSupport.canonicalMaps());
         AuthService auth = TestServices.authService();
         MutableClock clock = new MutableClock(1_000_000L);
         BlockingLifecycleRandom random = new BlockingLifecycleRandom();
@@ -189,7 +191,8 @@ class GameplayIntegrationTest {
     @Test
     void livingPlayerReturnTownRequestIsIgnored() throws Exception {
         String accountName = "livingreturn";
-        GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"));
+        GameResources resources = GameResources.fromFrameRoot(
+                Path.of("resources", "json"), MapTestSupport.canonicalMaps());
         AuthService auth = TestServices.authService();
         assertTrue(auth.register(accountName, "secret1", "127.0.0.1").success());
         NetworkServer server = new NetworkServer(
@@ -233,7 +236,8 @@ class GameplayIntegrationTest {
 
     @Test
     void javaClientRoundTripsMap0AndMap1WithCachedTemplates() throws Exception {
-        GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"));
+        GameResources resources = GameResources.fromFrameRoot(
+                Path.of("resources", "json"), MapTestSupport.canonicalMaps());
         AuthService auth = TestServices.authService();
         assertTrue(auth.register("mapround1", "secret1", "127.0.0.1").success());
         NetworkServer server = new NetworkServer("127.0.0.1", 0, 2, 262_144, 8, 1_000,
@@ -302,7 +306,8 @@ class GameplayIntegrationTest {
 
     @Test
     void javaClientsFollowEachOtherAcrossMapsWithoutCrossMapPresence() throws Exception {
-        GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"));
+        GameResources resources = GameResources.fromFrameRoot(
+                Path.of("resources", "json"), MapTestSupport.canonicalMaps());
         AuthService auth = TestServices.authService();
         assertTrue(auth.register("mapzonea", "secret1", "127.0.0.1").success());
         assertTrue(auth.register("mapzoneb", "secret1", "127.0.0.1").success());
@@ -381,7 +386,8 @@ class GameplayIntegrationTest {
 
     @Test
     void javaClientsObserveAuthoritativeMonsterMovementAndChase() throws Exception {
-        GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"));
+        GameResources resources = GameResources.fromFrameRoot(
+                Path.of("resources", "json"), MapTestSupport.canonicalMaps());
         AuthService auth = TestServices.authService();
         MutableClock clock = new MutableClock(1_000_000L);
         assertTrue(auth.register("chasetcp1", "secret1", "127.0.0.1").success());
@@ -481,7 +487,8 @@ class GameplayIntegrationTest {
 
     @Test
     void twoClientsSeeSameZonePresenceMovementAndDisconnect() throws Exception {
-        GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"));
+        GameResources resources = GameResources.fromFrameRoot(
+                Path.of("resources", "json"), MapTestSupport.canonicalMaps());
         AuthService auth = TestServices.authService();
         assertTrue(auth.register("zonea1", "secret1", "127.0.0.1").success());
         assertTrue(auth.register("zoneb1", "secret1", "127.0.0.1").success());
@@ -544,7 +551,8 @@ class GameplayIntegrationTest {
 
     @Test
     void twoClientsFightMap1MonsterObserveRespawnAndFightAgain() throws Exception {
-        GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"));
+        GameResources resources = GameResources.fromFrameRoot(
+                Path.of("resources", "json"), MapTestSupport.canonicalMaps());
         AuthService auth = TestServices.authService();
         MutableClock clock = new MutableClock(1_000_000L);
         assertTrue(auth.register("combatza", "secret1", "127.0.0.1").success());
@@ -678,7 +686,8 @@ class GameplayIntegrationTest {
     @Test
     void javaClientReceivesPotentialRewardAfterKillingMonster() throws Exception {
         String accountName = "rewardtcp";
-        GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"));
+        GameResources resources = GameResources.fromFrameRoot(
+                Path.of("resources", "json"), MapTestSupport.canonicalMaps());
         AuthService auth = TestServices.authService();
         assertTrue(auth.register(accountName, "secret1", "127.0.0.1").success());
         GameplayServices maps = new GameplayServices(
@@ -757,7 +766,8 @@ class GameplayIntegrationTest {
 
     @Test
     void monsterRetaliatesAfterHitWithoutLethalPlayerDamage() throws Exception {
-        GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"));
+        GameResources resources = GameResources.fromFrameRoot(
+                Path.of("resources", "json"), MapTestSupport.canonicalMaps());
         AuthService auth = TestServices.authService();
         MutableClock clock = new MutableClock(1_000_000L);
         assertTrue(auth.register("retaliatea", "secret1", "127.0.0.1").success());
@@ -882,7 +892,8 @@ class GameplayIntegrationTest {
 
     @Test
     void retaliationPlayerStateSurvivesMoveAndMapChangeOverTcp() throws Exception {
-        GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"));
+        GameResources resources = GameResources.fromFrameRoot(
+                Path.of("resources", "json"), MapTestSupport.canonicalMaps());
         AuthService auth = TestServices.authService();
         MutableClock clock = new MutableClock(1_000_000L);
         assertTrue(auth.register("retaliaterace", "secret1", "127.0.0.1").success());
@@ -954,7 +965,8 @@ class GameplayIntegrationTest {
 
     @Test
     void javaClientMovesThreeTimesWithoutDisconnecting() throws Exception {
-        GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"));
+        GameResources resources = GameResources.fromFrameRoot(
+                Path.of("resources", "json"), MapTestSupport.canonicalMaps());
         AuthService auth = TestServices.authService();
         NetworkServer server = new NetworkServer(
                 "127.0.0.1", 0, 2, 262_144, 8, 1_000,

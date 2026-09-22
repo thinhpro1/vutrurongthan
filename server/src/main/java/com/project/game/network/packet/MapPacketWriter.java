@@ -1,5 +1,9 @@
 package com.project.game.network.packet;
 
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
+import com.google.gson.Gson;
+import com.project.game.map.MapData;
 import com.project.game.map.MapTemplate;
 import com.project.game.monster.MonsterSnapshot;
 import com.project.game.network.message.Message;
@@ -13,6 +17,8 @@ import java.util.Objects;
 
 /** Serializes the legacy MAP_INFO payload without owning map/session state. */
 public final class MapPacketWriter {
+    private static final Gson GSON = new Gson();
+
     public Message mapInfo(
             PlayerProfile player,
             MapTemplate map,
@@ -37,26 +43,7 @@ public final class MapPacketWriter {
 
         MessageWriter writer = new MessageWriter().writeShort(map.id());
         if (includeTemplate) {
-            writer.writeShort(map.iconId())
-                    .writeUtf(map.name())
-                    .writeShort(map.row())
-                    .writeShort(map.column())
-                    .writeUtf(map.data());
-            for (int imageId : map.imagesBgr()) {
-                writer.writeShort(imageId);
-            }
-            for (var colorRow : map.colorsBgr()) {
-                for (int value : colorRow) {
-                    writer.writeShort(value);
-                }
-            }
-            writer.writeBoolean(map.line());
-            if (map.line()) {
-                if (map.dataLine() == null) {
-                    throw new IOException("line map missing dataLine for map " + map.id());
-                }
-                writer.writeUtf(map.dataLine());
-            }
+            writeTemplate(writer, map);
         }
 
         writer.writeByte(player.zoneId())
@@ -88,5 +75,80 @@ public final class MapPacketWriter {
         }
         writer.writeShort(0).writeBoolean(false);
         return new Message(MessageName.MAP_INFO, writer.toByteArray());
+    }
+
+    private static void writeTemplate(MessageWriter writer, MapTemplate map) throws IOException {
+        MapData data = map.data();
+        requireNonNegativeShort(data.terrain(), "terrain");
+        requireNonNegativeShort(data.row(), "row");
+        requireNonNegativeShort(data.column(), "column");
+        if (data.background().layers().size() != 3
+                || data.background().skyColor().size() != 3
+                || data.background().layers().stream().anyMatch(layer -> layer.fillColor().size() != 3)) {
+            throw new IOException("map background must contain three RGB layers");
+        }
+
+        writer.writeShort(data.terrain())
+                .writeUtf(map.name())
+                .writeShort(data.row())
+                .writeShort(data.column());
+
+        if (data.collision().type() == MapData.CollisionType.GRID) {
+            if (data.collision().data() == null) {
+                throw new IOException("GRID map missing collision data for map " + map.id());
+            }
+            writer.writeUtf(data.collision().data());
+        } else {
+            writer.writeUtf("");
+        }
+
+        for (MapData.Layer layer : data.background().layers()) {
+            requireNonNegativeShort(layer.image(), "background image");
+            writer.writeShort(layer.image());
+        }
+        for (int value : data.background().skyColor()) {
+            requireNonNegativeShort(value, "background sky color");
+            writer.writeShort(value);
+        }
+        for (MapData.Layer layer : data.background().layers()) {
+            for (int value : layer.fillColor()) {
+                requireNonNegativeShort(value, "background fill color");
+                writer.writeShort(value);
+            }
+        }
+
+        boolean line = data.collision().type() == MapData.CollisionType.LINE;
+        writer.writeBoolean(line);
+        if (line) {
+            writer.writeUtf(lineJson(data));
+        }
+    }
+
+    private static String lineJson(MapData data) {
+        JsonObject root = new JsonObject();
+        root.addProperty("MapWidth", data.width());
+        root.addProperty("MapHeight", data.height());
+        JsonArray lines = new JsonArray();
+        for (MapData.Line source : data.collision().lines()) {
+            JsonObject line = new JsonObject();
+            line.addProperty("Type", source.type().name());
+            JsonArray points = new JsonArray();
+            for (MapData.Point sourcePoint : source.points()) {
+                JsonArray point = new JsonArray();
+                point.add(sourcePoint.x());
+                point.add(sourcePoint.y());
+                points.add(point);
+            }
+            line.add("Points", points);
+            lines.add(line);
+        }
+        root.add("Lines", lines);
+        return GSON.toJson(root);
+    }
+
+    private static void requireNonNegativeShort(int value, String label) throws IOException {
+        if (value < 0 || value > Short.MAX_VALUE) {
+            throw new IOException(label + " must fit 0..32767: " + value);
+        }
     }
 }

@@ -160,6 +160,52 @@ class MapPacketWriterTest {
     }
 
     @Test
+    void serializesBackgroundImageSentinelAndKeepsPacketAligned() throws Exception {
+        MapTemplate map = simpleMap(List.of());
+        PlayerProfile player = TestPlayerProfiles.initial(1L, 7, "alpha1", 0)
+                .withLocation(4, 0, 1, 2);
+
+        var reader = new MapPacketWriter()
+                .mapInfo(player, map, true, List.of(), List.of())
+                .reader();
+
+        assertEquals(4, reader.readShort());
+        assertEquals(5, reader.readShort());
+        assertEquals("simple", reader.readUtf());
+        assertEquals(1, reader.readShort());
+        assertEquals(1, reader.readShort());
+        assertEquals("0", reader.readUtf());
+        assertEquals(-1, reader.readShort());
+        assertEquals(-1, reader.readShort());
+        assertEquals(-1, reader.readShort());
+        for (int index = 0; index < 12; index++) {
+            assertEquals(0, reader.readShort());
+        }
+        assertFalse(reader.readBoolean());
+        assertEquals(0, reader.readByte());
+        assertEquals(1, reader.readShort());
+        assertEquals(2, reader.readShort());
+        assertEquals(0, reader.readByte());
+        assertEquals(0, reader.readByte());
+        assertEquals(0, reader.readByte());
+        assertEquals(0, reader.readShort());
+        assertFalse(reader.readBoolean());
+        assertEquals(0, reader.remaining());
+    }
+
+    @Test
+    void rejectsBackgroundImageOutsideSentinelRange() {
+        PlayerProfile player = TestPlayerProfiles.initial(1L, 7, "alpha1", 0)
+                .withLocation(4, 0, 1, 2);
+        MapPacketWriter writer = new MapPacketWriter();
+
+        assertThrows(IOException.class, () -> writer.mapInfo(
+                player, simpleMapWithImages(List.of(), -2, -1, -1), true, List.of(), List.of()));
+        assertThrows(IOException.class, () -> writer.mapInfo(
+                player, simpleMapWithImages(List.of(), 32768, -1, -1), true, List.of(), List.of()));
+    }
+
+    @Test
     void rejectsWaypointNameCountMismatch() {
         MapTemplate map = simpleMap(List.of(
                 new Waypoint(1, 2, 10, 20, 30, 40, 0)));
@@ -218,12 +264,17 @@ class MapPacketWriterTest {
     }
 
     private static MapTemplate simpleMap(List<Waypoint> waypoints) {
+        return simpleMapWithImages(waypoints, -1, -1, -1);
+    }
+
+    private static MapTemplate simpleMapWithImages(
+            List<Waypoint> waypoints, int firstImage, int secondImage, int thirdImage) {
         MapData data = new MapData(7, 5, 1, 1,
                 new MapData.Background(
                         List.of(0, 0, 0),
-                        List.of(new MapData.Layer(-1, List.of(0, 0, 0)),
-                                new MapData.Layer(-1, List.of(0, 0, 0)),
-                                new MapData.Layer(-1, List.of(0, 0, 0)))),
+                        List.of(new MapData.Layer(firstImage, List.of(0, 0, 0)),
+                                new MapData.Layer(secondImage, List.of(0, 0, 0)),
+                                new MapData.Layer(thirdImage, List.of(0, 0, 0)))),
                 new MapData.Collision(MapData.CollisionType.GRID, "0", List.of()));
         return new MapTemplate(4, "simple", "ONLINE", "EARTH", 1, 1, 1, 7, data, waypoints);
     }

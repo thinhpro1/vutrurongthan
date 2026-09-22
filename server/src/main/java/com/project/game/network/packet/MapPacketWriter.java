@@ -103,7 +103,7 @@ public final class MapPacketWriter {
         }
 
         for (MapData.Layer layer : data.background().layers()) {
-            requireNonNegativeShort(layer.image(), "background image");
+            requireBackgroundImage(layer.image());
             writer.writeShort(layer.image());
         }
         for (int value : data.background().skyColor()) {
@@ -149,6 +149,12 @@ public final class MapPacketWriter {
     private static void requireNonNegativeShort(int value, String label) throws IOException {
         if (value < 0 || value > Short.MAX_VALUE) {
             throw new IOException(label + " must fit 0..32767: " + value);
+        }
+    }
+
+    private static void requireBackgroundImage(int value) throws IOException {
+        if (value < -1 || value > Short.MAX_VALUE) {
+            throw new IOException("background image must fit -1..32767: " + value);
         }
     }
 }

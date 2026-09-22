@@ -1,29 +1,5 @@
 {
   "version": 1,
-  "darts": [
-    {
-      "id": 0,
-      "isMeteorite": false,
-      "light": {
-        "icons": [2198, 2199, 2200],
-        "dx": 0,
-        "dy": 0,
-        "delay": 30
-      },
-      "bullet": {
-        "icons": [2190, 2191, 2192],
-        "dx": 0,
-        "dy": 0,
-        "delay": 30
-      },
-      "explode": {
-        "icons": [2193, 2194, 2195, 2196, 2197],
-        "dx": 0,
-        "dy": 0,
-        "delay": 20
-      }
-    }
-  ],
   "templates": [
     {
       "id": 1,

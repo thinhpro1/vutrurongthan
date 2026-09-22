@@ -22,6 +22,7 @@ import java.io.PipedOutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -174,32 +175,36 @@ class MessageHandlerResourceTest {
                 var reader = response.reader();
                 assertEquals(4, reader.readByte());
                 assertEquals(1, reader.readByte());
-                assertEquals(1, reader.readShort());
-                assertEquals(0, reader.readShort());
-                assertFalse(reader.readBoolean());
-                assertEquals(3, reader.readByte());
-                assertEquals(2198, reader.readShort());
-                assertEquals(2199, reader.readShort());
-                assertEquals(2200, reader.readShort());
-                assertEquals(0, reader.readShort());
-                assertEquals(0, reader.readShort());
-                assertEquals(30, reader.readShort());
-                assertEquals(3, reader.readByte());
-                assertEquals(2190, reader.readShort());
-                assertEquals(2191, reader.readShort());
-                assertEquals(2192, reader.readShort());
-                assertEquals(0, reader.readShort());
-                assertEquals(0, reader.readShort());
-                assertEquals(30, reader.readShort());
-                assertEquals(5, reader.readByte());
-                assertEquals(2193, reader.readShort());
-                assertEquals(2194, reader.readShort());
-                assertEquals(2195, reader.readShort());
-                assertEquals(2196, reader.readShort());
-                assertEquals(2197, reader.readShort());
-                assertEquals(0, reader.readShort());
-                assertEquals(0, reader.readShort());
-                assertEquals(20, reader.readShort());
+                assertEquals(6, reader.readShort());
+                List<List<Integer>> lightIcons = List.of(
+                        List.of(2198, 2199, 2200),
+                        List.of(2212, 2213, 2214, 2215),
+                        List.of(2198, 2199, 2200),
+                        List.of(267, 268, 269),
+                        List.of(260, 261, 262),
+                        List.of(2212, 2213, 2214, 2215));
+                List<List<Integer>> bulletIcons = List.of(
+                        List.of(2190, 2191, 2192),
+                        List.of(2206, 2207, 2208, 2209, 2210, 2211),
+                        List.of(232, 233, 234),
+                        List.of(238, 239, 240),
+                        List.of(260, 261, 262),
+                        List.of(2622, 2623, 2624, 2625, 2626, 2627));
+                List<List<Integer>> explodeIcons = List.of(
+                        List.of(2193, 2194, 2195, 2196, 2197),
+                        List.of(2201, 2202, 2203, 2204, 2205),
+                        List.of(235, 236, 237),
+                        List.of(241, 242, 243),
+                        List.of(263, 264, 265, 266),
+                        List.of(2628, 2629, 2630, 2631, 2632));
+                List<Boolean> meteorites = List.of(false, true, false, false, false, true);
+                for (int id = 0; id < 6; id++) {
+                    assertEquals(id, reader.readShort());
+                    assertEquals(meteorites.get(id), reader.readBoolean());
+                    assertMonsterDartPhase(reader, lightIcons.get(id), 30);
+                    assertMonsterDartPhase(reader, bulletIcons.get(id), 30);
+                    assertMonsterDartPhase(reader, explodeIcons.get(id), 20);
+                }
                 assertEquals(1, reader.readShort());
                 assertEquals(1, reader.readShort());
                 assertEquals("Hổ nanh kiếm", reader.readUtf());
@@ -224,6 +229,19 @@ class MessageHandlerResourceTest {
                 session.close();
             }
         }
+    }
+
+    private static void assertMonsterDartPhase(
+            com.project.game.network.message.MessageReader reader,
+            List<Integer> icons,
+            int delay) throws IOException {
+        assertEquals(icons.size(), reader.readByte());
+        for (int icon : icons) {
+            assertEquals(icon, reader.readShort());
+        }
+        assertEquals(0, reader.readShort());
+        assertEquals(0, reader.readShort());
+        assertEquals(delay, reader.readShort());
     }
 
     @Test

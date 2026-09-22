@@ -3,7 +3,6 @@ package com.project.game.resource.loader;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.project.game.monster.MonsterDart;
-import com.project.game.monster.MonsterDart.Phase;
 import com.project.game.monster.MonsterSpawn;
 import com.project.game.monster.MonsterTemplate;
 
@@ -33,18 +32,19 @@ final class MonsterLoader {
         }
         JsonObject rootObject = JsonResourceReader.readObject(root, "MonsterBootstrap.json");
         JsonResourceReader.requireExactFields(rootObject,
-                Set.of("version", "darts", "templates", "mapSpawns"),
+                Set.of("version", "templates", "mapSpawns"),
                 "MonsterBootstrap.json");
         if (JsonResourceReader.readStrictInt(rootObject, "version") != 1) {
             throw new IllegalArgumentException("MonsterBootstrap.json version must be 1");
         }
 
-        JsonElement dartsValue = JsonResourceReader.required(rootObject, "darts");
+        List<MonsterDart> darts = MonsterDartLoader.load(root, true);
+        Set<Integer> dartIds = new HashSet<>();
+        for (MonsterDart dart : darts) {
+            dartIds.add(dart.id());
+        }
         JsonElement templatesValue = JsonResourceReader.required(rootObject, "templates");
         JsonElement mapSpawnsValue = JsonResourceReader.required(rootObject, "mapSpawns");
-        if (!dartsValue.isJsonArray() || dartsValue.getAsJsonArray().size() != 1) {
-            throw new IllegalArgumentException("MonsterBootstrap.json must contain exactly one dart");
-        }
         if (!templatesValue.isJsonArray() || templatesValue.getAsJsonArray().size() != 1) {
             throw new IllegalArgumentException("MonsterBootstrap.json must contain exactly one template");
         }
@@ -57,9 +57,8 @@ final class MonsterLoader {
                     "MonsterBootstrap.json mapSpawns must contain exactly maps 0 and 1");
         }
 
-        MonsterDart dart = readMonsterDart(dartsValue.getAsJsonArray().get(0));
         MonsterTemplate template = readMonsterTemplate(
-                templatesValue.getAsJsonArray().get(0), dart);
+                templatesValue.getAsJsonArray().get(0), dartIds);
         List<MonsterSpawn> map0 = readMonsterSpawns(
                 mapSpawnsObject.get("0"), 0, template);
         List<MonsterSpawn> map1 = readMonsterSpawns(
@@ -85,54 +84,12 @@ final class MonsterLoader {
         Map<Integer, List<MonsterSpawn>> spawns = new HashMap<>();
         spawns.put(0, map0);
         spawns.put(1, map1);
-        return new LoadedMonsters(1, List.of(dart), List.of(template),
+        return new LoadedMonsters(1, darts, List.of(template),
                 Collections.unmodifiableMap(spawns));
     }
 
-    private static MonsterDart readMonsterDart(JsonElement value) {
-        if (!value.isJsonObject()) {
-            throw new IllegalArgumentException("MonsterBootstrap dart must be an object");
-        }
-        JsonObject object = value.getAsJsonObject();
-        JsonResourceReader.requireExactFields(object,
-                Set.of("id", "isMeteorite", "light", "bullet", "explode"),
-                "MonsterBootstrap dart");
-        int id = JsonResourceReader.readShortValue(object, "id");
-        boolean meteorite = JsonResourceReader.readBoolean(object, "isMeteorite");
-        if (id != 0 || meteorite) {
-            throw new IllegalArgumentException("MonsterBootstrap dart must be id 0 and non-meteorite");
-        }
-        MonsterDart.Phase light = readMonsterDartPhase(object, "light");
-        MonsterDart.Phase bullet = readMonsterDartPhase(object, "bullet");
-        MonsterDart.Phase explode = readMonsterDartPhase(object, "explode");
-        if (!light.icons().equals(List.of(2198, 2199, 2200)) || light.dx() != 0
-                || light.dy() != 0 || light.delay() != 30
-                || !bullet.icons().equals(List.of(2190, 2191, 2192)) || bullet.dx() != 0
-                || bullet.dy() != 0 || bullet.delay() != 30
-                || !explode.icons().equals(List.of(2193, 2194, 2195, 2196, 2197))
-                || explode.dx() != 0 || explode.dy() != 0 || explode.delay() != 20) {
-            throw new IllegalArgumentException("MonsterBootstrap dart 0 is not canonical");
-        }
-        return new MonsterDart(id, meteorite, light, bullet, explode);
-    }
-
-    private static MonsterDart.Phase readMonsterDartPhase(JsonObject parent, String field) {
-        JsonObject object = JsonResourceReader.requiredObject(parent, field);
-        JsonResourceReader.requireExactFields(object,
-                Set.of("icons", "dx", "dy", "delay"),
-                "MonsterBootstrap dart " + field);
-        List<Integer> icons = JsonResourceReader.readShortList(object, "icons");
-        if (icons.size() > Byte.MAX_VALUE) {
-            throw new IllegalArgumentException("too many icons for MonsterBootstrap dart " + field);
-        }
-        return new MonsterDart.Phase(icons,
-                JsonResourceReader.readShortValue(object, "dx"),
-                JsonResourceReader.readShortValue(object, "dy"),
-                JsonResourceReader.readShortValue(object, "delay"));
-    }
-
     private static MonsterTemplate readMonsterTemplate(JsonElement value,
-                                                               MonsterDart dart) {
+                                                               Set<Integer> dartIds) {
         if (!value.isJsonObject()) {
             throw new IllegalArgumentException("MonsterBootstrap template must be an object");
         }
@@ -161,7 +118,7 @@ final class MonsterLoader {
                 || type != 1 || dartId != 0
                 || !iconsMove.equals(List.of(11818, 11819, 11820, 11821, 11822))
                 || iconInjure != 11824 || iconAttack != 11823 || width != 175 || height != 95
-                || dx != 0 || dy != 0 || dart.id() != dartId) {
+                || dx != 0 || dy != 0 || !dartIds.contains(dartId)) {
             throw new IllegalArgumentException("MonsterBootstrap template 1 is not canonical");
         }
         return new MonsterTemplate(id, name, rangeMove, speed, type, dartId,

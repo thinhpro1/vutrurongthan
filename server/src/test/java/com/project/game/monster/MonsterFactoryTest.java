@@ -75,6 +75,8 @@ class MonsterFactoryTest {
     @Test
     void missingCombatStatFailsClearly(@TempDir Path root) throws IOException {
         Files.copy(Path.of("resources", "json", "Frame.json"), root.resolve("Frame.json"));
+        Files.copy(Path.of("resources", "json", "MonsterDartTemplate.json"),
+                root.resolve("MonsterDartTemplate.json"));
         Files.copy(Path.of("resources", "json", "MonsterBootstrap.json"),
                 root.resolve("MonsterBootstrap.json"));
 

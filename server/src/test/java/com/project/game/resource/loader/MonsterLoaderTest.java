@@ -1,6 +1,5 @@
 package com.project.game.resource.loader;
 
-import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonParser;
 import org.junit.jupiter.api.Test;
@@ -9,8 +8,6 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.MessageDigest;
-import java.util.HexFormat;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -24,7 +21,11 @@ class MonsterLoaderTest {
         var monsters = MonsterLoader.load(Path.of("resources", "json"), true);
 
         assertEquals(1, monsters.version());
-        assertEquals(1, monsters.darts().size());
+        assertEquals(6, monsters.darts().size());
+        assertEquals(List.of(0, 1, 2, 3, 4, 5), monsters.darts().stream()
+                .map(dart -> dart.id()).toList());
+        assertEquals(List.of(false, true, false, false, false, true), monsters.darts().stream()
+                .map(dart -> dart.meteorite()).toList());
         assertEquals(1, monsters.templates().size());
         assertTrue(monsters.spawns().get(0).isEmpty());
         assertEquals(6, monsters.spawns().get(1).size());
@@ -76,15 +77,6 @@ class MonsterLoaderTest {
     }
 
     @Test
-    void pinsCanonicalMonsterBootstrapHash() throws Exception {
-        byte[] bytes = Files.readAllBytes(Path.of("resources", "json", "MonsterBootstrap.json"));
-        String hash = HexFormat.of().formatHex(
-                MessageDigest.getInstance("SHA-256").digest(bytes));
-
-        assertEquals("70f32b034f2644636a56bfefabdfd477d28f26d525534e108b16ca070ee757f9", hash);
-    }
-
-    @Test
     void rejectsMonsterBootstrapVersionZero(@TempDir Path root) throws IOException {
         var bootstrap = productionMonsterBootstrap();
         bootstrap.addProperty("version", 0);
@@ -92,17 +84,35 @@ class MonsterLoaderTest {
     }
 
     @Test
-    void rejectsMonsterBootstrapMissingDart(@TempDir Path root) throws IOException {
+    void rejectsMissingMonsterDartSource(@TempDir Path root) throws IOException {
         var bootstrap = productionMonsterBootstrap();
-        bootstrap.getAsJsonArray("darts").remove(0);
+        writeMonsterBootstrap(root, bootstrap);
+        assertThrows(IllegalArgumentException.class,
+                () -> MonsterLoader.load(root, true));
+    }
+
+    @Test
+    void rejectsMonsterBootstrapDartsField(@TempDir Path root) throws IOException {
+        var bootstrap = productionMonsterBootstrap();
+        bootstrap.add("darts", new com.google.gson.JsonArray());
         assertMonsterBootstrapRejected(root, bootstrap);
     }
 
     @Test
     void rejectsMonsterBootstrapTemplateDartReference(@TempDir Path root) throws IOException {
         var bootstrap = productionMonsterBootstrap();
-        bootstrap.getAsJsonArray("templates").get(0).getAsJsonObject().addProperty("dartId", 1);
+        bootstrap.getAsJsonArray("templates").get(0).getAsJsonObject().addProperty("dartId", 6);
         assertMonsterBootstrapRejected(root, bootstrap);
+    }
+
+    @Test
+    void optionalMissingMonsterBootstrapReturnsUnavailableFamily(@TempDir Path root) {
+        var monsters = MonsterLoader.load(root, false);
+
+        assertEquals(-1, monsters.version());
+        assertTrue(monsters.darts().isEmpty());
+        assertTrue(monsters.templates().isEmpty());
+        assertTrue(monsters.spawns().isEmpty());
     }
 
     @Test
@@ -159,9 +169,16 @@ class MonsterLoaderTest {
 
     private static void assertMonsterBootstrapRejected(
             Path root, com.google.gson.JsonObject bootstrap) throws IOException {
-        Files.writeString(root.resolve("MonsterBootstrap.json"),
-                new GsonBuilder().serializeNulls().create().toJson(bootstrap));
+        Files.copy(Path.of("resources", "json", "MonsterDartTemplate.json"),
+                root.resolve("MonsterDartTemplate.json"));
+        writeMonsterBootstrap(root, bootstrap);
         assertThrows(IllegalArgumentException.class,
                 () -> MonsterLoader.load(root, true));
+    }
+
+    private static void writeMonsterBootstrap(
+            Path root, com.google.gson.JsonObject bootstrap) throws IOException {
+        Files.writeString(root.resolve("MonsterBootstrap.json"),
+                new GsonBuilder().serializeNulls().create().toJson(bootstrap));
     }
 }

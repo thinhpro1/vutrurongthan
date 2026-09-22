@@ -93,6 +93,27 @@ final class JsonResourceReader {
         }
     }
 
+    static int readCanonicalInt(JsonObject object, String field) {
+        return readCanonicalInt(required(object, field), field);
+    }
+
+    static int readCanonicalInt(JsonElement value, String field) {
+        if (value == null || !value.isJsonPrimitive() || !value.getAsJsonPrimitive().isNumber()) {
+            throw new IllegalArgumentException("resource field " + field + " must be numeric");
+        }
+        String lexical = value.getAsString();
+        if (!lexical.matches("-?(0|[1-9][0-9]*)")) {
+            throw new IllegalArgumentException("resource field " + field
+                    + " must be a canonical integer");
+        }
+        try {
+            return Integer.parseInt(lexical);
+        } catch (NumberFormatException exception) {
+            throw new IllegalArgumentException("resource field " + field
+                    + " must fit signed int: " + lexical, exception);
+        }
+    }
+
     static long readLong(JsonObject object, String field) {
         JsonElement value = required(object, field);
         if (!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isNumber()) {

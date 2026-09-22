@@ -20,7 +20,7 @@ public interface MapRepository {
     ) {}
 
     record WaypointRow(
-            long id,
+            int id,
             int mapId,
             int x,
             int y,

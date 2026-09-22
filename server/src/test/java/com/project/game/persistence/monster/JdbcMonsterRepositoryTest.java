@@ -56,7 +56,7 @@ class JdbcMonsterRepositoryTest {
     void mapsAllSpawnColumnsAndUsesStableMapAndIdOrdering() {
         String[] sql = new String[1];
         ResultSet rows = resultSet(List.of(Map.of(
-                "id", 3_000_000_002L,
+                "id", 27,
                 "map_id", 7,
                 "monster_id", 4,
                 "x", 1250,
@@ -66,7 +66,7 @@ class JdbcMonsterRepositoryTest {
                 .findAllSpawns();
 
         assertIterableEquals(List.of(new MonsterRepository.SpawnRow(
-                3_000_000_002L, 7, 4, 1250, 648)), spawns);
+                27, 7, 4, 1250, 648)), spawns);
         assertEquals("SELECT id, map_id, monster_id, x, y "
                 + "FROM monster_spawn ORDER BY map_id, id", sql[0]);
     }

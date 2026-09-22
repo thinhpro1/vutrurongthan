@@ -26,7 +26,7 @@ CREATE TABLE map_template (
   COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE map_waypoint (
-    id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    id INT NOT NULL AUTO_INCREMENT,
 
     map_id SMALLINT UNSIGNED NOT NULL,
 

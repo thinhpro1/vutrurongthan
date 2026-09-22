@@ -60,7 +60,7 @@ public final class JdbcMonsterRepository implements MonsterRepository {
              ResultSet results = statement.executeQuery()) {
             while (results.next()) {
                 spawns.add(new SpawnRow(
-                        results.getLong("id"),
+                        results.getInt("id"),
                         results.getInt("map_id"),
                         results.getInt("monster_id"),
                         results.getInt("x"),

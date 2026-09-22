@@ -7,6 +7,7 @@ import com.project.game.monster.MonsterDart.Phase;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -83,22 +84,50 @@ final class MonsterDartLoader {
         JsonObject object = JsonResourceReader.requiredObject(parent, field);
         JsonResourceReader.requireExactFields(object, PHASE_FIELDS,
                 FILE_NAME + " dart " + dartId + " " + field);
-        List<Integer> icons = JsonResourceReader.readShortList(object, "icon");
+        List<Integer> icons = readCanonicalIconList(object, "icon");
         if (icons.isEmpty() || icons.size() > Byte.MAX_VALUE) {
             throw new IllegalArgumentException(FILE_NAME + " dart " + dartId + " " + field
                     + " must contain 1 to 127 icons");
         }
-        if (icons.stream().anyMatch(icon -> icon < 0)) {
-            throw new IllegalArgumentException(FILE_NAME + " dart " + dartId + " " + field
-                    + " icon ids must be non-negative");
-        }
-        int dx = JsonResourceReader.readShortValue(object, "dx");
-        int dy = JsonResourceReader.readShortValue(object, "dy");
-        int delay = JsonResourceReader.readShortValue(object, "delay");
-        if (delay < 0) {
-            throw new IllegalArgumentException(FILE_NAME + " dart " + dartId + " " + field
-                    + " delay must be non-negative");
-        }
+        int dx = readCanonicalSignedShort(object, "dx");
+        int dy = readCanonicalSignedShort(object, "dy");
+        int delay = readCanonicalNonNegativeShort(object, "delay");
         return new Phase(icons, dx, dy, delay);
+    }
+
+    private static List<Integer> readCanonicalIconList(JsonObject object, String field) {
+        JsonElement value = JsonResourceReader.required(object, field);
+        if (!value.isJsonArray()) {
+            throw new IllegalArgumentException("resource field " + field + " must be an array");
+        }
+        List<Integer> result = new ArrayList<>(value.getAsJsonArray().size());
+        for (JsonElement element : value.getAsJsonArray()) {
+            int icon = JsonResourceReader.readCanonicalInt(element, field);
+            if (icon < 0 || icon > Short.MAX_VALUE) {
+                throw new IllegalArgumentException("resource field " + field
+                        + " must contain non-negative signed shorts");
+            }
+            result.add(icon);
+        }
+        return List.copyOf(result);
+    }
+
+    private static int readCanonicalSignedShort(JsonObject object, String field) {
+        int value = JsonResourceReader.readCanonicalInt(
+                JsonResourceReader.required(object, field), field);
+        if (value < Short.MIN_VALUE || value > Short.MAX_VALUE) {
+            throw new IllegalArgumentException("resource field " + field
+                    + " must fit signed short: " + value);
+        }
+        return value;
+    }
+
+    private static int readCanonicalNonNegativeShort(JsonObject object, String field) {
+        int value = readCanonicalSignedShort(object, field);
+        if (value < 0) {
+            throw new IllegalArgumentException("resource field " + field
+                    + " must be non-negative");
+        }
+        return value;
     }
 }

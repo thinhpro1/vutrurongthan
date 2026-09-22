@@ -106,6 +106,19 @@ class MonsterLoaderTest {
     }
 
     @Test
+    void rejectsTemplateDartReferenceMissingFromDartSource(@TempDir Path root) throws IOException {
+        var bootstrap = productionMonsterBootstrap();
+        var darts = productionMonsterDartTemplates();
+        darts.remove("0");
+        Files.writeString(root.resolve("MonsterDartTemplate.json"),
+                new GsonBuilder().serializeNulls().create().toJson(darts));
+        writeMonsterBootstrap(root, bootstrap);
+
+        assertThrows(IllegalArgumentException.class,
+                () -> MonsterLoader.load(root, true));
+    }
+
+    @Test
     void optionalMissingMonsterBootstrapReturnsUnavailableFamily(@TempDir Path root) {
         var monsters = MonsterLoader.load(root, false);
 
@@ -164,6 +177,12 @@ class MonsterLoaderTest {
     private static com.google.gson.JsonObject productionMonsterBootstrap() throws IOException {
         return JsonParser.parseString(
                 Files.readString(Path.of("resources", "json", "MonsterBootstrap.json")))
+                .getAsJsonObject();
+    }
+
+    private static com.google.gson.JsonObject productionMonsterDartTemplates() throws IOException {
+        return JsonParser.parseString(
+                Files.readString(Path.of("resources", "json", "MonsterDartTemplate.json")))
                 .getAsJsonObject();
     }
 

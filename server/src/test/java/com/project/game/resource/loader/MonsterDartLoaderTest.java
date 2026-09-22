@@ -188,6 +188,26 @@ class MonsterDartLoaderTest {
         assertRejects(root, rootWithValue("0", fractional));
     }
 
+    @Test
+    void rejectsLexicalIntegralDecimals(@TempDir Path root) throws IOException {
+        JsonObject icon = validDart();
+        icon.getAsJsonObject("light").getAsJsonArray("icon").set(0,
+                new com.google.gson.JsonPrimitive(1.0));
+        assertRejects(root, rootWithValue("0", icon));
+
+        JsonObject dx = validDart();
+        dx.getAsJsonObject("light").addProperty("dx", 1.0);
+        assertRejects(root, rootWithValue("0", dx));
+
+        JsonObject dy = validDart();
+        dy.getAsJsonObject("light").addProperty("dy", 1.0);
+        assertRejects(root, rootWithValue("0", dy));
+
+        JsonObject delay = validDart();
+        delay.getAsJsonObject("light").addProperty("delay", 1.0);
+        assertRejects(root, rootWithValue("0", delay));
+    }
+
     private static void assertRejects(Path root, JsonObject value) throws IOException {
         write(root, value);
         assertThrows(IllegalArgumentException.class,

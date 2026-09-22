@@ -49,10 +49,34 @@ class ResourcePacketWriterTest {
     void rejectsMonsterMoveIconCountThatWouldBeTruncated() {
         MonsterTemplate overflowing = new MonsterTemplate(
                 1, "bat", 1, 1, 1, 1,
-                Collections.nCopies(Byte.MAX_VALUE + 1, 1), 1, 1,
-                1, 1, 1, 1);
+                Collections.nCopies(Byte.MAX_VALUE + 1, 1), List.of(1), List.of(1),
+                1, 1);
 
         assertThrows(IOException.class, () -> writer.monsterResource(1, List.of(), List.of(overflowing)));
+    }
+
+    @Test
+    void rejectsEmptyOrOversizedMonsterAnimationArrays() {
+        for (int animation = 0; animation < 3; animation++) {
+            List<Integer> move = animation == 0 ? List.of() : List.of(1);
+            List<Integer> injure = animation == 1 ? List.of() : List.of(1);
+            List<Integer> attack = animation == 2 ? List.of() : List.of(1);
+            MonsterTemplate empty = new MonsterTemplate(
+                    1, "bat", 1, 1, 1, 1, move, injure, attack, 1, 1);
+            assertThrows(IOException.class, () -> writer.monsterResource(1, List.of(), List.of(empty)));
+
+            List<Integer> overflowingMove = animation == 0
+                    ? Collections.nCopies(Byte.MAX_VALUE + 1, 1) : List.of(1);
+            List<Integer> overflowingInjure = animation == 1
+                    ? Collections.nCopies(Byte.MAX_VALUE + 1, 1) : List.of(1);
+            List<Integer> overflowingAttack = animation == 2
+                    ? Collections.nCopies(Byte.MAX_VALUE + 1, 1) : List.of(1);
+            MonsterTemplate overflowing = new MonsterTemplate(
+                    1, "bat", 1, 1, 1, 1,
+                    overflowingMove, overflowingInjure, overflowingAttack, 1, 1);
+            assertThrows(IOException.class,
+                    () -> writer.monsterResource(1, List.of(), List.of(overflowing)));
+        }
     }
 
     @Test
@@ -123,14 +147,14 @@ class ResourcePacketWriterTest {
     }
 
     @Test
-    void serializesMonsterDartsAndTemplatesInLegacyShape() throws Exception {
+    void serializesMonsterDartsAndTemplatesInV2Shape() throws Exception {
         MonsterDart.Phase light = new MonsterDart.Phase(List.of(1), 2, 3, 4);
         MonsterDart.Phase bullet = new MonsterDart.Phase(List.of(5, 6), 7, 8, 9);
         MonsterDart.Phase explode = new MonsterDart.Phase(List.of(10), 11, 12, 13);
         MonsterDart dart = new MonsterDart(4, true, light, bullet, explode);
         MonsterTemplate template = new MonsterTemplate(
-                8, "bat", 50, 6, 2, 4, List.of(20, 21), 22, 23,
-                24, 25, 26, 27);
+                8, "bat", 50, 6, 2, 4, List.of(20, 21), List.of(30, 31, 32),
+                List.of(40), 24, 25);
 
         var reader = writer.monsterResource(3, List.of(dart), List.of(template)).reader();
         assertEquals(4, reader.readByte());
@@ -151,12 +175,16 @@ class ResourcePacketWriterTest {
         assertEquals(template.iconsMove().size(), reader.readByte());
         assertEquals(template.iconsMove().get(0), reader.readShort());
         assertEquals(template.iconsMove().get(1), reader.readShort());
-        assertEquals(template.iconInjure(), reader.readShort());
-        assertEquals(template.iconAttack(), reader.readShort());
+        assertEquals(template.iconsInjure().size(), reader.readByte());
+        for (int icon : template.iconsInjure()) {
+            assertEquals(icon, reader.readShort());
+        }
+        assertEquals(template.iconsAttack().size(), reader.readByte());
+        for (int icon : template.iconsAttack()) {
+            assertEquals(icon, reader.readShort());
+        }
         assertEquals(template.w(), reader.readShort());
         assertEquals(template.h(), reader.readShort());
-        assertEquals(template.dx(), reader.readByte());
-        assertEquals(template.dy(), reader.readByte());
         assertEquals(0, reader.remaining());
     }
 
@@ -241,7 +269,7 @@ class ResourcePacketWriterTest {
     private static MonsterTemplate validTemplate() {
         return new MonsterTemplate(
                 1, "bat", 1, 1, 1, 1, List.of(1),
-                1, 1, 1, 1, 1, 1);
+                List.of(1), List.of(1), 1, 1);
     }
 
     private static FrameTemplate validFrame() {

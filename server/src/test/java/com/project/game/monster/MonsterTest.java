@@ -373,7 +373,7 @@ class MonsterTest {
                         new MonsterCombatTemplate(1, 0, 0), movement));
         MonsterTemplate wrongMovement = new MonsterTemplate(
                 2, "wrong", 100, 1, 1, 0,
-                List.of(1), 2, 3, 10, 10, 0, 0);
+                List.of(1), List.of(2), List.of(3), 10, 10);
         assertThrows(IllegalArgumentException.class,
                 () -> new Monster(spawn,
                         new MonsterCombatTemplate(1, 10, 0), wrongMovement));
@@ -389,12 +389,12 @@ class MonsterTest {
     }
 
     private static Monster map1Monster() {
-        GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"));
+        GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"), 2);
         return new MonsterFactory(resources).createForMap(1).getFirst();
     }
 
     private static MonsterTemplate map1Movement() {
-        GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"));
+        GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"), 2);
         return resources.monsterTemplates().getFirst();
     }
 }

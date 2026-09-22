@@ -1,6 +1,7 @@
 package com.project.game.monster;
 
 import java.util.List;
+import java.util.Objects;
 
 /** Immutable client-visible monster template. */
 public record MonsterTemplate(
@@ -11,14 +12,15 @@ public record MonsterTemplate(
         int type,
         int dartId,
         List<Integer> iconsMove,
-        int iconInjure,
-        int iconAttack,
+        List<Integer> iconsInjure,
+        List<Integer> iconsAttack,
         int w,
-        int h,
-        int dx,
-        int dy
+        int h
 ) {
     public MonsterTemplate {
-        iconsMove = List.copyOf(iconsMove);
+        name = Objects.requireNonNull(name, "name");
+        iconsMove = List.copyOf(Objects.requireNonNull(iconsMove, "iconsMove"));
+        iconsInjure = List.copyOf(Objects.requireNonNull(iconsInjure, "iconsInjure"));
+        iconsAttack = List.copyOf(Objects.requireNonNull(iconsAttack, "iconsAttack"));
     }
 }

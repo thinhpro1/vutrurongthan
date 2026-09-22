@@ -59,7 +59,7 @@ class ResourceIntegrationTest {
 
     @Test
     void clientLoadsLevelResourcePacket() throws Exception {
-        GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"));
+        GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"), 2);
         NetworkServer server = new NetworkServer("127.0.0.1", 0, 2, 262_144, 8, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
                 TestServices.serverServices(TestServices.authService(), resources), null,
@@ -98,7 +98,7 @@ class ResourceIntegrationTest {
                 assertEquals(-1, manifestReader.readByte()); // item option
                 assertEquals(-1, manifestReader.readByte()); // npc
                 assertEquals(2, manifestReader.readByte()); // effect
-                assertEquals(1, manifestReader.readByte()); // monster
+                assertEquals(2, manifestReader.readByte()); // monster
                 assertEquals(-1, manifestReader.readByte()); // medal
                 assertEquals(0, manifestReader.readByte()); // level
                 assertEquals(1, manifestReader.readByte()); // frame
@@ -151,7 +151,8 @@ class ResourceIntegrationTest {
         GameResources resources = GameResources.fromRoots(
                 iconRoot,
                 Path.of("resources", "json"),
-                7);
+                7,
+                2);
         NetworkServer server = new NetworkServer(
                 "127.0.0.1", 0, 2, 262_144, 8, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
@@ -193,7 +194,7 @@ class ResourceIntegrationTest {
                 assertEquals(-1, manifestReader.readByte()); // item option
                 assertEquals(-1, manifestReader.readByte()); // npc
                 assertEquals(2, manifestReader.readByte());  // effect
-                assertEquals(1, manifestReader.readByte());  // monster
+                assertEquals(2, manifestReader.readByte());  // monster
                 assertEquals(-1, manifestReader.readByte()); // medal
                 assertEquals(0, manifestReader.readByte());  // level
                 assertEquals(1, manifestReader.readByte());  // frame
@@ -420,7 +421,7 @@ class ResourceIntegrationTest {
         NetworkServer server = new NetworkServer("127.0.0.1", 0, 2, 1024, 8, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
                 TestServices.serverServices(TestServices.authService(), GameResources.fromFrameRoot(
-                        Path.of("resources", "json"))),
+                        Path.of("resources", "json"), 2)),
                 null, ClientConfig.defaults());
         AtomicReference<Throwable> serverFailure = new AtomicReference<>();
         Thread serverThread = Thread.ofVirtual().start(() -> {
@@ -458,7 +459,7 @@ class ResourceIntegrationTest {
             Message manifest = codec.readServerResponse(transport.input(), cipher, true);
             assertEquals(MessageName.UPDATE_DATA, manifest.command());
             assertArrayEquals(new byte[]{
-                    -1, -1, -1, -1, -1, 2, 1, -1, 0, 1, -1, -1, -1, -1
+                    -1, -1, -1, -1, -1, 2, 2, -1, 0, 1, -1, -1, -1, -1
             }, manifest.payload());
             assertThrows(SocketTimeoutException.class,
                     () -> codec.readServerResponse(transport.input(), cipher, true));

@@ -1,5 +1,4 @@
 {
-  "version": 1,
   "templates": [
     {
       "id": 1,
@@ -9,12 +8,10 @@
       "type": 1,
       "dartId": 0,
       "iconsMove": [11818, 11819, 11820, 11821, 11822],
-      "iconInjure": 11824,
-      "iconAttack": 11823,
+      "iconsInjure": [11824],
+      "iconsAttack": [11823],
       "w": 175,
-      "h": 95,
-      "dx": 0,
-      "dy": 0
+      "h": 95
     }
   ],
   "mapSpawns": {

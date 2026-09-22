@@ -27,7 +27,7 @@ class MonsterServiceSnapshotTest {
     @Test
     void snapshotsCreateRuntimeZoneButLifecycleTickOnlyVisitsExistingZones() {
         ZoneRegistry zones = new ZoneRegistry(new MonsterFactory(
-                GameResources.fromFrameRoot(Path.of("resources", "json"))));
+                GameResources.fromFrameRoot(Path.of("resources", "json"), 2)));
         MonsterService monsters = new MonsterService(
                 zones, new MonsterPacketWriter(), new PlayerPacketWriter());
 

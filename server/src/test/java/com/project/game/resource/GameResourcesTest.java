@@ -106,6 +106,16 @@ class GameResourcesTest {
     }
 
     @Test
+    void fromFrameRootAcceptsExplicitMonsterResourceVersion() {
+        GameResources resources = GameResources.fromFrameRoot(
+                Path.of("resources", "json"), 2);
+
+        assertEquals(2, resources.monsterVersion());
+        assertEquals(List.of(11824), resources.monsterTemplates().getFirst().iconsInjure());
+        assertEquals(List.of(11823), resources.monsterTemplates().getFirst().iconsAttack());
+    }
+
+    @Test
     void fromFrameRootDoesNotInspectLegacyMapBootstrap(@TempDir Path root) throws IOException {
         Files.copy(Path.of("resources", "json", "Frame.json"), root.resolve("Frame.json"));
         Files.writeString(root.resolve("MapBootstrap.json"), "not-json");

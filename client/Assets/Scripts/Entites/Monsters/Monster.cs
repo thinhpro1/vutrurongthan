@@ -67,7 +67,7 @@ namespace Assets.Scripts.Entites.Monsters
                 {
                     if (!isChocolate)
                     {
-                        GraphicManager.instance.Draw(g, iconPaint, x + template.dx, y + template.dx, (dir == 1) ? 0 : 2, StaticObj.BOTTOM_HCENTER);
+                        GraphicManager.instance.Draw(g, iconPaint, x, y, (dir == 1) ? 0 : 2, StaticObj.BOTTOM_HCENTER);
                     }
                     foreach (Effect effect in effects)
                     {
@@ -150,7 +150,7 @@ namespace Assets.Scripts.Entites.Monsters
         public virtual void UpdateDead()
         {
             isDontMove = false;
-            iconPaint = template.iconInjure;
+            iconPaint = template.iconsInjure[0];
             long now = Utils.CurrentTimeMillis();
             if (timeDie == 0)
             {
@@ -199,7 +199,7 @@ namespace Assets.Scripts.Entites.Monsters
 
         public virtual void UpdateAttack()
         {
-            iconPaint = template.iconAttack;
+            iconPaint = template.iconsAttack[0];
             if (targets.Count == 0)
             {
                 status = MonsterStatus.MOVE;
@@ -229,7 +229,7 @@ namespace Assets.Scripts.Entites.Monsters
 
         private void UpdateInjure()
         {
-            iconPaint = template.iconInjure;
+            iconPaint = template.iconsInjure[0];
             timeStatus--;
             if (timeStatus <= 0)
             {

@@ -315,12 +315,18 @@ namespace Assets.Scripts.Controllers
                                     {
                                         template.iconsMove.Add(message.ReadShort());
                                     }
-                                    template.iconInjure = message.ReadShort();
-                                    template.iconAttack = message.ReadShort();
+                                    count_img = message.ReadSByte();
+                                    for (int j = 0; j < count_img; j++)
+                                    {
+                                        template.iconsInjure.Add(message.ReadShort());
+                                    }
+                                    count_img = message.ReadSByte();
+                                    for (int j = 0; j < count_img; j++)
+                                    {
+                                        template.iconsAttack.Add(message.ReadShort());
+                                    }
                                     template.w = message.ReadShort();
                                     template.h = message.ReadShort();
-                                    template.dx = message.ReadSByte();
-                                    template.dy = message.ReadSByte();
                                     MonsterManager.instance.monsterTemplates.Add(template.id, template);
                                 }
                                 MonsterManager.instance.SaveMonsterTemplate();

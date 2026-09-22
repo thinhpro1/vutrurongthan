@@ -76,7 +76,7 @@ class ZoneMonsterCombatTest {
     @Test
     void zoneRejectsDuplicateMonsterRuntimeIds() {
         MonsterFactory factory = new MonsterFactory(
-                GameResources.fromFrameRoot(Path.of("resources", "json")));
+                GameResources.fromFrameRoot(Path.of("resources", "json"), 2));
         List<Monster> runtimes = factory.createForMap(1);
 
         assertThrows(
@@ -313,7 +313,7 @@ class ZoneMonsterCombatTest {
 
     private static Zone map1Zone() {
         MonsterFactory factory = new MonsterFactory(
-                GameResources.fromFrameRoot(Path.of("resources", "json")));
+                GameResources.fromFrameRoot(Path.of("resources", "json"), 2));
         return new Zone(1, 0, factory.createForMap(1));
     }
 

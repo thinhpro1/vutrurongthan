@@ -1,6 +1,8 @@
 package com.project.game.resource.loader;
 
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -8,6 +10,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -18,9 +21,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class MonsterLoaderTest {
     @Test
     void loadsCanonicalStaticMap1MonsterBootstrap() throws Exception {
-        var monsters = MonsterLoader.load(Path.of("resources", "json"), true);
+        var monsters = MonsterLoader.load(Path.of("resources", "json"), true, 2);
 
-        assertEquals(1, monsters.version());
+        assertEquals(2, monsters.version());
         assertEquals(6, monsters.darts().size());
         assertEquals(List.of(0, 1, 2, 3, 4, 5), monsters.darts().stream()
                 .map(dart -> dart.id()).toList());
@@ -54,12 +57,10 @@ class MonsterLoaderTest {
         assertEquals(1, template.type());
         assertEquals(0, template.dartId());
         assertEquals(List.of(11818, 11819, 11820, 11821, 11822), template.iconsMove());
-        assertEquals(11824, template.iconInjure());
-        assertEquals(11823, template.iconAttack());
+        assertEquals(List.of(11824), template.iconsInjure());
+        assertEquals(List.of(11823), template.iconsAttack());
         assertEquals(175, template.w());
         assertEquals(95, template.h());
-        assertEquals(0, template.dx());
-        assertEquals(0, template.dy());
 
         var map1 = monsters.spawns().get(1);
         assertEquals(List.of(0, 1, 2, 3, 4, 5), map1.stream()
@@ -77,10 +78,37 @@ class MonsterLoaderTest {
     }
 
     @Test
-    void rejectsMonsterBootstrapVersionZero(@TempDir Path root) throws IOException {
+    void rejectsReintroducedMonsterBootstrapVersionField(@TempDir Path root) throws IOException {
         var bootstrap = productionMonsterBootstrap();
         bootstrap.addProperty("version", 0);
         assertMonsterBootstrapRejected(root, bootstrap);
+    }
+
+    @Test
+    void rejectsReintroducedMonsterTemplateLegacyFields(@TempDir Path root) throws IOException {
+        for (String field : List.of("iconInjure", "iconAttack", "dx", "dy")) {
+            var bootstrap = productionMonsterBootstrap();
+            bootstrap.getAsJsonArray("templates").get(0).getAsJsonObject()
+                    .addProperty(field, 0);
+            assertMonsterBootstrapRejected(root, bootstrap);
+        }
+    }
+
+    @Test
+    void rejectsInvalidMonsterAnimationArrays(@TempDir Path root) throws IOException {
+        for (String field : List.of("iconsMove", "iconsInjure", "iconsAttack")) {
+            assertTemplateAnimationRejected(root, field, null);
+            assertTemplateAnimationRejected(root, field, new com.google.gson.JsonPrimitive(1));
+            assertTemplateAnimationRejected(root, field, new JsonArray());
+            JsonArray overflowing = new JsonArray();
+            for (int index = 0; index < 128; index++) {
+                overflowing.add(1);
+            }
+            assertTemplateAnimationRejected(root, field, overflowing);
+            assertTemplateAnimationRejected(root, field, singleAnimationValue(-1));
+            assertTemplateAnimationRejected(root, field, singleAnimationValue(32768));
+            assertTemplateAnimationRejected(root, field, singleAnimationValue(1.5));
+        }
     }
 
     @Test
@@ -88,7 +116,7 @@ class MonsterLoaderTest {
         var bootstrap = productionMonsterBootstrap();
         writeMonsterBootstrap(root, bootstrap);
         assertThrows(IllegalArgumentException.class,
-                () -> MonsterLoader.load(root, true));
+                () -> MonsterLoader.load(root, true, 2));
     }
 
     @Test
@@ -115,12 +143,12 @@ class MonsterLoaderTest {
         writeMonsterBootstrap(root, bootstrap);
 
         assertThrows(IllegalArgumentException.class,
-                () -> MonsterLoader.load(root, true));
+                () -> MonsterLoader.load(root, true, 2));
     }
 
     @Test
     void optionalMissingMonsterBootstrapReturnsUnavailableFamily(@TempDir Path root) {
-        var monsters = MonsterLoader.load(root, false);
+        var monsters = MonsterLoader.load(root, false, 2);
 
         assertEquals(-1, monsters.version());
         assertTrue(monsters.darts().isEmpty());
@@ -189,10 +217,28 @@ class MonsterLoaderTest {
     private static void assertMonsterBootstrapRejected(
             Path root, com.google.gson.JsonObject bootstrap) throws IOException {
         Files.copy(Path.of("resources", "json", "MonsterDartTemplate.json"),
-                root.resolve("MonsterDartTemplate.json"));
+                root.resolve("MonsterDartTemplate.json"), StandardCopyOption.REPLACE_EXISTING);
         writeMonsterBootstrap(root, bootstrap);
         assertThrows(IllegalArgumentException.class,
-                () -> MonsterLoader.load(root, true));
+                () -> MonsterLoader.load(root, true, 2));
+    }
+
+    private static void assertTemplateAnimationRejected(
+            Path root, String field, JsonElement replacement) throws IOException {
+        var bootstrap = productionMonsterBootstrap();
+        var template = bootstrap.getAsJsonArray("templates").get(0).getAsJsonObject();
+        if (replacement == null) {
+            template.remove(field);
+        } else {
+            template.add(field, replacement);
+        }
+        assertMonsterBootstrapRejected(root, bootstrap);
+    }
+
+    private static JsonArray singleAnimationValue(Number value) {
+        JsonArray result = new JsonArray();
+        result.add(value);
+        return result;
     }
 
     private static void writeMonsterBootstrap(

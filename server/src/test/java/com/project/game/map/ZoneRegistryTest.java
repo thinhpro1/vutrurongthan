@@ -47,6 +47,6 @@ class ZoneRegistryTest {
 
     private static ZoneRegistry registry() {
         return new ZoneRegistry(new MonsterFactory(
-                GameResources.fromFrameRoot(java.nio.file.Path.of("resources", "json"))));
+                GameResources.fromFrameRoot(java.nio.file.Path.of("resources", "json"), 2)));
     }
 }

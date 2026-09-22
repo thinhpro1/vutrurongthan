@@ -69,10 +69,11 @@ class ServerBootstrapTest {
     void overlaysOnlySupportedGameSystemPropertyNamespaces() {
         String networkKey = "game.network.port";
         String resourceKey = "game.resource.image-version";
+        String monsterResourceKey = "game.resource.monster-version";
         String dbKey = "game.db.url";
         String clientKey = "game.client.version";
         Properties previous = new Properties();
-        for (String key : new String[]{networkKey, resourceKey, dbKey, clientKey}) {
+        for (String key : new String[]{networkKey, resourceKey, monsterResourceKey, dbKey, clientKey}) {
             String value = System.getProperty(key);
             if (value != null) {
                 previous.setProperty(key, value);
@@ -81,11 +82,13 @@ class ServerBootstrapTest {
         try {
             System.setProperty(networkKey, "1708");
             System.setProperty(resourceKey, "3");
+            System.setProperty(monsterResourceKey, "4");
             System.setProperty(dbKey, "jdbc:mysql://override/rongthanchibi");
             System.setProperty(clientKey, "override-client");
             Properties properties = new Properties();
             properties.setProperty(networkKey, "1707");
             properties.setProperty(resourceKey, "2");
+            properties.setProperty(monsterResourceKey, "2");
             properties.setProperty(dbKey, "jdbc:mysql://baseline/rongthanchibi");
             properties.setProperty(clientKey, "baseline-client");
 
@@ -93,12 +96,28 @@ class ServerBootstrapTest {
 
             assertEquals("1708", properties.getProperty(networkKey));
             assertEquals("3", properties.getProperty(resourceKey));
+            assertEquals("4", properties.getProperty(monsterResourceKey));
             assertEquals("jdbc:mysql://override/rongthanchibi", properties.getProperty(dbKey));
             assertEquals("baseline-client", properties.getProperty(clientKey));
         } finally {
-            for (String key : new String[]{networkKey, resourceKey, dbKey, clientKey}) {
+            for (String key : new String[]{networkKey, resourceKey, monsterResourceKey, dbKey, clientKey}) {
                 restoreProperty(key, previous.getProperty(key));
             }
+        }
+    }
+
+    @Test
+    void rejectsInvalidConfiguredMonsterVersion() {
+        for (String configured : new String[]{null, "", "0", "128", "not-an-integer"}) {
+            Properties properties = startupProperties();
+            if (configured == null) {
+                properties.remove("game.resource.monster-version");
+            } else {
+                properties.setProperty("game.resource.monster-version", configured);
+            }
+            assertThrows(IllegalStateException.class, () -> ServerBootstrap.fromProperties(
+                    properties, ServerBootstrapTest::databaseManager,
+                    ignored -> mapRepository(canonicalMapRows())));
         }
     }
 
@@ -345,6 +364,7 @@ class ServerBootstrapTest {
         properties.setProperty("game.resource.json-dir", "resources/json");
         properties.setProperty("game.resource.map-dir", "resources/maps");
         properties.setProperty("game.resource.image-version", "2");
+        properties.setProperty("game.resource.monster-version", "2");
         return properties;
     }
 

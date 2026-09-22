@@ -135,7 +135,7 @@ class MessageHandlerCombatTest {
     @Test
     void preFinishMapInfoZoneCannotBeTargeted() {
         GameResources resources = GameResources.fromFrameRoot(
-                Path.of("resources", "json"), MapTestSupport.canonicalMaps());
+                Path.of("resources", "json"), MapTestSupport.canonicalMaps(), 2);
         GameplayServices maps = new GameplayServices(new PlayerPacketWriter(), new MonsterPacketWriter(),
                 new MonsterFactory(resources));
         SessionServices services = TestServices.serverServices(TestServices.authService(), resources, maps);
@@ -178,7 +178,7 @@ class MessageHandlerCombatTest {
 
     private static CombatContext combatContext() {
         GameResources resources = GameResources.fromFrameRoot(
-                Path.of("resources", "json"), MapTestSupport.canonicalMaps());
+                Path.of("resources", "json"), MapTestSupport.canonicalMaps(), 2);
         GameplayServices maps = new GameplayServices(new PlayerPacketWriter(), new MonsterPacketWriter(),
                 new MonsterFactory(resources));
         SessionServices services = TestServices.serverServices(TestServices.authService(), resources, maps);

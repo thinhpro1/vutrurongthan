@@ -18,19 +18,15 @@ namespace Assets.Scripts.Entites.Monsters
         public List<int> iconsMove = new List<int>();
         public List<int> iconsStand = new List<int>();
 
-        public int iconInjure;
+        public List<int> iconsInjure = new List<int>();
 
-        public int iconAttack;
+        public List<int> iconsAttack = new List<int>();
 
         public MonsterDartTemplate dart;
 
         public int w;
 
         public int h;
-
-        public int dx;
-
-        public int dy;
 
         public void LoadIcons()
         {
@@ -44,8 +40,14 @@ namespace Assets.Scripts.Entites.Monsters
                 {
                     GraphicManager.instance.CreateImage(id);
                 }
-                GraphicManager.instance.CreateImage(iconInjure);
-                GraphicManager.instance.CreateImage(iconAttack);
+                foreach (int id in iconsInjure)
+                {
+                    GraphicManager.instance.CreateImage(id);
+                }
+                foreach (int id in iconsAttack)
+                {
+                    GraphicManager.instance.CreateImage(id);
+                }
             }
             catch
             {

@@ -19,7 +19,14 @@ final class MonsterLoader {
     private MonsterLoader() {
     }
 
-    static LoadedMonsters load(Path root, boolean required) {
+    static LoadedMonsters load(Path root, boolean required, int monsterVersion) {
+        if (monsterVersion == -1) {
+            return new LoadedMonsters(-1, List.of(), List.of(), Map.of());
+        }
+        if (monsterVersion < 1 || monsterVersion > Byte.MAX_VALUE) {
+            throw new IllegalArgumentException(
+                    "monster resource version must be between 1 and 127: " + monsterVersion);
+        }
         Path normalizedRoot = root.toAbsolutePath().normalize();
         Path source = normalizedRoot.resolve("MonsterBootstrap.json").normalize();
         if (!source.startsWith(normalizedRoot)
@@ -32,11 +39,8 @@ final class MonsterLoader {
         }
         JsonObject rootObject = JsonResourceReader.readObject(root, "MonsterBootstrap.json");
         JsonResourceReader.requireExactFields(rootObject,
-                Set.of("version", "templates", "mapSpawns"),
+                Set.of("templates", "mapSpawns"),
                 "MonsterBootstrap.json");
-        if (JsonResourceReader.readStrictInt(rootObject, "version") != 1) {
-            throw new IllegalArgumentException("MonsterBootstrap.json version must be 1");
-        }
 
         List<MonsterDart> darts = MonsterDartLoader.load(root, true);
         Set<Integer> dartIds = new HashSet<>();
@@ -84,7 +88,7 @@ final class MonsterLoader {
         Map<Integer, List<MonsterSpawn>> spawns = new HashMap<>();
         spawns.put(0, map0);
         spawns.put(1, map1);
-        return new LoadedMonsters(1, darts, List.of(template),
+        return new LoadedMonsters(monsterVersion, darts, List.of(template),
                 Collections.unmodifiableMap(spawns));
     }
 
@@ -96,7 +100,7 @@ final class MonsterLoader {
         JsonObject object = value.getAsJsonObject();
         JsonResourceReader.requireExactFields(object,
                 Set.of("id", "name", "rangeMove", "speed", "type", "dartId",
-                        "iconsMove", "iconInjure", "iconAttack", "w", "h", "dx", "dy"),
+                        "iconsMove", "iconsInjure", "iconsAttack", "w", "h"),
                 "MonsterBootstrap template");
         int id = JsonResourceReader.readShortValue(object, "id");
         String name = JsonResourceReader.readString(object, "name");
@@ -104,25 +108,34 @@ final class MonsterLoader {
         int speed = JsonResourceReader.readByteValue(object, "speed");
         int type = JsonResourceReader.readByteValue(object, "type");
         int dartId = JsonResourceReader.readByteValue(object, "dartId");
-        List<Integer> iconsMove = JsonResourceReader.readShortList(object, "iconsMove");
-        if (iconsMove.size() > Byte.MAX_VALUE) {
-            throw new IllegalArgumentException("too many move icons for MonsterBootstrap template");
-        }
-        int iconInjure = JsonResourceReader.readShortValue(object, "iconInjure");
-        int iconAttack = JsonResourceReader.readShortValue(object, "iconAttack");
+        List<Integer> iconsMove = readAnimationList(object, "iconsMove");
+        List<Integer> iconsInjure = readAnimationList(object, "iconsInjure");
+        List<Integer> iconsAttack = readAnimationList(object, "iconsAttack");
         int width = JsonResourceReader.readShortValue(object, "w");
         int height = JsonResourceReader.readShortValue(object, "h");
-        int dx = JsonResourceReader.readByteValue(object, "dx");
-        int dy = JsonResourceReader.readByteValue(object, "dy");
         if (id != 1 || !"Hổ nanh kiếm".equals(name) || rangeMove != 100 || speed != 1
                 || type != 1 || dartId != 0
                 || !iconsMove.equals(List.of(11818, 11819, 11820, 11821, 11822))
-                || iconInjure != 11824 || iconAttack != 11823 || width != 175 || height != 95
-                || dx != 0 || dy != 0 || !dartIds.contains(dartId)) {
+                || !iconsInjure.equals(List.of(11824))
+                || !iconsAttack.equals(List.of(11823)) || width != 175 || height != 95
+                || !dartIds.contains(dartId)) {
             throw new IllegalArgumentException("MonsterBootstrap template 1 is not canonical");
         }
         return new MonsterTemplate(id, name, rangeMove, speed, type, dartId,
-                iconsMove, iconInjure, iconAttack, width, height, dx, dy);
+                iconsMove, iconsInjure, iconsAttack, width, height);
+    }
+
+    private static List<Integer> readAnimationList(JsonObject object, String field) {
+        List<Integer> icons = JsonResourceReader.readShortList(object, field);
+        if (icons.isEmpty() || icons.size() > Byte.MAX_VALUE) {
+            throw new IllegalArgumentException(
+                    "MonsterBootstrap template " + field + " must contain 1..127 icons");
+        }
+        if (icons.stream().anyMatch(icon -> icon < 0)) {
+            throw new IllegalArgumentException(
+                    "MonsterBootstrap template " + field + " contains a negative icon");
+        }
+        return icons;
     }
 
     private static List<MonsterSpawn> readMonsterSpawns(JsonElement value, int mapId,

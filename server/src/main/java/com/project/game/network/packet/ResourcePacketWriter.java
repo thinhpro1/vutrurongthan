@@ -100,24 +100,19 @@ public final class ResourcePacketWriter {
         writer.writeShort(templates.size());
         for (MonsterTemplate template : templates) {
             Objects.requireNonNull(template, "template");
-            requireByteCount(template.iconsMove().size(),
-                    "move icons for monster template " + template.id());
             writer.writeShort(template.id())
                     .writeUtf(template.name())
                     .writeShort(template.rangeMove())
                     .writeByte(template.speed())
                     .writeByte(template.type())
-                    .writeByte(template.dartId())
-                    .writeByte(template.iconsMove().size());
-            for (int icon : template.iconsMove()) {
-                writer.writeShort(icon);
-            }
-            writer.writeShort(template.iconInjure())
-                    .writeShort(template.iconAttack())
-                    .writeShort(template.w())
-                    .writeShort(template.h())
-                    .writeByte(template.dx())
-                    .writeByte(template.dy());
+                    .writeByte(template.dartId());
+            writeMonsterAnimation(writer, template.iconsMove(),
+                    "move icons for monster template " + template.id());
+            writeMonsterAnimation(writer, template.iconsInjure(),
+                    "injure icons for monster template " + template.id());
+            writeMonsterAnimation(writer, template.iconsAttack(),
+                    "attack icons for monster template " + template.id());
+            writer.writeShort(template.w()).writeShort(template.h());
         }
         return new Message(MessageName.UPDATE_DATA, writer.toByteArray());
     }
@@ -134,6 +129,21 @@ public final class ResourcePacketWriter {
         writer.writeShort(phase.dx())
                 .writeShort(phase.dy())
                 .writeShort(phase.delay());
+    }
+
+    private static void writeMonsterAnimation(
+            MessageWriter writer, List<Integer> icons, String field) throws IOException {
+        Objects.requireNonNull(icons, field);
+        if (icons.isEmpty() || icons.size() > Byte.MAX_VALUE) {
+            throw new IOException(field + " must contain 1..127 icons: " + icons.size());
+        }
+        writer.writeByte(icons.size());
+        for (Integer icon : icons) {
+            if (icon == null || icon < 0 || icon > Short.MAX_VALUE) {
+                throw new IOException(field + " icon must be between 0 and 32767: " + icon);
+            }
+            writer.writeShort(icon);
+        }
     }
 
     public Message levelResource(int version, List<LevelTemplate> levels) throws IOException {

@@ -37,6 +37,14 @@ namespace Assets.Scripts.Entites.Monsters
             {
                 MyReader reader = new MyReader(Rms.Load("monster"));
                 versionMonster = reader.ReadSbyte();
+                if (versionMonster != 2)
+                {
+                    versionMonster = -1;
+                    monsterTemplates.Clear();
+                    monsterDartTemplates.Clear();
+                    darts.Clear();
+                    return;
+                }
                 int count = reader.ReadShort();
                 for (int i = 0; i < count; i++)
                 {
@@ -87,12 +95,18 @@ namespace Assets.Scripts.Entites.Monsters
                     {
                         template.iconsMove.Add(reader.ReadShort());
                     }
-                    template.iconInjure = reader.ReadShort();
-                    template.iconAttack = reader.ReadShort();
+                    count_img = reader.ReadSbyte();
+                    for (int j = 0; j < count_img; j++)
+                    {
+                        template.iconsInjure.Add(reader.ReadShort());
+                    }
+                    count_img = reader.ReadSbyte();
+                    for (int j = 0; j < count_img; j++)
+                    {
+                        template.iconsAttack.Add(reader.ReadShort());
+                    }
                     template.w = reader.ReadShort();
                     template.h = reader.ReadShort();
-                    template.dx = reader.ReadSbyte();
-                    template.dy = reader.ReadSbyte();
                     monsterTemplates.Add(template.id, template);
                 }
             }
@@ -102,6 +116,7 @@ namespace Assets.Scripts.Entites.Monsters
                 versionMonster = -1;
                 monsterTemplates.Clear();
                 monsterDartTemplates.Clear();
+                darts.Clear();
             }
         }
 
@@ -155,12 +170,18 @@ namespace Assets.Scripts.Entites.Monsters
                 {
                     writer.WriteShort(icon);
                 }
-                writer.WriteShort(template.iconInjure);
-                writer.WriteShort(template.iconAttack);
+                writer.WriteSByte(template.iconsInjure.Count);
+                foreach (int icon in template.iconsInjure)
+                {
+                    writer.WriteShort(icon);
+                }
+                writer.WriteSByte(template.iconsAttack.Count);
+                foreach (int icon in template.iconsAttack)
+                {
+                    writer.WriteShort(icon);
+                }
                 writer.WriteShort(template.w);
                 writer.WriteShort(template.h);
-                writer.WriteSByte(template.dx);
-                writer.WriteSByte(template.dy);
             }
             Rms.Save("monster", writer.GetData());
         }

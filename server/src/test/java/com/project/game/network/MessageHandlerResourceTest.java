@@ -22,6 +22,7 @@ import java.io.PipedOutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -151,8 +152,8 @@ class MessageHandlerResourceTest {
     }
 
     @Test
-    void serializesExactLegacyMonsterResourceInUnityFieldOrder() throws Exception {
-        GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"));
+    void serializesExactMonsterResourceV2InUnityFieldOrder() throws Exception {
+        GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"), 2);
         PipedInputStream input = new PipedInputStream();
         try (PipedOutputStream inputWriter = new PipedOutputStream(input)) {
             ByteArrayOutputStream output = new ByteArrayOutputStream();
@@ -174,7 +175,7 @@ class MessageHandlerResourceTest {
                 assertEquals(MessageName.UPDATE_DATA, response.command());
                 var reader = response.reader();
                 assertEquals(4, reader.readByte());
-                assertEquals(1, reader.readByte());
+                assertEquals(2, reader.readByte());
                 assertEquals(6, reader.readShort());
                 List<List<Integer>> lightIcons = List.of(
                         List.of(2198, 2199, 2200),
@@ -218,13 +219,16 @@ class MessageHandlerResourceTest {
                 assertEquals(11820, reader.readShort());
                 assertEquals(11821, reader.readShort());
                 assertEquals(11822, reader.readShort());
+                assertEquals(1, reader.readByte());
                 assertEquals(11824, reader.readShort());
+                assertEquals(1, reader.readByte());
                 assertEquals(11823, reader.readShort());
                 assertEquals(175, reader.readShort());
                 assertEquals(95, reader.readShort());
-                assertEquals(0, reader.readByte());
-                assertEquals(0, reader.readByte());
                 assertEquals(0, reader.remaining());
+                assertEquals(334, response.payload().length);
+                assertEquals("d06cb5c1ec2558fd2b5445ec6be5955f474b4ccef01205d85dd5ff478ede5e21",
+                        sha256(response.payload()));
             } finally {
                 session.close();
             }
@@ -263,9 +267,18 @@ class MessageHandlerResourceTest {
     }
 
     @Test
-    void manifestAdvertisesLoadedMonsterVersionOne() throws Exception {
-        assertEquals(1, readManifestMonsterVersion(GameResources.fromFrameRoot(
-                Path.of("resources", "json"))));
+    void manifestAdvertisesLoadedMonsterVersionTwo() throws Exception {
+        assertEquals(2, readManifestMonsterVersion(GameResources.fromFrameRoot(
+                Path.of("resources", "json"), 2)));
+    }
+
+    private static String sha256(byte[] payload) throws Exception {
+        byte[] digest = MessageDigest.getInstance("SHA-256").digest(payload);
+        StringBuilder result = new StringBuilder(digest.length * 2);
+        for (byte value : digest) {
+            result.append(String.format("%02x", Byte.toUnsignedInt(value)));
+        }
+        return result.toString();
     }
 
     @Test

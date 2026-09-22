@@ -59,7 +59,7 @@ namespace Assets.Scripts.Entites.Monsters
 
         public override void UpdateDead()
         {
-            iconPaint = template.iconInjure;
+            iconPaint = template.iconsInjure[0];
             if (GameCanvas.gameTick % 10 == 0)
             {
                 effects.Add(new EffectLoop(this, 9, 1, Utils.random(0, w / 2) * (Utils.r.Next(2) == 0 ? 1 : (-1)), Utils.random(h / 4, h), StaticObj.VCENTER_HCENTER));

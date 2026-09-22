@@ -165,6 +165,7 @@ public final class ServerBootstrap {
         String configuredIconRoot = properties.getProperty("game.resource.icon-dir", "").trim();
         String configuredJsonRoot = properties.getProperty("game.resource.json-dir", "").trim();
         int imageVersion = integer(properties, "game.resource.image-version", -1);
+        int monsterVersion = requiredMonsterVersion(properties);
         java.nio.file.Path iconRoot = configuredIconRoot.isEmpty()
                 ? null : java.nio.file.Path.of(configuredIconRoot);
         if (configuredJsonRoot.isEmpty()) {
@@ -175,7 +176,28 @@ public final class ServerBootstrap {
                 iconRoot,
                 java.nio.file.Path.of(configuredJsonRoot),
                 imageVersion,
+                monsterVersion,
                 maps);
+    }
+
+    private static int requiredMonsterVersion(Properties properties) {
+        String configured = properties.getProperty("game.resource.monster-version");
+        if (configured == null || configured.trim().isEmpty()) {
+            throw new IllegalStateException(
+                    "game.resource.monster-version must be configured for normal startup");
+        }
+        final int version;
+        try {
+            version = Integer.parseInt(configured.trim());
+        } catch (NumberFormatException exception) {
+            throw new IllegalStateException(
+                    "game.resource.monster-version must be an integer", exception);
+        }
+        if (version < 1 || version > Byte.MAX_VALUE) {
+            throw new IllegalStateException(
+                    "game.resource.monster-version must be between 1 and 127: " + version);
+        }
+        return version;
     }
 
     private static Path requiredPath(Properties properties, String key) {

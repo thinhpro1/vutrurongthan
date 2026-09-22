@@ -88,10 +88,21 @@ public final class GameResources {
                 Objects.requireNonNull(jsonRoot, "jsonRoot"));
     }
 
+    public static GameResources fromFrameRoot(Path jsonRoot, int monsterVersion) {
+        return GameResourcesLoader.fromFrameRoot(
+                Objects.requireNonNull(jsonRoot, "jsonRoot"), monsterVersion);
+    }
+
     public static GameResources fromFrameRoot(
             Path jsonRoot, Map<Integer, MapTemplate> maps) {
         return GameResourcesLoader.fromFrameRoot(
                 Objects.requireNonNull(jsonRoot, "jsonRoot"), maps);
+    }
+
+    public static GameResources fromFrameRoot(
+            Path jsonRoot, Map<Integer, MapTemplate> maps, int monsterVersion) {
+        return GameResourcesLoader.fromFrameRoot(
+                Objects.requireNonNull(jsonRoot, "jsonRoot"), maps, monsterVersion);
     }
 
     public static GameResources fromRoots(Path iconRoot, Path jsonRoot) {
@@ -103,8 +114,23 @@ public final class GameResources {
     }
 
     public static GameResources fromRoots(
+            Path iconRoot, Path jsonRoot, int imageVersion, int monsterVersion) {
+        return GameResourcesLoader.fromRoots(jsonRoot, iconRoot, imageVersion, monsterVersion);
+    }
+
+    public static GameResources fromRoots(
             Path iconRoot, Path jsonRoot, int imageVersion, Map<Integer, MapTemplate> maps) {
         return GameResourcesLoader.fromRoots(jsonRoot, iconRoot, imageVersion, maps);
+    }
+
+    public static GameResources fromRoots(
+            Path iconRoot,
+            Path jsonRoot,
+            int imageVersion,
+            int monsterVersion,
+            Map<Integer, MapTemplate> maps) {
+        return GameResourcesLoader.fromRoots(
+                jsonRoot, iconRoot, imageVersion, monsterVersion, maps);
     }
 
     public int imageVersion() {

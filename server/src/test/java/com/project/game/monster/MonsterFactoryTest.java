@@ -17,7 +17,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class MonsterFactoryTest {
     private static GameResources resources() {
         return GameResources.fromFrameRoot(
-                Path.of("resources", "json"));
+                Path.of("resources", "json"), 2);
     }
 
     @Test
@@ -80,7 +80,7 @@ class MonsterFactoryTest {
         Files.copy(Path.of("resources", "json", "MonsterBootstrap.json"),
                 root.resolve("MonsterBootstrap.json"));
 
-        GameResources resources = GameResources.fromFrameRoot(root);
+        GameResources resources = GameResources.fromFrameRoot(root, 2);
         IllegalStateException failure = assertThrows(IllegalStateException.class,
                 () -> new MonsterFactory(resources).createForMap(1));
         assertTrue(failure.getMessage().contains("missing monster combat template 1"));

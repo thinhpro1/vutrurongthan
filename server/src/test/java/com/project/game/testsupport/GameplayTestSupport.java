@@ -73,22 +73,22 @@ public static void joinAtBarrier(CyclicBarrier start, GameplayServices maps,
     public static MonsterFactory monsterFactory() {
         return new MonsterFactory(
                 GameResources.fromFrameRoot(
-                        Path.of("resources", "json"), MapTestSupport.canonicalMaps()));
+                        Path.of("resources", "json"), MapTestSupport.canonicalMaps(), 2));
     }
 
     public static GameplayServices mapsWithMonsters() {
         return new GameplayServices(GameResources.fromFrameRoot(
-                Path.of("resources", "json"), MapTestSupport.canonicalMaps()));
+                Path.of("resources", "json"), MapTestSupport.canonicalMaps(), 2));
     }
 
     public static GameplayServices mapsWithMonsters(Clock clock) {
         return new GameplayServices(GameResources.fromFrameRoot(
-                Path.of("resources", "json"), MapTestSupport.canonicalMaps()), clock);
+                Path.of("resources", "json"), MapTestSupport.canonicalMaps(), 2), clock);
     }
 
     public static GameplayServices mapsWithMonsters(Clock clock, java.util.random.RandomGenerator random) {
         return new GameplayServices(GameResources.fromFrameRoot(
-                Path.of("resources", "json"), MapTestSupport.canonicalMaps()), clock, random);
+                Path.of("resources", "json"), MapTestSupport.canonicalMaps(), 2), clock, random);
     }
 
     public static GameplayServices mapsWithoutMonsters() {

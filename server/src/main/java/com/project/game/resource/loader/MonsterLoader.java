@@ -126,16 +126,24 @@ final class MonsterLoader {
     }
 
     private static List<Integer> readAnimationList(JsonObject object, String field) {
-        List<Integer> icons = JsonResourceReader.readShortList(object, field);
+        JsonElement value = JsonResourceReader.required(object, field);
+        if (!value.isJsonArray()) {
+            throw new IllegalArgumentException("resource field " + field + " must be an array");
+        }
+        List<Integer> icons = new java.util.ArrayList<>(value.getAsJsonArray().size());
+        for (JsonElement element : value.getAsJsonArray()) {
+            int icon = JsonResourceReader.readCanonicalInt(element, field);
+            if (icon < 0 || icon > Short.MAX_VALUE) {
+                throw new IllegalArgumentException("resource field " + field
+                        + " must fit unsigned short: " + icon);
+            }
+            icons.add(icon);
+        }
         if (icons.isEmpty() || icons.size() > Byte.MAX_VALUE) {
             throw new IllegalArgumentException(
                     "MonsterBootstrap template " + field + " must contain 1..127 icons");
         }
-        if (icons.stream().anyMatch(icon -> icon < 0)) {
-            throw new IllegalArgumentException(
-                    "MonsterBootstrap template " + field + " contains a negative icon");
-        }
-        return icons;
+        return List.copyOf(icons);
     }
 
     private static List<MonsterSpawn> readMonsterSpawns(JsonElement value, int mapId,

@@ -112,6 +112,19 @@ class MonsterLoaderTest {
     }
 
     @Test
+    void rejectsNonCanonicalDecimalMonsterAnimationIntegers(@TempDir Path root) throws IOException {
+        for (String field : List.of("iconsMove", "iconsInjure", "iconsAttack")) {
+            var bootstrap = productionMonsterBootstrap();
+            var icons = bootstrap.getAsJsonArray("templates").get(0).getAsJsonObject()
+                    .getAsJsonArray(field);
+            String canonicalValue = icons.get(0).getAsString();
+            icons.set(0, JsonParser.parseString("[" + canonicalValue + ".0]")
+                    .getAsJsonArray().get(0));
+            assertMonsterBootstrapRejected(root, bootstrap);
+        }
+    }
+
+    @Test
     void rejectsMissingMonsterDartSource(@TempDir Path root) throws IOException {
         var bootstrap = productionMonsterBootstrap();
         writeMonsterBootstrap(root, bootstrap);

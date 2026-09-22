@@ -48,7 +48,7 @@ class ResourcePacketWriterTest {
     @Test
     void rejectsMonsterMoveIconCountThatWouldBeTruncated() {
         MonsterTemplate overflowing = new MonsterTemplate(
-                1, "bat", 1, 1, 1, 1,
+                1, "bat", 1, 100L, 10L, 0L, 1, 1, 1, 1,
                 Collections.nCopies(Byte.MAX_VALUE + 1, 1), List.of(1), List.of(1),
                 1, 1);
 
@@ -62,7 +62,8 @@ class ResourcePacketWriterTest {
             List<Integer> injure = animation == 1 ? List.of() : List.of(1);
             List<Integer> attack = animation == 2 ? List.of() : List.of(1);
             MonsterTemplate empty = new MonsterTemplate(
-                    1, "bat", 1, 1, 1, 1, move, injure, attack, 1, 1);
+                    1, "bat", 1, 100L, 10L, 0L, 1, 1, 1, 1,
+                    move, injure, attack, 1, 1);
             assertThrows(IOException.class, () -> writer.monsterResource(1, List.of(), List.of(empty)));
 
             List<Integer> overflowingMove = animation == 0
@@ -72,7 +73,7 @@ class ResourcePacketWriterTest {
             List<Integer> overflowingAttack = animation == 2
                     ? Collections.nCopies(Byte.MAX_VALUE + 1, 1) : List.of(1);
             MonsterTemplate overflowing = new MonsterTemplate(
-                    1, "bat", 1, 1, 1, 1,
+                    1, "bat", 1, 100L, 10L, 0L, 1, 1, 1, 1,
                     overflowingMove, overflowingInjure, overflowingAttack, 1, 1);
             assertThrows(IOException.class,
                     () -> writer.monsterResource(1, List.of(), List.of(overflowing)));
@@ -153,7 +154,8 @@ class ResourcePacketWriterTest {
         MonsterDart.Phase explode = new MonsterDart.Phase(List.of(10), 11, 12, 13);
         MonsterDart dart = new MonsterDart(4, true, light, bullet, explode);
         MonsterTemplate template = new MonsterTemplate(
-                8, "bat", 50, 6, 2, 4, List.of(20, 21), List.of(30, 31, 32),
+                8, "bat", 3, 100L, 10L, 4L, 50, 6, 2, 4,
+                List.of(20, 21), List.of(30, 31, 32),
                 List.of(40), 24, 25);
 
         var reader = writer.monsterResource(3, List.of(dart), List.of(template)).reader();
@@ -268,7 +270,7 @@ class ResourcePacketWriterTest {
 
     private static MonsterTemplate validTemplate() {
         return new MonsterTemplate(
-                1, "bat", 1, 1, 1, 1, List.of(1),
+                1, "bat", 1, 100L, 10L, 0L, 1, 1, 1, 1, List.of(1),
                 List.of(1), List.of(1), 1, 1);
     }
 

@@ -1,6 +1,9 @@
 package com.project.game.monster;
 
 import com.project.game.resource.GameResources;
+import com.project.game.persistence.monster.MonsterRepository;
+import com.project.game.testsupport.MapTestSupport;
+import com.project.game.testsupport.MonsterTestSupport;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -17,7 +20,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class MonsterFactoryTest {
     private static GameResources resources() {
         return GameResources.fromFrameRoot(
-                Path.of("resources", "json"), 2);
+                Path.of("resources", "json"), MapTestSupport.canonicalMaps(), 2,
+                MonsterTestSupport.canonicalRepository());
     }
 
     @Test
@@ -34,7 +38,7 @@ class MonsterFactoryTest {
                 map1.stream().map(Monster::snapshot).toList();
 
         assertEquals(
-                List.of(0, 1, 2, 3, 4, 5),
+                List.of(101, 102, 103, 104, 105, 106),
                 snapshots.stream().map(MonsterSnapshot::id).toList());
         assertEquals(
                 List.of(975, 1348, 1800, 2250, 2600, 2950),
@@ -73,16 +77,26 @@ class MonsterFactoryTest {
     }
 
     @Test
-    void missingCombatStatFailsClearly(@TempDir Path root) throws IOException {
-        Files.copy(Path.of("resources", "json", "Frame.json"), root.resolve("Frame.json"));
-        Files.copy(Path.of("resources", "json", "MonsterDartTemplate.json"),
-                root.resolve("MonsterDartTemplate.json"));
-        Files.copy(Path.of("resources", "json", "MonsterBootstrap.json"),
-                root.resolve("MonsterBootstrap.json"));
+    void missingCanonicalTemplateFailsClearly() {
+        MonsterRepository repository = new MonsterRepository() {
+            @Override
+            public List<TemplateRow> findAllTemplates() {
+                return List.of(new TemplateRow(
+                        1, "Hổ nanh kiếm", 2, 300L, 10L, 10L,
+                        100, 1, 1, 0,
+                        "[11818,11819,11820,11821,11822]", "[11823]", "[11824]",
+                        175, 95));
+            }
 
-        GameResources resources = GameResources.fromFrameRoot(root, 2);
-        IllegalStateException failure = assertThrows(IllegalStateException.class,
-                () -> new MonsterFactory(resources).createForMap(1));
-        assertTrue(failure.getMessage().contains("missing monster combat template 1"));
+            @Override
+            public List<SpawnRow> findAllSpawns() {
+                return List.of(new SpawnRow(101, 1, 2, 975, 936));
+            }
+        };
+
+        IllegalArgumentException failure = assertThrows(IllegalArgumentException.class,
+                () -> GameResources.fromFrameRoot(
+                        Path.of("resources", "json"), MapTestSupport.canonicalMaps(), 2, repository));
+        assertTrue(failure.getMessage().contains("missing template 2"));
     }
 }

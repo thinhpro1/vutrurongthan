@@ -27,7 +27,9 @@ class MonsterServiceSnapshotTest {
     @Test
     void snapshotsCreateRuntimeZoneButLifecycleTickOnlyVisitsExistingZones() {
         ZoneRegistry zones = new ZoneRegistry(new MonsterFactory(
-                GameResources.fromFrameRoot(Path.of("resources", "json"), 2)));
+                GameResources.fromFrameRoot(Path.of("resources", "json"),
+                        com.project.game.testsupport.MapTestSupport.canonicalMaps(), 2,
+                        com.project.game.testsupport.MonsterTestSupport.canonicalRepository())));
         MonsterService monsters = new MonsterService(
                 zones, new MonsterPacketWriter(), new PlayerPacketWriter());
 
@@ -49,7 +51,7 @@ class MonsterServiceSnapshotTest {
 
         assertEquals(6, monsters.size());
         assertEquals(
-                List.of(0, 1, 2, 3, 4, 5),
+                List.of(101, 102, 103, 104, 105, 106),
                 monsters.stream().map(MonsterSnapshot::id).toList());
         assertEquals(0, maps.mapService().memberCount(1, 0));
     }

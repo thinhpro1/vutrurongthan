@@ -64,7 +64,7 @@ public static void joinAtBarrier(CyclicBarrier start, GameplayServices maps,
                                         AtomicReference<Throwable> failure) {
         try {
             start.await();
-            result.set(maps.combatService().attackMonster(session, 0, 10));
+            result.set(maps.combatService().attackMonster(session, 101, 10));
         } catch (Throwable exception) {
             failure.compareAndSet(null, exception);
         }
@@ -73,22 +73,26 @@ public static void joinAtBarrier(CyclicBarrier start, GameplayServices maps,
     public static MonsterFactory monsterFactory() {
         return new MonsterFactory(
                 GameResources.fromFrameRoot(
-                        Path.of("resources", "json"), MapTestSupport.canonicalMaps(), 2));
+                        Path.of("resources", "json"), MapTestSupport.canonicalMaps(), 2,
+                        MonsterTestSupport.canonicalRepository()));
     }
 
     public static GameplayServices mapsWithMonsters() {
         return new GameplayServices(GameResources.fromFrameRoot(
-                Path.of("resources", "json"), MapTestSupport.canonicalMaps(), 2));
+                Path.of("resources", "json"), MapTestSupport.canonicalMaps(), 2,
+                MonsterTestSupport.canonicalRepository()));
     }
 
     public static GameplayServices mapsWithMonsters(Clock clock) {
         return new GameplayServices(GameResources.fromFrameRoot(
-                Path.of("resources", "json"), MapTestSupport.canonicalMaps(), 2), clock);
+                Path.of("resources", "json"), MapTestSupport.canonicalMaps(), 2,
+                MonsterTestSupport.canonicalRepository()), clock);
     }
 
     public static GameplayServices mapsWithMonsters(Clock clock, java.util.random.RandomGenerator random) {
         return new GameplayServices(GameResources.fromFrameRoot(
-                Path.of("resources", "json"), MapTestSupport.canonicalMaps(), 2), clock, random);
+                Path.of("resources", "json"), MapTestSupport.canonicalMaps(), 2,
+                MonsterTestSupport.canonicalRepository()), clock, random);
     }
 
     public static GameplayServices mapsWithoutMonsters() {

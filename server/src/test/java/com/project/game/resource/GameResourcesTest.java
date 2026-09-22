@@ -1,5 +1,7 @@
 package com.project.game.resource;
 
+import com.project.game.testsupport.MapTestSupport;
+import com.project.game.testsupport.MonsterTestSupport;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -16,7 +18,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class GameResourcesTest {
     @Test
-    void unavailableServiceHasNoMonsterBootstrap() {
+    void unavailableServiceHasNoMonsterResources() {
         GameResources resources = GameResources.unavailable();
 
         assertEquals(-1, resources.monsterVersion());
@@ -102,17 +104,22 @@ class GameResourcesTest {
         assertTrue(resources.levels().isEmpty());
         assertTrue(resources.effects().isEmpty());
         assertEquals(-1, resources.monsterVersion());
-        assertTrue(resources.monsterCombatTemplate(1).isEmpty());
+        assertTrue(resources.monsterDarts().isEmpty());
+        assertTrue(resources.monsterTemplates().isEmpty());
     }
 
     @Test
     void fromFrameRootAcceptsExplicitMonsterResourceVersion() {
         GameResources resources = GameResources.fromFrameRoot(
-                Path.of("resources", "json"), 2);
+                Path.of("resources", "json"), MapTestSupport.canonicalMaps(), 2,
+                MonsterTestSupport.canonicalRepository());
 
         assertEquals(2, resources.monsterVersion());
+        assertEquals(1, resources.monsterTemplates().size());
         assertEquals(List.of(11824), resources.monsterTemplates().getFirst().iconsInjure());
         assertEquals(List.of(11823), resources.monsterTemplates().getFirst().iconsAttack());
+        assertEquals(List.of(101, 102, 103, 104, 105, 106),
+                resources.monstersForMap(1).stream().map(com.project.game.monster.MonsterSpawn::id).toList());
     }
 
     @Test

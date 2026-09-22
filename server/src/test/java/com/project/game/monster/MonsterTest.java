@@ -21,7 +21,7 @@ class MonsterTest {
 
         Monster.Damage result = monster.applyDamage(7, 10, NOW, RESPAWN_DELAY).orElseThrow();
 
-        assertEquals(new Monster.Damage(0, 10, 290, false, 0L), result);
+        assertEquals(new Monster.Damage(101, 10, 290, false, 0L), result);
         assertFalse(result.killed());
         assertEquals(0L, result.potentialReward());
         assertTrue(monster.isAlive());
@@ -69,7 +69,7 @@ class MonsterTest {
         Monster.Damage result =
                 monster.applyDamage(7, 10, NOW, RESPAWN_DELAY).orElseThrow();
 
-        assertEquals(new Monster.Damage(0, 10, 290, false, 0L), result);
+        assertEquals(new Monster.Damage(101, 10, 290, false, 0L), result);
         assertFalse(result.killed());
         assertEquals(0L, result.potentialReward());
         assertTrue(monster.respawnIfDue(Long.MAX_VALUE).isEmpty());
@@ -96,7 +96,7 @@ class MonsterTest {
         Monster.Respawn respawn =
                 monster.respawnIfDue(NOW + RESPAWN_DELAY + 1).orElseThrow();
 
-        assertEquals(new Monster.Respawn(0, 0, 300L), respawn);
+        assertEquals(new Monster.Respawn(101, 0, 300L), respawn);
         assertTrue(monster.isAlive());
         assertEquals(300L, monster.snapshot().hp());
         assertEquals(0, monster.snapshot().status());
@@ -152,7 +152,7 @@ class MonsterTest {
 
         Monster.Move move = monster.patrolOrReturn().orElseThrow();
 
-        assertEquals(new Monster.Move(0, 979, 936, 1), move);
+        assertEquals(new Monster.Move(101, 979, 936, 1), move);
         assertEquals(979, monster.snapshot().x());
         assertEquals(936, monster.snapshot().y());
     }
@@ -360,25 +360,24 @@ class MonsterTest {
     }
 
     @Test
-    void constructorRequiresMatchingPositiveCombatTemplate() {
+    void constructorRequiresMatchingPositiveTemplate() {
         MonsterSpawn spawn = new MonsterSpawn(0, 1, 9, 2, 0,
                 1, 2, 300, 300, 0);
         MonsterTemplate movement = map1Movement();
 
         assertThrows(IllegalArgumentException.class,
-                () -> new Monster(spawn,
-                        new MonsterCombatTemplate(2, 10, 0), movement));
+                () -> new Monster(spawn, new MonsterTemplate(
+                        2, "wrong", 2, 300L, 10L, 0L, 100, 1, 1, 0,
+                        List.of(1), List.of(2), List.of(3), 10, 10)));
         assertThrows(IllegalArgumentException.class,
-                () -> new Monster(spawn,
-                        new MonsterCombatTemplate(1, 0, 0), movement));
+                () -> new Monster(spawn, new MonsterTemplate(
+                        1, "invalid", 2, 300L, 0L, 0L, 100, 1, 1, 0,
+                        List.of(1), List.of(2), List.of(3), 10, 10)));
         MonsterTemplate wrongMovement = new MonsterTemplate(
-                2, "wrong", 100, 1, 1, 0,
+                2, "wrong", 2, 300L, 10L, 0L, 100, 1, 1, 0,
                 List.of(1), List.of(2), List.of(3), 10, 10);
         assertThrows(IllegalArgumentException.class,
-                () -> new Monster(spawn,
-                        new MonsterCombatTemplate(1, 10, 0), wrongMovement));
-        assertThrows(IllegalArgumentException.class,
-                () -> new MonsterCombatTemplate(1, 10L, -1L));
+                () -> new Monster(spawn, wrongMovement));
     }
 
     private static void setIntField(Monster monster, String fieldName, int value)
@@ -389,12 +388,20 @@ class MonsterTest {
     }
 
     private static Monster map1Monster() {
-        GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"), 2);
+        GameResources resources = GameResources.fromFrameRoot(
+                Path.of("resources", "json"),
+                com.project.game.testsupport.MapTestSupport.canonicalMaps(),
+                2,
+                com.project.game.testsupport.MonsterTestSupport.canonicalRepository());
         return new MonsterFactory(resources).createForMap(1).getFirst();
     }
 
     private static MonsterTemplate map1Movement() {
-        GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"), 2);
+        GameResources resources = GameResources.fromFrameRoot(
+                Path.of("resources", "json"),
+                com.project.game.testsupport.MapTestSupport.canonicalMaps(),
+                2,
+                com.project.game.testsupport.MonsterTestSupport.canonicalRepository());
         return resources.monsterTemplates().getFirst();
     }
 }

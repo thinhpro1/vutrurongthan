@@ -3,10 +3,14 @@ package com.project.game.monster;
 import java.util.List;
 import java.util.Objects;
 
-/** Immutable client-visible monster template. */
+/** Immutable monster template shared by client resources and server gameplay. */
 public record MonsterTemplate(
         int id,
         String name,
+        int level,
+        long hp,
+        long damage,
+        long potentialReward,
         int rangeMove,
         int speed,
         int type,

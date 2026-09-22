@@ -42,7 +42,7 @@ class MonsterServiceRespawnTest {
 
         maps.mapService().finishLoad(attacker);
         drain(attacker);
-        assertTrue(maps.combatService().attackMonster(attacker, 0, 500));
+        assertTrue(maps.combatService().attackMonster(attacker, 101, 500));
         assertEquals(List.of(MessageName.MONSTER_START_DIE, MessageName.PLAYER_INFO),
                 commands(drain(attacker)));
 
@@ -56,7 +56,7 @@ class MonsterServiceRespawnTest {
         List<Message> messages = withoutMonsterMoves(drain(attacker));
         assertEquals(List.of(MessageName.MONSTER_RESPAWN), commands(messages));
         var reader = messages.getFirst().reader();
-        assertEquals(0, reader.readInt());
+        assertEquals(101, reader.readInt());
         assertEquals(0, reader.readByte());
         assertEquals(300L, reader.readLong());
         assertEquals(0, reader.remaining());
@@ -76,7 +76,7 @@ class MonsterServiceRespawnTest {
         maps.mapService().finishLoad(peer);
         drain(attacker);
         drain(peer);
-        assertTrue(maps.combatService().attackMonster(attacker, 0, 500));
+        assertTrue(maps.combatService().attackMonster(attacker, 101, 500));
         drain(attacker);
         drain(peer);
 
@@ -104,7 +104,7 @@ class MonsterServiceRespawnTest {
         maps.mapService().finishLoad(other);
         drain(attacker);
         drain(other);
-        assertTrue(maps.combatService().attackMonster(attacker, 0, 500));
+        assertTrue(maps.combatService().attackMonster(attacker, 101, 500));
         drain(attacker);
 
         clock.advanceMillis(9_001L);
@@ -126,7 +126,7 @@ class MonsterServiceRespawnTest {
         maps.mapService().finishLoad(peer);
         drain(attacker);
         drain(peer);
-        assertTrue(maps.combatService().attackMonster(attacker, 0, 500));
+        assertTrue(maps.combatService().attackMonster(attacker, 101, 500));
         drain(attacker);
         drain(peer);
         peer.close();
@@ -147,7 +147,7 @@ class MonsterServiceRespawnTest {
 
         maps.mapService().finishLoad(attacker);
         drain(attacker);
-        assertTrue(maps.combatService().attackMonster(attacker, 0, 500));
+        assertTrue(maps.combatService().attackMonster(attacker, 101, 500));
         drain(attacker);
         maps.mapService().leave(attacker);
 
@@ -169,18 +169,18 @@ class MonsterServiceRespawnTest {
 
         maps.mapService().finishLoad(attacker);
         drain(attacker);
-        maps.combatService().attackMonster(attacker, 0, 500);
+        maps.combatService().attackMonster(attacker, 101, 500);
         drain(attacker);
         clock.advanceMillis(9_001L);
         maps.monsterService().tickLifecycle();
         drain(attacker);
 
-        assertTrue(maps.combatService().canTargetMonster(attacker, 0));
-        assertTrue(maps.combatService().attackMonster(attacker, 0, 10));
+        assertTrue(maps.combatService().canTargetMonster(attacker, 101));
+        assertTrue(maps.combatService().attackMonster(attacker, 101, 10));
         List<Message> messages = drain(attacker);
         assertEquals(List.of(MessageName.MONSTER_INJURE), commands(messages));
         var reader = messages.getFirst().reader();
-        assertEquals(0, reader.readInt());
+        assertEquals(101, reader.readInt());
         assertEquals(10L, reader.readLong());
         assertEquals(290L, reader.readLong());
         assertFalse(reader.readBoolean());

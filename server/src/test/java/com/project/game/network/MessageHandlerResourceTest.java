@@ -153,7 +153,11 @@ class MessageHandlerResourceTest {
 
     @Test
     void serializesExactMonsterResourceV2InUnityFieldOrder() throws Exception {
-        GameResources resources = GameResources.fromFrameRoot(Path.of("resources", "json"), 2);
+        GameResources resources = GameResources.fromFrameRoot(
+                Path.of("resources", "json"),
+                com.project.game.testsupport.MapTestSupport.canonicalMaps(),
+                2,
+                com.project.game.testsupport.MonsterTestSupport.canonicalRepository());
         PipedInputStream input = new PipedInputStream();
         try (PipedOutputStream inputWriter = new PipedOutputStream(input)) {
             ByteArrayOutputStream output = new ByteArrayOutputStream();
@@ -269,7 +273,10 @@ class MessageHandlerResourceTest {
     @Test
     void manifestAdvertisesLoadedMonsterVersionTwo() throws Exception {
         assertEquals(2, readManifestMonsterVersion(GameResources.fromFrameRoot(
-                Path.of("resources", "json"), 2)));
+                Path.of("resources", "json"),
+                com.project.game.testsupport.MapTestSupport.canonicalMaps(),
+                2,
+                com.project.game.testsupport.MonsterTestSupport.canonicalRepository())));
     }
 
     private static String sha256(byte[] payload) throws Exception {

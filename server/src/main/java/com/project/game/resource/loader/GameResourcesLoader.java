@@ -1,10 +1,10 @@
 package com.project.game.resource.loader;
 
 import com.project.game.map.MapTemplate;
-import com.project.game.monster.MonsterCombatTemplate;
 import com.project.game.monster.MonsterDart;
 import com.project.game.monster.MonsterSpawn;
 import com.project.game.monster.MonsterTemplate;
+import com.project.game.persistence.monster.MonsterRepository;
 import com.project.game.resource.GameResources;
 import com.project.game.resource.IconCatalog;
 import com.project.game.resource.EffectImage;
@@ -26,7 +26,7 @@ public final class GameResourcesLoader {
         IconCatalog catalog = IconCatalog.fromRoot(iconRoot);
         return new GameResources(catalog, requireLegacyImageVersion(imageVersion),
                 List.of(), Map.of(), Map.of(), List.of(), List.of(), -1,
-                List.of(), List.of(), Map.of(), Map.of());
+                List.of(), List.of(), Map.of());
     }
 
     public static GameResources fromFrameRoot(Path jsonRoot) {
@@ -45,7 +45,16 @@ public final class GameResourcesLoader {
     public static GameResources fromFrameRoot(
             Path jsonRoot, Map<Integer, MapTemplate> maps, int monsterVersion) {
         return loadJson(Objects.requireNonNull(jsonRoot, "jsonRoot"), false,
-                null, -1, monsterVersion, maps);
+                null, -1, monsterVersion, maps, null);
+    }
+
+    public static GameResources fromFrameRoot(
+            Path jsonRoot,
+            Map<Integer, MapTemplate> maps,
+            int monsterVersion,
+            MonsterRepository monsterRepository) {
+        return loadJson(Objects.requireNonNull(jsonRoot, "jsonRoot"), false,
+                null, -1, monsterVersion, maps, monsterRepository);
     }
 
     public static GameResources fromRoots(Path jsonRoot, Path iconRoot, int imageVersion) {
@@ -68,10 +77,21 @@ public final class GameResourcesLoader {
             int imageVersion,
             int monsterVersion,
             Map<Integer, MapTemplate> maps) {
+        return fromRoots(jsonRoot, iconRoot, imageVersion, monsterVersion, maps, null);
+    }
+
+    public static GameResources fromRoots(
+            Path jsonRoot,
+            Path iconRoot,
+            int imageVersion,
+            int monsterVersion,
+            Map<Integer, MapTemplate> maps,
+            MonsterRepository monsterRepository) {
         Objects.requireNonNull(jsonRoot, "jsonRoot");
         IconCatalog catalog = iconRoot == null ? null : IconCatalog.fromRoot(iconRoot);
         int configuredImageVersion = iconRoot == null ? -1 : requireLegacyImageVersion(imageVersion);
-        return loadJson(jsonRoot, true, catalog, configuredImageVersion, monsterVersion, maps);
+        return loadJson(jsonRoot, true, catalog, configuredImageVersion, monsterVersion, maps,
+                monsterRepository);
     }
 
     private static GameResources loadJson(
@@ -80,16 +100,17 @@ public final class GameResourcesLoader {
             IconCatalog iconCatalog,
             int imageVersion,
             int monsterVersion,
-            Map<Integer, MapTemplate> maps) {
+            Map<Integer, MapTemplate> maps,
+            MonsterRepository monsterRepository) {
         Objects.requireNonNull(maps, "maps");
         List<FrameTemplate> frames = FrameLoader.load(jsonRoot);
         Map<Integer, List<SkillTemplate>> playerSkills =
                 SkillLoader.load(jsonRoot, required);
         List<LevelTemplate> levels = LevelLoader.load(jsonRoot, required);
         List<EffectImage> effects = EffectLoader.load(jsonRoot, required);
-        MonsterLoader.LoadedMonsters monsters = MonsterLoader.load(jsonRoot, required, monsterVersion);
-        Map<Integer, MonsterCombatTemplate> combat =
-                MonsterCombatLoader.load(jsonRoot, required);
+        MonsterCatalogLoader.LoadedMonsters monsters = monsterRepository == null
+                ? new MonsterCatalogLoader.LoadedMonsters(-1, List.of(), List.of(), Map.of())
+                : MonsterCatalogLoader.load(monsterRepository, jsonRoot, monsterVersion, maps);
         return new GameResources(
                 iconCatalog,
                 imageVersion,
@@ -101,8 +122,7 @@ public final class GameResourcesLoader {
                 monsters.version(),
                 monsters.darts(),
                 monsters.templates(),
-                monsters.spawns(),
-                combat);
+                monsters.spawns());
     }
 
     private static int requireLegacyImageVersion(int imageVersion) {

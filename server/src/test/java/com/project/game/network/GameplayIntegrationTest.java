@@ -39,7 +39,8 @@ class GameplayIntegrationTest {
         String victimAccount = "deathrevivea";
         String observerAccount = "deathreviveb";
         GameResources resources = GameResources.fromFrameRoot(
-                Path.of("resources", "json"), MapTestSupport.canonicalMaps(), 2);
+                Path.of("resources", "json"), MapTestSupport.canonicalMaps(), 2,
+                com.project.game.testsupport.MonsterTestSupport.canonicalRepository());
         AuthService auth = TestServices.authService();
         MutableClock clock = new MutableClock(1_000_000L);
         BlockingLifecycleRandom random = new BlockingLifecycleRandom();
@@ -92,10 +93,10 @@ class GameplayIntegrationTest {
                 assertAddPlayerId(victim.readServerMessage(), observer.playerInfo().id());
                 assertAddPlayerId(observer.readServerMessage(), victim.playerInfo().id());
 
-                victim.prepareMonsterAttack(0, 0);
-                victim.impactMonster(0);
-                assertMonsterInjure(victim.readServerMessage(), 0, 10, 290);
-                assertMonsterInjure(observer.readServerMessage(), 0, 10, 290);
+                victim.prepareMonsterAttack(0, 101);
+                victim.impactMonster(101);
+                assertMonsterInjure(victim.readServerMessage(), 101, 10, 290);
+                assertMonsterInjure(observer.readServerMessage(), 101, 10, 290);
 
                 assertTrue(random.entered.await(5, TimeUnit.SECONDS),
                         "monster lifecycle scheduler did not reach target selection");
@@ -106,9 +107,9 @@ class GameplayIntegrationTest {
         dead.bindPlayer(dead.player().withHp(10));
                 random.release.countDown();
 
-                assertMonsterAttack(victim.readServerMessage(), 0, victim.playerInfo().id(), 10L);
+                assertMonsterAttack(victim.readServerMessage(), 101, victim.playerInfo().id(), 10L);
                 assertMeDie(victim.readServerMessage(), 90, 1008);
-                assertMonsterAttack(observer.readServerMessage(), 0, victim.playerInfo().id(), 10L);
+                assertMonsterAttack(observer.readServerMessage(), 101, victim.playerInfo().id(), 10L);
                 assertPlayerDie(observer.readServerMessage(), victim.playerInfo().id(), 90, 1008);
                 assertEquals(0L, server.sessions().findByAccount(victimAccount).player().hp());
 
@@ -192,7 +193,8 @@ class GameplayIntegrationTest {
     void livingPlayerReturnTownRequestIsIgnored() throws Exception {
         String accountName = "livingreturn";
         GameResources resources = GameResources.fromFrameRoot(
-                Path.of("resources", "json"), MapTestSupport.canonicalMaps(), 2);
+                Path.of("resources", "json"), MapTestSupport.canonicalMaps(), 2,
+                com.project.game.testsupport.MonsterTestSupport.canonicalRepository());
         AuthService auth = TestServices.authService();
         assertTrue(auth.register(accountName, "secret1", "127.0.0.1").success());
         NetworkServer server = new NetworkServer(
@@ -237,7 +239,8 @@ class GameplayIntegrationTest {
     @Test
     void javaClientRoundTripsMap0AndMap1WithCachedTemplates() throws Exception {
         GameResources resources = GameResources.fromFrameRoot(
-                Path.of("resources", "json"), MapTestSupport.canonicalMaps(), 2);
+                Path.of("resources", "json"), MapTestSupport.canonicalMaps(), 2,
+                com.project.game.testsupport.MonsterTestSupport.canonicalRepository());
         AuthService auth = TestServices.authService();
         assertTrue(auth.register("mapround1", "secret1", "127.0.0.1").success());
         NetworkServer server = new NetworkServer("127.0.0.1", 0, 2, 262_144, 8, 1_000,
@@ -307,7 +310,8 @@ class GameplayIntegrationTest {
     @Test
     void javaClientsFollowEachOtherAcrossMapsWithoutCrossMapPresence() throws Exception {
         GameResources resources = GameResources.fromFrameRoot(
-                Path.of("resources", "json"), MapTestSupport.canonicalMaps(), 2);
+                Path.of("resources", "json"), MapTestSupport.canonicalMaps(), 2,
+                com.project.game.testsupport.MonsterTestSupport.canonicalRepository());
         AuthService auth = TestServices.authService();
         assertTrue(auth.register("mapzonea", "secret1", "127.0.0.1").success());
         assertTrue(auth.register("mapzoneb", "secret1", "127.0.0.1").success());
@@ -387,7 +391,8 @@ class GameplayIntegrationTest {
     @Test
     void javaClientsObserveAuthoritativeMonsterMovementAndChase() throws Exception {
         GameResources resources = GameResources.fromFrameRoot(
-                Path.of("resources", "json"), MapTestSupport.canonicalMaps(), 2);
+                Path.of("resources", "json"), MapTestSupport.canonicalMaps(), 2,
+                com.project.game.testsupport.MonsterTestSupport.canonicalRepository());
         AuthService auth = TestServices.authService();
         MutableClock clock = new MutableClock(1_000_000L);
         assertTrue(auth.register("chasetcp1", "secret1", "127.0.0.1").success());
@@ -441,22 +446,22 @@ class GameplayIntegrationTest {
                 attacker.move(2_100, 936);
                 assertEquals(MessageName.PLAYER_MOVE, observer.readServerMessage().command());
 
-                attacker.prepareMonsterAttack(0, 0);
-                attacker.impactMonster(0);
-                assertMonsterInjure(attacker.readServerMessage(), 0, 10, 290);
-                assertMonsterInjure(observer.readServerMessage(), 0, 10, 290);
+                attacker.prepareMonsterAttack(0, 101);
+                attacker.impactMonster(101);
+                assertMonsterInjure(attacker.readServerMessage(), 101, 10, 290);
+                assertMonsterInjure(observer.readServerMessage(), 101, 10, 290);
 
-                MonsterMoveView attackerMove = readMonsterMove(attacker, 0);
-                MonsterMoveView observerMove = readMonsterMove(observer, 0);
+                MonsterMoveView attackerMove = readMonsterMove(attacker, 101);
+                MonsterMoveView observerMove = readMonsterMove(observer, 101);
                 assertEquals(attackerMove, observerMove);
-                assertEquals(0, attackerMove.monsterId());
+                assertEquals(101, attackerMove.monsterId());
                 assertEquals(1, attackerMove.dir());
                 assertTrue(attackerMove.x() > 975);
                 assertTrue(maps.monsterSnapshots(1, 0).getFirst().x() >= attackerMove.x());
 
                 MonsterMoveView stopped = attackerMove;
                 while (stopped.x() < 1_203) {
-                    stopped = readMonsterMove(attacker, 0);
+                    stopped = readMonsterMove(attacker, 101);
                 }
                 assertEquals(1_203, stopped.x());
                 int authoritativeX = maps.monsterSnapshots(1, 0).getFirst().x();
@@ -488,7 +493,8 @@ class GameplayIntegrationTest {
     @Test
     void twoClientsSeeSameZonePresenceMovementAndDisconnect() throws Exception {
         GameResources resources = GameResources.fromFrameRoot(
-                Path.of("resources", "json"), MapTestSupport.canonicalMaps(), 2);
+                Path.of("resources", "json"), MapTestSupport.canonicalMaps(), 2,
+                com.project.game.testsupport.MonsterTestSupport.canonicalRepository());
         AuthService auth = TestServices.authService();
         assertTrue(auth.register("zonea1", "secret1", "127.0.0.1").success());
         assertTrue(auth.register("zoneb1", "secret1", "127.0.0.1").success());
@@ -552,7 +558,8 @@ class GameplayIntegrationTest {
     @Test
     void twoClientsFightMap1MonsterObserveRespawnAndFightAgain() throws Exception {
         GameResources resources = GameResources.fromFrameRoot(
-                Path.of("resources", "json"), MapTestSupport.canonicalMaps(), 2);
+                Path.of("resources", "json"), MapTestSupport.canonicalMaps(), 2,
+                com.project.game.testsupport.MonsterTestSupport.canonicalRepository());
         AuthService auth = TestServices.authService();
         MutableClock clock = new MutableClock(1_000_000L);
         assertTrue(auth.register("combatza", "secret1", "127.0.0.1").success());
@@ -608,29 +615,29 @@ class GameplayIntegrationTest {
                 first.move(3_000, 3_000);
                 assertEquals(MessageName.PLAYER_MOVE, second.readServerMessage().command());
 
-                first.prepareMonsterAttack(0, 0);
-                first.impactMonster(0);
-                assertMonsterInjure(first.readServerMessage(), 0, 10, 290);
-                assertMonsterInjure(second.readServerMessage(), 0, 10, 290);
+                first.prepareMonsterAttack(0, 101);
+                first.impactMonster(101);
+                assertMonsterInjure(first.readServerMessage(), 101, 10, 290);
+                assertMonsterInjure(second.readServerMessage(), 101, 10, 290);
                 assertEquals(290L, maps.monsterSnapshots(1, 0).getFirst().hp());
 
                 for (int expectedHp = 280; expectedHp >= 10; expectedHp -= 10) {
-                    first.prepareMonsterAttack(0, 0);
-                    first.impactMonster(0);
-                    assertMonsterInjure(first.readServerMessage(), 0, 10, expectedHp);
-                    assertMonsterInjure(second.readServerMessage(), 0, 10, expectedHp);
+                    first.prepareMonsterAttack(0, 101);
+                    first.impactMonster(101);
+                    assertMonsterInjure(first.readServerMessage(), 101, 10, expectedHp);
+                    assertMonsterInjure(second.readServerMessage(), 101, 10, expectedHp);
                 }
 
-                first.prepareMonsterAttack(0, 0);
-                first.impactMonster(0);
-                assertMonsterDeath(first.readServerMessage(), 0, 10);
+                first.prepareMonsterAttack(0, 101);
+                first.impactMonster(101);
+                assertMonsterDeath(first.readServerMessage(), 101, 10);
                 assertPotentialReward(first.readServerMessage(), 11L);
-                assertMonsterDeath(second.readServerMessage(), 0, 10);
+                assertMonsterDeath(second.readServerMessage(), 101, 10);
                 assertEquals(0L, maps.monsterSnapshots(1, 0).getFirst().hp());
                 assertEquals(1, maps.monsterSnapshots(1, 0).getFirst().status());
 
-                first.prepareMonsterAttack(0, 0);
-                first.impactMonster(0);
+                first.prepareMonsterAttack(0, 101);
+                first.impactMonster(101);
                 assertNoServerMessage(first);
                 assertNoServerMessage(second);
 
@@ -639,20 +646,20 @@ class GameplayIntegrationTest {
                 assertNoServerMessage(second);
 
                 clock.advanceMillis(1L);
-                assertMonsterRespawn(first.readServerMessage(), 0, 0, 300L);
-                assertMonsterRespawn(second.readServerMessage(), 0, 0, 300L);
+                assertMonsterRespawn(first.readServerMessage(), 101, 0, 300L);
+                assertMonsterRespawn(second.readServerMessage(), 101, 0, 300L);
                 var respawned = maps.monsterSnapshots(1, 0).getFirst();
-                assertEquals(0, respawned.id());
+                assertEquals(101, respawned.id());
                 assertEquals(300L, respawned.hp());
                 assertEquals(300L, respawned.maxHp());
                 assertEquals(0, respawned.status());
                 assertEquals(975, respawned.x());
                 assertEquals(936, respawned.y());
 
-                first.prepareMonsterAttack(0, 0);
-                first.impactMonster(0);
-                assertMonsterInjure(first.readServerMessage(), 0, 10, 290);
-                assertMonsterInjure(second.readServerMessage(), 0, 10, 290);
+                first.prepareMonsterAttack(0, 101);
+                first.impactMonster(101);
+                assertMonsterInjure(first.readServerMessage(), 101, 10, 290);
+                assertMonsterInjure(second.readServerMessage(), 101, 10, 290);
                 assertEquals(290L, maps.monsterSnapshots(1, 0).getFirst().hp());
 
                 second.close();
@@ -687,7 +694,8 @@ class GameplayIntegrationTest {
     void javaClientReceivesPotentialRewardAfterKillingMonster() throws Exception {
         String accountName = "rewardtcp";
         GameResources resources = GameResources.fromFrameRoot(
-                Path.of("resources", "json"), MapTestSupport.canonicalMaps(), 2);
+                Path.of("resources", "json"), MapTestSupport.canonicalMaps(), 2,
+                com.project.game.testsupport.MonsterTestSupport.canonicalRepository());
         AuthService auth = TestServices.authService();
         assertTrue(auth.register(accountName, "secret1", "127.0.0.1").success());
         GameplayServices maps = new GameplayServices(
@@ -727,9 +735,9 @@ class GameplayIntegrationTest {
                 assertEquals(1L, live.player().power());
 
                 for (int expectedHp = 290; expectedHp >= 10; expectedHp -= 10) {
-                    client.prepareMonsterAttack(0, 0);
-                    client.impactMonster(0);
-                    assertMonsterInjure(client.readServerMessage(), 0, 10, expectedHp);
+                    client.prepareMonsterAttack(0, 101);
+                    client.impactMonster(101);
+                    assertMonsterInjure(client.readServerMessage(), 101, 10, expectedHp);
                 }
 
                 live = server.sessions().findByAccount(accountName);
@@ -738,9 +746,9 @@ class GameplayIntegrationTest {
                 assertEquals(1L, live.player().potential());
                 assertEquals(1L, live.player().power());
 
-                client.prepareMonsterAttack(0, 0);
-                client.impactMonster(0);
-                assertMonsterDeath(client.readServerMessage(), 0, 10);
+                client.prepareMonsterAttack(0, 101);
+                client.impactMonster(101);
+                assertMonsterDeath(client.readServerMessage(), 101, 10);
                 assertPotentialReward(client.readServerMessage(), 11L);
 
                 live = server.sessions().findByAccount(accountName);
@@ -767,7 +775,8 @@ class GameplayIntegrationTest {
     @Test
     void monsterRetaliatesAfterHitWithoutLethalPlayerDamage() throws Exception {
         GameResources resources = GameResources.fromFrameRoot(
-                Path.of("resources", "json"), MapTestSupport.canonicalMaps(), 2);
+                Path.of("resources", "json"), MapTestSupport.canonicalMaps(), 2,
+                com.project.game.testsupport.MonsterTestSupport.canonicalRepository());
         AuthService auth = TestServices.authService();
         MutableClock clock = new MutableClock(1_000_000L);
         assertTrue(auth.register("retaliatea", "secret1", "127.0.0.1").success());
@@ -819,65 +828,65 @@ class GameplayIntegrationTest {
                 assertNoServerMessage(first);
                 assertNoServerMessage(second);
 
-                first.prepareMonsterAttack(0, 0);
-                first.impactMonster(0);
-                assertMonsterInjure(first.readServerMessage(), 0, 10, 290);
-                assertMonsterInjure(second.readServerMessage(), 0, 10, 290);
+                first.prepareMonsterAttack(0, 101);
+                first.impactMonster(101);
+                assertMonsterInjure(first.readServerMessage(), 101, 10, 290);
+                assertMonsterInjure(second.readServerMessage(), 101, 10, 290);
                 clock.advanceMillis(1L);
-                assertMonsterAttack(first.readServerMessage(), 0, first.playerInfo().id(), 10L);
-                assertMonsterAttack(second.readServerMessage(), 0, first.playerInfo().id(), 10L);
+                assertMonsterAttack(first.readServerMessage(), 101, first.playerInfo().id(), 10L);
+                assertMonsterAttack(second.readServerMessage(), 101, first.playerInfo().id(), 10L);
                 assertEquals(190L, server.sessions().findByAccount("retaliatea").player().hp());
 
                 clock.advanceMillis(1_600L);
                 assertNoServerMessage(first);
                 assertNoServerMessage(second);
                 clock.advanceMillis(1L);
-                assertMonsterAttack(first.readServerMessage(), 0, first.playerInfo().id(), 10L);
-                assertMonsterAttack(second.readServerMessage(), 0, first.playerInfo().id(), 10L);
+                assertMonsterAttack(first.readServerMessage(), 101, first.playerInfo().id(), 10L);
+                assertMonsterAttack(second.readServerMessage(), 101, first.playerInfo().id(), 10L);
                 assertEquals(180L, server.sessions().findByAccount("retaliatea").player().hp());
 
                 for (int expectedHp = 170; expectedHp >= 10; expectedHp -= 10) {
                     clock.advanceMillis(1_601L);
-                    assertMonsterAttack(first.readServerMessage(), 0, first.playerInfo().id(), 10L);
-                    assertMonsterAttack(second.readServerMessage(), 0, first.playerInfo().id(), 10L);
+                    assertMonsterAttack(first.readServerMessage(), 101, first.playerInfo().id(), 10L);
+                    assertMonsterAttack(second.readServerMessage(), 101, first.playerInfo().id(), 10L);
                     assertEquals(expectedHp,
                             server.sessions().findByAccount("retaliatea").player().hp());
                 }
                 clock.advanceMillis(1_601L);
-                assertMonsterAttack(first.readServerMessage(), 0, first.playerInfo().id(), 10L);
+                assertMonsterAttack(first.readServerMessage(), 101, first.playerInfo().id(), 10L);
                 assertMeDie(first.readServerMessage(), 90, 1008);
-                assertMonsterAttack(second.readServerMessage(), 0, first.playerInfo().id(), 10L);
+                assertMonsterAttack(second.readServerMessage(), 101, first.playerInfo().id(), 10L);
                 assertPlayerDie(second.readServerMessage(), first.playerInfo().id(), 90, 1008);
                 assertEquals(0L, server.sessions().findByAccount("retaliatea").player().hp());
 
                 for (int expectedHp = 280; expectedHp >= 10; expectedHp -= 10) {
-                    second.prepareMonsterAttack(0, 0);
-                    second.impactMonster(0);
-                    assertMonsterInjure(first.readServerMessage(), 0, 10, expectedHp);
-                    assertMonsterInjure(second.readServerMessage(), 0, 10, expectedHp);
+                    second.prepareMonsterAttack(0, 101);
+                    second.impactMonster(101);
+                    assertMonsterInjure(first.readServerMessage(), 101, 10, expectedHp);
+                    assertMonsterInjure(second.readServerMessage(), 101, 10, expectedHp);
                 }
-                second.prepareMonsterAttack(0, 0);
-                second.impactMonster(0);
-                assertMonsterDeath(first.readServerMessage(), 0, 10);
-                assertMonsterDeath(second.readServerMessage(), 0, 10);
+                second.prepareMonsterAttack(0, 101);
+                second.impactMonster(101);
+                assertMonsterDeath(first.readServerMessage(), 101, 10);
+                assertMonsterDeath(second.readServerMessage(), 101, 10);
                 assertPotentialReward(second.readServerMessage(), 11L);
                 assertEquals(1, maps.monsterSnapshots(1, 0).getFirst().status());
                 clock.advanceMillis(8_000L);
                 assertNoServerMessage(first);
                 assertNoServerMessage(second);
                 clock.advanceMillis(1L);
-                assertMonsterRespawn(first.readServerMessage(), 0, 0, 300L);
-                assertMonsterRespawn(second.readServerMessage(), 0, 0, 300L);
+                assertMonsterRespawn(first.readServerMessage(), 101, 0, 300L);
+                assertMonsterRespawn(second.readServerMessage(), 101, 0, 300L);
                 assertNoServerMessage(first);
                 assertNoServerMessage(second);
 
-                second.prepareMonsterAttack(0, 0);
-                second.impactMonster(0);
-                assertMonsterInjure(first.readServerMessage(), 0, 10, 290);
-                assertMonsterInjure(second.readServerMessage(), 0, 10, 290);
+                second.prepareMonsterAttack(0, 101);
+                second.impactMonster(101);
+                assertMonsterInjure(first.readServerMessage(), 101, 10, 290);
+                assertMonsterInjure(second.readServerMessage(), 101, 10, 290);
                 clock.advanceMillis(1L);
-                assertMonsterAttack(first.readServerMessage(), 0, second.playerInfo().id(), 10L);
-                assertMonsterAttack(second.readServerMessage(), 0, second.playerInfo().id(), 10L);
+                assertMonsterAttack(first.readServerMessage(), 101, second.playerInfo().id(), 10L);
+                assertMonsterAttack(second.readServerMessage(), 101, second.playerInfo().id(), 10L);
                 assertNoServerMessage(first);
                 assertEquals(0L, server.sessions().findByAccount("retaliatea").player().hp());
                 assertEquals(190L, server.sessions().findByAccount("retaliateb").player().hp());
@@ -893,7 +902,8 @@ class GameplayIntegrationTest {
     @Test
     void retaliationPlayerStateSurvivesMoveAndMapChangeOverTcp() throws Exception {
         GameResources resources = GameResources.fromFrameRoot(
-                Path.of("resources", "json"), MapTestSupport.canonicalMaps(), 2);
+                Path.of("resources", "json"), MapTestSupport.canonicalMaps(), 2,
+                com.project.game.testsupport.MonsterTestSupport.canonicalRepository());
         AuthService auth = TestServices.authService();
         MutableClock clock = new MutableClock(1_000_000L);
         assertTrue(auth.register("retaliaterace", "secret1", "127.0.0.1").success());
@@ -930,11 +940,11 @@ class GameplayIntegrationTest {
                 assertEquals(1008, map1.y());
                 client.finishLoadMap();
 
-                client.prepareMonsterAttack(0, 0);
-                client.impactMonster(0);
-                assertMonsterInjure(client.readServerMessage(), 0, 10, 290);
+                client.prepareMonsterAttack(0, 101);
+                client.impactMonster(101);
+                assertMonsterInjure(client.readServerMessage(), 101, 10, 290);
                 clock.advanceMillis(1L);
-                assertMonsterAttack(client.readServerMessage(), 0, client.playerInfo().id(), 10L);
+                assertMonsterAttack(client.readServerMessage(), 101, client.playerInfo().id(), 10L);
                 assertEquals(190L, server.sessions().findByAccount("retaliaterace").player().hp());
 
                 client.move(1260, 640);
@@ -966,7 +976,8 @@ class GameplayIntegrationTest {
     @Test
     void javaClientMovesThreeTimesWithoutDisconnecting() throws Exception {
         GameResources resources = GameResources.fromFrameRoot(
-                Path.of("resources", "json"), MapTestSupport.canonicalMaps(), 2);
+                Path.of("resources", "json"), MapTestSupport.canonicalMaps(), 2,
+                com.project.game.testsupport.MonsterTestSupport.canonicalRepository());
         AuthService auth = TestServices.authService();
         NetworkServer server = new NetworkServer(
                 "127.0.0.1", 0, 2, 262_144, 8, 1_000,
@@ -1070,12 +1081,12 @@ class GameplayIntegrationTest {
 
     private static List<ParsedMonsterSpawn> canonicalMap1Monsters() {
         return List.of(
-                new ParsedMonsterSpawn(0, 1, 0, 2, 0, 975, 936, 300L, 300L, 0),
-                new ParsedMonsterSpawn(0, 1, 1, 2, 0, 1348, 936, 300L, 300L, 0),
-                new ParsedMonsterSpawn(0, 1, 2, 2, 0, 1800, 936, 300L, 300L, 0),
-                new ParsedMonsterSpawn(0, 1, 3, 2, 0, 2250, 936, 300L, 300L, 0),
-                new ParsedMonsterSpawn(0, 1, 4, 2, 0, 2600, 936, 300L, 300L, 0),
-                new ParsedMonsterSpawn(0, 1, 5, 2, 0, 2950, 936, 300L, 300L, 0));
+                new ParsedMonsterSpawn(0, 1, 101, 2, 0, 975, 936, 300L, 300L, 0),
+                new ParsedMonsterSpawn(0, 1, 102, 2, 0, 1348, 936, 300L, 300L, 0),
+                new ParsedMonsterSpawn(0, 1, 103, 2, 0, 1800, 936, 300L, 300L, 0),
+                new ParsedMonsterSpawn(0, 1, 104, 2, 0, 2250, 936, 300L, 300L, 0),
+                new ParsedMonsterSpawn(0, 1, 105, 2, 0, 2600, 936, 300L, 300L, 0),
+                new ParsedMonsterSpawn(0, 1, 106, 2, 0, 2950, 936, 300L, 300L, 0));
     }
 
     private static void assertMap1MonsterShape(List<ParsedMonsterSpawn> actual) {

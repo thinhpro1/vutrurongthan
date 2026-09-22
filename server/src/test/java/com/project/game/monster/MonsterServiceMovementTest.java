@@ -38,7 +38,7 @@ class MonsterServiceMovementTest {
         assertEquals(979, after.x());
         assertEquals(936, after.y());
         assertTrue(moves.stream().anyMatch(result ->
-                result.monsterId() == 0
+                result.monsterId() == 101
                         && result.x() == 979
                         && result.y() == 936
                         && result.dir() == 1));
@@ -67,7 +67,7 @@ class MonsterServiceMovementTest {
         Zone zone = zoneFor(maps, 1, 0);
         zone.moveMonsters();
 
-        assertTrue(maps.combatService().attackMonster(player, 0, 10));
+        assertTrue(maps.combatService().attackMonster(player, 101, 10));
         drain(player);
 
         MonsterSnapshot before = zone.monsterSnapshots().getFirst();
@@ -77,7 +77,7 @@ class MonsterServiceMovementTest {
         assertEquals(979, before.x());
         assertEquals(983, after.x());
         assertEquals(1, moves.stream()
-                .filter(result -> result.monsterId() == 0)
+                .filter(result -> result.monsterId() == 101)
                 .findFirst()
                 .orElseThrow()
                 .dir());
@@ -93,14 +93,14 @@ class MonsterServiceMovementTest {
         drain(lowerId);
         drain(higherId);
 
-        assertTrue(maps.combatService().attackMonster(lowerId, 0, 10));
-        assertTrue(maps.combatService().attackMonster(higherId, 0, 10));
+        assertTrue(maps.combatService().attackMonster(lowerId, 101, 10));
+        assertTrue(maps.combatService().attackMonster(higherId, 101, 10));
         drain(lowerId);
         drain(higherId);
 
         Zone zone = zoneFor(maps, 1, 0);
         Monster.Move move = zone.moveMonsters().stream()
-                .filter(result -> result.monsterId() == 0)
+                .filter(result -> result.monsterId() == 101)
                 .findFirst()
                 .orElseThrow();
 
@@ -114,24 +114,24 @@ class MonsterServiceMovementTest {
         Session insideRange = session(player(1, 1, 0).withPosition(1874, 936), insideRangeMaps);
         insideRangeMaps.mapService().finishLoad(insideRange);
         drain(insideRange);
-        assertTrue(insideRangeMaps.combatService().attackMonster(insideRange, 0, 10));
+        assertTrue(insideRangeMaps.combatService().attackMonster(insideRange, 101, 10));
         drain(insideRange);
 
         Zone insideRangeZone = zoneFor(insideRangeMaps, 1, 0);
         assertTrue(insideRangeZone.moveMonsters().stream()
-                .noneMatch(result -> result.monsterId() == 0));
+                .noneMatch(result -> result.monsterId() == 101));
         assertEquals(975, insideRangeZone.monsterSnapshots().getFirst().x());
 
         GameplayServices exactRangeMaps = mapsWithMonsters();
         Session exactRange = session(player(1, 1, 0).withPosition(1875, 936), exactRangeMaps);
         exactRangeMaps.mapService().finishLoad(exactRange);
         drain(exactRange);
-        assertTrue(exactRangeMaps.combatService().attackMonster(exactRange, 0, 10));
+        assertTrue(exactRangeMaps.combatService().attackMonster(exactRange, 101, 10));
         drain(exactRange);
 
         Zone exactRangeZone = zoneFor(exactRangeMaps, 1, 0);
         Monster.Move move = exactRangeZone.moveMonsters().stream()
-                .filter(result -> result.monsterId() == 0)
+                .filter(result -> result.monsterId() == 101)
                 .findFirst()
                 .orElseThrow();
         assertEquals(979, move.x());
@@ -143,7 +143,7 @@ class MonsterServiceMovementTest {
         Session player = session(player(1, 1, 0).withPosition(-300, 936), maps);
         maps.mapService().finishLoad(player);
         drain(player);
-        assertTrue(maps.combatService().attackMonster(player, 0, 10));
+        assertTrue(maps.combatService().attackMonster(player, 101, 10));
         drain(player);
 
         Zone zone = zoneFor(maps, 1, 0);
@@ -156,7 +156,7 @@ class MonsterServiceMovementTest {
         assertTrue(maps.mapService().movePlayer(player, 1975, 936));
         drain(player);
         Monster.Move resumed = zone.moveMonsters().stream()
-                .filter(result -> result.monsterId() == 0)
+                .filter(result -> result.monsterId() == 101)
                 .findFirst()
                 .orElseThrow();
         assertEquals(983, resumed.x());
@@ -169,7 +169,7 @@ class MonsterServiceMovementTest {
         Session player = session(player(1, 1, 0).withPosition(2200, 936), maps);
         maps.mapService().finishLoad(player);
         drain(player);
-        assertTrue(maps.combatService().attackMonster(player, 0, 10));
+        assertTrue(maps.combatService().attackMonster(player, 101, 10));
         drain(player);
 
         Monster monster = runtimeMonsters(maps, 1, 0).getFirst();
@@ -178,7 +178,7 @@ class MonsterServiceMovementTest {
         Zone zone = zoneFor(maps, 1, 0);
 
         Monster.Move returning = zone.moveMonsters().stream()
-                .filter(result -> result.monsterId() == 0)
+                .filter(result -> result.monsterId() == 101)
                 .findFirst()
                 .orElseThrow();
         assertEquals(1196, returning.x());
@@ -193,7 +193,7 @@ class MonsterServiceMovementTest {
         maps.mapService().finishLoad(player);
         drain(player);
 
-        assertTrue(maps.combatService().attackMonster(player, 0, 10));
+        assertTrue(maps.combatService().attackMonster(player, 101, 10));
         drain(player);
 
         Monster monster = runtimeMonsters(maps, 1, 0).getFirst();
@@ -202,7 +202,7 @@ class MonsterServiceMovementTest {
         Zone zone = zoneFor(maps, 1, 0);
 
         Monster.Move chase = zone.moveMonsters().stream()
-                .filter(result -> result.monsterId() == 0)
+                .filter(result -> result.monsterId() == 101)
                 .findFirst()
                 .orElseThrow();
         assertEquals(1075, chase.x());
@@ -212,7 +212,7 @@ class MonsterServiceMovementTest {
         drain(player);
 
         Monster.Move returning = zone.moveMonsters().stream()
-                .filter(result -> result.monsterId() == 0)
+                .filter(result -> result.monsterId() == 101)
                 .findFirst()
                 .orElseThrow();
         assertEquals(1071, returning.x());
@@ -229,7 +229,7 @@ class MonsterServiceMovementTest {
         maps.mapService().finishLoad(player);
         drain(player);
 
-        assertTrue(maps.combatService().attackMonster(player, 0, 10));
+        assertTrue(maps.combatService().attackMonster(player, 101, 10));
         drain(player);
 
         Monster monster = runtimeMonsters(maps, 1, 0).getFirst();
@@ -238,7 +238,7 @@ class MonsterServiceMovementTest {
 
         Zone zone = zoneFor(maps, 1, 0);
         Monster.Move move = zone.moveMonsters().stream()
-                .filter(result -> result.monsterId() == 0)
+                .filter(result -> result.monsterId() == 101)
                 .findFirst()
                 .orElseThrow();
 
@@ -294,8 +294,8 @@ class MonsterServiceMovementTest {
             assertArrayEquals(firstMoves.get(i).payload(), secondMoves.get(i).payload());
         }
 
-        assertMonsterMove(firstMessages.getFirst(), 0, 979, 936, 1);
-        assertMonsterMove(secondMessages.getFirst(), 0, 979, 936, 1);
+        assertMonsterMove(firstMessages.getFirst(), 101, 979, 936, 1);
+        assertMonsterMove(secondMessages.getFirst(), 101, 979, 936, 1);
     }
 
     @Test
@@ -305,7 +305,7 @@ class MonsterServiceMovementTest {
         Session target = session(player(1, 1, 0).withPosition(1875, 936), maps);
         maps.mapService().finishLoad(target);
         drain(target);
-        assertTrue(maps.combatService().attackMonster(target, 0, 10));
+        assertTrue(maps.combatService().attackMonster(target, 101, 10));
         drain(target);
 
         clock.advanceMillis(1L);
@@ -313,7 +313,7 @@ class MonsterServiceMovementTest {
 
         List<Message> messages = drain(target);
         assertEquals(MessageName.MONSTER_MOVE, messages.getFirst().command());
-        assertMonsterMove(messages.getFirst(), 0, 979, 936, 1);
+        assertMonsterMove(messages.getFirst(), 101, 979, 936, 1);
         assertEquals(MessageName.MONSTER_ATTACK, messages.get(6).command());
         assertEquals(90L, target.player().hp());
     }
@@ -325,7 +325,7 @@ class MonsterServiceMovementTest {
         Session target = session(player(1, 1, 0).withPosition(1874, 936), maps);
         maps.mapService().finishLoad(target);
         drain(target);
-        assertTrue(maps.combatService().attackMonster(target, 0, 10));
+        assertTrue(maps.combatService().attackMonster(target, 101, 10));
         drain(target);
 
         clock.advanceMillis(1L);

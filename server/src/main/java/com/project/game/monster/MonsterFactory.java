@@ -5,7 +5,6 @@ import com.project.game.resource.GameResources;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.stream.Collectors;
 
 public final class MonsterFactory {
@@ -16,22 +15,18 @@ public final class MonsterFactory {
     }
 
     public List<Monster> createForMap(int mapId) {
-        Map<Integer, MonsterTemplate> movementById =
+        Map<Integer, MonsterTemplate> templatesById =
                 resources.monsterTemplates().stream()
                         .collect(Collectors.toUnmodifiableMap(
                                 MonsterTemplate::id,
                                 template -> template));
         return resources.monstersForMap(mapId).stream()
                 .map(spawn -> {
-                    MonsterCombatTemplate combat = resources
-                            .monsterCombatTemplate(spawn.templateId())
+                    MonsterTemplate template = java.util.Optional.ofNullable(
+                                    templatesById.get(spawn.templateId()))
                             .orElseThrow(() -> new IllegalStateException(
-                                    "missing monster combat template " + spawn.templateId()));
-                    MonsterTemplate movement = Optional.ofNullable(
-                                    movementById.get(spawn.templateId()))
-                            .orElseThrow(() -> new IllegalStateException(
-                                    "missing monster movement template " + spawn.templateId()));
-                    return new Monster(spawn, combat, movement);
+                                    "missing monster template " + spawn.templateId()));
+                    return new Monster(spawn, template);
                 })
                 .toList();
     }

@@ -117,7 +117,8 @@ class ServerBootstrapTest {
             }
             assertThrows(IllegalStateException.class, () -> ServerBootstrap.fromProperties(
                     properties, ServerBootstrapTest::databaseManager,
-                    ignored -> mapRepository(canonicalMapRows())));
+                    ignored -> mapRepository(canonicalMapRows()),
+                    ignored -> com.project.game.testsupport.MonsterTestSupport.canonicalRepository()));
         }
     }
 
@@ -133,7 +134,8 @@ class ServerBootstrapTest {
         };
 
         assertThrows(NumberFormatException.class, () -> ServerBootstrap.fromProperties(
-                properties, managerFactory, ignored -> mapRepository(canonicalMapRows())));
+                properties, managerFactory, ignored -> mapRepository(canonicalMapRows()),
+                ignored -> com.project.game.testsupport.MonsterTestSupport.canonicalRepository()));
 
         assertTrue(isClosed(createdManager.get()));
     }
@@ -146,7 +148,8 @@ class ServerBootstrapTest {
                     DatabaseManager manager = databaseManager();
                     createdManager.set(manager);
                     return manager;
-                }, ignored -> mapRepository(canonicalMapRows()));
+                }, ignored -> mapRepository(canonicalMapRows()),
+                ignored -> com.project.game.testsupport.MonsterTestSupport.canonicalRepository());
 
         assertFalse(isClosed(createdManager.get()));
 
@@ -163,7 +166,8 @@ class ServerBootstrapTest {
                             DatabaseManager manager = databaseManager();
                             createdManager.set(manager);
                             return manager;
-                        }, ignored -> mapRepository(List.of())));
+                        }, ignored -> mapRepository(List.of()),
+                        ignored -> com.project.game.testsupport.MonsterTestSupport.canonicalRepository()));
 
         assertEquals("enabled map catalog is empty", failure.getMessage());
         assertTrue(isClosed(createdManager.get()));
@@ -180,7 +184,8 @@ class ServerBootstrapTest {
                             return manager;
                         }, ignored -> mapRepository(List.of(
                                 new MapRepository.MapRow(
-                                        1, "Bờ sông Pu", "OFFLINE", "NAMEK", 1, 3, 40, 2, true)))));
+                                        1, "Bờ sông Pu", "OFFLINE", "NAMEK", 1, 3, 40, 2, true))),
+                        ignored -> com.project.game.testsupport.MonsterTestSupport.canonicalRepository()));
 
         assertEquals("enabled map 0 is required", failure.getMessage());
         assertTrue(isClosed(createdManager.get()));
@@ -205,9 +210,52 @@ class ServerBootstrapTest {
                             public List<WaypointRow> findAllWaypoints() {
                                 return List.of();
                             }
-                        }));
+                        }, ignored -> com.project.game.testsupport.MonsterTestSupport.canonicalRepository()));
 
         assertEquals("map catalog failure", failure.getMessage());
+        assertTrue(isClosed(createdManager.get()));
+    }
+
+    @Test
+    void monsterRepositoryFailureClosesDatabaseBeforeNetworkConstruction() {
+        AtomicReference<DatabaseManager> createdManager = new AtomicReference<>();
+        IllegalStateException failure = assertThrows(IllegalStateException.class,
+                () -> ServerBootstrap.fromProperties(
+                        startupProperties(), () -> {
+                            DatabaseManager manager = databaseManager();
+                            createdManager.set(manager);
+                            return manager;
+                        }, ignored -> mapRepository(canonicalMapRows()), ignored -> {
+                            throw new IllegalStateException("monster repository failure");
+                        }));
+
+        assertEquals("monster repository failure", failure.getMessage());
+        assertTrue(isClosed(createdManager.get()));
+    }
+
+    @Test
+    void emptyMonsterTemplateCatalogFailsBeforeNetworkConstructionAndClosesDatabase() {
+        AtomicReference<DatabaseManager> createdManager = new AtomicReference<>();
+        IllegalArgumentException failure = assertThrows(IllegalArgumentException.class,
+                () -> ServerBootstrap.fromProperties(
+                        startupProperties(), () -> {
+                            DatabaseManager manager = databaseManager();
+                            createdManager.set(manager);
+                            return manager;
+                        }, ignored -> mapRepository(canonicalMapRows()),
+                        ignored -> new com.project.game.persistence.monster.MonsterRepository() {
+                            @Override
+                            public List<TemplateRow> findAllTemplates() {
+                                return List.of();
+                            }
+
+                            @Override
+                            public List<SpawnRow> findAllSpawns() {
+                                return List.of();
+                            }
+                        }));
+
+        assertEquals("monster template catalog must not be empty", failure.getMessage());
         assertTrue(isClosed(createdManager.get()));
     }
 
@@ -215,12 +263,14 @@ class ServerBootstrapTest {
     void honorsConfiguredMapDataDirectory(@org.junit.jupiter.api.io.TempDir Path mapRoot)
             throws Exception {
         Files.copy(Path.of("resources", "maps", "1.json"), mapRoot.resolve("1.json"));
+        Files.copy(Path.of("resources", "maps", "2.json"), mapRoot.resolve("2.json"));
         Properties properties = startupProperties();
         properties.setProperty("game.resource.map-dir", mapRoot.toString());
 
         ServerBootstrap bootstrap = ServerBootstrap.fromProperties(
                 properties, ServerBootstrapTest::databaseManager,
-                ignored -> mapRepository(canonicalMapRows()));
+                ignored -> mapRepository(canonicalMapRows()),
+                ignored -> com.project.game.testsupport.MonsterTestSupport.canonicalRepository());
 
         assertDoesNotThrow(bootstrap::stop);
     }
@@ -369,8 +419,11 @@ class ServerBootstrapTest {
     }
 
     private static List<MapRepository.MapRow> canonicalMapRows() {
-        return List.of(new MapRepository.MapRow(
-                0, "Núi Paozu", "ONLINE", "EARTH", 1, 3, 40, 1, true));
+        return List.of(
+                new MapRepository.MapRow(
+                        0, "Núi Paozu", "ONLINE", "EARTH", 1, 3, 40, 1, true),
+                new MapRepository.MapRow(
+                        1, "Bờ sông Pu", "OFFLINE", "NAMEK", 1, 3, 40, 2, true));
     }
 
     private static MapRepository mapRepository(List<MapRepository.MapRow> maps) {

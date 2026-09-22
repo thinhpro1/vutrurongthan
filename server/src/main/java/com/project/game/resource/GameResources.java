@@ -1,10 +1,10 @@
 package com.project.game.resource;
 
 import com.project.game.map.MapTemplate;
-import com.project.game.monster.MonsterCombatTemplate;
 import com.project.game.monster.MonsterDart;
 import com.project.game.monster.MonsterSpawn;
 import com.project.game.monster.MonsterTemplate;
+import com.project.game.persistence.monster.MonsterRepository;
 import com.project.game.resource.loader.GameResourcesLoader;
 
 import java.nio.file.Path;
@@ -26,7 +26,6 @@ public final class GameResources {
             -1,
             List.of(),
             List.of(),
-            Map.of(),
             Map.of());
 
     private final IconCatalog iconCatalog;
@@ -40,7 +39,6 @@ public final class GameResources {
     private final List<MonsterDart> monsterDarts;
     private final List<MonsterTemplate> monsterTemplates;
     private final Map<Integer, List<MonsterSpawn>> monsterSpawns;
-    private final Map<Integer, MonsterCombatTemplate> monsterCombatTemplates;
 
     public GameResources(
             IconCatalog iconCatalog,
@@ -53,8 +51,7 @@ public final class GameResources {
             int monsterVersion,
             List<MonsterDart> monsterDarts,
             List<MonsterTemplate> monsterTemplates,
-            Map<Integer, List<MonsterSpawn>> monsterSpawns,
-            Map<Integer, MonsterCombatTemplate> monsterCombatTemplates) {
+            Map<Integer, List<MonsterSpawn>> monsterSpawns) {
         this.iconCatalog = iconCatalog;
         this.imageVersion = imageVersion;
         this.frames = List.copyOf(Objects.requireNonNull(frames, "frames"));
@@ -66,8 +63,6 @@ public final class GameResources {
         this.monsterDarts = List.copyOf(Objects.requireNonNull(monsterDarts, "monsterDarts"));
         this.monsterTemplates = List.copyOf(Objects.requireNonNull(monsterTemplates, "monsterTemplates"));
         this.monsterSpawns = copyLists(Objects.requireNonNull(monsterSpawns, "monsterSpawns"));
-        this.monsterCombatTemplates = Map.copyOf(
-                Objects.requireNonNull(monsterCombatTemplates, "monsterCombatTemplates"));
     }
 
     public static GameResources unavailable() {
@@ -105,6 +100,16 @@ public final class GameResources {
                 Objects.requireNonNull(jsonRoot, "jsonRoot"), maps, monsterVersion);
     }
 
+    public static GameResources fromFrameRoot(
+            Path jsonRoot,
+            Map<Integer, MapTemplate> maps,
+            int monsterVersion,
+            MonsterRepository monsterRepository) {
+        return GameResourcesLoader.fromFrameRoot(
+                Objects.requireNonNull(jsonRoot, "jsonRoot"), maps, monsterVersion,
+                monsterRepository);
+    }
+
     public static GameResources fromRoots(Path iconRoot, Path jsonRoot) {
         return GameResourcesLoader.fromRoots(jsonRoot, iconRoot, iconRoot == null ? -1 : 1);
     }
@@ -131,6 +136,17 @@ public final class GameResources {
             Map<Integer, MapTemplate> maps) {
         return GameResourcesLoader.fromRoots(
                 jsonRoot, iconRoot, imageVersion, monsterVersion, maps);
+    }
+
+    public static GameResources fromRoots(
+            Path iconRoot,
+            Path jsonRoot,
+            int imageVersion,
+            int monsterVersion,
+            Map<Integer, MapTemplate> maps,
+            MonsterRepository monsterRepository) {
+        return GameResourcesLoader.fromRoots(
+                jsonRoot, iconRoot, imageVersion, monsterVersion, maps, monsterRepository);
     }
 
     public int imageVersion() {
@@ -179,10 +195,6 @@ public final class GameResources {
 
     public List<MonsterSpawn> monstersForMap(int mapId) {
         return monsterSpawns.getOrDefault(mapId, List.of());
-    }
-
-    public Optional<MonsterCombatTemplate> monsterCombatTemplate(int templateId) {
-        return Optional.ofNullable(monsterCombatTemplates.get(templateId));
     }
 
     private static <T> Map<Integer, List<T>> copyLists(Map<Integer, List<T>> source) {

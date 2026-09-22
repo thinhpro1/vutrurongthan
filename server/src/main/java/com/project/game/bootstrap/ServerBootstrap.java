@@ -16,6 +16,8 @@ import com.project.game.persistence.DatabaseManager;
 import com.project.game.persistence.account.JdbcAccountRepository;
 import com.project.game.persistence.map.JdbcMapRepository;
 import com.project.game.persistence.map.MapRepository;
+import com.project.game.persistence.monster.JdbcMonsterRepository;
+import com.project.game.persistence.monster.MonsterRepository;
 import com.project.game.persistence.player.JdbcPlayerRepository;
 import com.project.game.player.PlayerService;
 import com.project.game.resource.GameResources;
@@ -63,16 +65,27 @@ public final class ServerBootstrap {
             Properties properties,
             Supplier<DatabaseManager> databaseManagerFactory) {
         return fromProperties(properties, databaseManagerFactory,
-                manager -> new JdbcMapRepository(manager.dataSource()));
+                manager -> new JdbcMapRepository(manager.dataSource()),
+                manager -> new JdbcMonsterRepository(manager.dataSource()));
     }
 
     static ServerBootstrap fromProperties(
             Properties properties,
             Supplier<DatabaseManager> databaseManagerFactory,
             Function<DatabaseManager, MapRepository> mapRepositoryFactory) {
+        return fromProperties(properties, databaseManagerFactory, mapRepositoryFactory,
+                manager -> new JdbcMonsterRepository(manager.dataSource()));
+    }
+
+    static ServerBootstrap fromProperties(
+            Properties properties,
+            Supplier<DatabaseManager> databaseManagerFactory,
+            Function<DatabaseManager, MapRepository> mapRepositoryFactory,
+            Function<DatabaseManager, MonsterRepository> monsterRepositoryFactory) {
         Objects.requireNonNull(properties, "properties");
         Objects.requireNonNull(databaseManagerFactory, "databaseManagerFactory");
         Objects.requireNonNull(mapRepositoryFactory, "mapRepositoryFactory");
+        Objects.requireNonNull(monsterRepositoryFactory, "monsterRepositoryFactory");
 
         String transport = properties.getProperty("game.network.transport", "LEGACY_TCP").trim();
         SSLContext tlsContext;
@@ -94,7 +107,9 @@ public final class ServerBootstrap {
             Map<Integer, MapTemplate> mapCatalog =
                     MapCatalogLoader.load(mapRepository, mapDataRoot);
             requireEnabledMaps(mapCatalog);
-            GameResources resources = loadResources(properties, mapCatalog);
+            MonsterRepository monsterRepository = Objects.requireNonNull(
+                    monsterRepositoryFactory.apply(databaseManager), "monsterRepository");
+            GameResources resources = loadResources(properties, mapCatalog, monsterRepository);
             MonsterFactory monsterFactory = new MonsterFactory(resources);
             PlayerPacketWriter playerPackets = new PlayerPacketWriter();
             MonsterPacketWriter monsterPackets = new MonsterPacketWriter();
@@ -161,7 +176,9 @@ public final class ServerBootstrap {
     }
 
     private static GameResources loadResources(
-            Properties properties, Map<Integer, MapTemplate> maps) {
+            Properties properties,
+            Map<Integer, MapTemplate> maps,
+            MonsterRepository monsterRepository) {
         String configuredIconRoot = properties.getProperty("game.resource.icon-dir", "").trim();
         String configuredJsonRoot = properties.getProperty("game.resource.json-dir", "").trim();
         int imageVersion = integer(properties, "game.resource.image-version", -1);
@@ -177,7 +194,8 @@ public final class ServerBootstrap {
                 java.nio.file.Path.of(configuredJsonRoot),
                 imageVersion,
                 monsterVersion,
-                maps);
+                maps,
+                monsterRepository);
     }
 
     private static int requiredMonsterVersion(Properties properties) {

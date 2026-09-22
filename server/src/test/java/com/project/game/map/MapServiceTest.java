@@ -92,7 +92,7 @@ class MapServiceTest {
         maps.mapService().finishLoad(player);
         drain(player);
 
-        assertTrue(maps.combatService().attackMonster(player, 0, 10));
+        assertTrue(maps.combatService().attackMonster(player, 101, 10));
         assertEquals(List.of(MessageName.MONSTER_INJURE), commands(drain(player)));
         clock.advanceMillis(1L);
 
@@ -129,7 +129,7 @@ class MapServiceTest {
         maps.mapService().finishLoad(player);
         drain(player);
 
-        assertTrue(maps.combatService().attackMonster(player, 0, 10));
+        assertTrue(maps.combatService().attackMonster(player, 101, 10));
         drain(player);
         clock.advanceMillis(1L);
 
@@ -155,10 +155,10 @@ class MapServiceTest {
         maps.monsterService().tickLifecycle();
         List<Message> monsterMoves = drain(player).stream()
                 .filter(message -> message.command() == MessageName.MONSTER_MOVE)
-                .filter(message -> monsterMoveId(message) == 0)
+                .filter(message -> monsterMoveId(message) == 101)
                 .toList();
         assertEquals(1, monsterMoves.size());
-        assertMonsterMove(monsterMoves.getFirst(), 0, 979, 936, 1);
+        assertMonsterMove(monsterMoves.getFirst(), 101, 979, 936, 1);
     }
 
     @Test

@@ -47,6 +47,9 @@ class ZoneRegistryTest {
 
     private static ZoneRegistry registry() {
         return new ZoneRegistry(new MonsterFactory(
-                GameResources.fromFrameRoot(java.nio.file.Path.of("resources", "json"), 2)));
+                GameResources.fromFrameRoot(
+                        java.nio.file.Path.of("resources", "json"),
+                        com.project.game.testsupport.MapTestSupport.canonicalMaps(), 2,
+                        com.project.game.testsupport.MonsterTestSupport.canonicalRepository())));
     }
 }

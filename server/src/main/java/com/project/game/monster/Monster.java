@@ -36,25 +36,19 @@ public final class Monster {
     private final LinkedHashMap<Integer, Long> enemies = new LinkedHashMap<>();
     private long lastAttackAtMillis;
 
-    Monster(MonsterSpawn spawn,
-                   MonsterCombatTemplate combat,
-                   MonsterTemplate movement) {
+    Monster(MonsterSpawn spawn, MonsterTemplate template) {
         Objects.requireNonNull(spawn, "spawn");
-        Objects.requireNonNull(combat, "combat");
-        Objects.requireNonNull(movement, "movement");
-        if (combat.templateId() != spawn.templateId()) {
-            throw new IllegalArgumentException("monster combat template does not match spawn");
+        Objects.requireNonNull(template, "template");
+        if (template.id() != spawn.templateId()) {
+            throw new IllegalArgumentException("monster template does not match spawn");
         }
-        if (combat.damage() <= 0L) {
-            throw new IllegalArgumentException("monster combat damage must be positive");
+        if (template.damage() <= 0L) {
+            throw new IllegalArgumentException("monster damage must be positive");
         }
-        if (movement.id() != spawn.templateId()) {
-            throw new IllegalArgumentException("monster movement template does not match spawn");
-        }
-        if (movement.rangeMove() < 0) {
+        if (template.rangeMove() < 0) {
             throw new IllegalArgumentException("monster movement range must be non-negative");
         }
-        if (movement.speed() < 0) {
+        if (template.speed() < 0) {
             throw new IllegalArgumentException("monster movement speed must be non-negative");
         }
         id = spawn.id();
@@ -69,11 +63,11 @@ public final class Monster {
         maxHp = spawn.maxHp();
         hp = spawn.hp();
         status = spawn.status();
-        damage = combat.damage();
-        potentialReward = combat.potentialReward();
-        rangeMove = movement.rangeMove();
-        speed = movement.speed();
-        moveType = movement.type();
+        damage = template.damage();
+        potentialReward = template.potentialReward();
+        rangeMove = template.rangeMove();
+        speed = template.speed();
+        moveType = template.type();
     }
 
     public int id() {

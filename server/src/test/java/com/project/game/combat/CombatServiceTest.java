@@ -35,8 +35,8 @@ class CombatServiceTest {
         CombatService combat = new CombatService(
                 zones, new PlayerPacketWriter(), new MonsterPacketWriter());
 
-        assertFalse(combat.canTargetMonster(null, 0));
-        assertFalse(combat.attackMonster(null, 0, 1L));
+        assertFalse(combat.canTargetMonster(null, 101));
+        assertFalse(combat.attackMonster(null, 101, 1L));
         assertNull(zones.find(1, 0));
     }
 
@@ -46,8 +46,8 @@ class CombatServiceTest {
         Session session = session(player(1, 1, 0), maps);
 
         assertEquals(0, zoneRegistrySize(maps));
-        assertFalse(maps.combatService().canTargetMonster(session, 0));
-        assertFalse(maps.combatService().attackMonster(session, 0, 10));
+        assertFalse(maps.combatService().canTargetMonster(session, 101));
+        assertFalse(maps.combatService().attackMonster(session, 101, 10));
         assertEquals(0, zoneRegistrySize(maps));
     }
 
@@ -58,8 +58,8 @@ class CombatServiceTest {
         Session session = session(player(1, 1, 0), maps);
 
         assertEquals(0, maps.mapService().memberCount(1, 0));
-        assertFalse(maps.combatService().canTargetMonster(session, 0));
-        assertFalse(maps.combatService().attackMonster(session, 0, 10));
+        assertFalse(maps.combatService().canTargetMonster(session, 101));
+        assertFalse(maps.combatService().attackMonster(session, 101, 10));
         assertEquals(300L, maps.monsterService().monsterSnapshots(1, 0).getFirst().hp());
     }
 
@@ -70,8 +70,8 @@ class CombatServiceTest {
         maps.mapService().finishLoad(dead);
         drain(dead);
 
-        assertFalse(maps.combatService().canTargetMonster(dead, 0));
-        assertFalse(maps.combatService().attackMonster(dead, 0, 10L));
+        assertFalse(maps.combatService().canTargetMonster(dead, 101));
+        assertFalse(maps.combatService().attackMonster(dead, 101, 10L));
         assertEquals(300L, maps.monsterService().monsterSnapshots(1, 0).getFirst().hp());
         assertEquals(List.of(), drain(dead));
     }
@@ -83,12 +83,12 @@ class CombatServiceTest {
         maps.mapService().finishLoad(attacker);
         drain(attacker);
 
-        assertTrue(maps.combatService().canTargetMonster(attacker, 0));
-        assertTrue(maps.combatService().attackMonster(attacker, 0, 10));
+        assertTrue(maps.combatService().canTargetMonster(attacker, 101));
+        assertTrue(maps.combatService().attackMonster(attacker, 101, 10));
         List<Message> messages = drain(attacker);
         assertEquals(List.of(MessageName.MONSTER_INJURE), commands(messages));
         var reader = messages.getFirst().reader();
-        assertEquals(0, reader.readInt());
+        assertEquals(101, reader.readInt());
         assertEquals(10L, reader.readLong());
         assertEquals(290L, reader.readLong());
         assertFalse(reader.readBoolean());
@@ -105,7 +105,7 @@ class CombatServiceTest {
         long powerBefore = attacker.player().power();
         long potentialBefore = attacker.player().potential();
 
-        assertTrue(maps.combatService().attackMonster(attacker, 0, 10L));
+        assertTrue(maps.combatService().attackMonster(attacker, 101, 10L));
 
         assertEquals(powerBefore, attacker.player().power());
         assertEquals(potentialBefore, attacker.player().potential());
@@ -122,7 +122,7 @@ class CombatServiceTest {
         long powerBefore = attacker.player().power();
         long potentialBefore = attacker.player().potential();
 
-        assertTrue(maps.combatService().attackMonster(attacker, 0, 500L));
+        assertTrue(maps.combatService().attackMonster(attacker, 101, 500L));
 
         assertEquals(powerBefore, attacker.player().power());
         assertEquals(potentialBefore + 10L, attacker.player().potential());
@@ -149,7 +149,7 @@ class CombatServiceTest {
         maps.mapService().finishLoad(attacker);
         drain(attacker);
 
-        assertTrue(maps.combatService().attackMonster(attacker, 0, 500L));
+        assertTrue(maps.combatService().attackMonster(attacker, 101, 500L));
 
         assertEquals(Long.MAX_VALUE, attacker.player().potential());
         assertEquals(nearMax.power(), attacker.player().power());
@@ -177,7 +177,7 @@ class CombatServiceTest {
 
         long observerPotential = observer.player().potential();
 
-        assertTrue(maps.combatService().attackMonster(killer, 0, 500L));
+        assertTrue(maps.combatService().attackMonster(killer, 101, 500L));
 
         assertEquals(
                 List.of(MessageName.MONSTER_START_DIE, MessageName.PLAYER_INFO),
@@ -195,11 +195,11 @@ class CombatServiceTest {
         maps.mapService().finishLoad(attacker);
         drain(attacker);
 
-        assertTrue(maps.combatService().attackMonster(attacker, 0, 500L));
+        assertTrue(maps.combatService().attackMonster(attacker, 101, 500L));
         drain(attacker);
         long afterKill = attacker.player().potential();
 
-        assertFalse(maps.combatService().attackMonster(attacker, 0, 500L));
+        assertFalse(maps.combatService().attackMonster(attacker, 101, 500L));
 
         assertEquals(afterKill, attacker.player().potential());
         assertEquals(List.of(), drain(attacker));
@@ -215,7 +215,7 @@ class CombatServiceTest {
 
         long before = attacker.player().potential();
 
-        assertTrue(maps.combatService().attackMonster(attacker, 0, 500L));
+        assertTrue(maps.combatService().attackMonster(attacker, 101, 500L));
         drain(attacker);
         assertEquals(before + 10L, attacker.player().potential());
 
@@ -224,7 +224,7 @@ class CombatServiceTest {
         assertEquals(List.of(MessageName.MONSTER_RESPAWN),
                 commands(withoutMonsterMoves(drain(attacker))));
 
-        assertTrue(maps.combatService().attackMonster(attacker, 0, 500L));
+        assertTrue(maps.combatService().attackMonster(attacker, 101, 500L));
         assertEquals(before + 20L, attacker.player().potential());
         assertEquals(
                 List.of(MessageName.MONSTER_START_DIE, MessageName.PLAYER_INFO),
@@ -238,7 +238,7 @@ class CombatServiceTest {
         maps.mapService().finishLoad(attacker);
         drain(attacker);
 
-        assertTrue(maps.combatService().attackMonster(attacker, 0, 500L));
+        assertTrue(maps.combatService().attackMonster(attacker, 101, 500L));
         drain(attacker);
         long rewarded = attacker.player().potential();
 
@@ -270,7 +270,7 @@ class CombatServiceTest {
         drain(attacker);
         drain(peer);
 
-        assertTrue(maps.combatService().attackMonster(attacker, 0, 10));
+        assertTrue(maps.combatService().attackMonster(attacker, 101, 10));
         List<Message> attackerMessages = drain(attacker);
         List<Message> peerMessages = drain(peer);
         assertEquals(List.of(MessageName.MONSTER_INJURE), commands(attackerMessages));
@@ -288,7 +288,7 @@ class CombatServiceTest {
         drain(attacker);
         drain(otherZone);
 
-        assertTrue(maps.combatService().attackMonster(attacker, 0, 10));
+        assertTrue(maps.combatService().attackMonster(attacker, 101, 10));
         assertEquals(List.of(MessageName.MONSTER_INJURE), commands(drain(attacker)));
         assertEquals(List.of(), drain(otherZone));
         assertEquals(300L, maps.monsterService().monsterSnapshots(1, 1).getFirst().hp());
@@ -304,7 +304,7 @@ class CombatServiceTest {
         drain(first);
         drain(second);
         for (int i = 0; i < 29; i++) {
-            assertTrue(maps.combatService().attackMonster(first, 0, 10));
+            assertTrue(maps.combatService().attackMonster(first, 101, 10));
             drain(first);
             drain(second);
         }

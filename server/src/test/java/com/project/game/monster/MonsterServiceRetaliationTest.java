@@ -35,7 +35,7 @@ class MonsterServiceRetaliationTest {
         drain(attacker);
         drain(observer);
 
-        assertTrue(maps.combatService().attackMonster(attacker, 0, 10));
+        assertTrue(maps.combatService().attackMonster(attacker, 101, 10));
         drain(attacker);
         drain(observer);
         clock.advanceMillis(1L);
@@ -58,7 +58,7 @@ class MonsterServiceRetaliationTest {
         maps.mapService().finishLoad(target);
         drain(target);
 
-        assertTrue(maps.combatService().attackMonster(target, 0, 10L));
+        assertTrue(maps.combatService().attackMonster(target, 101, 10L));
         drain(target);
 
         clock.advanceMillis(1L);
@@ -76,7 +76,7 @@ class MonsterServiceRetaliationTest {
         maps.mapService().finishLoad(target);
         drain(target);
 
-        assertTrue(maps.combatService().attackMonster(target, 0, 10L));
+        assertTrue(maps.combatService().attackMonster(target, 101, 10L));
         drain(target);
 
         clock.advanceMillis(1L);
@@ -93,7 +93,7 @@ class MonsterServiceRetaliationTest {
         maps.mapService().finishLoad(target);
         drain(target);
 
-        for (int monsterId = 0; monsterId < 6; monsterId++) {
+        for (int monsterId = 101; monsterId <= 106; monsterId++) {
             assertTrue(maps.combatService().attackMonster(target, monsterId, 1L));
             drain(target);
         }
@@ -122,7 +122,7 @@ class MonsterServiceRetaliationTest {
         drain(victim);
         drain(observer);
 
-        assertTrue(maps.combatService().attackMonster(victim, 0, 10L));
+        assertTrue(maps.combatService().attackMonster(victim, 101, 10L));
         drain(victim);
         drain(observer);
         clock.advanceMillis(1L);
@@ -159,7 +159,7 @@ class MonsterServiceRetaliationTest {
         drain(attacker);
         drain(otherZone);
 
-        assertTrue(maps.combatService().attackMonster(attacker, 0, 10));
+        assertTrue(maps.combatService().attackMonster(attacker, 101, 10));
         drain(attacker);
         clock.advanceMillis(1L);
         maps.monsterService().tickLifecycle();
@@ -177,7 +177,7 @@ class MonsterServiceRetaliationTest {
         Session attacker = session(player(1, 1, 0), maps);
         maps.mapService().finishLoad(attacker);
         drain(attacker);
-        assertTrue(maps.combatService().attackMonster(attacker, 0, 10));
+        assertTrue(maps.combatService().attackMonster(attacker, 101, 10));
         drain(attacker);
 
         attacker.bindPlayer(attacker.player().withPosition(975 + 901, 936));
@@ -206,7 +206,7 @@ class MonsterServiceRetaliationTest {
         maps.mapService().finishLoad(attacker);
         drain(attacker);
 
-        assertTrue(maps.combatService().attackMonster(attacker, 0, 10));
+        assertTrue(maps.combatService().attackMonster(attacker, 101, 10));
         drain(attacker);
         clock.advanceMillis(1L);
         maps.monsterService().tickLifecycle();
@@ -240,7 +240,7 @@ class MonsterServiceRetaliationTest {
         maps.mapService().finishLoad(survivor);
         drain(survivor);
 
-        assertTrue(maps.combatService().attackMonster(survivor, 0, 500));
+        assertTrue(maps.combatService().attackMonster(survivor, 101, 500));
         drain(survivor);
         clock.advanceMillis(9_000L);
         maps.monsterService().tickLifecycle();

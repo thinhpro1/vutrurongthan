@@ -53,7 +53,7 @@ public final class JdbcMapRepository implements MapRepository {
              ResultSet results = statement.executeQuery()) {
             while (results.next()) {
                 waypoints.add(new WaypointRow(
-                        results.getInt("id"),
+                        results.getLong("id"),
                         results.getInt("map_id"),
                         results.getInt("x"),
                         results.getInt("y"),

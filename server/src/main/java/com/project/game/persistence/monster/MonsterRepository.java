@@ -26,7 +26,7 @@ public interface MonsterRepository {
     ) {}
 
     record SpawnRow(
-            int id,
+            long id,
             int mapId,
             int monsterId,
             int x,

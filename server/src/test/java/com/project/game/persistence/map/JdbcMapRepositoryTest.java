@@ -45,7 +45,7 @@ class JdbcMapRepositoryTest {
     void mapsAllWaypointColumnsAndUsesStableMapAndIdOrdering() {
         String[] sql = new String[1];
         ResultSet rows = resultSet(List.of(Map.of(
-                "id", 19,
+                "id", 3_000_000_001L,
                 "map_id", 7,
                 "x", 4464,
                 "y", 936,
@@ -58,7 +58,7 @@ class JdbcMapRepositoryTest {
                 .findAllWaypoints();
 
         assertIterableEquals(List.of(new MapRepository.WaypointRow(
-                19, 7, 4464, 936, 1, 1, 90, 1008)), waypoints);
+                3_000_000_001L, 7, 4464, 936, 1, 1, 90, 1008)), waypoints);
         assertEquals("SELECT id, map_id, x, y, type, go_map, go_x, go_y "
                 + "FROM map_waypoint ORDER BY map_id, id", sql[0]);
     }

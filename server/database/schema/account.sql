@@ -1,5 +1,5 @@
--- Reference schema only.
--- The application does not execute this file automatically.
+-- Reference/current schema snapshot only.
+-- Executable runtime history lives under database/migrations/.
 
 CREATE TABLE account (
     id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,

@@ -39,6 +39,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Optional;
 import java.util.List;
 import java.util.Properties;
@@ -155,6 +156,52 @@ class ServerBootstrapTest {
 
         bootstrap.stop();
         assertTrue(isClosed(createdManager.get()));
+    }
+
+    @Test
+    void runsMigrationAfterDatabaseCreationBeforeRepositoryFactories() {
+        List<String> events = new ArrayList<>();
+        ServerBootstrap bootstrap = ServerBootstrap.fromProperties(
+                startupProperties(), () -> {
+                    events.add("database");
+                    return databaseManager();
+                }, ignored -> {
+                    events.add("map");
+                    return mapRepository(canonicalMapRows());
+                }, ignored -> {
+                    events.add("monster");
+                    return com.project.game.testsupport.MonsterTestSupport.canonicalRepository();
+                }, (ignored, migrationDirectory) -> events.add("migration:" + migrationDirectory));
+
+        assertEquals(List.of("database", "migration:" + Path.of("database/migrations"), "map", "monster"), events);
+        bootstrap.stop();
+    }
+
+    @Test
+    void migrationFailureClosesDatabaseAndPreventsRepositoryAndNetworkConstruction() {
+        AtomicReference<DatabaseManager> createdManager = new AtomicReference<>();
+        AtomicBoolean mapFactoryCalled = new AtomicBoolean();
+        AtomicBoolean monsterFactoryCalled = new AtomicBoolean();
+        IllegalStateException failure = assertThrows(IllegalStateException.class,
+                () -> ServerBootstrap.fromProperties(
+                        startupProperties(), () -> {
+                            DatabaseManager manager = databaseManager();
+                            createdManager.set(manager);
+                            return manager;
+                        }, ignored -> {
+                            mapFactoryCalled.set(true);
+                            return mapRepository(canonicalMapRows());
+                        }, ignored -> {
+                            monsterFactoryCalled.set(true);
+                            return com.project.game.testsupport.MonsterTestSupport.canonicalRepository();
+                        }, (ignored, migrationDirectory) -> {
+                            throw new IllegalStateException("migration failure");
+                        }));
+
+        assertEquals("migration failure", failure.getMessage());
+        assertTrue(isClosed(createdManager.get()));
+        assertFalse(mapFactoryCalled.get());
+        assertFalse(monsterFactoryCalled.get());
     }
 
     @Test
@@ -415,6 +462,7 @@ class ServerBootstrapTest {
         properties.setProperty("game.resource.map-dir", "resources/maps");
         properties.setProperty("game.resource.image-version", "2");
         properties.setProperty("game.resource.monster-version", "2");
+        properties.setProperty("game.db.migration-dir", "database/migrations");
         return properties;
     }
 

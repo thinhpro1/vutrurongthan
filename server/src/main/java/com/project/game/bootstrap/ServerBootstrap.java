@@ -13,6 +13,7 @@ import com.project.game.network.packet.PlayerPacketWriter;
 import com.project.game.network.transport.TlsContextFactory;
 import com.project.game.persistence.DatabaseConfig;
 import com.project.game.persistence.DatabaseManager;
+import com.project.game.persistence.DatabaseMigrator;
 import com.project.game.persistence.account.JdbcAccountRepository;
 import com.project.game.persistence.map.JdbcMapRepository;
 import com.project.game.persistence.map.MapRepository;
@@ -35,6 +36,7 @@ import java.util.Map;
 import java.nio.file.Path;
 import java.util.function.Supplier;
 import java.util.function.Function;
+import java.util.function.BiConsumer;
 
 /** Creates the application services and owns their shared database lifecycle. */
 public final class ServerBootstrap {
@@ -58,7 +60,11 @@ public final class ServerBootstrap {
         }
         overlaySystemProperties(properties);
         return fromProperties(properties,
-                () -> new DatabaseManager(DatabaseConfig.fromProperties(properties)));
+                () -> new DatabaseManager(DatabaseConfig.fromProperties(properties)),
+                manager -> new JdbcMapRepository(manager.dataSource()),
+                manager -> new JdbcMonsterRepository(manager.dataSource()),
+                (manager, migrationDirectory) -> DatabaseMigrator.migrate(
+                        manager.dataSource(), migrationDirectory));
     }
 
     static ServerBootstrap fromProperties(
@@ -66,7 +72,8 @@ public final class ServerBootstrap {
             Supplier<DatabaseManager> databaseManagerFactory) {
         return fromProperties(properties, databaseManagerFactory,
                 manager -> new JdbcMapRepository(manager.dataSource()),
-                manager -> new JdbcMonsterRepository(manager.dataSource()));
+                manager -> new JdbcMonsterRepository(manager.dataSource()),
+                (ignored, ignoredDirectory) -> { });
     }
 
     static ServerBootstrap fromProperties(
@@ -74,7 +81,8 @@ public final class ServerBootstrap {
             Supplier<DatabaseManager> databaseManagerFactory,
             Function<DatabaseManager, MapRepository> mapRepositoryFactory) {
         return fromProperties(properties, databaseManagerFactory, mapRepositoryFactory,
-                manager -> new JdbcMonsterRepository(manager.dataSource()));
+                manager -> new JdbcMonsterRepository(manager.dataSource()),
+                (ignored, ignoredDirectory) -> { });
     }
 
     static ServerBootstrap fromProperties(
@@ -82,10 +90,21 @@ public final class ServerBootstrap {
             Supplier<DatabaseManager> databaseManagerFactory,
             Function<DatabaseManager, MapRepository> mapRepositoryFactory,
             Function<DatabaseManager, MonsterRepository> monsterRepositoryFactory) {
+        return fromProperties(properties, databaseManagerFactory, mapRepositoryFactory,
+                monsterRepositoryFactory, (ignored, ignoredDirectory) -> { });
+    }
+
+    static ServerBootstrap fromProperties(
+            Properties properties,
+            Supplier<DatabaseManager> databaseManagerFactory,
+            Function<DatabaseManager, MapRepository> mapRepositoryFactory,
+            Function<DatabaseManager, MonsterRepository> monsterRepositoryFactory,
+            BiConsumer<DatabaseManager, Path> migrationAction) {
         Objects.requireNonNull(properties, "properties");
         Objects.requireNonNull(databaseManagerFactory, "databaseManagerFactory");
         Objects.requireNonNull(mapRepositoryFactory, "mapRepositoryFactory");
         Objects.requireNonNull(monsterRepositoryFactory, "monsterRepositoryFactory");
+        Objects.requireNonNull(migrationAction, "migrationAction");
 
         String transport = properties.getProperty("game.network.transport", "LEGACY_TCP").trim();
         SSLContext tlsContext;
@@ -99,8 +118,10 @@ public final class ServerBootstrap {
             throw new IllegalStateException("cannot initialize TLS network transport", exception);
         }
 
+        Path migrationDirectory = requiredPath(properties, "game.db.migration-dir");
         DatabaseManager databaseManager = databaseManagerFactory.get();
         try {
+            migrationAction.accept(databaseManager, migrationDirectory);
             MapRepository mapRepository = Objects.requireNonNull(
                     mapRepositoryFactory.apply(databaseManager), "mapRepository");
             Path mapDataRoot = requiredPath(properties, "game.resource.map-dir");

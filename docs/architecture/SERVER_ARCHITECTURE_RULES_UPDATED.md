@@ -203,6 +203,7 @@ com.project.game/
 └── persistence/
     ├── DatabaseConfig.java
     ├── DatabaseManager.java
+    ├── DatabaseMigrator.java
     ├── account/
     ├── map/
     ├── monster/
@@ -1137,7 +1138,18 @@ manual ALTER/recreate note nếu DB local đã tồn tại
 real MySQL integration gate
 ```
 
-Ứng dụng hiện không tự chạy migration.
+Startup phải áp dụng versioned in-house SQL migrations trước khi tạo/query repositories và catalog:
+
+```text
+DatabaseMigrator
+→ database/migrations/VNNN__name.sql
+→ schema_migration
+→ repositories/catalogs
+```
+
+Migration history là immutable và được kiểm tra bằng SHA-256 checksum. `database/schema/*.sql` chỉ là current reference snapshots, không phải executable history. Mỗi schema change phải thêm migration mới, cập nhật snapshot, mapping/tests và chạy real MySQL gate. Không dùng Flyway/Liquibase hoặc migration framework khác.
+
+Migration runner phải giữ advisory lock MySQL trong toàn bộ migration pass, không dùng `allowMultiQueries=true`, không hứa rollback transactional cho MySQL DDL, và chỉ ghi history sau khi toàn bộ statement của migration thành công. Existing tables/rows không bị drop, truncate, delete hoặc reseed bởi schema migration.
 
 ---
 

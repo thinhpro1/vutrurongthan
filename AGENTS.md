@@ -22,22 +22,61 @@ before planning, reviewing, testing, or changing code:
 1. **MUST read and follow**
    `docs/architecture/SERVER_ARCHITECTURE_RULES_UPDATED.md`.
 
-2. **MUST treat**
-   `docs/architecture/SERVER_ARCHITECTURE_RULES_UPDATED.md`
-   as the authoritative architecture, naming, ownership, type-granularity,
-   dependency, persistence, concurrency, protocol, and testing contract
-   for the server.
+2. **MUST also read and follow**
+   `docs/architecture/SERVER_FEATURE_READABILITY_RULES.md`.
 
-3. **MUST inspect the current implementation before proposing or applying changes.**
+3. Treat the two files as complementary authoritative contracts:
 
-4. If the rule file is missing or unreadable, **MUST stop before changing server code**.
+```text
+SERVER_ARCHITECTURE_RULES_UPDATED.md
+→ protocol / persistence / concurrency / dependency / testing safety
 
-5. If the requested implementation conflicts with the rule file,
-   **MUST report the conflict before changing production code**.
+SERVER_FEATURE_READABILITY_RULES.md
+→ feature center / Manager-Service choice / entity ownership /
+  naming / gameplay flow / file layout / readability
+```
 
-For client-only work that does not affect the server, shared protocol,
-or Unity/server compatibility, the server architecture rule does not need
-to be loaded.
+4. If examples in the older architecture rule conflict with the feature-readability
+   rule on gameplay naming, file shape, Manager/Service preference, method ordering,
+   or split-vs-cohesion decisions, **the feature-readability rule controls those
+   readability topics**, while the existing runtime/protocol/persistence/concurrency
+   invariants remain mandatory.
+
+5. **MUST inspect the current implementation before proposing or applying changes.**
+
+6. If either mandatory rule file is missing or unreadable, **MUST stop before
+   changing server code**.
+
+7. If the requested implementation conflicts with current production runtime,
+   protocol, persistence, or concurrency invariants, **MUST report the conflict
+   before changing production code**.
+
+---
+
+## Architecture priority
+
+When documents or examples conflict, use this order:
+
+```text
+1. Current production/runtime/database/protocol/concurrency contract
+2. docs/architecture/SERVER_ARCHITECTURE_RULES_UPDATED.md
+3. docs/architecture/SERVER_FEATURE_READABILITY_RULES.md for its owned topics
+4. Newly approved feature/refactor design/spec
+5. server/README.md
+6. Older plans/specifications/reference source trees
+```
+
+Historical/reference source may guide:
+
+```text
+feature naming
+feature center
+Manager convention
+method vocabulary
+code reading flow
+```
+
+but does not override current safety/runtime contracts.
 
 ---
 
@@ -47,55 +86,127 @@ Before modifying anything under `server/**`:
 
 1. **MUST preserve existing behavior outside the requested scope.**
 
-2. **MUST preserve Unity protocol compatibility**
-   unless the task explicitly approves a protocol/client change.
+2. **MUST preserve Unity protocol compatibility** unless the task explicitly
+   approves a protocol/client change.
 
-3. **MUST preserve existing persistence boundaries.**
-   Persistence implementation belongs under `persistence/**`
-   unless an approved architecture change explicitly says otherwise.
+3. **MUST preserve existing persistence boundaries.** Persistence implementation
+   belongs under `persistence/**` unless an approved architecture change says otherwise.
 
-4. **MUST NOT introduce new frameworks, architectural layers,
-   abstractions, or Design Patterns unless they solve a demonstrated
-   current problem and comply with the architecture rule.**
+4. **MUST NOT introduce new frameworks, architectural layers, abstractions, or
+   Design Patterns unless they solve a demonstrated current problem.**
 
-5. **MUST NOT revive obsolete architecture from older plans/specifications**
-   when it conflicts with the current production contract or
-   `SERVER_ARCHITECTURE_RULES_UPDATED.md`.
+5. **MUST NOT revive obsolete runtime architecture from older plans/reference
+   source** when it conflicts with current production contracts.
 
 6. **MUST NOT opportunistically refactor unrelated code.**
 
-7. **MUST add or update focused tests**
-   for changed behavior, contracts, concurrency, protocol handling,
-   persistence behavior, or regression risk.
+7. **MUST add or update focused tests** for changed behavior/contracts/concurrency/
+   protocol/persistence/regression risk.
 
-8. **MUST run relevant focused tests and the full Maven server test gate**
-   after implementation.
+8. **MUST run relevant focused tests and the full Maven server test gate** after
+   implementation.
 
-9. **MUST explicitly report**
-   any Unity, manual, real-DB, TLS, or other runtime gate that was not
-   actually executed.
+9. **MUST explicitly report** any Unity/manual/real-DB/TLS/runtime gate that was
+   not actually executed.
 
 10. **MUST NOT claim runtime success from static review alone.**
 
 ---
 
-## Architecture priority
+## Gameplay feature rules
 
-When documents or examples conflict, use this order:
+Before adding or refactoring gameplay code, identify:
 
 ```text
-1. Current production/runtime/database/protocol contract
-2. docs/architecture/SERVER_ARCHITECTURE_RULES_UPDATED.md
-3. Newly approved feature design/spec
-4. server/README.md
-5. Older plans/specifications/examples
+feature center
+main runtime object
+static Template/Data if any
+Manager/collection/lifecycle owner if any
+cross-feature Service/use-case if any
+technical boundaries that stay separate
 ```
 
-Older documents and reference source trees are historical/reference material
-only unless explicitly re-approved.
+Default mental model for an entity/static-data feature is:
 
-Reference projects may guide naming, readability, or game vocabulary,
-but they do not override the current server architecture or runtime contracts.
+```text
+Feature
+FeatureManager      // only when management authority exists
+FeatureTemplate     // only when static definition exists
+supporting types
+```
+
+This is a convention, not a quota.
+
+Do not create missing roles only for symmetry.
+
+### Large files
+
+There is **no line-count threshold** requiring a gameplay class to split.
+
+A 1,000+ line cohesive `Player`, `Monster`, `Item`, `Skill`, or `Zone` may be
+better than many small files if it keeps one gameplay flow locally readable.
+
+Split only when the extracted part has a real owner/subsystem/technical boundary.
+
+### Navigation cost
+
+A refactor is suspect if it:
+
+```text
+reduces lines per file
+but
+increases the number of files needed to understand one normal gameplay flow
+```
+
+### Manager vs Service
+
+Use `Manager` naturally for feature collection/catalog/init/create/find/lifecycle
+ownership.
+
+Use `Service` for a real cross-owner/use-case orchestration.
+
+Do not default every feature to `Service`.
+
+Do not create peer `Factory + Service + Manager + Registry + Scheduler` merely
+because each name is technically defensible.
+
+### Entity behavior
+
+Prefer entity-owned behavior near the entity:
+
+```text
+update
+updateAttack
+findTarget
+injure/takeDamage
+die
+respawn
+move
+useItem
+equip
+```
+
+Keep JDBC, packet encoding, socket/protocol handling, and unrelated cross-feature
+transactions outside gameplay entities.
+
+### File layout
+
+Gameplay files should read top-to-bottom:
+
+```text
+constants
+immutable refs/dependencies
+runtime state
+constructor/init
+main lifecycle
+primary actions
+secondary actions
+queries/getters
+private helpers
+nested types
+```
+
+Do not interleave enums/records/fields randomly between methods added over time.
 
 ---
 
@@ -104,12 +215,13 @@ but they do not override the current server architecture or runtime contracts.
 Prefer:
 
 ```text
-direct readable code
-clear ownership
+direct readable game vocabulary
 feature-first packages
-simple game vocabulary
-small number of meaningful abstractions
-cohesive files and types
+obvious feature center
+cohesive files/types
+few meaningful abstractions
+large cohesive gameplay files when appropriate
+simple top-to-bottom flow
 ```
 
 Avoid:
@@ -118,26 +230,20 @@ Avoid:
 unnecessary layers
 pattern-driven abstractions
 generic service locators
-God classes
+ownership-sprawling God classes
 one-file-per-trivial-record fragmentation
-generic Models/DTOs/Types/Results containers
+technical names replacing simple game verbs
 SQL inside gameplay code
-packet encoding inside gameplay models/services
-database writes on realtime hot paths
+packet encoding inside gameplay models/managers
+DB writes on realtime hot paths
 empty future packages
 ```
 
-Do not create an abstraction, top-level type, package, or wrapper merely
-because a Design Pattern or naming convention suggests it.
+If choosing between a clever decomposition and a larger direct implementation
+that is easier to follow:
 
-If choosing between a clever abstraction and a direct readable implementation:
-
-> **Choose the direct readable implementation.**
-
-Detailed naming, ownership, top-level-vs-nested type, package, and model
-granularity rules belong to
-`SERVER_ARCHITECTURE_RULES_UPDATED.md`
-and must not be redefined independently here.
+> **Choose the implementation that is easier to read as game logic, while
+> preserving the technical boundaries.**
 
 ---
 
@@ -147,7 +253,8 @@ Before editing server code, identify:
 
 ```text
 feature owner
-package owner
+file/package owner
+feature center/readability impact
 naming/type-granularity impact
 protocol impact
 persistence impact
@@ -160,12 +267,12 @@ If a change touches a sensitive runtime contract such as:
 
 ```text
 Session close/disconnect ordering
-account admission or same-account reservation
+account admission/same-account reservation
 Zone synchronization
 combat/lifecycle ordering
 player persistence checkpoints
 legacy packet bytes/order/width
-database schema or transaction behavior
+database schema/transaction behavior
 TLS/network transport behavior
 ```
 
@@ -182,58 +289,63 @@ cd server
 .\mvnw.cmd test
 ```
 
-If the Maven wrapper is unavailable, use the equivalent Maven command.
+If the Maven wrapper is unavailable, use equivalent system Maven.
 
-When persistence/schema behavior changes, also follow the real MySQL
-integration gate documented in:
+When persistence/schema behavior changes, also follow the real MySQL integration
+rules in `server/README.md`.
 
-```text
-server/README.md
-```
-
-Protocol, concurrency, TLS, and other sensitive changes must also run
-the focused gates required by
-`SERVER_ARCHITECTURE_RULES_UPDATED.md`.
+Protocol/concurrency/TLS/sensitive changes must run the focused gates required
+by the authoritative architecture rules.
 
 ---
 
 ## Final server review gate
 
-Before finishing any server implementation or refactor:
+Before finishing any server implementation/refactor:
 
-1. **MUST re-check the affected sections**
-   of `SERVER_ARCHITECTURE_RULES_UPDATED.md`.
+1. **MUST re-read the affected sections** of both authoritative rule files.
 
-2. **MUST inspect the final diff**
-   and verify that the change did not introduce:
-   - naming violations;
-   - unjustified top-level tiny types;
-   - God classes;
-   - package/layer drift;
-   - protocol drift;
-   - persistence leakage;
-   - unrelated refactors.
+2. **MUST inspect the final diff** and verify no introduction of:
 
-3. **MUST verify focused regression coverage**
-   for every changed contract.
+```text
+naming/readability violations
+unjustified fragmentation
+ownership-sprawling God behavior
+package/layer drift
+protocol drift
+persistence leakage
+unrelated refactors
+```
 
-4. **MUST report which automated/runtime gates actually passed**
-   and which were not executed.
+3. For gameplay features, reviewer must be able to answer:
 
-5. **MUST NOT mark the work complete**
-   if the implementation knowingly violates the architecture rule.
+```text
+Which file do I open first?
+What is the main runtime object?
+Who manages the feature?
+What does update/lifecycle do?
+Where does state change?
+Where is persistence?
+Where is packet encoding?
+```
+
+4. **MUST verify focused regression coverage** for every changed contract.
+
+5. **MUST report which automated/runtime gates actually passed** and which were
+   not executed.
+
+6. **MUST NOT mark work complete** while knowingly violating either rule file.
 
 ---
 
 ## Client work
 
-Do not modify Unity/client code merely to simplify the server.
+Do not modify Unity/client code merely to simplify server architecture.
 
-Client changes require an explicit task or an approved protocol/design change.
+Client changes require an explicit task or approved shared-contract change.
 
-If client work changes shared packets, serialization, login flow,
-resource contracts, or other Unity/server compatibility behavior,
-the mandatory architecture gate applies.
+If client work changes shared packets, serialization, login flow, resource
+contracts, or Unity/server compatibility, the mandatory architecture gate applies.
 
 ---
 
@@ -243,7 +355,9 @@ Good code in this repository should make it easy to answer:
 
 ```text
 Where is this feature?
-Who owns this rule?
+Which file do I open first?
+What does the main object do?
+Who owns collection/lifecycle?
 Where does the packet enter?
 Where does gameplay happen?
 Where is state changed?
@@ -256,7 +370,8 @@ Optimize for:
 
 ```text
 easy to find
-easy to read
+easy to read top-to-bottom
 easy to modify
+few unnecessary file jumps
 hard to accidentally break
 ```

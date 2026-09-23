@@ -14,6 +14,7 @@ import com.project.game.network.transport.TlsContextFactory;
 import com.project.game.persistence.DatabaseConfig;
 import com.project.game.persistence.DatabaseManager;
 import com.project.game.persistence.DatabaseMigrator;
+import com.project.game.persistence.DatabaseCatalogSeeder;
 import com.project.game.persistence.account.JdbcAccountRepository;
 import com.project.game.persistence.map.JdbcMapRepository;
 import com.project.game.persistence.map.MapRepository;
@@ -64,7 +65,9 @@ public final class ServerBootstrap {
                 manager -> new JdbcMapRepository(manager.dataSource()),
                 manager -> new JdbcMonsterRepository(manager.dataSource()),
                 (manager, migrationDirectory) -> DatabaseMigrator.migrate(
-                        manager.dataSource(), migrationDirectory));
+                        manager.dataSource(), migrationDirectory),
+                (manager, catalogSeedFile) -> DatabaseCatalogSeeder.seed(
+                        manager.dataSource(), catalogSeedFile));
     }
 
     static ServerBootstrap fromProperties(
@@ -72,12 +75,14 @@ public final class ServerBootstrap {
             Supplier<DatabaseManager> databaseManagerFactory,
             Function<DatabaseManager, MapRepository> mapRepositoryFactory,
             Function<DatabaseManager, MonsterRepository> monsterRepositoryFactory,
-            BiConsumer<DatabaseManager, Path> migrationAction) {
+            BiConsumer<DatabaseManager, Path> migrationAction,
+            BiConsumer<DatabaseManager, Path> catalogSeedAction) {
         Objects.requireNonNull(properties, "properties");
         Objects.requireNonNull(databaseManagerFactory, "databaseManagerFactory");
         Objects.requireNonNull(mapRepositoryFactory, "mapRepositoryFactory");
         Objects.requireNonNull(monsterRepositoryFactory, "monsterRepositoryFactory");
         Objects.requireNonNull(migrationAction, "migrationAction");
+        Objects.requireNonNull(catalogSeedAction, "catalogSeedAction");
 
         String transport = properties.getProperty("game.network.transport", "LEGACY_TCP").trim();
         SSLContext tlsContext;
@@ -92,9 +97,11 @@ public final class ServerBootstrap {
         }
 
         Path migrationDirectory = requiredPath(properties, "game.db.migration-dir");
+        Path catalogSeedFile = requiredPath(properties, "game.db.catalog-seed-file");
         DatabaseManager databaseManager = databaseManagerFactory.get();
         try {
             migrationAction.accept(databaseManager, migrationDirectory);
+            catalogSeedAction.accept(databaseManager, catalogSeedFile);
             MapRepository mapRepository = Objects.requireNonNull(
                     mapRepositoryFactory.apply(databaseManager), "mapRepository");
             Path mapDataRoot = requiredPath(properties, "game.resource.map-dir");

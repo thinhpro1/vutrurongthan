@@ -60,6 +60,8 @@ class ServerBootstrapTest {
     private static final String TEST_JDBC_URL = "jdbc:server-bootstrap-test:unused";
     private static final BiConsumer<DatabaseManager, Path> NO_MIGRATION =
             (ignoredManager, ignoredDirectory) -> { };
+    private static final BiConsumer<DatabaseManager, Path> NO_CATALOG_SEED =
+            (ignoredManager, ignoredSeedFile) -> { };
 
     static {
         try {
@@ -123,7 +125,7 @@ class ServerBootstrapTest {
                     properties, ServerBootstrapTest::databaseManager,
                     ignored -> mapRepository(canonicalMapRows()),
                     ignored -> com.project.game.testsupport.MonsterTestSupport.canonicalRepository(),
-                    NO_MIGRATION));
+                    NO_MIGRATION, NO_CATALOG_SEED));
         }
     }
 
@@ -141,7 +143,7 @@ class ServerBootstrapTest {
         assertThrows(NumberFormatException.class, () -> ServerBootstrap.fromProperties(
                 properties, managerFactory, ignored -> mapRepository(canonicalMapRows()),
                 ignored -> com.project.game.testsupport.MonsterTestSupport.canonicalRepository(),
-                NO_MIGRATION));
+                NO_MIGRATION, NO_CATALOG_SEED));
 
         assertTrue(isClosed(createdManager.get()));
     }
@@ -156,7 +158,7 @@ class ServerBootstrapTest {
                     return manager;
                 }, ignored -> mapRepository(canonicalMapRows()),
                 ignored -> com.project.game.testsupport.MonsterTestSupport.canonicalRepository(),
-                NO_MIGRATION);
+                NO_MIGRATION, NO_CATALOG_SEED);
 
         assertFalse(isClosed(createdManager.get()));
 
@@ -165,7 +167,7 @@ class ServerBootstrapTest {
     }
 
     @Test
-    void runsMigrationAfterDatabaseCreationBeforeRepositoryFactories() {
+    void runsMigrationAndSeedAfterDatabaseCreationBeforeRepositoryFactories() {
         List<String> events = new ArrayList<>();
         ServerBootstrap bootstrap = ServerBootstrap.fromProperties(
                 startupProperties(), () -> {
@@ -177,10 +179,43 @@ class ServerBootstrapTest {
                 }, ignored -> {
                     events.add("monster");
                     return com.project.game.testsupport.MonsterTestSupport.canonicalRepository();
-                }, (ignored, migrationDirectory) -> events.add("migration:" + migrationDirectory));
+                }, (ignored, migrationDirectory) -> events.add("migration:" + migrationDirectory),
+                (ignored, seedFile) -> events.add("seed:" + seedFile));
 
-        assertEquals(List.of("database", "migration:" + Path.of("database/migrations"), "map", "monster"), events);
+        assertEquals(List.of(
+                "database",
+                "migration:" + Path.of("database/migrations"),
+                "seed:" + Path.of("database/seeds/baseline_catalog.sql"),
+                "map",
+                "monster"), events);
         bootstrap.stop();
+    }
+
+    @Test
+    void seedFailureClosesDatabaseAndPreventsRepositoryAndNetworkConstruction() {
+        AtomicReference<DatabaseManager> createdManager = new AtomicReference<>();
+        AtomicBoolean mapFactoryCalled = new AtomicBoolean();
+        AtomicBoolean monsterFactoryCalled = new AtomicBoolean();
+        IllegalStateException failure = assertThrows(IllegalStateException.class,
+                () -> ServerBootstrap.fromProperties(
+                        startupProperties(), () -> {
+                            DatabaseManager manager = databaseManager();
+                            createdManager.set(manager);
+                            return manager;
+                        }, ignored -> {
+                            mapFactoryCalled.set(true);
+                            return mapRepository(canonicalMapRows());
+                        }, ignored -> {
+                            monsterFactoryCalled.set(true);
+                            return com.project.game.testsupport.MonsterTestSupport.canonicalRepository();
+                        }, NO_MIGRATION, (ignored, seedFile) -> {
+                            throw new IllegalStateException("catalog seed failure");
+                        }));
+
+        assertEquals("catalog seed failure", failure.getMessage());
+        assertTrue(isClosed(createdManager.get()));
+        assertFalse(mapFactoryCalled.get());
+        assertFalse(monsterFactoryCalled.get());
     }
 
     @Test
@@ -211,7 +246,7 @@ class ServerBootstrapTest {
                             return com.project.game.testsupport.MonsterTestSupport.canonicalRepository();
                         }, (ignored, migrationDirectory) -> {
                             throw new IllegalStateException("migration failure");
-                        }));
+                        }, NO_CATALOG_SEED));
 
         assertEquals("migration failure", failure.getMessage());
         assertTrue(isClosed(createdManager.get()));
@@ -230,7 +265,7 @@ class ServerBootstrapTest {
                             return manager;
                         }, ignored -> mapRepository(List.of()),
                         ignored -> com.project.game.testsupport.MonsterTestSupport.canonicalRepository(),
-                        NO_MIGRATION));
+                        NO_MIGRATION, NO_CATALOG_SEED));
 
         assertEquals("enabled map catalog is empty", failure.getMessage());
         assertTrue(isClosed(createdManager.get()));
@@ -249,7 +284,7 @@ class ServerBootstrapTest {
                                 new MapRepository.MapRow(
                                         1, "Bờ sông Pu", "OFFLINE", "NAMEK", 1, 3, 40, 2, true))),
                         ignored -> com.project.game.testsupport.MonsterTestSupport.canonicalRepository(),
-                        NO_MIGRATION));
+                        NO_MIGRATION, NO_CATALOG_SEED));
 
         assertEquals("enabled map 0 is required", failure.getMessage());
         assertTrue(isClosed(createdManager.get()));
@@ -275,7 +310,7 @@ class ServerBootstrapTest {
                                 return List.of();
                             }
                         }, ignored -> com.project.game.testsupport.MonsterTestSupport.canonicalRepository(),
-                        NO_MIGRATION));
+                        NO_MIGRATION, NO_CATALOG_SEED));
 
         assertEquals("map catalog failure", failure.getMessage());
         assertTrue(isClosed(createdManager.get()));
@@ -292,7 +327,7 @@ class ServerBootstrapTest {
                             return manager;
                         }, ignored -> mapRepository(canonicalMapRows()), ignored -> {
                             throw new IllegalStateException("monster repository failure");
-                        }, NO_MIGRATION));
+                        }, NO_MIGRATION, NO_CATALOG_SEED));
 
         assertEquals("monster repository failure", failure.getMessage());
         assertTrue(isClosed(createdManager.get()));
@@ -318,7 +353,7 @@ class ServerBootstrapTest {
                             public List<SpawnRow> findAllSpawns() {
                                 return List.of();
                             }
-                        }, NO_MIGRATION));
+                        }, NO_MIGRATION, NO_CATALOG_SEED));
 
         assertEquals("monster template catalog must not be empty", failure.getMessage());
         assertTrue(isClosed(createdManager.get()));
@@ -336,7 +371,7 @@ class ServerBootstrapTest {
                 properties, ServerBootstrapTest::databaseManager,
                 ignored -> mapRepository(canonicalMapRows()),
                 ignored -> com.project.game.testsupport.MonsterTestSupport.canonicalRepository(),
-                NO_MIGRATION);
+                NO_MIGRATION, NO_CATALOG_SEED);
 
         assertDoesNotThrow(bootstrap::stop);
     }
@@ -482,6 +517,7 @@ class ServerBootstrapTest {
         properties.setProperty("game.resource.image-version", "2");
         properties.setProperty("game.resource.monster-version", "2");
         properties.setProperty("game.db.migration-dir", "database/migrations");
+        properties.setProperty("game.db.catalog-seed-file", "database/seeds/baseline_catalog.sql");
         return properties;
     }
 

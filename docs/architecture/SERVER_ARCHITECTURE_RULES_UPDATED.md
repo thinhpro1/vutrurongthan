@@ -779,6 +779,29 @@ NetworkServer
 
 Không tiếp tục để `NetworkServer.fromSystemProperties()` phình theo mỗi feature.
 
+Startup persistence ownership hiện tại là:
+
+```text
+DatabaseMigrator
+→ schema migrations only
+
+DatabaseCatalogSeeder
+→ baseline production catalog only when
+  map_template, map_waypoint, monster_template,
+  and monster_spawn are all empty
+
+MapCatalogLoader / MonsterCatalogLoader
+→ validate the runtime catalog
+```
+
+`DatabaseCatalogSeeder` phải giữ advisory lock riêng, quyết định fresh-vs-existing
+catalog dưới lock, và seed DML trong một transaction. Nếu bất kỳ một trong bốn
+bảng catalog đã có row, seeder không được repair, upsert, update, delete hoặc
+truncate; catalog hiện có được giữ nguyên để các loader quyết định hợp lệ hay
+không. Baseline hiện chỉ gồm Map0, Map1, cặp waypoint trực tiếp, monster template
+1 và sáu Map1 monster spawns. Đây là production data bootstrap riêng, không phải
+migration history; thay đổi catalog tương lai cần một data change được review riêng.
+
 `SessionServices` (hoặc bundle session tương đương trong production hiện tại) chỉ là coarse wiring object cho một accepted session; không biến nó thành global service locator chứa 10–20 service truyền đi khắp nơi.
 
 Handler nên nhận dependency nó thực sự cần. Nếu một bundle chỉ được dùng để giảm constructor noise ở boundary, không truyền bundle đó sâu vào gameplay.

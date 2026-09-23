@@ -27,7 +27,7 @@ mvn -q package
 java -cp target/classes com.project.game.GameApplication
 ```
 
-Maven test suite thông thường bao gồm TLS tests và không cần MySQL. Normal startup tự động áp dụng các migration versioned từ `game.db.migration-dir` trước khi load repository/catalog; server chỉ cần database đã cấu hình, migrator sẽ tạo/kiểm tra sáu bảng runtime: `account`, `player`, `map_template`, `map_waypoint`, `monster_template` và `monster_spawn`. Mặc định server nghe tại `127.0.0.1:1707` qua `LEGACY_TCP`.
+Maven test suite thông thường bao gồm TLS tests và không cần MySQL. Normal startup tự động áp dụng các migration versioned từ `game.db.migration-dir`, sau đó chạy baseline catalog seed từ `game.db.catalog-seed-file` trước khi load repository/catalog; server chỉ cần database đã cấu hình, migrator sẽ tạo/kiểm tra sáu bảng runtime: `account`, `player`, `map_template`, `map_waypoint`, `monster_template` và `monster_spawn`. Mặc định server nghe tại `127.0.0.1:1707` qua `LEGACY_TCP`.
 
 ## Kiểm tra protocol với server thật
 
@@ -65,11 +65,13 @@ database/schema/monster.sql
 
 Normal startup chạy `DatabaseMigrator` từ `game.db.migration-dir` (mặc định `database/migrations`) trước khi tạo/query repositories và catalog. `database/migrations` là executable immutable migration history; `database/schema` là current reference snapshots; `schema_migration` lưu version/name/checksum đã áp dụng. Ứng dụng không execute trực tiếp các snapshot file. Migration không drop, truncate, delete hoặc reseed dữ liệu production.
 
+Sau migration, `DatabaseCatalogSeeder` đọc `game.db.catalog-seed-file` (mặc định `database/seeds/baseline_catalog.sql`) dưới advisory lock `rongthan_catalog_seed`. Seeder chỉ chạy seed DML trong một transaction khi cả bốn bảng catalog `map_template`, `map_waypoint`, `monster_template` và `monster_spawn` đều rỗng. Nếu bất kỳ bảng nào đã có row, seeder không ghi gì và giữ nguyên catalog operator-owned; `MapCatalogLoader` và `MonsterCatalogLoader` sẽ quyết định catalog hiện có có hợp lệ cho runtime hay không. Seeder không repair, upsert, update, delete hoặc truncate catalog hiện có.
+
 MySQL DDL có thể implicit commit, nên một migration file không được bảo đảm rollback như một transaction. Nếu statement N fail, các statement 1..N-1 có thể đã có hiệu lực; history row của migration fail không được ghi, startup fail, và lần startup sau sẽ thử lại migration đó. Migration SQL phải được viết để safely re-run/idempotent khi phù hợp; không sửa migration đã shipped mà thêm migration `VNNN` mới cho schema change.
 
-Schema tồn tại không đồng nghĩa production đã có dữ liệu catalog. Normal runtime cần các row sử dụng được trong `map_template`, topology `map_waypoint` khi map yêu cầu, `monster_template`, và các `monster_spawn` mong muốn theo map. Catalog map không có enabled map, catalog monster rỗng/không hợp lệ, hoặc reference/topology không hợp lệ sẽ làm startup thất bại.
+Schema tồn tại không đồng nghĩa production đã có dữ liệu catalog. Baseline seed hiện chỉ chứa Map0 `Núi Paozu`, Map1 `Bờ sông Pu`, cặp waypoint trực tiếp hai chiều giữa hai map, monster template 1 `Hổ nanh kiếm`, và sáu spawn Hổ trên Map1. Catalog map không có enabled map, catalog monster rỗng/không hợp lệ, hoặc reference/topology không hợp lệ sẽ làm startup thất bại.
 
-Plan 10A chỉ tự động tạo/áp dụng schema; không populate production map/monster rows. Production data bootstrap/seed là follow-up riêng của Plan 10B.
+Các giá trị baseline được khôi phục từ nguồn legacy `thinhpro1/rongthan`, commit `a8bfd96d0dac4e606054d78dce3f5da58f7937b2`, file `sqlfinal.sql`; nguồn này chỉ cung cấp nội dung canonical, không được execute trực tiếp. Việc thay đổi catalog production trong tương lai là một data change riêng cần được review; chỉnh `baseline_catalog.sql` không tự động patch các database đã có catalog.
 
 Inventory, skill progression và quest state hiện chưa thuộc phạm vi persistence. `zoneId` của player chỉ tồn tại trong runtime; vị trí bền vững lưu `mapId`, `x` và `y`. `exp` là tổng kinh nghiệm tích lũy, không có cột `max_exp`.
 

@@ -18,7 +18,7 @@ import java.util.random.RandomGenerator;
 public final class MonsterManager {
     private final ZoneRegistry zones;
     private final MonsterPacketWriter monsterPackets;
-    private final PlayerPacketWriter packets;
+    private final PlayerPacketWriter playerPackets;
     private final Clock clock;
     private final RandomGenerator random;
 
@@ -35,13 +35,9 @@ public final class MonsterManager {
                           RandomGenerator random) {
         this.zones = Objects.requireNonNull(zones, "zones");
         this.monsterPackets = Objects.requireNonNull(monsterPackets, "monsterPackets");
-        this.packets = Objects.requireNonNull(packets, "packets");
+        this.playerPackets = Objects.requireNonNull(packets, "packets");
         this.clock = Objects.requireNonNull(clock, "clock");
         this.random = Objects.requireNonNull(random, "random");
-    }
-
-    public List<MonsterSnapshot> monsterSnapshots(int mapId, int zoneId) {
-        return zones.getOrCreate(mapId, zoneId).monsterSnapshots();
     }
 
     public void update() {
@@ -90,8 +86,8 @@ public final class MonsterManager {
                     }
 
                     PlayerProfile dead = victim.player();
-                    Message selfDeath = packets.meDie(dead.x(), dead.y());
-                    Message observerDeath = packets.playerDie(dead.id(), dead.x(), dead.y());
+                    Message selfDeath = playerPackets.meDie(dead.x(), dead.y());
+                    Message observerDeath = playerPackets.playerDie(dead.id(), dead.x(), dead.y());
                     for (Session member : members) {
                         if (member.state() == SessionState.CLOSED) {
                             continue;
@@ -101,5 +97,9 @@ public final class MonsterManager {
                 }
             }
         }
+    }
+
+    public List<MonsterSnapshot> monsterSnapshots(int mapId, int zoneId) {
+        return zones.getOrCreate(mapId, zoneId).monsterSnapshots();
     }
 }

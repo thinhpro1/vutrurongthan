@@ -155,7 +155,7 @@ com.project.game/
 │   ├── MonsterDart.java
 │   ├── MonsterFactory.java
 │   ├── MonsterLifecycleScheduler.java
-│   ├── MonsterService.java
+│   ├── MonsterManager.java
 │   ├── MonsterSnapshot.java
 │   ├── MonsterSpawn.java
 │   └── MonsterTemplate.java
@@ -687,8 +687,9 @@ Giữ boundary responsibility sau refactor:
 MapService
 → join / leave / movement / change map / change zone
 
-MonsterService
-→ monster lifecycle / movement / respawn / AI tick
+MonsterManager
+→ monster feature lifecycle/update across zones
+→ monster snapshots and lifecycle broadcasts
 
 CombatService
 → attack / damage / combat formula / combat reward

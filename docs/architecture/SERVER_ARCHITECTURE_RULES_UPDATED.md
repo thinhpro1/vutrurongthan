@@ -1131,12 +1131,14 @@ monster HP/damage
 DB/schema change phải cập nhật:
 
 ```text
-reference SQL
-repository mapping
-tests
-manual ALTER/recreate note nếu DB local đã tồn tại
-real MySQL integration gate
+1. add a new immutable VNNN migration
+2. update the corresponding database/schema reference snapshot
+3. update JDBC mapping/tests
+4. run focused migration tests
+5. run real MySQL migration gate
 ```
+
+Không edit migration đã shipped để thay đổi schema tương lai. Ví dụ: không sửa `V001` để thêm column; phải thêm `V002__...sql`, cập nhật reference snapshot, JDBC mapping/tests và chạy các migration gates.
 
 Startup phải áp dụng versioned in-house SQL migrations trước khi tạo/query repositories và catalog:
 
@@ -1149,7 +1151,7 @@ DatabaseMigrator
 
 Migration history là immutable và được kiểm tra bằng SHA-256 checksum. `database/schema/*.sql` chỉ là current reference snapshots, không phải executable history. Mỗi schema change phải thêm migration mới, cập nhật snapshot, mapping/tests và chạy real MySQL gate. Không dùng Flyway/Liquibase hoặc migration framework khác.
 
-Migration runner phải giữ advisory lock MySQL trong toàn bộ migration pass, không dùng `allowMultiQueries=true`, không hứa rollback transactional cho MySQL DDL, và chỉ ghi history sau khi toàn bộ statement của migration thành công. Existing tables/rows không bị drop, truncate, delete hoặc reseed bởi schema migration.
+Migration runner phải giữ advisory lock MySQL trong toàn bộ migration pass, không dùng `allowMultiQueries=true`, và chỉ ghi history sau khi toàn bộ statement của migration thành công. MySQL DDL có thể implicit commit; một migration file không được bảo đảm rollback như một transaction. Nếu statement N fail, statement 1..N-1 có thể đã có hiệu lực, history row của migration fail không được ghi, startup fail và lần startup sau sẽ thử lại migration đó. Vì vậy migration SQL phải được viết để safely re-run/idempotent khi phù hợp. Existing tables/rows không bị drop, truncate, delete hoặc reseed bởi schema migration.
 
 ---
 

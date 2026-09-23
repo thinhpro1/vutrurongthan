@@ -46,6 +46,7 @@ import java.util.Properties;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BiConsumer;
 import java.util.function.Supplier;
 import java.util.logging.Logger;
 
@@ -57,6 +58,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ServerBootstrapTest {
     private static final String TEST_JDBC_URL = "jdbc:server-bootstrap-test:unused";
+    private static final BiConsumer<DatabaseManager, Path> NO_MIGRATION =
+            (ignoredManager, ignoredDirectory) -> { };
 
     static {
         try {
@@ -119,7 +122,8 @@ class ServerBootstrapTest {
             assertThrows(IllegalStateException.class, () -> ServerBootstrap.fromProperties(
                     properties, ServerBootstrapTest::databaseManager,
                     ignored -> mapRepository(canonicalMapRows()),
-                    ignored -> com.project.game.testsupport.MonsterTestSupport.canonicalRepository()));
+                    ignored -> com.project.game.testsupport.MonsterTestSupport.canonicalRepository(),
+                    NO_MIGRATION));
         }
     }
 
@@ -136,7 +140,8 @@ class ServerBootstrapTest {
 
         assertThrows(NumberFormatException.class, () -> ServerBootstrap.fromProperties(
                 properties, managerFactory, ignored -> mapRepository(canonicalMapRows()),
-                ignored -> com.project.game.testsupport.MonsterTestSupport.canonicalRepository()));
+                ignored -> com.project.game.testsupport.MonsterTestSupport.canonicalRepository(),
+                NO_MIGRATION));
 
         assertTrue(isClosed(createdManager.get()));
     }
@@ -150,7 +155,8 @@ class ServerBootstrapTest {
                     createdManager.set(manager);
                     return manager;
                 }, ignored -> mapRepository(canonicalMapRows()),
-                ignored -> com.project.game.testsupport.MonsterTestSupport.canonicalRepository());
+                ignored -> com.project.game.testsupport.MonsterTestSupport.canonicalRepository(),
+                NO_MIGRATION);
 
         assertFalse(isClosed(createdManager.get()));
 
@@ -175,6 +181,15 @@ class ServerBootstrapTest {
 
         assertEquals(List.of("database", "migration:" + Path.of("database/migrations"), "map", "monster"), events);
         bootstrap.stop();
+    }
+
+    @Test
+    void exposesOnlyTheExplicitMigrationTestEntryPoint() {
+        long fromPropertiesMethods = java.util.Arrays.stream(ServerBootstrap.class.getDeclaredMethods())
+                .filter(method -> method.getName().equals("fromProperties"))
+                .count();
+
+        assertEquals(1, fromPropertiesMethods);
     }
 
     @Test
@@ -214,7 +229,8 @@ class ServerBootstrapTest {
                             createdManager.set(manager);
                             return manager;
                         }, ignored -> mapRepository(List.of()),
-                        ignored -> com.project.game.testsupport.MonsterTestSupport.canonicalRepository()));
+                        ignored -> com.project.game.testsupport.MonsterTestSupport.canonicalRepository(),
+                        NO_MIGRATION));
 
         assertEquals("enabled map catalog is empty", failure.getMessage());
         assertTrue(isClosed(createdManager.get()));
@@ -232,7 +248,8 @@ class ServerBootstrapTest {
                         }, ignored -> mapRepository(List.of(
                                 new MapRepository.MapRow(
                                         1, "Bờ sông Pu", "OFFLINE", "NAMEK", 1, 3, 40, 2, true))),
-                        ignored -> com.project.game.testsupport.MonsterTestSupport.canonicalRepository()));
+                        ignored -> com.project.game.testsupport.MonsterTestSupport.canonicalRepository(),
+                        NO_MIGRATION));
 
         assertEquals("enabled map 0 is required", failure.getMessage());
         assertTrue(isClosed(createdManager.get()));
@@ -257,7 +274,8 @@ class ServerBootstrapTest {
                             public List<WaypointRow> findAllWaypoints() {
                                 return List.of();
                             }
-                        }, ignored -> com.project.game.testsupport.MonsterTestSupport.canonicalRepository()));
+                        }, ignored -> com.project.game.testsupport.MonsterTestSupport.canonicalRepository(),
+                        NO_MIGRATION));
 
         assertEquals("map catalog failure", failure.getMessage());
         assertTrue(isClosed(createdManager.get()));
@@ -274,7 +292,7 @@ class ServerBootstrapTest {
                             return manager;
                         }, ignored -> mapRepository(canonicalMapRows()), ignored -> {
                             throw new IllegalStateException("monster repository failure");
-                        }));
+                        }, NO_MIGRATION));
 
         assertEquals("monster repository failure", failure.getMessage());
         assertTrue(isClosed(createdManager.get()));
@@ -300,7 +318,7 @@ class ServerBootstrapTest {
                             public List<SpawnRow> findAllSpawns() {
                                 return List.of();
                             }
-                        }));
+                        }, NO_MIGRATION));
 
         assertEquals("monster template catalog must not be empty", failure.getMessage());
         assertTrue(isClosed(createdManager.get()));
@@ -317,7 +335,8 @@ class ServerBootstrapTest {
         ServerBootstrap bootstrap = ServerBootstrap.fromProperties(
                 properties, ServerBootstrapTest::databaseManager,
                 ignored -> mapRepository(canonicalMapRows()),
-                ignored -> com.project.game.testsupport.MonsterTestSupport.canonicalRepository());
+                ignored -> com.project.game.testsupport.MonsterTestSupport.canonicalRepository(),
+                NO_MIGRATION);
 
         assertDoesNotThrow(bootstrap::stop);
     }

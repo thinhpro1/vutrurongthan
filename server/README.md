@@ -65,6 +65,8 @@ database/schema/monster.sql
 
 Normal startup chạy `DatabaseMigrator` từ `game.db.migration-dir` (mặc định `database/migrations`) trước khi tạo/query repositories và catalog. `database/migrations` là executable immutable migration history; `database/schema` là current reference snapshots; `schema_migration` lưu version/name/checksum đã áp dụng. Ứng dụng không execute trực tiếp các snapshot file. Migration không drop, truncate, delete hoặc reseed dữ liệu production.
 
+MySQL DDL có thể implicit commit, nên một migration file không được bảo đảm rollback như một transaction. Nếu statement N fail, các statement 1..N-1 có thể đã có hiệu lực; history row của migration fail không được ghi, startup fail, và lần startup sau sẽ thử lại migration đó. Migration SQL phải được viết để safely re-run/idempotent khi phù hợp; không sửa migration đã shipped mà thêm migration `VNNN` mới cho schema change.
+
 Schema tồn tại không đồng nghĩa production đã có dữ liệu catalog. Normal runtime cần các row sử dụng được trong `map_template`, topology `map_waypoint` khi map yêu cầu, `monster_template`, và các `monster_spawn` mong muốn theo map. Catalog map không có enabled map, catalog monster rỗng/không hợp lệ, hoặc reference/topology không hợp lệ sẽ làm startup thất bại.
 
 Plan 10A chỉ tự động tạo/áp dụng schema; không populate production map/monster rows. Production data bootstrap/seed là follow-up riêng của Plan 10B.

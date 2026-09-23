@@ -77,13 +77,20 @@ public final class DatabaseMigrator {
             } finally {
                 if (lockAcquired) {
                     try {
-                        callLock(connection, "SELECT RELEASE_LOCK(?)", null);
-                    } catch (SQLException exception) {
-                        if (failure != null) {
-                            failure.addSuppressed(exception);
-                        } else {
+                        Integer releaseResult = callLock(connection, "SELECT RELEASE_LOCK(?)", null);
+                        if (!Integer.valueOf(1).equals(releaseResult)) {
                             throw new IllegalStateException(
-                                    "failed to release database migration lock", exception);
+                                    "failed to release database migration lock: " + releaseResult);
+                        }
+                    } catch (SQLException | RuntimeException exception) {
+                        RuntimeException releaseFailure = exception instanceof RuntimeException runtime
+                                ? runtime
+                                : new IllegalStateException(
+                                        "failed to release database migration lock", exception);
+                        if (failure != null) {
+                            failure.addSuppressed(releaseFailure);
+                        } else {
+                            throw releaseFailure;
                         }
                     }
                 }

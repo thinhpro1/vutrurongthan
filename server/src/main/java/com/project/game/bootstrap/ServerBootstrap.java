@@ -69,33 +69,6 @@ public final class ServerBootstrap {
 
     static ServerBootstrap fromProperties(
             Properties properties,
-            Supplier<DatabaseManager> databaseManagerFactory) {
-        return fromProperties(properties, databaseManagerFactory,
-                manager -> new JdbcMapRepository(manager.dataSource()),
-                manager -> new JdbcMonsterRepository(manager.dataSource()),
-                (ignored, ignoredDirectory) -> { });
-    }
-
-    static ServerBootstrap fromProperties(
-            Properties properties,
-            Supplier<DatabaseManager> databaseManagerFactory,
-            Function<DatabaseManager, MapRepository> mapRepositoryFactory) {
-        return fromProperties(properties, databaseManagerFactory, mapRepositoryFactory,
-                manager -> new JdbcMonsterRepository(manager.dataSource()),
-                (ignored, ignoredDirectory) -> { });
-    }
-
-    static ServerBootstrap fromProperties(
-            Properties properties,
-            Supplier<DatabaseManager> databaseManagerFactory,
-            Function<DatabaseManager, MapRepository> mapRepositoryFactory,
-            Function<DatabaseManager, MonsterRepository> monsterRepositoryFactory) {
-        return fromProperties(properties, databaseManagerFactory, mapRepositoryFactory,
-                monsterRepositoryFactory, (ignored, ignoredDirectory) -> { });
-    }
-
-    static ServerBootstrap fromProperties(
-            Properties properties,
             Supplier<DatabaseManager> databaseManagerFactory,
             Function<DatabaseManager, MapRepository> mapRepositoryFactory,
             Function<DatabaseManager, MonsterRepository> monsterRepositoryFactory,

@@ -59,9 +59,28 @@ class DatabaseMigratorTest {
     }
 
     @Test
-    void rejectsGapsAndMalformedVersionedSql(@TempDir Path directory) throws Exception {
+    void rejectsVersionGapIndependently(@TempDir Path directory) throws Exception {
         write(directory, "V001__one.sql", "ONE;");
         write(directory, "V003__three.sql", "THREE;");
+
+        IllegalStateException failure = assertThrows(IllegalStateException.class,
+                () -> DatabaseMigrator.migrate(new FakeDatabase(), directory));
+
+        assertTrue(failure.getMessage().contains("contiguous starting at 1"));
+    }
+
+    @Test
+    void rejectsMissingBaselineIndependently(@TempDir Path directory) throws Exception {
+        write(directory, "V002__two.sql", "TWO;");
+
+        IllegalStateException failure = assertThrows(IllegalStateException.class,
+                () -> DatabaseMigrator.migrate(new FakeDatabase(), directory));
+
+        assertTrue(failure.getMessage().contains("expected 1 but found 2"));
+    }
+
+    @Test
+    void rejectsMalformedVersionedSqlIndependently(@TempDir Path directory) throws Exception {
         write(directory, "Vbad__broken.sql", "BROKEN;");
 
         IllegalStateException failure = assertThrows(IllegalStateException.class,
@@ -121,6 +140,48 @@ class DatabaseMigratorTest {
         assertTrue(database.events().indexOf("CREATE_HISTORY") < database.events().indexOf("ONE"));
         assertTrue(database.events().indexOf("ONE") < database.events().indexOf("INSERT_HISTORY"));
         assertTrue(database.events().indexOf("INSERT_HISTORY") < database.events().indexOf("RELEASE_LOCK"));
+    }
+
+    @Test
+    void releaseResultZeroFailsAfterSuccessfulMigration(@TempDir Path directory) throws Exception {
+        write(directory, "V001__one.sql", "ONE;");
+        FakeDatabase database = new FakeDatabase();
+        database.releaseResult = 0;
+
+        IllegalStateException failure = assertThrows(IllegalStateException.class,
+                () -> DatabaseMigrator.migrate(database, directory));
+
+        assertTrue(failure.getMessage().contains("failed to release database migration lock"));
+        assertEquals(1, database.historyRows().size());
+    }
+
+    @Test
+    void releaseResultNullFailsAfterSuccessfulMigration(@TempDir Path directory) throws Exception {
+        write(directory, "V001__one.sql", "ONE;");
+        FakeDatabase database = new FakeDatabase();
+        database.releaseResult = null;
+
+        IllegalStateException failure = assertThrows(IllegalStateException.class,
+                () -> DatabaseMigrator.migrate(database, directory));
+
+        assertTrue(failure.getMessage().contains("failed to release database migration lock"));
+        assertEquals(1, database.historyRows().size());
+    }
+
+    @Test
+    void migrationFailureRemainsPrimaryWhenReleaseAlsoFails(@TempDir Path directory) throws Exception {
+        write(directory, "V001__one.sql", "ONE; FAIL;");
+        FakeDatabase database = new FakeDatabase();
+        database.failOnStatement("FAIL");
+        database.releaseResult = 0;
+
+        IllegalStateException failure = assertThrows(IllegalStateException.class,
+                () -> DatabaseMigrator.migrate(database, directory));
+
+        assertEquals("database migration failed", failure.getMessage());
+        assertEquals(1, failure.getSuppressed().length);
+        assertTrue(failure.getSuppressed()[0].getMessage()
+                .contains("failed to release database migration lock"));
     }
 
     @Test

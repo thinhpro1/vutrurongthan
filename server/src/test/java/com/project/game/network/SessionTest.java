@@ -14,6 +14,8 @@ import com.project.game.persistence.player.PlayerRepository;
 import com.project.game.persistence.player.PlayerRepositoryException;
 import com.project.game.player.PlayerProfile;
 import com.project.game.testsupport.GameplayServices;
+import com.project.game.testsupport.GameplayTestSupport;
+import com.project.game.testsupport.MutableClock;
 import com.project.game.monster.MonsterFactory;
 import com.project.game.network.packet.MonsterPacketWriter;
 import com.project.game.network.packet.PlayerPacketWriter;
@@ -34,6 +36,7 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.time.Instant;
 import java.util.Optional;
 
@@ -143,6 +146,107 @@ class SessionTest {
         assertTrue(!close.isAlive());
         assertEquals(null, manager.findByAccount("user01"));
         assertEquals(77L, delegate.requireByAccountId(101L).hp());
+    }
+
+    @Test
+    void disconnectCheckpointsLatestPositionAfterInFlightZoneMutation() throws Exception {
+        TestPlayerRepository delegate = new TestPlayerRepository();
+        BlockingPlayerRepository repository = new BlockingPlayerRepository(delegate);
+        PlayerService players = new PlayerService(repository);
+        AuthService auth = new AuthService(new TestAccountRepository());
+        GameplayServices gameplay = new GameplayServices(GameResources.unavailable());
+        SessionServices services = TestServices.serverServices(
+                auth, GameResources.unavailable(), gameplay, players);
+        PlayerProfile moverProfile = players.create(101L, "alpha1", 0).player();
+        PlayerProfile observerProfile = players.create(202L, "beta22", 0).player();
+        Session mover = managedSession(services, moverProfile, "user01");
+        Session observer = managedSession(services, observerProfile, "user02");
+        gameplay.mapService().finishLoad(mover);
+        gameplay.mapService().finishLoad(observer);
+        GameplayTestSupport.drain(mover);
+        GameplayTestSupport.drain(observer);
+
+        GameplayTestSupport.BlockingOfferQueue observerQueue =
+                new GameplayTestSupport.BlockingOfferQueue();
+        GameplayTestSupport.replaceSendQueue(observer, observerQueue);
+        AtomicBoolean moved = new AtomicBoolean();
+        Thread movement = Thread.ofVirtual().start(() ->
+                moved.set(gameplay.mapService().movePlayer(mover, 1260, 640)));
+        assertTrue(observerQueue.offerEntered.await(5, java.util.concurrent.TimeUnit.SECONDS));
+
+        Thread close = Thread.ofVirtual().start(mover::close);
+        assertFalse(repository.updateEntered.await(100, java.util.concurrent.TimeUnit.MILLISECONDS));
+
+        observerQueue.releaseOffer.countDown();
+        movement.join(1_000);
+        assertFalse(movement.isAlive());
+        assertTrue(moved.get());
+        assertTrue(repository.updateEntered.await(5, java.util.concurrent.TimeUnit.SECONDS));
+        repository.allowUpdate.countDown();
+        close.join(1_000);
+
+        assertFalse(close.isAlive());
+        assertEquals(1260, delegate.requireByAccountId(101L).x());
+        assertEquals(640, delegate.requireByAccountId(101L).y());
+        assertEquals(1, repository.checkpointCalls.get());
+        assertEquals(null, mover.manager().findByAccount("user01"));
+        assertEquals(SessionState.CLOSED, mover.state());
+    }
+
+    @Test
+    void disconnectCheckpointsLatestHpAfterInFlightMonsterAttack() throws Exception {
+        MutableClock clock = new MutableClock(1_000_000L);
+        GameplayServices gameplay = new GameplayServices(
+                GameResources.fromFrameRoot(
+                        java.nio.file.Path.of("resources", "json"),
+                        com.project.game.testsupport.MapTestSupport.canonicalMaps(),
+                        2,
+                        com.project.game.testsupport.MonsterTestSupport.canonicalRepository()),
+                clock,
+                new java.util.Random(0L));
+        TestPlayerRepository delegate = new TestPlayerRepository();
+        BlockingPlayerRepository repository = new BlockingPlayerRepository(delegate);
+        PlayerService players = new PlayerService(repository);
+        AuthService auth = new AuthService(new TestAccountRepository());
+        SessionServices services = TestServices.serverServices(
+                auth, GameResources.unavailable(), gameplay, players);
+        PlayerProfile targetProfile = players.create(101L, "alpha1", 0).player()
+                .withLocation(1, 0, 1250, 648)
+                .withHp(100);
+        PlayerProfile observerProfile = players.create(202L, "beta22", 0).player()
+                .withLocation(1, 0, 1250, 648);
+        Session target = managedSession(services, targetProfile, "user01");
+        Session observer = managedSession(services, observerProfile, "user02");
+        gameplay.mapService().finishLoad(target);
+        gameplay.mapService().finishLoad(observer);
+        GameplayTestSupport.drain(target);
+        GameplayTestSupport.drain(observer);
+        assertTrue(gameplay.combatService().attackMonster(target, 101, 10L));
+        GameplayTestSupport.drain(target);
+        GameplayTestSupport.drain(observer);
+        clock.advanceMillis(1L);
+
+        BlockingAttackQueue observerQueue = new BlockingAttackQueue();
+        GameplayTestSupport.replaceSendQueue(observer, observerQueue);
+        Thread lifecycle = Thread.ofVirtual().start(gameplay.monsterManager()::update);
+        assertTrue(observerQueue.attackEntered.await(5, java.util.concurrent.TimeUnit.SECONDS));
+        assertEquals(90, target.player().hp());
+
+        Thread close = Thread.ofVirtual().start(target::close);
+        assertFalse(repository.updateEntered.await(100, java.util.concurrent.TimeUnit.MILLISECONDS));
+
+        observerQueue.releaseAttack.countDown();
+        lifecycle.join(1_000);
+        assertFalse(lifecycle.isAlive());
+        assertTrue(repository.updateEntered.await(5, java.util.concurrent.TimeUnit.SECONDS));
+        repository.allowUpdate.countDown();
+        close.join(1_000);
+
+        assertFalse(close.isAlive());
+        assertEquals(90, delegate.requireByAccountId(101L).hp());
+        assertEquals(1, repository.checkpointCalls.get());
+        assertEquals(null, target.manager().findByAccount("user01"));
+        assertEquals(SessionState.CLOSED, target.state());
     }
 
     @Test
@@ -284,6 +388,45 @@ class SessionTest {
                 throw new PlayerRepositoryException("interrupted in test", exception);
             }
             delegate.updateCheckpoint(player, playedAt);
+        }
+    }
+
+    private static Session managedSession(
+            SessionServices services,
+            PlayerProfile player,
+            String accountName) {
+        SessionManager manager = new SessionManager();
+        Session session = new Session(manager.nextId(), new TestTransport(), manager,
+                new LegacyPacketCodec(1024), "abc".getBytes(StandardCharsets.US_ASCII), 16,
+                services, ClientConfig.defaults());
+        assertTrue(manager.tryAdd(session, 1));
+        assertTrue(manager.beginAccountAdmission(session, player.accountId(), accountName));
+        manager.finishAccountAdmission(session, true);
+        session.bindPlayer(player);
+        session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
+        session.transition(SessionState.HANDSHAKE_DONE, SessionState.AUTHENTICATED);
+        session.transition(SessionState.AUTHENTICATED, SessionState.IN_GAME);
+        return session;
+    }
+
+    private static final class BlockingAttackQueue extends LinkedBlockingQueue<Message> {
+        private final CountDownLatch attackEntered = new CountDownLatch(1);
+        private final CountDownLatch releaseAttack = new CountDownLatch(1);
+        private final AtomicBoolean blockAttack = new AtomicBoolean(true);
+
+        @Override
+        public boolean offer(Message message) {
+            if (message.command() == MessageName.MONSTER_ATTACK
+                    && blockAttack.compareAndSet(true, false)) {
+                attackEntered.countDown();
+                try {
+                    releaseAttack.await();
+                } catch (InterruptedException exception) {
+                    Thread.currentThread().interrupt();
+                    throw new AssertionError("attack gate interrupted", exception);
+                }
+            }
+            return super.offer(message);
         }
     }
 

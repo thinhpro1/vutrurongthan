@@ -40,7 +40,8 @@ public final class MapService {
         }
         synchronized (zone) {
             Zone.JoinResult result = zone.addAndSnapshot(session);
-            if (result.status() == Zone.JoinStatus.FULL) {
+            if (result.status() == Zone.JoinStatus.FULL
+                    || result.status() == Zone.JoinStatus.PLAYER_ID_CONFLICT) {
                 return false;
             }
             if (result.status() == Zone.JoinStatus.ALREADY_PRESENT) {

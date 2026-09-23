@@ -197,6 +197,24 @@ class MapServiceTest {
     }
 
     @Test
+    void finishLoadRejectsDifferentSessionWithSamePlayerId() throws Exception {
+        GameplayServices maps = mapsWithoutMonsters();
+        Session first = session(player(7, 0, 0));
+        Session conflicting = session(player(7, 0, 0));
+
+        assertTrue(maps.mapService().finishLoad(first));
+        drain(first);
+
+        assertFalse(maps.mapService().finishLoad(conflicting));
+        assertEquals(1, maps.mapService().memberCount(0, 0));
+        Zone zone = zoneFor(maps, 0, 0);
+        assertTrue(zone.contains(first));
+        assertFalse(zone.contains(conflicting));
+        assertEquals(List.of(), drain(first));
+        assertEquals(List.of(), drain(conflicting));
+    }
+
+    @Test
     void closedMembersAreNotSentPackets() throws Exception {
         GameplayServices maps = mapsWithoutMonsters();
         Session first = session(player(1, 0, 0));
@@ -237,6 +255,33 @@ class MapServiceTest {
         var secondReader = secondMessages.get(0).reader();
         assertEquals(2, firstReader.readInt());
         assertEquals(1, secondReader.readInt());
+    }
+
+    @Test
+    void simultaneousFinishLoadAdmissionEnforcesCapacityAtomically() throws Exception {
+        GameplayServices maps = policyMaps("ONLINE", "ONLINE", 1, 1);
+        Session first = session(player(1, 0, 0), maps);
+        Session second = session(player(2, 0, 0), maps);
+        CyclicBarrier start = new CyclicBarrier(3);
+        AtomicInteger successes = new AtomicInteger();
+        AtomicInteger failures = new AtomicInteger();
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+
+        Thread firstJoin = Thread.ofVirtual().start(() -> finishLoadAtBarrier(
+                start, maps, first, successes, failures, failure));
+        Thread secondJoin = Thread.ofVirtual().start(() -> finishLoadAtBarrier(
+                start, maps, second, successes, failures, failure));
+
+        start.await();
+        firstJoin.join();
+        secondJoin.join();
+
+        if (failure.get() != null) {
+            throw new AssertionError("concurrent finish-load failed", failure.get());
+        }
+        assertEquals(1, successes.get());
+        assertEquals(1, failures.get());
+        assertEquals(1, maps.mapService().memberCount(0, 0));
     }
 
     @Test
@@ -484,5 +529,24 @@ class MapServiceTest {
         return new MapTemplate(
                 map.id(), map.name(), type, map.planet(), minZone, maxZone, maxPlayer,
                 map.dataId(), map.data(), map.waypoints());
+    }
+
+    private static void finishLoadAtBarrier(
+            CyclicBarrier start,
+            GameplayServices maps,
+            Session session,
+            AtomicInteger successes,
+            AtomicInteger failures,
+            AtomicReference<Throwable> failure) {
+        try {
+            start.await();
+            if (maps.mapService().finishLoad(session)) {
+                successes.incrementAndGet();
+            } else {
+                failures.incrementAndGet();
+            }
+        } catch (Throwable exception) {
+            failure.compareAndSet(null, exception);
+        }
     }
 }

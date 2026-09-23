@@ -63,6 +63,22 @@ class ZoneTest {
     }
 
     @Test
+    void differentSessionWithSamePlayerIdIsAnIdentityConflict() {
+        Zone zone = new Zone(0, 0, 2, List.of());
+        Session first = session(TestPlayerProfiles.initial(1L, 7, "alpha1", 0));
+        Session second = session(TestPlayerProfiles.initial(2L, 7, "alpha2", 0));
+
+        assertEquals(Zone.JoinStatus.ADDED, zone.addAndSnapshot(first).status());
+        assertEquals(Zone.JoinStatus.PLAYER_ID_CONFLICT, zone.addAndSnapshot(second).status());
+        assertEquals(1, zone.size());
+        assertEquals(List.of(first), zone.snapshot());
+        assertTrue(zone.contains(first));
+        assertFalse(zone.contains(second));
+        assertTrue(zone.canAccept(first));
+        assertFalse(zone.canAccept(second));
+    }
+
+    @Test
     void snapshotIsImmutable() {
         Zone zone = new Zone(0, 0, Integer.MAX_VALUE, List.of());
         zone.add(session(TestPlayerProfiles.initial(1L, 7, "alpha1", 0)));

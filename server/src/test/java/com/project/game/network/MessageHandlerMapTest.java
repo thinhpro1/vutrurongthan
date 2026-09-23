@@ -319,6 +319,35 @@ class MessageHandlerMapTest {
     }
 
     @Test
+    void finishLoadMapClosesConflictingSessionWithoutReplacingOriginalMember() throws Exception {
+        AuthService auth = TestServices.authService();
+        GameplayServices gameplay = new GameplayServices(
+                new PlayerPacketWriter(),
+                new MonsterPacketWriter(),
+                new MonsterFactory(GameResources.unavailable()));
+        SessionServices services = TestServices.serverServices(
+                auth, GameResources.unavailable(), gameplay);
+        Session first = inGameSession(services,
+                TestPlayerProfiles.initial(7L, 7, "alpha1", 0));
+        Session conflicting = inGameSession(services,
+                TestPlayerProfiles.initial(8L, 7, "alpha2", 0));
+        MessageHandler firstHandler = newHandler(first, services, ClientConfig.defaults());
+        MessageHandler conflictingHandler = newHandler(
+                conflicting, services, ClientConfig.defaults());
+
+        firstHandler.onMessage(new Message(MessageName.FINISH_LOAD_MAP));
+        drainMessages(first);
+        conflictingHandler.onMessage(new Message(MessageName.FINISH_LOAD_MAP));
+
+        assertEquals(SessionState.IN_GAME, first.state());
+        assertEquals(SessionState.CLOSED, conflicting.state());
+        assertEquals(1, gameplay.memberCount(0, 0));
+        assertTrue(gameplay.findZone(0, 0).contains(first));
+        assertFalse(gameplay.findZone(0, 0).contains(conflicting));
+        assertEquals(0, first.queuedMessages());
+    }
+
+    @Test
     void requestChangeMapDoesNotEmitMapInfoWhenDestinationIsOffline() throws Exception {
         Map<Integer, MapTemplate> mapCatalog = policyMaps("ONLINE", "OFFLINE", 1, 1);
         GameResources resources = GameResources.fromFrameRoot(

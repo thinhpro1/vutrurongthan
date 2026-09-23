@@ -73,7 +73,8 @@ public final class Zone {
     enum JoinStatus {
         ADDED,
         ALREADY_PRESENT,
-        FULL
+        FULL,
+        PLAYER_ID_CONFLICT
     }
 
     /**
@@ -83,8 +84,12 @@ public final class Zone {
     synchronized JoinResult addAndSnapshot(Session session) {
         Objects.requireNonNull(session, "session");
         PlayerProfile player = requirePlayer(session);
-        if (members.containsKey(player.id())) {
+        Session existingSession = members.get(player.id());
+        if (existingSession == session) {
             return new JoinResult(JoinStatus.ALREADY_PRESENT, List.of());
+        }
+        if (existingSession != null) {
+            return new JoinResult(JoinStatus.PLAYER_ID_CONFLICT, List.of());
         }
         if (members.size() >= maxPlayer) {
             return new JoinResult(JoinStatus.FULL, List.of());
@@ -97,7 +102,14 @@ public final class Zone {
     synchronized boolean canAccept(Session session) {
         Objects.requireNonNull(session, "session");
         PlayerProfile player = requirePlayer(session);
-        return members.containsKey(player.id()) || members.size() < maxPlayer;
+        Session existing = members.get(player.id());
+        if (existing == session) {
+            return true;
+        }
+        if (existing != null) {
+            return false;
+        }
+        return members.size() < maxPlayer;
     }
 
     public synchronized boolean contains(Session session) {

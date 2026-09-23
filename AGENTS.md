@@ -98,8 +98,28 @@ direct DB access from gameplay
 packet encoding inside gameplay entities
 unsafe concurrency
 obsolete data/protocol behavior
-thread-per-zone/thread-per-session architecture
+platform-thread-per-Zone as a scalability default
+network/session threads mutating gameplay entities directly
+cross-thread runtime mutation hidden behind locks
+always-running idle Zone loops
 ```
+
+The approved target may deliberately use virtual threads at infrastructure and
+runtime ownership boundaries. Do not confuse:
+
+```text
+legacy thread ownership
+```
+
+with:
+
+```text
+1 ACTIVE Zone = 1 virtual thread = 1 writer
+Session reader/writer virtual threads for blocking socket I/O
+```
+
+The target model is defined by `SERVER_RULES.md`, not by mechanically copying
+legacy threading code.
 
 `docs/architecture/SERVER_RULES.md` and current runtime contracts always win.
 
@@ -129,6 +149,59 @@ Normal full gate:
 cd server
 .\mvnw.cmd test
 ```
+
+---
+
+## Runtime ownership gate
+
+For Zone/runtime/concurrency work, the coding model MUST distinguish the
+**current production contract** from the **approved migration target**.
+
+Approved target:
+
+```text
+1 ACTIVE Zone
+= 1 virtual thread
+= 1 writer for Zone-owned runtime state
+```
+
+Zone-owned runtime state includes, when present:
+
+```text
+Player
+Monster
+Boss
+Npc
+ItemMap
+active gameplay effects
+other live Zone world state
+```
+
+External execution contexts such as:
+
+```text
+Session reader/writer virtual threads
+persistence/JDBC execution
+web/admin/payment input
+other Zones
+```
+
+must not directly mutate Zone-owned runtime entities. They communicate through
+explicit Zone input/handoff boundaries.
+
+Blocking I/O is allowed at infrastructure boundaries, including blocking
+Socket I/O and JDBC, but MUST NOT run inside Zone gameplay execution.
+
+Until a dedicated migration phase replaces an existing synchronization or
+Player runtime contract, the current production implementation remains
+authoritative. Do not use the target architecture as permission for an
+unscoped cutover.
+
+Every touched feature slice must leave the phase compliant with
+`SERVER_RULES.md`. Do not preserve obsolete wrappers, managers, schedulers,
+snapshots, result types, names, or file fragmentation merely because they
+existed before the phase. This rule does not authorize unrelated repo-wide
+cleanup.
 
 ---
 
@@ -181,10 +254,14 @@ Before finishing server work:
 1. Re-read affected sections of `SERVER_RULES.md`.
 2. Inspect the final diff.
 3. Verify no protocol/persistence/concurrency drift.
-4. Verify no unjustified fragmentation or new architecture ceremony.
-5. Verify focused regression coverage.
-6. Run the full server gate.
-7. Report exactly which runtime/manual gates were not executed.
+4. Verify the execution owner of every mutated runtime object is explicit.
+5. Verify no blocking I/O was introduced into Zone gameplay execution.
+6. Verify no unjustified fragmentation or new architecture ceremony.
+7. Verify the touched slice does not retain obsolete architecture without a
+   documented migration reason.
+8. Verify focused regression coverage.
+9. Run the full server gate.
+10. Report exactly which runtime/manual gates were not executed.
 
 For gameplay work, reviewer must be able to answer:
 

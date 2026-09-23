@@ -56,13 +56,13 @@ class CombatServiceTest {
     @Test
     void mapInfoCreatedButPreFinishSessionCannotCombat() {
         GameplayServices maps = mapsWithMonsters();
-        assertEquals(300L, maps.monsterService().monsterSnapshots(1, 0).getFirst().hp());
+        assertEquals(300L, maps.monsterManager().monsterSnapshots(1, 0).getFirst().hp());
         Session session = session(player(1, 1, 0), maps);
 
         assertEquals(0, maps.mapService().memberCount(1, 0));
         assertFalse(maps.combatService().canTargetMonster(session, 101));
         assertFalse(maps.combatService().attackMonster(session, 101, 10));
-        assertEquals(300L, maps.monsterService().monsterSnapshots(1, 0).getFirst().hp());
+        assertEquals(300L, maps.monsterManager().monsterSnapshots(1, 0).getFirst().hp());
     }
 
     @Test
@@ -74,7 +74,7 @@ class CombatServiceTest {
 
         assertFalse(maps.combatService().canTargetMonster(dead, 101));
         assertFalse(maps.combatService().attackMonster(dead, 101, 10L));
-        assertEquals(300L, maps.monsterService().monsterSnapshots(1, 0).getFirst().hp());
+        assertEquals(300L, maps.monsterManager().monsterSnapshots(1, 0).getFirst().hp());
         assertEquals(List.of(), drain(dead));
     }
 
@@ -222,7 +222,7 @@ class CombatServiceTest {
         assertEquals(before + 10L, attacker.player().potential());
 
         clock.advanceMillis(9_001L);
-        maps.monsterService().tickLifecycle();
+        maps.monsterManager().update();
         assertEquals(List.of(MessageName.MONSTER_RESPAWN),
                 commands(withoutMonsterMoves(drain(attacker))));
 
@@ -293,7 +293,7 @@ class CombatServiceTest {
         assertTrue(maps.combatService().attackMonster(attacker, 101, 10));
         assertEquals(List.of(MessageName.MONSTER_INJURE), commands(drain(attacker)));
         assertEquals(List.of(), drain(otherZone));
-        assertEquals(300L, maps.monsterService().monsterSnapshots(1, 1).getFirst().hp());
+        assertEquals(300L, maps.monsterManager().monsterSnapshots(1, 1).getFirst().hp());
     }
 
     @Test
@@ -333,8 +333,8 @@ class CombatServiceTest {
         Session loser = firstResult.get() ? second : first;
         assertEquals(11L, winner.player().potential());
         assertEquals(1L, loser.player().potential());
-        assertEquals(0L, maps.monsterService().monsterSnapshots(1, 0).getFirst().hp());
-        assertEquals(1, maps.monsterService().monsterSnapshots(1, 0).getFirst().status());
+        assertEquals(0L, maps.monsterManager().monsterSnapshots(1, 0).getFirst().hp());
+        assertEquals(1, maps.monsterManager().monsterSnapshots(1, 0).getFirst().status());
         List<Message> firstMessages = drain(first);
         List<Message> secondMessages = drain(second);
         assertEquals(1, commands(firstMessages).stream()

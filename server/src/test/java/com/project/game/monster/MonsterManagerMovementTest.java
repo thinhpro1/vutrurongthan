@@ -22,12 +22,12 @@ import java.util.concurrent.atomic.*;
 import static com.project.game.testsupport.GameplayTestSupport.*;
 import static org.junit.jupiter.api.Assertions.*;
 
-class MonsterServiceMovementTest {
+class MonsterManagerMovementTest {
 
     @Test
     void idleMonsterPatrolIsServerAuthoritative() {
         GameplayServices maps = mapsWithMonsters();
-        maps.monsterService().monsterSnapshots(1, 0);
+        maps.monsterManager().monsterSnapshots(1, 0);
         Zone zone = zoneFor(maps, 1, 0);
 
         MonsterSnapshot before = zone.monsterSnapshots().getFirst();
@@ -257,7 +257,7 @@ class MonsterServiceMovementTest {
         drain(player);
 
         clock.advanceMillis(5_000L);
-        maps.monsterService().tickLifecycle();
+        maps.monsterManager().update();
 
         assertEquals(List.of(), withoutMonsterMoves(drain(player)));
         assertEquals(100L, player.player().hp());
@@ -274,7 +274,7 @@ class MonsterServiceMovementTest {
         drain(first);
         drain(second);
 
-        maps.monsterService().tickLifecycle();
+        maps.monsterManager().update();
 
         List<Message> firstMessages = drain(first);
         List<Message> secondMessages = drain(second);
@@ -309,7 +309,7 @@ class MonsterServiceMovementTest {
         drain(target);
 
         clock.advanceMillis(1L);
-        maps.monsterService().tickLifecycle();
+        maps.monsterManager().update();
 
         List<Message> messages = drain(target);
         assertEquals(MessageName.MONSTER_MOVE, messages.getFirst().command());
@@ -329,7 +329,7 @@ class MonsterServiceMovementTest {
         drain(target);
 
         clock.advanceMillis(1L);
-        maps.monsterService().tickLifecycle();
+        maps.monsterManager().update();
 
         List<Message> messages = drain(target);
         assertTrue(messages.stream()

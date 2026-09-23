@@ -31,7 +31,7 @@ public final class MessageHandler {
 
         this.connectionHandler = new ConnectionHandler(session, networkConfig);
         this.resourceHandler = new ResourceHandler(session, services.resources());
-        this.mapHandler = new MapHandler(session, services.maps(), services.monsters(),
+        this.mapHandler = new MapHandler(session, services.maps(), services.monsterManager(),
                 services.players(), services.resources());
         this.playerHandler = new PlayerHandler(session, services.players(), services.resources(), mapHandler);
         this.authHandler = new AuthHandler(session, services.auth(), services.players(),

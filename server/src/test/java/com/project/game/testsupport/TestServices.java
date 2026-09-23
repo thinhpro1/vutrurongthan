@@ -8,7 +8,7 @@ import com.project.game.map.MapService;
 import com.project.game.map.ZoneRegistry;
 import com.project.game.combat.CombatService;
 import com.project.game.monster.MonsterFactory;
-import com.project.game.monster.MonsterService;
+import com.project.game.monster.MonsterManager;
 import com.project.game.network.packet.PlayerPacketWriter;
 import com.project.game.network.packet.MonsterPacketWriter;
 
@@ -39,15 +39,15 @@ public final class TestServices {
         ZoneRegistry zones = new ZoneRegistry(MapTestSupport.canonicalMaps(), new MonsterFactory(resources));
         MapService maps = new MapService(zones, playerPackets);
         CombatService combat = new CombatService(zones, playerPackets, monsterPackets);
-        MonsterService monsters = new MonsterService(zones, monsterPackets, playerPackets);
-        return new SessionServices(auth, resources, maps, combat, monsters,
+        MonsterManager monsterManager = new MonsterManager(zones, monsterPackets, playerPackets);
+        return new SessionServices(auth, resources, maps, combat, monsterManager,
                 new PlayerService(playerRepository(auth)));
     }
 
     public static SessionServices serverServices(AuthService auth, GameResources resources,
                                                 GameplayServices gameplay) {
         return new SessionServices(auth, resources, gameplay.mapService(),
-                gameplay.combatService(), gameplay.monsterService(),
+                gameplay.combatService(), gameplay.monsterManager(),
                 new PlayerService(playerRepository(auth)));
     }
 
@@ -55,7 +55,7 @@ public final class TestServices {
                                                 GameplayServices gameplay,
                                                 PlayerService players) {
         return new SessionServices(auth, resources, gameplay.mapService(),
-                gameplay.combatService(), gameplay.monsterService(), players);
+                gameplay.combatService(), gameplay.monsterManager(), players);
     }
 
     public static PlayerService playerService(AuthService auth) {

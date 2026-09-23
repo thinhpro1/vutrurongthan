@@ -15,20 +15,20 @@ import java.util.Objects;
 import java.util.random.RandomGenerator;
 
 /** Coordinates authoritative monster snapshots, lifecycle ticks, and broadcasts. */
-public final class MonsterService {
+public final class MonsterManager {
     private final ZoneRegistry zones;
     private final MonsterPacketWriter monsterPackets;
     private final PlayerPacketWriter packets;
     private final Clock clock;
     private final RandomGenerator random;
 
-    public MonsterService(ZoneRegistry zones,
+    public MonsterManager(ZoneRegistry zones,
                           MonsterPacketWriter monsterPackets,
                           PlayerPacketWriter packets) {
         this(zones, monsterPackets, packets, Clock.systemUTC(), RandomGenerator.getDefault());
     }
 
-    public MonsterService(ZoneRegistry zones,
+    public MonsterManager(ZoneRegistry zones,
                           MonsterPacketWriter monsterPackets,
                           PlayerPacketWriter packets,
                           Clock clock,
@@ -44,7 +44,7 @@ public final class MonsterService {
         return zones.getOrCreate(mapId, zoneId).monsterSnapshots();
     }
 
-    public void tickLifecycle() {
+    public void update() {
         long nowMillis = clock.millis();
         for (Zone zone : zones.snapshot()) {
             synchronized (zone) {

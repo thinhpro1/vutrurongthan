@@ -22,7 +22,7 @@ import java.util.concurrent.atomic.*;
 import static com.project.game.testsupport.GameplayTestSupport.*;
 import static org.junit.jupiter.api.Assertions.*;
 
-class MonsterServiceRetaliationTest {
+class MonsterManagerRetaliationTest {
 
     @Test
     void retaliationBroadcastsToSameZoneAndMutatesOnlyTargetHp() throws Exception {
@@ -39,7 +39,7 @@ class MonsterServiceRetaliationTest {
         drain(attacker);
         drain(observer);
         clock.advanceMillis(1L);
-        maps.monsterService().tickLifecycle();
+        maps.monsterManager().update();
 
         List<Message> attackerMessages = withoutMonsterMoves(drain(attacker));
         List<Message> observerMessages = withoutMonsterMoves(drain(observer));
@@ -62,7 +62,7 @@ class MonsterServiceRetaliationTest {
         drain(target);
 
         clock.advanceMillis(1L);
-        maps.monsterService().tickLifecycle();
+        maps.monsterManager().update();
 
         assertEquals(0L, target.player().hp());
     }
@@ -80,7 +80,7 @@ class MonsterServiceRetaliationTest {
         drain(target);
 
         clock.advanceMillis(1L);
-        maps.monsterService().tickLifecycle();
+        maps.monsterManager().update();
 
         assertEquals(0L, target.player().hp());
     }
@@ -99,7 +99,7 @@ class MonsterServiceRetaliationTest {
         }
 
         clock.advanceMillis(1L);
-        maps.monsterService().tickLifecycle();
+        maps.monsterManager().update();
 
         assertEquals(0L, target.player().hp());
         assertTrue(runtimeMonsters(maps, 1, 0).stream()
@@ -107,7 +107,7 @@ class MonsterServiceRetaliationTest {
 
         withoutMonsterMoves(drain(target));
         clock.advanceMillis(10_000L);
-        maps.monsterService().tickLifecycle();
+        maps.monsterManager().update();
         assertEquals(List.of(), withoutMonsterMoves(drain(target)));
     }
 
@@ -126,7 +126,7 @@ class MonsterServiceRetaliationTest {
         drain(victim);
         drain(observer);
         clock.advanceMillis(1L);
-        maps.monsterService().tickLifecycle();
+        maps.monsterManager().update();
 
         List<Message> victimMessages = withoutMonsterMoves(drain(victim));
         assertEquals(
@@ -162,7 +162,7 @@ class MonsterServiceRetaliationTest {
         assertTrue(maps.combatService().attackMonster(attacker, 101, 10));
         drain(attacker);
         clock.advanceMillis(1L);
-        maps.monsterService().tickLifecycle();
+        maps.monsterManager().update();
 
         assertEquals(List.of(MessageName.MONSTER_ATTACK),
                 commands(withoutMonsterMoves(drain(attacker))));
@@ -182,16 +182,16 @@ class MonsterServiceRetaliationTest {
 
         attacker.bindPlayer(attacker.player().withPosition(975 + 901, 936));
         clock.advanceMillis(1L);
-        maps.monsterService().tickLifecycle();
+        maps.monsterManager().update();
         assertEquals(List.of(MessageName.MONSTER_ATTACK),
                 commands(withoutMonsterMoves(drain(attacker))));
 
         attacker.bindPlayer(attacker.player().withPosition(975, 936));
         clock.advanceMillis(1_600L);
-        maps.monsterService().tickLifecycle();
+        maps.monsterManager().update();
         assertEquals(List.of(), withoutMonsterMoves(drain(attacker)));
         clock.advanceMillis(1L);
-        maps.monsterService().tickLifecycle();
+        maps.monsterManager().update();
         assertEquals(List.of(MessageName.MONSTER_ATTACK),
                 commands(withoutMonsterMoves(drain(attacker))));
         assertEquals(80L, attacker.player().hp());
@@ -209,13 +209,13 @@ class MonsterServiceRetaliationTest {
         assertTrue(maps.combatService().attackMonster(attacker, 101, 10));
         drain(attacker);
         clock.advanceMillis(1L);
-        maps.monsterService().tickLifecycle();
+        maps.monsterManager().update();
         assertEquals(List.of(MessageName.MONSTER_ATTACK),
                 commands(withoutMonsterMoves(drain(attacker))));
         assertEquals(10L, attacker.player().hp());
 
         clock.advanceMillis(1_601L);
-        maps.monsterService().tickLifecycle();
+        maps.monsterManager().update();
         List<Message> lethalMessages = drain(attacker);
         assertEquals(List.of(
                         MessageName.MONSTER_MOVE,
@@ -231,7 +231,7 @@ class MonsterServiceRetaliationTest {
         assertEquals(0L, attacker.player().hp());
 
         clock.advanceMillis(1_601L);
-        maps.monsterService().tickLifecycle();
+        maps.monsterManager().update();
         assertEquals(List.of(), withoutMonsterMoves(drain(attacker)));
         assertEquals(0L, attacker.player().hp());
 
@@ -243,14 +243,14 @@ class MonsterServiceRetaliationTest {
         assertTrue(maps.combatService().attackMonster(survivor, 101, 500));
         drain(survivor);
         clock.advanceMillis(9_000L);
-        maps.monsterService().tickLifecycle();
+        maps.monsterManager().update();
         assertEquals(List.of(), withoutMonsterMoves(drain(survivor)));
         clock.advanceMillis(1L);
-        maps.monsterService().tickLifecycle();
+        maps.monsterManager().update();
         assertEquals(List.of(MessageName.MONSTER_RESPAWN),
                 commands(withoutMonsterMoves(drain(survivor))));
         clock.advanceMillis(1L);
-        maps.monsterService().tickLifecycle();
+        maps.monsterManager().update();
         assertEquals(List.of(), withoutMonsterMoves(drain(survivor)));
     }
 }

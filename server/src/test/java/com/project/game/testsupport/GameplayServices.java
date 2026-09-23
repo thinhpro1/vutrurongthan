@@ -6,7 +6,7 @@ import com.project.game.map.MapTemplate;
 import com.project.game.map.Zone;
 import com.project.game.map.ZoneRegistry;
 import com.project.game.monster.MonsterFactory;
-import com.project.game.monster.MonsterService;
+import com.project.game.monster.MonsterManager;
 import com.project.game.monster.MonsterSnapshot;
 import com.project.game.network.Session;
 import com.project.game.network.packet.MonsterPacketWriter;
@@ -25,7 +25,7 @@ public final class GameplayServices {
     private ZoneRegistry zones;
     private MapService maps;
     private CombatService combat;
-    private MonsterService monsters;
+    private MonsterManager monsterManager;
 
     public GameplayServices(PlayerPacketWriter playerPackets,
                              MonsterPacketWriter monsterPackets,
@@ -89,7 +89,7 @@ public final class GameplayServices {
         this.zones = registry;
         this.maps = new MapService(registry, playerPackets);
         this.combat = new CombatService(registry, playerPackets, monsterPackets, clock);
-        this.monsters = new MonsterService(registry, monsterPackets, playerPackets, clock, random);
+        this.monsterManager = new MonsterManager(registry, monsterPackets, playerPackets, clock, random);
     }
 
     public MapService mapService() {
@@ -100,8 +100,8 @@ public final class GameplayServices {
         return combat;
     }
 
-    public MonsterService monsterService() {
-        return monsters;
+    public MonsterManager monsterManager() {
+        return monsterManager;
     }
 
     public ZoneRegistry zones() {
@@ -127,9 +127,9 @@ public final class GameplayServices {
     public boolean attackMonster(Session session, int monsterId, long damage) {
         return combat.attackMonster(session, monsterId, damage);
     }
-    public void tickMonsterLifecycle() { monsters.tickLifecycle(); }
+    public void tickMonsterLifecycle() { monsterManager.update(); }
     public List<MonsterSnapshot> monsterSnapshots(int mapId, int zoneId) {
-        return monsters.monsterSnapshots(mapId, zoneId);
+        return monsterManager.monsterSnapshots(mapId, zoneId);
     }
     public Zone findZone(int mapId, int zoneId) { return zones.find(mapId, zoneId); }
 }

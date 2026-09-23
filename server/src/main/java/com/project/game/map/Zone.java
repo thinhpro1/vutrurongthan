@@ -69,14 +69,6 @@ public final class Zone {
         return members.remove(player.id(), session);
     }
 
-    /** The outcome of one atomic admission attempt. */
-    enum JoinStatus {
-        ADDED,
-        ALREADY_PRESENT,
-        FULL,
-        PLAYER_ID_CONFLICT
-    }
-
     /**
      * Returns the members present before an added session joined. Admission, capacity, and the
      * snapshot share this Zone monitor so a join cannot miss another concurrent join.
@@ -153,7 +145,7 @@ public final class Zone {
         }
 
         long delay = respawnDelayMillis(members.size());
-        return monster.applyDamage(attackerPlayerId, damage, nowMillis, delay);
+        return monster.injure(attackerPlayerId, damage, nowMillis, delay);
     }
 
     public synchronized List<MonsterAttack> attackDueMonsters(
@@ -162,7 +154,7 @@ public final class Zone {
         Objects.requireNonNull(random, "random");
         List<MonsterAttack> attacks = new java.util.ArrayList<>();
         for (Monster monster : monsters.values()) {
-            if (!monster.beginAttackAttemptIfDue(nowMillis)) {
+            if (!monster.beginAttack(nowMillis)) {
                 continue;
             }
             List<Session> eligible = monster.enemyPlayerIds().stream()
@@ -213,8 +205,8 @@ public final class Zone {
 
             Session target = nearestChaseTarget(monster, chaseEligible);
             Optional<Monster.Move> moved = target == null
-                    ? monster.patrolOrReturn()
-                    : monster.moveToward(target.player().x());
+                    ? monster.patrol()
+                    : monster.moveTo(target.player().x());
             moved.ifPresent(moves::add);
         }
         return List.copyOf(moves);
@@ -222,7 +214,7 @@ public final class Zone {
 
     public synchronized List<Monster.Respawn> respawnDueMonsters(long nowMillis) {
         return monsters.values().stream()
-                .map(monster -> monster.respawnIfDue(nowMillis))
+                .map(monster -> monster.updateRespawn(nowMillis))
                 .flatMap(Optional::stream)
                 .toList();
     }
@@ -289,6 +281,14 @@ public final class Zone {
             throw new IllegalStateException("zone membership requires a bound player");
         }
         return player;
+    }
+
+    /** The outcome of one atomic admission attempt. */
+    enum JoinStatus {
+        ADDED,
+        ALREADY_PRESENT,
+        FULL,
+        PLAYER_ID_CONFLICT
     }
 
     record JoinResult(JoinStatus status, List<Session> existing) {

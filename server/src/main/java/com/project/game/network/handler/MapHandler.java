@@ -1,7 +1,7 @@
 package com.project.game.network.handler;
 
 import com.project.game.map.MapService;
-import com.project.game.monster.MonsterService;
+import com.project.game.monster.MonsterManager;
 import com.project.game.monster.MonsterSnapshot;
 import com.project.game.network.Session;
 import com.project.game.network.SessionState;
@@ -21,17 +21,17 @@ import java.util.Optional;
 final class MapHandler {
     private final Session session;
     private final MapService mapService;
-    private final MonsterService monsterService;
+    private final MonsterManager monsterManager;
     private final PlayerService playerService;
     private final GameResources resources;
     private final PlayerPacketWriter playerPackets = new PlayerPacketWriter();
     private final MapPacketWriter mapPackets = new MapPacketWriter();
 
-    MapHandler(Session session, MapService mapService, MonsterService monsterService,
+    MapHandler(Session session, MapService mapService, MonsterManager monsterManager,
                PlayerService playerService, GameResources resources) {
         this.session = session;
         this.mapService = mapService;
-        this.monsterService = monsterService;
+        this.monsterManager = monsterManager;
         this.playerService = playerService;
         this.resources = resources;
     }
@@ -142,7 +142,7 @@ final class MapHandler {
             throw new IOException("invalid map zone: " + map.id() + "/" + player.zoneId());
         }
         try {
-            monsters = monsterService.monsterSnapshots(map.id(), player.zoneId());
+            monsters = monsterManager.monsterSnapshots(map.id(), player.zoneId());
         } catch (IllegalArgumentException exception) {
             throw new IOException("invalid map zone: " + map.id() + "/" + player.zoneId(), exception);
         }

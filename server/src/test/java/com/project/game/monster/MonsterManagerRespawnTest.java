@@ -22,7 +22,7 @@ import java.util.concurrent.atomic.*;
 import static com.project.game.testsupport.GameplayTestSupport.*;
 import static org.junit.jupiter.api.Assertions.*;
 
-class MonsterServiceRespawnTest {
+class MonsterManagerRespawnTest {
 
     @Test
     void respawnTickDoesNotCreateAdditionalZones() {
@@ -30,7 +30,7 @@ class MonsterServiceRespawnTest {
         GameplayServices maps = mapsWithMonsters(clock);
 
         assertEquals(2, zoneRegistrySize(maps));
-        maps.monsterService().tickLifecycle();
+        maps.monsterManager().update();
         assertEquals(2, zoneRegistrySize(maps));
     }
 
@@ -47,12 +47,12 @@ class MonsterServiceRespawnTest {
                 commands(drain(attacker)));
 
         clock.advanceMillis(9_000L);
-        maps.monsterService().tickLifecycle();
+        maps.monsterManager().update();
         assertEquals(List.of(), withoutMonsterMoves(drain(attacker)));
-        assertEquals(1, maps.monsterService().monsterSnapshots(1, 0).getFirst().status());
+        assertEquals(1, maps.monsterManager().monsterSnapshots(1, 0).getFirst().status());
 
         clock.advanceMillis(1L);
-        maps.monsterService().tickLifecycle();
+        maps.monsterManager().update();
         List<Message> messages = withoutMonsterMoves(drain(attacker));
         assertEquals(List.of(MessageName.MONSTER_RESPAWN), commands(messages));
         var reader = messages.getFirst().reader();
@@ -60,7 +60,7 @@ class MonsterServiceRespawnTest {
         assertEquals(0, reader.readByte());
         assertEquals(300L, reader.readLong());
         assertEquals(0, reader.remaining());
-        MonsterSnapshot snapshot = maps.monsterService().monsterSnapshots(1, 0).getFirst();
+        MonsterSnapshot snapshot = maps.monsterManager().monsterSnapshots(1, 0).getFirst();
         assertEquals(300L, snapshot.hp());
         assertEquals(0, snapshot.status());
     }
@@ -81,14 +81,14 @@ class MonsterServiceRespawnTest {
         drain(peer);
 
         clock.advanceMillis(8_001L);
-        maps.monsterService().tickLifecycle();
+        maps.monsterManager().update();
         List<Message> attackerMessages = withoutMonsterMoves(drain(attacker));
         List<Message> peerMessages = withoutMonsterMoves(drain(peer));
         assertEquals(List.of(MessageName.MONSTER_RESPAWN), commands(attackerMessages));
         assertEquals(List.of(MessageName.MONSTER_RESPAWN), commands(peerMessages));
         assertArrayEquals(attackerMessages.getFirst().payload(), peerMessages.getFirst().payload());
 
-        maps.monsterService().tickLifecycle();
+        maps.monsterManager().update();
         assertEquals(List.of(), withoutMonsterMoves(drain(attacker)));
         assertEquals(List.of(), withoutMonsterMoves(drain(peer)));
     }
@@ -108,11 +108,11 @@ class MonsterServiceRespawnTest {
         drain(attacker);
 
         clock.advanceMillis(9_001L);
-        maps.monsterService().tickLifecycle();
+        maps.monsterManager().update();
         assertEquals(List.of(MessageName.MONSTER_RESPAWN),
                 commands(withoutMonsterMoves(drain(attacker))));
         assertEquals(List.of(), withoutMonsterMoves(drain(other)));
-        assertEquals(300L, maps.monsterService().monsterSnapshots(1, 1).getFirst().hp());
+        assertEquals(300L, maps.monsterManager().monsterSnapshots(1, 1).getFirst().hp());
     }
 
     @Test
@@ -133,7 +133,7 @@ class MonsterServiceRespawnTest {
         drain(attacker);
 
         clock.advanceMillis(8_001L);
-        maps.monsterService().tickLifecycle();
+        maps.monsterManager().update();
         assertEquals(List.of(MessageName.MONSTER_RESPAWN),
                 commands(withoutMonsterMoves(drain(attacker))));
         assertEquals(List.of(), withoutMonsterMoves(drain(peer)));
@@ -152,10 +152,10 @@ class MonsterServiceRespawnTest {
         maps.mapService().leave(attacker);
 
         assertEquals(0, maps.mapService().memberCount(1, 0));
-        assertEquals(1, maps.monsterService().monsterSnapshots(1, 0).getFirst().status());
+        assertEquals(1, maps.monsterManager().monsterSnapshots(1, 0).getFirst().status());
         clock.advanceMillis(9_001L);
-        maps.monsterService().tickLifecycle();
-        MonsterSnapshot respawned = maps.monsterService().monsterSnapshots(1, 0).getFirst();
+        maps.monsterManager().update();
+        MonsterSnapshot respawned = maps.monsterManager().monsterSnapshots(1, 0).getFirst();
         assertEquals(300L, respawned.hp());
         assertEquals(0, respawned.status());
         assertEquals(0, maps.mapService().memberCount(1, 0));
@@ -172,7 +172,7 @@ class MonsterServiceRespawnTest {
         maps.combatService().attackMonster(attacker, 101, 500);
         drain(attacker);
         clock.advanceMillis(9_001L);
-        maps.monsterService().tickLifecycle();
+        maps.monsterManager().update();
         drain(attacker);
 
         assertTrue(maps.combatService().canTargetMonster(attacker, 101));

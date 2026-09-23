@@ -1,8 +1,8 @@
 package com.project.game.monster;
 
-import java.util.Objects;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 
 public final class Monster {
@@ -13,8 +13,8 @@ public final class Monster {
     private static final int MOVEMENT_STEP_MULTIPLIER = 4;
     private static final long NO_RESPAWN = -1L;
 
+    private final MonsterTemplate template;
     private final int id;
-    private final int templateId;
     private final int type;
     private final int level;
     private final int levelStatus;
@@ -27,18 +27,13 @@ public final class Monster {
     private long hp;
     private int status;
     private long respawnAtMillis = NO_RESPAWN;
-    private final long damage;
-    private final long potentialReward;
-    private final int rangeMove;
-    private final int speed;
-    private final int moveType;
     private int moveDir = INITIAL_MOVE_DIR;
     private final LinkedHashMap<Integer, Long> enemies = new LinkedHashMap<>();
     private long lastAttackAtMillis;
 
     Monster(MonsterSpawn spawn, MonsterTemplate template) {
         Objects.requireNonNull(spawn, "spawn");
-        Objects.requireNonNull(template, "template");
+        this.template = Objects.requireNonNull(template, "template");
         if (template.id() != spawn.templateId()) {
             throw new IllegalArgumentException("monster template does not match spawn");
         }
@@ -52,7 +47,6 @@ public final class Monster {
             throw new IllegalArgumentException("monster movement speed must be non-negative");
         }
         id = spawn.id();
-        templateId = spawn.templateId();
         type = spawn.type();
         level = spawn.level();
         levelStatus = spawn.levelStatus();
@@ -63,78 +57,13 @@ public final class Monster {
         maxHp = spawn.maxHp();
         hp = spawn.hp();
         status = spawn.status();
-        damage = template.damage();
-        potentialReward = template.potentialReward();
-        rangeMove = template.rangeMove();
-        speed = template.speed();
-        moveType = template.type();
-    }
-
-    public int id() {
-        return id;
     }
 
     public boolean isAlive() {
         return status == STATUS_LIVE && hp > 0;
     }
 
-    public long damage() {
-        return damage;
-    }
-
-    int rangeMove() {
-        return rangeMove;
-    }
-
-    int speed() {
-        return speed;
-    }
-
-    int moveType() {
-        return moveType;
-    }
-
-    int moveDir() {
-        return moveDir;
-    }
-
-    public int xFirst() {
-        return xFirst;
-    }
-
-    public List<Integer> enemyPlayerIds() {
-        return List.copyOf(enemies.keySet());
-    }
-
-    public int enemyCount() {
-        return enemies.size();
-    }
-
-    public boolean hasEnemy(int playerId) {
-        return enemies.containsKey(playerId);
-    }
-
-    public boolean removeEnemy(int playerId) {
-        return enemies.remove(playerId) != null;
-    }
-
-    public long attackDelayMillis() {
-        return Math.max(2_000L - 400L * enemies.size(), 500L);
-    }
-
-    public boolean beginAttackAttemptIfDue(long nowMillis) {
-        if (!isAlive() || enemies.isEmpty()) {
-            return false;
-        }
-        if (lastAttackAtMillis != 0L
-                && nowMillis <= deadlineAfter(lastAttackAtMillis, attackDelayMillis())) {
-            return false;
-        }
-        lastAttackAtMillis = nowMillis;
-        return true;
-    }
-
-    public Optional<Monster.Damage> applyDamage(
+    public Optional<Monster.Damage> injure(
             int attackerPlayerId,
             long damage,
             long nowMillis,
@@ -152,7 +81,6 @@ public final class Monster {
         }
 
         hp = hpAfter;
-
         enemies.merge(attackerPlayerId, damage, Monster::saturatingAdd);
 
         if (killed) {
@@ -165,10 +93,22 @@ public final class Monster {
                 damage,
                 hp,
                 killed,
-                killed ? potentialReward : 0L));
+                killed ? template.potentialReward() : 0L));
     }
 
-    public Optional<Monster.Respawn> respawnIfDue(long nowMillis) {
+    public boolean beginAttack(long nowMillis) {
+        if (!isAlive() || enemies.isEmpty()) {
+            return false;
+        }
+        if (lastAttackAtMillis != 0L
+                && nowMillis <= deadlineAfter(lastAttackAtMillis, attackDelay())) {
+            return false;
+        }
+        lastAttackAtMillis = nowMillis;
+        return true;
+    }
+
+    public Optional<Monster.Respawn> updateRespawn(long nowMillis) {
         if (status != STATUS_DIE
                 || respawnAtMillis == NO_RESPAWN
                 || nowMillis <= respawnAtMillis) {
@@ -187,8 +127,8 @@ public final class Monster {
         return Optional.of(new Monster.Respawn(id, levelStatus, hp));
     }
 
-    public Optional<Monster.Move> moveToward(int targetX) {
-        if (!isAlive() || moveType != MOVE_TYPE_RUN) {
+    public Optional<Monster.Move> moveTo(int targetX) {
+        if (!isAlive() || template.type() != MOVE_TYPE_RUN) {
             return Optional.empty();
         }
 
@@ -208,8 +148,8 @@ public final class Monster {
         return Optional.of(new Monster.Move(id, x, y, moveDir));
     }
 
-    public Optional<Monster.Move> patrolOrReturn() {
-        if (!isAlive() || moveType != MOVE_TYPE_RUN) {
+    public Optional<Monster.Move> patrol() {
+        if (!isAlive() || template.type() != MOVE_TYPE_RUN) {
             return Optional.empty();
         }
 
@@ -218,8 +158,8 @@ public final class Monster {
             return Optional.empty();
         }
 
-        int minX = Math.subtractExact(xFirst, rangeMove);
-        int maxX = Math.addExact(xFirst, rangeMove);
+        int minX = Math.subtractExact(xFirst, template.rangeMove());
+        int maxX = Math.addExact(xFirst, template.rangeMove());
         int beforeX = x;
         int beforeY = y;
 
@@ -257,10 +197,58 @@ public final class Monster {
         return Optional.of(new Monster.Move(id, x, y, moveDir));
     }
 
+    public int id() {
+        return id;
+    }
+
+    public long damage() {
+        return template.damage();
+    }
+
+    int rangeMove() {
+        return template.rangeMove();
+    }
+
+    int speed() {
+        return template.speed();
+    }
+
+    int moveType() {
+        return template.type();
+    }
+
+    int moveDir() {
+        return moveDir;
+    }
+
+    public int xFirst() {
+        return xFirst;
+    }
+
+    public List<Integer> enemyPlayerIds() {
+        return List.copyOf(enemies.keySet());
+    }
+
+    public int enemyCount() {
+        return enemies.size();
+    }
+
+    public boolean hasEnemy(int playerId) {
+        return enemies.containsKey(playerId);
+    }
+
+    public boolean removeEnemy(int playerId) {
+        return enemies.remove(playerId) != null;
+    }
+
+    public long attackDelay() {
+        return Math.max(2_000L - 400L * enemies.size(), 500L);
+    }
+
     public MonsterSnapshot snapshot() {
         return new MonsterSnapshot(
                 type,
-                templateId,
+                template.id(),
                 id,
                 level,
                 levelStatus,
@@ -280,7 +268,7 @@ public final class Monster {
     }
 
     private int movementStep() {
-        return Math.multiplyExact(speed, MOVEMENT_STEP_MULTIPLIER);
+        return Math.multiplyExact(template.speed(), MOVEMENT_STEP_MULTIPLIER);
     }
 
     private static long deadlineAfter(long start, long delay) {
@@ -292,6 +280,7 @@ public final class Monster {
         }
         return start + delay;
     }
+
     public record Damage(
             int monsterId,
             long damage,
@@ -311,4 +300,5 @@ public final class Monster {
             int monsterId,
             int levelStatus,
             long hp
-    ) {}}
+    ) {}
+}

@@ -22,7 +22,7 @@ import java.util.concurrent.atomic.*;
 import static com.project.game.testsupport.GameplayTestSupport.*;
 import static org.junit.jupiter.api.Assertions.*;
 
-class MonsterServiceSnapshotTest {
+class MonsterManagerSnapshotTest {
 
     @Test
     void snapshotsUseOnlyPolicyValidZonesAndLifecycleVisitsRegisteredZones() {
@@ -32,18 +32,18 @@ class MonsterServiceSnapshotTest {
                 GameResources.fromFrameRoot(Path.of("resources", "json"),
                         com.project.game.testsupport.MapTestSupport.canonicalMaps(), 2,
                         com.project.game.testsupport.MonsterTestSupport.canonicalRepository())));
-        MonsterService monsters = new MonsterService(
+        MonsterManager monsters = new MonsterManager(
                 zones, new MonsterPacketWriter(), new PlayerPacketWriter());
 
         assertEquals(2, zones.snapshot().size());
-        monsters.tickLifecycle();
+        monsters.update();
         assertEquals(2, zones.snapshot().size());
 
         assertNotNull(monsters.monsterSnapshots(0, 0));
         assertEquals(2, zones.snapshot().size());
         assertNotNull(monsters.monsterSnapshots(0, 1));
         assertEquals(3, zones.snapshot().size());
-        monsters.tickLifecycle();
+        monsters.update();
         assertEquals(3, zones.snapshot().size());
         assertThrows(IllegalArgumentException.class, () -> monsters.monsterSnapshots(99, 0));
     }
@@ -52,7 +52,7 @@ class MonsterServiceSnapshotTest {
     void monsterSnapshotCreatesZoneWithoutJoiningPlayer() {
         GameplayServices maps = mapsWithMonsters();
 
-        List<MonsterSnapshot> monsters = maps.monsterService().monsterSnapshots(1, 0);
+        List<MonsterSnapshot> monsters = maps.monsterManager().monsterSnapshots(1, 0);
 
         assertEquals(6, monsters.size());
         assertEquals(
@@ -64,28 +64,28 @@ class MonsterServiceSnapshotTest {
     @Test
     void mapZeroZoneStartsWithoutMonsters() {
         GameplayServices maps = mapsWithMonsters();
-        assertTrue(maps.monsterService().monsterSnapshots(0, 0).isEmpty());
+        assertTrue(maps.monsterManager().monsterSnapshots(0, 0).isEmpty());
         assertEquals(0, maps.mapService().memberCount(0, 0));
     }
 
     @Test
     void finishLoadReusesZoneCreatedForMonsterSnapshot() throws Exception {
         GameplayServices maps = mapsWithMonsters();
-        List<MonsterSnapshot> before = maps.monsterService().monsterSnapshots(1, 0);
+        List<MonsterSnapshot> before = maps.monsterManager().monsterSnapshots(1, 0);
         Session joining = session(player(1, 1, 0), maps);
 
         assertEquals(0, maps.mapService().memberCount(1, 0));
         maps.mapService().finishLoad(joining);
 
         assertEquals(1, maps.mapService().memberCount(1, 0));
-        assertEquals(before, maps.monsterService().monsterSnapshots(1, 0));
+        assertEquals(before, maps.monsterManager().monsterSnapshots(1, 0));
     }
 
     @Test
     void differentMap1ZonesStartWithEquivalentSeeds() {
         GameplayServices maps = mapsWithMonsters();
-        List<MonsterSnapshot> zone0 = maps.monsterService().monsterSnapshots(1, 0);
-        List<MonsterSnapshot> zone1 = maps.monsterService().monsterSnapshots(1, 1);
+        List<MonsterSnapshot> zone0 = maps.monsterManager().monsterSnapshots(1, 0);
+        List<MonsterSnapshot> zone1 = maps.monsterManager().monsterSnapshots(1, 1);
 
         assertEquals(zone0, zone1);
         assertEquals(6, zone0.size());
@@ -103,7 +103,7 @@ class MonsterServiceSnapshotTest {
         Thread one = Thread.ofVirtual().start(() -> {
             try {
                 start.await();
-                first.set(maps.monsterService().monsterSnapshots(1, 0));
+                first.set(maps.monsterManager().monsterSnapshots(1, 0));
             } catch (Throwable exception) {
                 failure.compareAndSet(null, exception);
             }
@@ -112,7 +112,7 @@ class MonsterServiceSnapshotTest {
         Thread two = Thread.ofVirtual().start(() -> {
             try {
                 start.await();
-                second.set(maps.monsterService().monsterSnapshots(1, 0));
+                second.set(maps.monsterManager().monsterSnapshots(1, 0));
             } catch (Throwable exception) {
                 failure.compareAndSet(null, exception);
             }

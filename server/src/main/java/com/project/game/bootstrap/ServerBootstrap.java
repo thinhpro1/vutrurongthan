@@ -5,7 +5,7 @@ import com.project.game.combat.CombatService;
 import com.project.game.map.MapService;
 import com.project.game.map.ZoneRegistry;
 import com.project.game.monster.MonsterFactory;
-import com.project.game.monster.MonsterService;
+import com.project.game.monster.MonsterManager;
 import com.project.game.network.ClientConfig;
 import com.project.game.network.NetworkServer;
 import com.project.game.network.packet.MonsterPacketWriter;
@@ -117,7 +117,7 @@ public final class ServerBootstrap {
             ZoneRegistry zones = new ZoneRegistry(mapCatalog, monsterFactory);
             MapService maps = new MapService(zones, playerPackets);
             CombatService combat = new CombatService(zones, playerPackets, monsterPackets);
-            MonsterService monsters = new MonsterService(zones, monsterPackets, playerPackets);
+            MonsterManager monsterManager = new MonsterManager(zones, monsterPackets, playerPackets);
 
             JdbcAccountRepository accountRepository =
                     new JdbcAccountRepository(databaseManager.dataSource());
@@ -128,7 +128,7 @@ public final class ServerBootstrap {
 
             AuthService auth = new AuthService(accountRepository);
             SessionServices services = new SessionServices(
-                    auth, resources, maps, combat, monsters, new PlayerService(playerRepository));
+                    auth, resources, maps, combat, monsterManager, new PlayerService(playerRepository));
             NetworkServer server = new NetworkServer(
                     properties.getProperty("game.network.host", "127.0.0.1"),
                     integer(properties, "game.network.port", 1707),

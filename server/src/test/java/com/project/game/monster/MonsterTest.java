@@ -19,7 +19,7 @@ class MonsterTest {
     void appliesNonLethalDamage() {
         Monster monster = map1Monster();
 
-        Monster.Damage result = monster.applyDamage(7, 10, NOW, RESPAWN_DELAY).orElseThrow();
+        Monster.Damage result = monster.injure(7, 10, NOW, RESPAWN_DELAY).orElseThrow();
 
         assertEquals(new Monster.Damage(101, 10, 290, false, 0L), result);
         assertFalse(result.killed());
@@ -33,7 +33,7 @@ class MonsterTest {
     void clampsLethalDamageToZeroAndMarksDead() {
         Monster monster = map1Monster();
 
-        Monster.Damage result = monster.applyDamage(7, 500, NOW, RESPAWN_DELAY).orElseThrow();
+        Monster.Damage result = monster.injure(7, 500, NOW, RESPAWN_DELAY).orElseThrow();
 
         assertEquals(0, result.hpAfter());
         assertTrue(result.killed());
@@ -46,9 +46,9 @@ class MonsterTest {
     @Test
     void deadMonsterRejectsFurtherDamageUntilRespawn() {
         Monster monster = map1Monster();
-        monster.applyDamage(7, 500, NOW, RESPAWN_DELAY).orElseThrow();
+        monster.injure(7, 500, NOW, RESPAWN_DELAY).orElseThrow();
 
-        assertTrue(monster.applyDamage(8, 10, NOW + 1_000, RESPAWN_DELAY).isEmpty());
+        assertTrue(monster.injure(8, 10, NOW + 1_000, RESPAWN_DELAY).isEmpty());
         assertEquals(0L, monster.snapshot().hp());
         assertEquals(1, monster.snapshot().status());
     }
@@ -57,8 +57,8 @@ class MonsterTest {
     void invalidDamageIsIgnored() {
         Monster monster = map1Monster();
 
-        assertTrue(monster.applyDamage(7, 0, NOW, RESPAWN_DELAY).isEmpty());
-        assertTrue(monster.applyDamage(8, -1, NOW, RESPAWN_DELAY).isEmpty());
+        assertTrue(monster.injure(7, 0, NOW, RESPAWN_DELAY).isEmpty());
+        assertTrue(monster.injure(8, -1, NOW, RESPAWN_DELAY).isEmpty());
         assertEquals(300, monster.snapshot().hp());
     }
 
@@ -67,12 +67,12 @@ class MonsterTest {
         Monster monster = map1Monster();
 
         Monster.Damage result =
-                monster.applyDamage(7, 10, NOW, RESPAWN_DELAY).orElseThrow();
+                monster.injure(7, 10, NOW, RESPAWN_DELAY).orElseThrow();
 
         assertEquals(new Monster.Damage(101, 10, 290, false, 0L), result);
         assertFalse(result.killed());
         assertEquals(0L, result.potentialReward());
-        assertTrue(monster.respawnIfDue(Long.MAX_VALUE).isEmpty());
+        assertTrue(monster.updateRespawn(Long.MAX_VALUE).isEmpty());
         assertTrue(monster.isAlive());
         assertEquals(290L, monster.snapshot().hp());
         assertEquals(0, monster.snapshot().status());
@@ -83,18 +83,18 @@ class MonsterTest {
         Monster monster = map1Monster();
 
         Monster.Damage death =
-                monster.applyDamage(7, 500, NOW, RESPAWN_DELAY).orElseThrow();
+                monster.injure(7, 500, NOW, RESPAWN_DELAY).orElseThrow();
 
         assertTrue(death.killed());
         assertEquals(10L, death.potentialReward());
         assertEquals(0L, death.hpAfter());
         assertFalse(monster.isAlive());
 
-        assertTrue(monster.respawnIfDue(NOW + RESPAWN_DELAY - 1).isEmpty());
-        assertTrue(monster.respawnIfDue(NOW + RESPAWN_DELAY).isEmpty());
+        assertTrue(monster.updateRespawn(NOW + RESPAWN_DELAY - 1).isEmpty());
+        assertTrue(monster.updateRespawn(NOW + RESPAWN_DELAY).isEmpty());
 
         Monster.Respawn respawn =
-                monster.respawnIfDue(NOW + RESPAWN_DELAY + 1).orElseThrow();
+                monster.updateRespawn(NOW + RESPAWN_DELAY + 1).orElseThrow();
 
         assertEquals(new Monster.Respawn(101, 0, 300L), respawn);
         assertTrue(monster.isAlive());
@@ -107,14 +107,14 @@ class MonsterTest {
         Monster monster = map1Monster();
         int runtimeId = monster.id();
 
-        monster.applyDamage(7, 500, NOW, RESPAWN_DELAY).orElseThrow();
+        monster.injure(7, 500, NOW, RESPAWN_DELAY).orElseThrow();
 
         Monster.Respawn first =
-                monster.respawnIfDue(NOW + RESPAWN_DELAY + 1).orElseThrow();
+                monster.updateRespawn(NOW + RESPAWN_DELAY + 1).orElseThrow();
 
         assertEquals(runtimeId, first.monsterId());
         assertEquals(runtimeId, monster.id());
-        assertTrue(monster.respawnIfDue(NOW + RESPAWN_DELAY + 2).isEmpty());
+        assertTrue(monster.updateRespawn(NOW + RESPAWN_DELAY + 2).isEmpty());
         assertTrue(monster.isAlive());
     }
 
@@ -125,8 +125,8 @@ class MonsterTest {
         setIntField(monster, "x", 1111);
         setIntField(monster, "y", 2222);
 
-        monster.applyDamage(7, 500, NOW, RESPAWN_DELAY).orElseThrow();
-        monster.respawnIfDue(NOW + RESPAWN_DELAY + 1).orElseThrow();
+        monster.injure(7, 500, NOW, RESPAWN_DELAY).orElseThrow();
+        monster.updateRespawn(NOW + RESPAWN_DELAY + 1).orElseThrow();
 
         MonsterSnapshot snapshot = monster.snapshot();
         assertEquals(975, snapshot.x());
@@ -150,7 +150,7 @@ class MonsterTest {
     void patrolMovesByExactServerStepAndKeepsSpawnY() {
         Monster monster = map1Monster();
 
-        Monster.Move move = monster.patrolOrReturn().orElseThrow();
+        Monster.Move move = monster.patrol().orElseThrow();
 
         assertEquals(new Monster.Move(101, 979, 936, 1), move);
         assertEquals(979, monster.snapshot().x());
@@ -164,13 +164,13 @@ class MonsterTest {
         setIntField(monster, "x", 1073);
         setIntField(monster, "moveDir", 1);
 
-        Monster.Move boundary = monster.patrolOrReturn().orElseThrow();
+        Monster.Move boundary = monster.patrol().orElseThrow();
 
         assertEquals(1075, boundary.x());
         assertEquals(-1, boundary.dir());
 
         setIntField(monster, "x", 1200);
-        Monster.Move returning = monster.patrolOrReturn().orElseThrow();
+        Monster.Move returning = monster.patrol().orElseThrow();
         assertEquals(1196, returning.x());
         assertEquals(-1, returning.dir());
     }
@@ -182,24 +182,24 @@ class MonsterTest {
         setIntField(monster, "x", 1071);
         setIntField(monster, "moveDir", 1);
 
-        Monster.Move right = monster.patrolOrReturn().orElseThrow();
+        Monster.Move right = monster.patrol().orElseThrow();
 
         assertEquals(1075, right.x());
         assertEquals(-1, right.dir());
 
-        Monster.Move afterRight = monster.patrolOrReturn().orElseThrow();
+        Monster.Move afterRight = monster.patrol().orElseThrow();
         assertEquals(1071, afterRight.x());
         assertEquals(-1, afterRight.dir());
 
         setIntField(monster, "x", 879);
         setIntField(monster, "moveDir", -1);
 
-        Monster.Move left = monster.patrolOrReturn().orElseThrow();
+        Monster.Move left = monster.patrol().orElseThrow();
 
         assertEquals(875, left.x());
         assertEquals(1, left.dir());
 
-        Monster.Move afterLeft = monster.patrolOrReturn().orElseThrow();
+        Monster.Move afterLeft = monster.patrol().orElseThrow();
         assertEquals(879, afterLeft.x());
         assertEquals(1, afterLeft.dir());
     }
@@ -211,12 +211,12 @@ class MonsterTest {
         setIntField(monster, "x", 1071);
         setIntField(monster, "moveDir", 1);
 
-        Monster.Move chase = monster.moveToward(1971).orElseThrow();
+        Monster.Move chase = monster.moveTo(1971).orElseThrow();
 
         assertEquals(1075, chase.x());
         assertEquals(1, chase.dir());
 
-        Monster.Move patrol = monster.patrolOrReturn().orElseThrow();
+        Monster.Move patrol = monster.patrol().orElseThrow();
 
         assertEquals(1071, patrol.x());
         assertEquals(936, patrol.y());
@@ -225,11 +225,11 @@ class MonsterTest {
         setIntField(monster, "x", 879);
         setIntField(monster, "moveDir", -1);
 
-        Monster.Move chaseLeft = monster.moveToward(-21).orElseThrow();
+        Monster.Move chaseLeft = monster.moveTo(-21).orElseThrow();
         assertEquals(875, chaseLeft.x());
         assertEquals(-1, chaseLeft.dir());
 
-        Monster.Move patrolRight = monster.patrolOrReturn().orElseThrow();
+        Monster.Move patrolRight = monster.patrol().orElseThrow();
         assertEquals(879, patrolRight.x());
         assertEquals(1, patrolRight.dir());
     }
@@ -240,11 +240,11 @@ class MonsterTest {
 
         setIntField(monster, "x", 900);
         setIntField(monster, "moveDir", -1);
-        monster.applyDamage(7, 500, NOW, RESPAWN_DELAY).orElseThrow();
+        monster.injure(7, 500, NOW, RESPAWN_DELAY).orElseThrow();
 
-        assertTrue(monster.patrolOrReturn().isEmpty());
+        assertTrue(monster.patrol().isEmpty());
 
-        monster.respawnIfDue(NOW + RESPAWN_DELAY + 1).orElseThrow();
+        monster.updateRespawn(NOW + RESPAWN_DELAY + 1).orElseThrow();
 
         assertEquals(975, monster.snapshot().x());
         assertEquals(936, monster.snapshot().y());
@@ -256,14 +256,14 @@ class MonsterTest {
         Monster monster = map1Monster();
 
         assertThrows(ArithmeticException.class,
-                () -> monster.applyDamage(7, 500, Long.MAX_VALUE - 10, 100));
+                () -> monster.injure(7, 500, Long.MAX_VALUE - 10, 100));
     }
 
     @Test
     void successfulDamageRegistersAttackerAsEnemy() {
         Monster monster = map1Monster();
 
-        monster.applyDamage(7, 10, NOW, RESPAWN_DELAY).orElseThrow();
+        monster.injure(7, 10, NOW, RESPAWN_DELAY).orElseThrow();
 
         assertTrue(monster.hasEnemy(7));
         assertEquals(1, monster.enemyCount());
@@ -274,8 +274,8 @@ class MonsterTest {
     void repeatedDamageKeepsOneEnemyAndAccumulatesBookkeeping() {
         Monster monster = map1Monster();
 
-        monster.applyDamage(7, 10, NOW, RESPAWN_DELAY).orElseThrow();
-        monster.applyDamage(7, 10, NOW + 1, RESPAWN_DELAY).orElseThrow();
+        monster.injure(7, 10, NOW, RESPAWN_DELAY).orElseThrow();
+        monster.injure(7, 10, NOW + 1, RESPAWN_DELAY).orElseThrow();
 
         assertEquals(1, monster.enemyCount());
         assertEquals(List.of(7), monster.enemyPlayerIds());
@@ -284,8 +284,8 @@ class MonsterTest {
     @Test
     void removeEnemyRemovesOnlyRequestedPlayer() {
         Monster monster = map1Monster();
-        monster.applyDamage(7, 10, NOW, RESPAWN_DELAY).orElseThrow();
-        monster.applyDamage(8, 10, NOW + 1, RESPAWN_DELAY).orElseThrow();
+        monster.injure(7, 10, NOW, RESPAWN_DELAY).orElseThrow();
+        monster.injure(8, 10, NOW + 1, RESPAWN_DELAY).orElseThrow();
 
         assertTrue(monster.removeEnemy(7));
 
@@ -298,7 +298,7 @@ class MonsterTest {
     @Test
     void removeMissingEnemyIsHarmless() {
         Monster monster = map1Monster();
-        monster.applyDamage(8, 10, NOW, RESPAWN_DELAY).orElseThrow();
+        monster.injure(8, 10, NOW, RESPAWN_DELAY).orElseThrow();
 
         assertFalse(monster.removeEnemy(7));
 
@@ -309,54 +309,54 @@ class MonsterTest {
     void rejectedOrDeadDamageDoesNotRegisterNewEnemy() {
         Monster monster = map1Monster();
 
-        assertTrue(monster.applyDamage(7, 0, NOW, RESPAWN_DELAY).isEmpty());
-        assertTrue(monster.applyDamage(7, -1, NOW, RESPAWN_DELAY).isEmpty());
-        assertTrue(monster.applyDamage(7, 500, NOW, RESPAWN_DELAY).isPresent());
-        assertTrue(monster.applyDamage(8, 10, NOW + 1, RESPAWN_DELAY).isEmpty());
+        assertTrue(monster.injure(7, 0, NOW, RESPAWN_DELAY).isEmpty());
+        assertTrue(monster.injure(7, -1, NOW, RESPAWN_DELAY).isEmpty());
+        assertTrue(monster.injure(7, 500, NOW, RESPAWN_DELAY).isPresent());
+        assertTrue(monster.injure(8, 10, NOW + 1, RESPAWN_DELAY).isEmpty());
 
         assertEquals(List.of(7), monster.enemyPlayerIds());
-        assertFalse(monster.beginAttackAttemptIfDue(NOW + 1));
+        assertFalse(monster.beginAttack(NOW + 1));
     }
 
     @Test
     void cooldownUsesCanonicalFormulaAndStrictDueTiming() {
         Monster monster = map1Monster();
-        assertEquals(2_000L, monster.attackDelayMillis());
+        assertEquals(2_000L, monster.attackDelay());
 
         for (int id = 1; id <= 5; id++) {
-            monster.applyDamage(id, 1, NOW + id, RESPAWN_DELAY).orElseThrow();
-            assertEquals(Math.max(2_000L - 400L * id, 500L), monster.attackDelayMillis());
+            monster.injure(id, 1, NOW + id, RESPAWN_DELAY).orElseThrow();
+            assertEquals(Math.max(2_000L - 400L * id, 500L), monster.attackDelay());
         }
 
-        assertTrue(monster.beginAttackAttemptIfDue(NOW + 6));
-        assertFalse(monster.beginAttackAttemptIfDue(NOW + 7));
-        assertFalse(monster.beginAttackAttemptIfDue(NOW + 506));
-        assertTrue(monster.beginAttackAttemptIfDue(NOW + 507));
+        assertTrue(monster.beginAttack(NOW + 6));
+        assertFalse(monster.beginAttack(NOW + 7));
+        assertFalse(monster.beginAttack(NOW + 506));
+        assertTrue(monster.beginAttack(NOW + 507));
     }
 
     @Test
     void firstRetaliationIsEligibleOnNextTick() {
         Monster monster = map1Monster();
 
-        monster.applyDamage(7, 10, NOW, RESPAWN_DELAY).orElseThrow();
+        monster.injure(7, 10, NOW, RESPAWN_DELAY).orElseThrow();
 
-        assertTrue(monster.beginAttackAttemptIfDue(NOW + 1));
+        assertTrue(monster.beginAttack(NOW + 1));
     }
 
     @Test
     void respawnClearsEnemiesAndResetsAttackTiming() {
         Monster monster = map1Monster();
-        monster.applyDamage(7, 500, NOW, RESPAWN_DELAY).orElseThrow();
+        monster.injure(7, 500, NOW, RESPAWN_DELAY).orElseThrow();
         assertTrue(monster.hasEnemy(7));
 
-        monster.respawnIfDue(NOW + RESPAWN_DELAY + 1).orElseThrow();
+        monster.updateRespawn(NOW + RESPAWN_DELAY + 1).orElseThrow();
 
         assertEquals(0, monster.enemyCount());
         assertTrue(monster.enemyPlayerIds().isEmpty());
-        assertFalse(monster.beginAttackAttemptIfDue(NOW + RESPAWN_DELAY + 2));
+        assertFalse(monster.beginAttack(NOW + RESPAWN_DELAY + 2));
 
-        monster.applyDamage(8, 10, NOW + RESPAWN_DELAY + 2, RESPAWN_DELAY).orElseThrow();
-        assertTrue(monster.beginAttackAttemptIfDue(NOW + RESPAWN_DELAY + 3));
+        monster.injure(8, 10, NOW + RESPAWN_DELAY + 2, RESPAWN_DELAY).orElseThrow();
+        assertTrue(monster.beginAttack(NOW + RESPAWN_DELAY + 3));
     }
 
     @Test

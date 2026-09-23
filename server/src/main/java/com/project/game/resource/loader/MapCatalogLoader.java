@@ -50,7 +50,6 @@ public final class MapCatalogLoader {
             }
             MapData data = dataById.computeIfAbsent(
                     row.data(), dataId -> MapDataLoader.load(mapDataRoot, dataId));
-            rejectPlatformCollision(row, data);
             waypointsByMap.put(row.id(), new ArrayList<>());
             enabledMaps.put(row.id(), new MapTemplate(
                     row.id(), row.name(), row.type(), row.planet(), row.minZone(), row.maxZone(),
@@ -145,15 +144,6 @@ public final class MapCatalogLoader {
         requireRange(row.goX(), 0, Short.MAX_VALUE, "waypoint goX");
         requireRange(row.goY(), 0, Short.MAX_VALUE, "waypoint goY");
         requireRange(row.type(), 0, 2, "waypoint type");
-    }
-
-    private static void rejectPlatformCollision(MapRepository.MapRow row, MapData data) {
-        if (data.collision().lines().stream()
-                .anyMatch(line -> line.type() == MapData.LineType.PLATFORM)) {
-            throw new IllegalArgumentException(
-                    "map " + row.id() + " uses PLATFORM collision; "
-                            + "PLATFORM requires the later Unity LINE collision cutover");
-        }
     }
 
     private static void validateCoordinates(

@@ -133,6 +133,53 @@ class MapPacketWriterTest {
     }
 
     @Test
+    void serializesMixedBlockAndPlatformLineMapAndKeepsRuntimeBytesAligned() throws Exception {
+        MapTemplate map = mixedLineMap();
+        PlayerProfile player = TestPlayerProfiles.initial(1L, 7, "alpha1", 0)
+                .withLocation(4, 0, 123, 456);
+
+        var reader = new MapPacketWriter()
+                .mapInfo(player, map, true, List.of(), List.of())
+                .reader();
+
+        assertEquals(4, reader.readShort());
+        assertEquals(130, reader.readShort());
+        assertEquals("mixed-line", reader.readUtf());
+        assertEquals(20, reader.readShort());
+        assertEquals(62, reader.readShort());
+        assertEquals("", reader.readUtf());
+        assertEquals(51, reader.readShort());
+        assertEquals(52, reader.readShort());
+        assertEquals(53, reader.readShort());
+        for (int value : List.of(128, 213, 242, 141, 185, 128,
+                90, 154, 64, 69, 153, 51)) {
+            assertEquals(value, reader.readShort());
+        }
+        assertTrue(reader.readBoolean());
+
+        JsonObject line = JsonParser.parseString(reader.readUtf()).getAsJsonObject();
+        assertEquals(4464, line.get("MapWidth").getAsInt());
+        assertEquals(1440, line.get("MapHeight").getAsInt());
+        assertEquals(2, line.getAsJsonArray("Lines").size());
+        assertEquals("BLOCK", line.getAsJsonArray("Lines").get(0)
+                .getAsJsonObject().get("Type").getAsString());
+        assertEquals(List.of(0, 936), point(line, 0));
+        assertEquals("PLATFORM", line.getAsJsonArray("Lines").get(1)
+                .getAsJsonObject().get("Type").getAsString());
+        assertEquals(List.of(1200, 720), point(line, 1, 0));
+
+        assertEquals(0, reader.readByte());
+        assertEquals(123, reader.readShort());
+        assertEquals(456, reader.readShort());
+        assertEquals(0, reader.readByte());
+        assertEquals(0, reader.readByte());
+        assertEquals(0, reader.readByte());
+        assertEquals(0, reader.readShort());
+        assertFalse(reader.readBoolean());
+        assertEquals(0, reader.remaining());
+    }
+
+    @Test
     void cachedMapInfoOmitsTemplateButKeepsRuntimeLayout() throws Exception {
         MapTemplate map = simpleMap(List.of(
                 new Waypoint(1, 2, 100, 200, 300, 400, 0)));
@@ -263,6 +310,25 @@ class MapPacketWriterTest {
         return new MapTemplate(4, "line", "ONLINE", "EARTH", 1, 1, 1, 9, data, List.of());
     }
 
+    private static MapTemplate mixedLineMap() {
+        MapData.Background background = new MapData.Background(
+                List.of(128, 213, 242),
+                List.of(
+                        new MapData.Layer(51, List.of(141, 185, 128)),
+                        new MapData.Layer(52, List.of(90, 154, 64)),
+                        new MapData.Layer(53, List.of(69, 153, 51))));
+        MapData.Line block = new MapData.Line(MapData.LineType.BLOCK, List.of(
+                new MapData.Point(0, 936), new MapData.Point(720, 936),
+                new MapData.Point(720, 1152), new MapData.Point(4464, 1152),
+                new MapData.Point(4464, 1440), new MapData.Point(0, 1440),
+                new MapData.Point(0, 936)));
+        MapData.Line platform = new MapData.Line(MapData.LineType.PLATFORM, List.of(
+                new MapData.Point(1200, 720), new MapData.Point(1800, 720)));
+        MapData data = new MapData(9, 130, 20, 62, background,
+                new MapData.Collision(MapData.CollisionType.LINE, null, List.of(block, platform)));
+        return new MapTemplate(4, "mixed-line", "ONLINE", "EARTH", 1, 1, 1, 9, data, List.of());
+    }
+
     private static MapTemplate simpleMap(List<Waypoint> waypoints) {
         return simpleMapWithImages(waypoints, -1, -1, -1);
     }
@@ -280,8 +346,12 @@ class MapPacketWriterTest {
     }
 
     private static List<Integer> point(JsonObject line, int index) {
-        var point = line.getAsJsonArray("Lines").get(0).getAsJsonObject()
-                .getAsJsonArray("Points").get(index).getAsJsonArray();
+        return point(line, 0, index);
+    }
+
+    private static List<Integer> point(JsonObject line, int lineIndex, int pointIndex) {
+        var point = line.getAsJsonArray("Lines").get(lineIndex).getAsJsonObject()
+                .getAsJsonArray("Points").get(pointIndex).getAsJsonArray();
         return List.of(point.get(0).getAsInt(), point.get(1).getAsInt());
     }
 

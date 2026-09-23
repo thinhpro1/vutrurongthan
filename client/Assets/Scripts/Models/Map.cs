@@ -45,6 +45,8 @@ namespace Assets.Scripts.Models
 
         public static MapTemplate template;
 
+        public static bool isDropThrough = false;
+
         public static int cmxMini;
 
         public static int cmyMini;
@@ -246,11 +248,12 @@ namespace Assets.Scripts.Models
             {
                 return true;
             }
-            // Ray casting: cast horizontal ray from (px, py) to the right
-            // Count intersections with ALL line segments (ground + block)
+            // Ray casting: cast horizontal ray from (px, py) to the right.
+            // Only closed BLOCK polygons participate in the fill test.
             int crossings = 0;
             foreach (TerrainLine line in template.terrainLines)
             {
+                if (line.type != TerrainLineType.Block) continue;
                 if (line.points.Count < 2) continue;
                 for (int i = 0; i < line.points.Count - 1; i++)
                 {
@@ -269,24 +272,68 @@ namespace Assets.Scripts.Models
                     }
                 }
             }
-            return (crossings % 2) == 1;
+            if ((crossings % 2) == 1)
+            {
+                return true;
+            }
+
+            if (isDropThrough)
+            {
+                return false;
+            }
+
+            foreach (TerrainLine line in template.terrainLines)
+            {
+                if (line.type != TerrainLineType.Platform || line.points.Count < 2) continue;
+                float? groundY = GetLineYAtX(line, px);
+                if (groundY.HasValue && py > groundY.Value && py <= groundY.Value + 8)
+                {
+                    return true;
+                }
+            }
+            return false;
         }
 
         private static int GetYSdLine(int xSd)
         {
             int bestY = height;
+            bool foundSurface = false;
             foreach (TerrainLine line in template.terrainLines)
             {
                 if (line.points.Count >= 2)
                 {
                     float? groundY = GetLineYAtX(line, xSd);
-                    if (groundY.HasValue && (int)groundY.Value < bestY)
+                    if (groundY.HasValue)
                     {
-                        bestY = (int)groundY.Value;
+                        foundSurface = true;
+                        if ((int)groundY.Value < bestY)
+                        {
+                            bestY = (int)groundY.Value;
+                        }
                     }
                 }
             }
-            return bestY;
+            return foundSurface ? bestY + 1 : height;
+        }
+
+        public static int CheckPlatformCrossing(int px, int fromY, int toY)
+        {
+            if (template == null || !template.isLine || isDropThrough)
+            {
+                return -1;
+            }
+
+            int highest = int.MaxValue;
+            foreach (TerrainLine line in template.terrainLines)
+            {
+                if (line.type != TerrainLineType.Platform || line.points.Count < 2) continue;
+                float? platformY = GetLineYAtX(line, px);
+                if (platformY.HasValue && fromY < platformY.Value && toY > platformY.Value)
+                {
+                    highest = Math.Min(highest, (int)platformY.Value);
+                }
+            }
+            return highest == int.MaxValue ? -1 : highest;
         }
 
         private static float? GetLineYAtX(TerrainLine line, float x)

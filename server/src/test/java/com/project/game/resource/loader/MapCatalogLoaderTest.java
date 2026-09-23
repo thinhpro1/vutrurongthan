@@ -196,7 +196,7 @@ class MapCatalogLoaderTest {
     }
 
     @Test
-    void rejectsEnabledPlatformCollisionBeforeGameplayComposition(@TempDir Path root) throws IOException {
+    void composesEnabledPlatformCollisionIntoCanonicalMapTemplate(@TempDir Path root) throws IOException {
         Files.writeString(root.resolve("1.json"), """
                 {
                   "terrain": 0,
@@ -219,12 +219,16 @@ class MapCatalogLoaderTest {
                 }
                 """, StandardCharsets.UTF_8);
 
-        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
-                () -> MapCatalogLoader.load(repository(
+        MapTemplate template = MapCatalogLoader.load(repository(
                         List.of(map(0, "Platform map", "ONLINE", "EARTH", 1, 1, 1, 1, true)),
-                        List.of()), root));
+                        List.of()), root)
+                .get(0);
 
-        assertTrue(exception.getMessage().contains("PLATFORM"));
+        assertEquals(MapData.CollisionType.LINE, template.data().collision().type());
+        assertEquals(1, template.data().collision().lines().size());
+        assertEquals(MapData.LineType.PLATFORM, template.data().collision().lines().get(0).type());
+        assertEquals(List.of(new MapData.Point(0, 0), new MapData.Point(72, 0)),
+                template.data().collision().lines().get(0).points());
     }
 
     @Test

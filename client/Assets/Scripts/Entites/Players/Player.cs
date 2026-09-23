@@ -1249,98 +1249,125 @@ namespace Assets.Scripts.Entites.Players
 
         private void UpdateFall()
         {
-            if ((x <= 50 && vx < 0) || (x >= Map.width - 50 && vx > 0))
+            bool dropThrough = isMoveDown && Map.template != null && Map.template.isLine;
+            Map.isDropThrough = dropThrough;
+            try
             {
-                vx = 0;
-            }
-            if (y + 12 >= Map.height)
-            {
-                SetStatus(PlayerStatus.STAND);
-                vx = 0;
-                vy = 0;
-                return;
-            }
-            if (IsWallBottom())
-            {
-                if (Equals(me) && (y - ySend != 0 || x - xSend != 0))
+                if ((x <= 50 && vx < 0) || (x >= Map.width - 50 && vx > 0))
                 {
-                    Service.instance.PlayerMove();
+                    vx = 0;
                 }
-                SetStatus(PlayerStatus.STAND);
-                vx = 0;
-                vy = 0;
-                AddEffectMove(1);
-                return;
-            }
-            vy++;
-            if (vy > speed * 3 / 2)
-            {
-                vy = speed * 3 / 2;
-            }
-            x += vx;
-            y += vy;
-            while (IsWallBottom(-1))
-            {
-                y--;
-            }
-            if (IsWallMid())
-            {
-                vx = 0;
-                if (Map.template != null && Map.template.isLine)
+                if (y + 12 >= Map.height)
                 {
-                    x -= dir;
+                    SetStatus(PlayerStatus.STAND);
+                    vx = 0;
+                    vy = 0;
+                    return;
                 }
-                else if (dir == 1)
+                if (IsWallBottom())
                 {
-                    x = Map.GetTileXofPixel(x + w / 2) + w / 2;
+                    if (Equals(me) && (y - ySend != 0 || x - xSend != 0))
+                    {
+                        Service.instance.PlayerMove();
+                    }
+                    SetStatus(PlayerStatus.STAND);
+                    vx = 0;
+                    vy = 0;
+                    AddEffectMove(1);
+                    return;
+                }
+                vy++;
+                if (vy > speed * 3 / 2)
+                {
+                    vy = speed * 3 / 2;
+                }
+                int previousY = y;
+                x += vx;
+                y += vy;
+                if (!dropThrough && Map.template != null && Map.template.isLine)
+                {
+                    int platformY = Map.CheckPlatformCrossing(x, previousY, y);
+                    if (platformY >= 0)
+                    {
+                        y = platformY;
+                        vx = 0;
+                        vy = 0;
+                        if (Equals(me) && (y - ySend != 0 || x - xSend != 0))
+                        {
+                            Service.instance.PlayerMove();
+                        }
+                        SetStatus(PlayerStatus.STAND);
+                        AddEffectMove(1);
+                        return;
+                    }
+                }
+                while (IsWallBottom(-1))
+                {
+                    y--;
+                }
+                if (IsWallMid())
+                {
+                    vx = 0;
+                    if (Map.template != null && Map.template.isLine)
+                    {
+                        x -= dir;
+                    }
+                    else if (dir == 1)
+                    {
+                        x = Map.GetTileXofPixel(x + w / 2) + w / 2;
+                    }
+                    else
+                    {
+                        x = Map.GetTileXofPixel(x - w / 2 - 1) + Map.size + w / 2;
+                    }
+                }
+                if (IsWallBottom())
+                {
+                    if (Equals(me) && (y - ySend != 0 || x - xSend != 0))
+                    {
+                        Service.instance.PlayerMove();
+                    }
+                    vx = (vy = 0);
+                    SetStatus(PlayerStatus.STAND);
+                    AddEffectMove(1);
+                    return;
+                }
+                if (mount != null && mount.isShow)
+                {
+                    frameTick++;
+                    if (frameTick > 30)
+                    {
+                        frameTick = 0;
+                    }
+                    int index = 0;
+                    if (frameTick % 15 >= 5)
+                    {
+                        index = 1;
+                    }
+                    if (head != null)
+                    {
+                        head.icon = head.template.stand[index];
+                    }
+                    if (body != null)
+                    {
+                        body.icon = body.template.stand[index];
+                    }
                 }
                 else
                 {
-                    x = Map.GetTileXofPixel(x - w / 2 - 1) + Map.size + w / 2;
+                    if (head != null)
+                    {
+                        head.icon = head.template.fall;
+                    }
+                    if (body != null)
+                    {
+                        body.icon = body.template.fall;
+                    }
                 }
             }
-            if (IsWallBottom())
+            finally
             {
-                if (Equals(me) && (y - ySend != 0 || x - xSend != 0))
-                {
-                    Service.instance.PlayerMove();
-                }
-                vx = (vy = 0);
-                SetStatus(PlayerStatus.STAND);
-                AddEffectMove(1);
-                return;
-            }
-            if (mount != null && mount.isShow)
-            {
-                frameTick++;
-                if (frameTick > 30)
-                {
-                    frameTick = 0;
-                }
-                int index = 0;
-                if (frameTick % 15 >= 5)
-                {
-                    index = 1;
-                }
-                if (head != null)
-                {
-                    head.icon = head.template.stand[index];
-                }
-                if (body != null)
-                {
-                    body.icon = body.template.stand[index];
-                }
-            }
-            else
-            {
-                if (head != null)
-                {
-                    head.icon = head.template.fall;
-                }
-                if (body != null)
-                {
-                    body.icon = body.template.fall;
-                }
+                Map.isDropThrough = false;
             }
         }
 
@@ -1354,7 +1381,7 @@ namespace Assets.Scripts.Entites.Players
                 vy = 5;
                 return;
             }
-            if (y - h < 0 || Map.IsWall(x, y - h))
+            if (y - h < 0 || IsWallIgnoringPlatforms(x, y - h))
             {
                 if (y - h < 0)
                 {
@@ -1504,6 +1531,28 @@ namespace Assets.Scripts.Entites.Players
         private void UpdateRun()
         {
             x += vx;
+            if (Map.template != null && Map.template.isLine)
+            {
+                int slopeRange = Math.Abs(vx) + 2;
+                if (IsWallBottom())
+                {
+                    for (int step = 0; step < slopeRange && IsWallBottom(); step++)
+                    {
+                        y--;
+                    }
+                }
+                else
+                {
+                    for (int step = 0; step < slopeRange; step++)
+                    {
+                        y++;
+                        if (IsWallBottom())
+                        {
+                            break;
+                        }
+                    }
+                }
+            }
             if (IsWallMid())
             {
                 vx = 0;
@@ -1582,7 +1631,7 @@ namespace Assets.Scripts.Entites.Players
             {
                 AddEffectMove(1);
             }
-            if (Map.IsWall(x, y - h - vy) && vy < 0)
+            if (IsWallIgnoringPlatforms(x, y - h - vy) && vy < 0)
             {
                 vy = 1;
             }
@@ -1627,7 +1676,7 @@ namespace Assets.Scripts.Entites.Players
                 vx = 0;
                 return;
             }
-            if (Map.IsWall(x, y - h) || (y - h) < 0)
+            if (IsWallIgnoringPlatforms(x, y - h) || (y - h) < 0)
             {
                 if (Equals(me) && x - xSend != 0)
                 {
@@ -2642,6 +2691,24 @@ namespace Assets.Scripts.Entites.Players
                 isLockKey = true;
             }
             isFusion = true;
+        }
+
+        private bool IsWallIgnoringPlatforms(int px, int py)
+        {
+            if (Map.template == null || !Map.template.isLine)
+            {
+                return Map.IsWall(px, py);
+            }
+
+            Map.isDropThrough = true;
+            try
+            {
+                return Map.IsWall(px, py);
+            }
+            finally
+            {
+                Map.isDropThrough = false;
+            }
         }
 
         public bool IsWallMid()

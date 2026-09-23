@@ -98,7 +98,24 @@ namespace Assets.Scripts.Models
         private void ParseOneLine(string lineJson)
         {
             TerrainLine line = new TerrainLine();
-            line.type = TerrainLineType.Block; // All lines are block polygons
+            int typeIdx = lineJson.IndexOf("\"Type\"");
+            if (typeIdx < 0) typeIdx = lineJson.IndexOf("\"type\"");
+            line.type = TerrainLineType.Block;
+            if (typeIdx >= 0)
+            {
+                int typeStart = lineJson.IndexOf(':', typeIdx) + 1;
+                int typeQuoteStart = lineJson.IndexOf('"', typeStart);
+                int typeQuoteEnd = lineJson.IndexOf('"', typeQuoteStart + 1);
+                string typeName = lineJson.Substring(typeQuoteStart + 1, typeQuoteEnd - typeQuoteStart - 1);
+                if (string.Equals(typeName, "PLATFORM", StringComparison.OrdinalIgnoreCase))
+                {
+                    line.type = TerrainLineType.Platform;
+                }
+                else if (!string.Equals(typeName, "BLOCK", StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new FormatException("Unknown terrain line type: " + typeName);
+                }
+            }
             // Parse points - support both "Points": ["x, y"] (MapTool) and "points": [[x,y]]
             int ptsIdx = lineJson.IndexOf("\"Points\"");
             if (ptsIdx < 0) ptsIdx = lineJson.IndexOf("\"points\"");
@@ -194,7 +211,8 @@ namespace Assets.Scripts.Models
     // Line collision data types
     public enum TerrainLineType
     {
-        Block = 0
+        Block = 0,
+        Platform = 1
     }
 
     public class LinePoint

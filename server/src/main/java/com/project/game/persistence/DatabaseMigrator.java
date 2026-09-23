@@ -51,7 +51,7 @@ public final class DatabaseMigrator {
 
         try (Connection connection = dataSource.getConnection()) {
             boolean lockAcquired = false;
-            RuntimeException failure = null;
+            Throwable failure = null;
             try {
                 Integer lockResult = callLock(connection, "SELECT GET_LOCK(?, ?)", 30);
                 if (!Integer.valueOf(1).equals(lockResult)) {
@@ -69,11 +69,16 @@ public final class DatabaseMigrator {
                     }
                 }
             } catch (SQLException exception) {
-                failure = new IllegalStateException("database migration failed", exception);
-                throw failure;
+                IllegalStateException wrapped =
+                        new IllegalStateException("database migration failed", exception);
+                failure = wrapped;
+                throw wrapped;
             } catch (RuntimeException exception) {
                 failure = exception;
                 throw exception;
+            } catch (Error error) {
+                failure = error;
+                throw error;
             } finally {
                 if (lockAcquired) {
                     try {
@@ -91,6 +96,12 @@ public final class DatabaseMigrator {
                             failure.addSuppressed(releaseFailure);
                         } else {
                             throw releaseFailure;
+                        }
+                    } catch (Error error) {
+                        if (failure != null) {
+                            failure.addSuppressed(error);
+                        } else {
+                            throw error;
                         }
                     }
                 }

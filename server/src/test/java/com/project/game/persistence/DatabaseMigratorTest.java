@@ -185,6 +185,37 @@ class DatabaseMigratorTest {
     }
 
     @Test
+    void errorRemainsPrimaryWhenReleaseAlsoFails(@TempDir Path directory) throws Exception {
+        write(directory, "V001__one.sql", "ONE; FAIL;");
+        FakeDatabase database = new FakeDatabase();
+        database.failWithErrorOnStatement("FAIL");
+        database.releaseResult = 0;
+
+        AssertionError failure = assertThrows(AssertionError.class,
+                () -> DatabaseMigrator.migrate(database, directory));
+
+        assertEquals("synthetic migration error", failure.getMessage());
+        assertEquals(1, failure.getSuppressed().length);
+        assertTrue(failure.getSuppressed()[0].getMessage()
+                .contains("failed to release database migration lock"));
+    }
+
+    @Test
+    void errorRemainsPrimaryWhenReleaseThrowsError(@TempDir Path directory) throws Exception {
+        write(directory, "V001__one.sql", "ONE; FAIL;");
+        FakeDatabase database = new FakeDatabase();
+        database.failWithErrorOnStatement("FAIL");
+        database.releaseError = new AssertionError("synthetic release error");
+
+        AssertionError failure = assertThrows(AssertionError.class,
+                () -> DatabaseMigrator.migrate(database, directory));
+
+        assertEquals("synthetic migration error", failure.getMessage());
+        assertEquals(1, failure.getSuppressed().length);
+        assertEquals("synthetic release error", failure.getSuppressed()[0].getMessage());
+    }
+
+    @Test
     void repeatsAppliedMigrationWithoutExecutingDdl(@TempDir Path directory) throws Exception {
         Path migration = write(directory, "V001__one.sql", "ONE;");
         FakeDatabase database = new FakeDatabase();
@@ -311,7 +342,9 @@ class DatabaseMigratorTest {
         private final List<HistoryRow> historyRows = new ArrayList<>();
         private Integer lockResult = 1;
         private Integer releaseResult = 1;
+        private Error releaseError;
         private String failingStatement;
+        private String failingErrorStatement;
         private int lockCalls;
         private int releaseCalls;
 
@@ -351,6 +384,10 @@ class DatabaseMigratorTest {
 
         void failOnStatement(String statement) {
             failingStatement = statement;
+        }
+
+        void failWithErrorOnStatement(String statement) {
+            failingErrorStatement = statement;
         }
 
         private Connection connectionProxy() {
@@ -407,6 +444,9 @@ class DatabaseMigratorTest {
             if (upper.contains(RELEASE_LOCK)) {
                 releaseCalls++;
                 events.add(RELEASE_LOCK);
+                if (releaseError != null) {
+                    throw releaseError;
+                }
                 List<Object[]> rows = new ArrayList<>();
                 rows.add(new Object[]{releaseResult});
                 return resultSet(rows);
@@ -426,6 +466,9 @@ class DatabaseMigratorTest {
                             } else {
                                 executedStatements.add(sql);
                                 events.add(sql);
+                                if (Objects.equals(sql, failingErrorStatement)) {
+                                    throw new AssertionError("synthetic migration error");
+                                }
                                 if (Objects.equals(sql, failingStatement)) {
                                     throw new SQLException("synthetic migration failure");
                                 }

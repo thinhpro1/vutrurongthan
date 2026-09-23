@@ -103,19 +103,39 @@ mvn `
 
 ### Real MySQL map/monster bootstrap smoke
 
-Không có automated real-DB test riêng cho map/monster catalog tại baseline này; không được coi Maven test thường là bằng chứng cho real MySQL readiness. Smoke thủ công cần xác nhận:
-
-1. Cả sáu bảng runtime tồn tại: `account`, `player`, `map_template`, `map_waypoint`, `monster_template`, `monster_spawn`.
-2. Catalog map/monster có row production hợp lệ: enabled map, waypoint topology hợp lệ, monster template tồn tại và spawn references hợp lệ.
-3. Các resource được cấu hình tồn tại: `resources/maps/{data}.json` và `resources/json/MonsterDartTemplate.json`.
-4. `ServerBootstrap` compose thành công trước khi `NetworkServer` start.
-
-Nếu chưa populate dữ liệu production/local map/monster, readiness là:
+Maven test thường không thay thế cho real-MySQL gate. Startup production compose theo thứ tự:
 
 ```text
-REAL DB CATALOG GATE:
-BLOCKED — production map/monster rows not populated
+DatabaseMigrator
+→ DatabaseCatalogSeeder
+→ JdbcMapRepository / MapCatalogLoader
+→ JdbcMonsterRepository / MonsterCatalogLoader
+→ phần composition còn lại của ServerBootstrap
 ```
+
+Smoke gate dùng MySQL đi kèm XAMPP, không dùng Windows service `MySQL80` làm kiểm tra authoritative
+và không yêu cầu `mysql` nằm trong `PATH`:
+
+```powershell
+$mysql = 'C:\xampp\mysql\bin\mysql.exe'
+
+& $mysql -h 127.0.0.1 -P 3306 -u root `
+  -e "SELECT VERSION() AS version, @@port AS port;"
+```
+
+Chỉ dùng database disposable, ví dụ `rongthanchibi_catalog_seed_test`, cho các bước có `DROP DATABASE`
+hoặc recreate. Không chạy lệnh destructive trên database production `rongthanchibi`.
+
+Ba trường hợp real-DB phải được kiểm tra:
+
+1. **Fresh database:** sau schema migration và normal bootstrap, bốn bảng catalog có đúng
+   `map_template=2`, `map_waypoint=2`, `monster_template=1`, `monster_spawn=6`; các resource/reference
+   hợp lệ và `ServerBootstrap` compose thành công mà không gọi `NetworkServer.start()`.
+2. **Second bootstrap:** chạy lại normal bootstrap trên cùng database phải thành công, không có catalog
+   change nào, giữ nguyên row counts, values và các ID đã được database cấp.
+3. **Existing catalog:** nếu bất kỳ một trong bốn bảng catalog đã có row, `DatabaseCatalogSeeder` phải
+   thực hiện zero writes và giữ nguyên catalog hiện có; `MapCatalogLoader` và `MonsterCatalogLoader`
+   chịu trách nhiệm validate catalog đó cho runtime.
 
 ## TLS 1.3 tùy chọn
 

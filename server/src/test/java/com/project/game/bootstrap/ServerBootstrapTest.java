@@ -123,7 +123,7 @@ class ServerBootstrapTest {
             }
             assertThrows(IllegalStateException.class, () -> ServerBootstrap.fromProperties(
                     properties, ServerBootstrapTest::databaseManager,
-                    ignored -> mapRepository(canonicalMapRows()),
+                    ignored -> mapRepository(bootstrapFixtureMapRows()),
                     ignored -> com.project.game.testsupport.MonsterTestSupport.canonicalRepository(),
                     NO_MIGRATION, NO_CATALOG_SEED));
         }
@@ -141,7 +141,7 @@ class ServerBootstrapTest {
         };
 
         assertThrows(NumberFormatException.class, () -> ServerBootstrap.fromProperties(
-                properties, managerFactory, ignored -> mapRepository(canonicalMapRows()),
+                properties, managerFactory, ignored -> mapRepository(bootstrapFixtureMapRows()),
                 ignored -> com.project.game.testsupport.MonsterTestSupport.canonicalRepository(),
                 NO_MIGRATION, NO_CATALOG_SEED));
 
@@ -156,7 +156,7 @@ class ServerBootstrapTest {
                     DatabaseManager manager = databaseManager();
                     createdManager.set(manager);
                     return manager;
-                }, ignored -> mapRepository(canonicalMapRows()),
+                }, ignored -> mapRepository(bootstrapFixtureMapRows()),
                 ignored -> com.project.game.testsupport.MonsterTestSupport.canonicalRepository(),
                 NO_MIGRATION, NO_CATALOG_SEED);
 
@@ -175,7 +175,7 @@ class ServerBootstrapTest {
                     return databaseManager();
                 }, ignored -> {
                     events.add("map");
-                    return mapRepository(canonicalMapRows());
+                    return mapRepository(bootstrapFixtureMapRows());
                 }, ignored -> {
                     events.add("monster");
                     return com.project.game.testsupport.MonsterTestSupport.canonicalRepository();
@@ -204,7 +204,7 @@ class ServerBootstrapTest {
                             return manager;
                         }, ignored -> {
                             mapFactoryCalled.set(true);
-                            return mapRepository(canonicalMapRows());
+                            return mapRepository(bootstrapFixtureMapRows());
                         }, ignored -> {
                             monsterFactoryCalled.set(true);
                             return com.project.game.testsupport.MonsterTestSupport.canonicalRepository();
@@ -219,7 +219,7 @@ class ServerBootstrapTest {
     }
 
     @Test
-    void exposesOnlyTheExplicitMigrationTestEntryPoint() {
+    void exposesOnlyTheExplicitPersistenceBootstrapTestEntryPoint() {
         long fromPropertiesMethods = java.util.Arrays.stream(ServerBootstrap.class.getDeclaredMethods())
                 .filter(method -> method.getName().equals("fromProperties"))
                 .count();
@@ -240,7 +240,7 @@ class ServerBootstrapTest {
                             return manager;
                         }, ignored -> {
                             mapFactoryCalled.set(true);
-                            return mapRepository(canonicalMapRows());
+                            return mapRepository(bootstrapFixtureMapRows());
                         }, ignored -> {
                             monsterFactoryCalled.set(true);
                             return com.project.game.testsupport.MonsterTestSupport.canonicalRepository();
@@ -325,7 +325,7 @@ class ServerBootstrapTest {
                             DatabaseManager manager = databaseManager();
                             createdManager.set(manager);
                             return manager;
-                        }, ignored -> mapRepository(canonicalMapRows()), ignored -> {
+                        }, ignored -> mapRepository(bootstrapFixtureMapRows()), ignored -> {
                             throw new IllegalStateException("monster repository failure");
                         }, NO_MIGRATION, NO_CATALOG_SEED));
 
@@ -342,7 +342,7 @@ class ServerBootstrapTest {
                             DatabaseManager manager = databaseManager();
                             createdManager.set(manager);
                             return manager;
-                        }, ignored -> mapRepository(canonicalMapRows()),
+                        }, ignored -> mapRepository(bootstrapFixtureMapRows()),
                         ignored -> new com.project.game.persistence.monster.MonsterRepository() {
                             @Override
                             public List<TemplateRow> findAllTemplates() {
@@ -369,7 +369,7 @@ class ServerBootstrapTest {
 
         ServerBootstrap bootstrap = ServerBootstrap.fromProperties(
                 properties, ServerBootstrapTest::databaseManager,
-                ignored -> mapRepository(canonicalMapRows()),
+                ignored -> mapRepository(bootstrapFixtureMapRows()),
                 ignored -> com.project.game.testsupport.MonsterTestSupport.canonicalRepository(),
                 NO_MIGRATION, NO_CATALOG_SEED);
 
@@ -521,7 +521,7 @@ class ServerBootstrapTest {
         return properties;
     }
 
-    private static List<MapRepository.MapRow> canonicalMapRows() {
+    private static List<MapRepository.MapRow> bootstrapFixtureMapRows() {
         return List.of(
                 new MapRepository.MapRow(
                         0, "Núi Paozu", "ONLINE", "EARTH", 1, 3, 40, 1, true),

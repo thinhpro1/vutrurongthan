@@ -217,28 +217,39 @@ class DatabaseCatalogSeederTest {
         List<String> statements = DatabaseMigrator.splitStatements(sql);
 
         assertEquals(4, statements.size());
-        String normalized = sql.replaceAll("\\s+", " ").toLowerCase(Locale.ROOT);
-        assertTrue(normalized.contains("(0, 'núi paozu', 'online', 'earth', 10, 100, 15, 1, true)"));
-        assertTrue(normalized.contains("(1, 'bờ sông pu', 'online', 'earth', 10, 100, 15, 2, true)"));
-        assertTrue(normalized.contains("(0, 4464, 936, 1, 1, 90, 1008)"));
-        assertTrue(normalized.contains("(1, 0, 1008, 0, 0, 4374, 936)"));
-        assertTrue(normalized.contains(
-                "(1, 'hổ nanh kiếm', 2, 300, 10, 10, 100, 1, 1, 0, "
-                        + "'[11818,11819,11820,11821,11822]', '[11823]', '[11824]', 175, 95)"));
-        for (String spawn : List.of(
-                "(1, 1, 975, 936)",
-                "(1, 1, 1348, 936)",
-                "(1, 1, 1800, 936)",
-                "(1, 1, 2250, 936)",
-                "(1, 1, 2600, 936)",
-                "(1, 1, 2950, 936)")) {
-            assertTrue(normalized.contains(spawn), spawn);
-        }
+        assertEquals(
+                "insert into map_template (id, name, type, planet, min_zone, max_zone, "
+                        + "max_player, data, enabled) values "
+                        + "(0, 'núi paozu', 'online', 'earth', 10, 100, 15, 1, true), "
+                        + "(1, 'bờ sông pu', 'online', 'earth', 10, 100, 15, 2, true)",
+                normalizeSql(statements.get(0)));
+        assertEquals(
+                "insert into map_waypoint (map_id, x, y, type, go_map, go_x, go_y) values "
+                        + "(0, 4464, 936, 1, 1, 90, 1008), "
+                        + "(1, 0, 1008, 0, 0, 4374, 936)",
+                normalizeSql(statements.get(1)));
+        assertEquals(
+                "insert into monster_template (id, name, level, hp, damage, potential_reward, "
+                        + "range_move, speed, type_move, dart_id, icon_move, icon_attack, "
+                        + "icon_injure, w, h) values (1, 'hổ nanh kiếm', 2, 300, 10, 10, 100, "
+                        + "1, 1, 0, '[11818,11819,11820,11821,11822]', '[11823]', '[11824]', "
+                        + "175, 95)",
+                normalizeSql(statements.get(2)));
+        assertEquals(
+                "insert into monster_spawn (map_id, monster_id, x, y) values "
+                        + "(1, 1, 975, 936), (1, 1, 1348, 936), (1, 1, 1800, 936), "
+                        + "(1, 1, 2250, 936), (1, 1, 2600, 936), (1, 1, 2950, 936)",
+                normalizeSql(statements.get(3)));
+        String normalized = normalizeSql(sql);
         for (String forbidden : List.of(
                 "UPDATE", "DELETE", "TRUNCATE", "DROP", "ALTER", "REPLACE",
                 "ON DUPLICATE KEY", "INSERT IGNORE", "CREATE")) {
             assertFalse(normalized.contains(forbidden.toLowerCase(Locale.ROOT)), forbidden);
         }
+    }
+
+    private static String normalizeSql(String sql) {
+        return sql.replaceAll("\\s+", " ").trim().toLowerCase(Locale.ROOT);
     }
 
     private static Path write(Path directory, String name, String sql) throws Exception {

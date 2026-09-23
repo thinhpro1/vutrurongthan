@@ -2,12 +2,12 @@
 
 > **Status:** Authoritative server architecture contract  
 > **Scope:** `server/**`  
-> **Audited baseline:** `cd1e9f65839ffc94958ec6fefbc4ea88ebd8ad37`
+> **Audited baseline:** `10197ca43cc5bb294d00720b49aaf78fa56bb2b2`
 >
 > Mục tiêu của tài liệu này là giữ server **dễ tìm code, dễ đọc, dễ sửa và khó phá nhầm** khi project lớn dần.
 > Readability quan trọng hơn việc ép code tuân thủ 100% một Design Pattern.
 >
-> **Bắt buộc với coding model:** trước khi sửa server, phải đọc file này. Nếu implementation định làm khác tài liệu này, phải nêu rõ điểm xung đột và được chấp thuận trước.
+> **Bắt buộc với coding model:** trước khi planning, reviewing, testing hoặc sửa server, phải đọc file này và companion `SERVER_FEATURE_READABILITY_RULES.md`. Nếu implementation định làm khác các tài liệu này, phải nêu rõ điểm xung đột và được chấp thuận trước.
 
 ---
 
@@ -18,9 +18,10 @@ Khi các tài liệu server mâu thuẫn nhau:
 ```text
 1. Production code + database/protocol contract hiện tại
 2. SERVER_ARCHITECTURE_RULES_UPDATED.md (this document)
-3. Feature design/spec mới được duyệt sau file này
-4. server/README.md
-5. Các plan/spec cũ
+3. SERVER_FEATURE_READABILITY_RULES.md cho feature structure, gameplay naming và readability
+4. Feature design/spec mới được duyệt sau các rule này
+5. server/README.md
+6. Các plan/spec cũ
 ```
 
 Các file cũ như:
@@ -866,6 +867,11 @@ Config    = configuration values
 Validator = validation là responsibility chính
 ```
 
+Trong gameplay, `Manager` là tên hợp lệ khi feature cần một authority cho
+collection/catalog, init, create, find, registration hoặc lifecycle/update.
+Không mặc định dùng `Service` làm feature center; `Service` chỉ phù hợp khi
+đang diễn tả một use-case thật sự qua nhiều owner.
+
 Không thêm suffix chỉ để class nghe “enterprise” hơn.
 
 ## 16.3 `Legacy`, `Runtime`, `Initial`, `Compatibility`, `Resource`
@@ -904,16 +910,10 @@ upgrade
 ...
 ```
 
-Ví dụ:
-
-```text
-Npc / NpcTemplate / NpcService
-Boss / BossTemplate / BossService
-Item / ItemTemplate / ItemService
-Skill / SkillTemplate / SkillService
-```
-
-Nhưng **không tạo đủ bộ chỉ vì convention tồn tại**. Chỉ tạo type khi feature có responsibility thật tương ứng.
+Ví dụ và quy tắc chọn `Manager`/`Service` cho các feature mới thuộc companion
+`SERVER_FEATURE_READABILITY_RULES.md`. Không mặc định tạo `Service`; chỉ tạo
+`Manager`, `Template` hoặc supporting type khi feature thực sự có ownership,
+static definition hoặc contract tương ứng.
 
 Rename-only nên làm riêng, không trộn gameplay/concurrency/protocol behavior change.
 
@@ -922,6 +922,11 @@ Rename-only nên làm riêng, không trộn gameplay/concurrency/protocol behavi
 # 17. File/type granularity and code readability rules
 
 Không có giới hạn cứng số dòng/class và cũng **không có rule “mỗi record/class phải một top-level file”**.
+
+File length alone không bao giờ là lý do đủ để split gameplay code. Navigation
+cost là một phần của chất lượng architecture: một file gameplay lớn nhưng
+cohesive có thể dễ đọc hơn nhiều file nhỏ làm developer phải nhảy qua nhiều
+owner để hiểu một lifecycle bình thường.
 
 Mục tiêu là tránh cả hai cực:
 
@@ -1081,7 +1086,6 @@ Gateway
 Interactor
 Strategy
 Factory
-Manager
 Coordinator
 EventBus
 Command framework
@@ -1089,6 +1093,11 @@ generic Object[] state
 ```
 
 nếu code hiện tại chưa có vấn đề mà abstraction đó giải quyết.
+
+`Manager` không phải anti-pattern mặc định; dùng nó khi nó thật sự sở hữu
+collection/catalog/init/create/find/lifecycle của một feature. Không tạo
+`Manager` chỉ để đủ bộ tên hoặc thay thế một `Service` đang là cross-owner
+use-case.
 
 Nguyên tắc:
 
@@ -1375,7 +1384,7 @@ Feature nhỏ bắt đầu bằng số type tối thiểu:
 ```text
 npc/
 ├── Npc.java
-└── NpcService.java        // chỉ khi orchestration thật sự cần
+└── NpcManager.java        // chỉ khi collection/lifecycle authority thật sự cần
 ```
 
 Nếu có static data độc lập:
@@ -1384,7 +1393,7 @@ Nếu có static data độc lập:
 npc/
 ├── Npc.java
 ├── NpcTemplate.java
-└── NpcService.java
+└── NpcManager.java        // chỉ khi feature thật sự có manager authority
 ```
 
 Không tự động thêm:
@@ -1419,6 +1428,10 @@ Không bắt `boss/` phải giống `monster/`.
 Không bắt `npc/` phải giống `player/`.
 
 Không bắt mọi feature có `Template + Factory + Service + Manager + Repository`.
+
+Các feature mới nên bắt đầu bằng feature center rõ ràng; xem companion
+`SERVER_FEATURE_READABILITY_RULES.md` để quyết định khi nào dùng `Manager`,
+`Service` hoặc chỉ một entity đơn giản.
 
 ## 25.3 Prefer game vocabulary over technical categories
 
@@ -1502,6 +1515,9 @@ Trước khi sửa server, model code phải tự trả lời:
 10. Type mới có cần top-level file thật không, hay thuộc về một owner rõ ràng?
 11. Tên có đang lặp package context hoặc lịch sử implementation không?
 12. Abstraction mới giải quyết vấn đề thật hay chỉ vì Design Pattern?
+13. Feature center là type nào và developer nên mở file nào đầu tiên?
+14. Có đang làm tăng số file cần đọc cho một gameplay flow bình thường không?
+15. Ai sở hữu collection/lifecycle, và behavior entity có còn ở gần entity không?
 ```
 
 Nếu câu 12 là:

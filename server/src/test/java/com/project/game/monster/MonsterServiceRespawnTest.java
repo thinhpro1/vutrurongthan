@@ -25,13 +25,13 @@ import static org.junit.jupiter.api.Assertions.*;
 class MonsterServiceRespawnTest {
 
     @Test
-    void respawnTickDoesNotCreateZones() {
+    void respawnTickDoesNotCreateAdditionalZones() {
         MutableClock clock = new MutableClock(1_000_000L);
         GameplayServices maps = mapsWithMonsters(clock);
 
-        assertEquals(0, zoneRegistrySize(maps));
+        assertEquals(2, zoneRegistrySize(maps));
         maps.monsterService().tickLifecycle();
-        assertEquals(0, zoneRegistrySize(maps));
+        assertEquals(2, zoneRegistrySize(maps));
     }
 
     @Test

@@ -86,12 +86,13 @@ class ZoneMonsterCombatTest {
                 () -> new Zone(
                         1,
                         0,
+                        Integer.MAX_VALUE,
                         List.of(runtimes.getFirst(), runtimes.getFirst())));
     }
 
     @Test
     void containsRequiresExactSessionIdentity() {
-        Zone zone = new Zone(1, 0, List.of());
+        Zone zone = new Zone(1, 0, Integer.MAX_VALUE, List.of());
         Session first = session(TestPlayerProfiles.initial(1L, 7, "alpha1", 1));
         Session equivalent = session(TestPlayerProfiles.initial(2L, 7, "alpha2", 1));
 
@@ -318,7 +319,7 @@ class ZoneMonsterCombatTest {
                 GameResources.fromFrameRoot(Path.of("resources", "json"),
                         com.project.game.testsupport.MapTestSupport.canonicalMaps(), 2,
                         com.project.game.testsupport.MonsterTestSupport.canonicalRepository()));
-        return new Zone(1, 0, factory.createForMap(1));
+        return new Zone(1, 0, Integer.MAX_VALUE, factory.createForMap(1));
     }
 
     private static Session session(PlayerProfile player) {

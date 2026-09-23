@@ -5,6 +5,7 @@ import com.project.game.testsupport.TestServices;
 
 import com.project.game.testsupport.GameplayServices;
 import com.project.game.testsupport.MapTestSupport;
+import com.project.game.map.MapTemplate;
 import com.project.game.map.Zone;
 import com.project.game.network.handler.MessageHandler;
 import com.project.game.network.message.Message;
@@ -21,6 +22,7 @@ import org.junit.jupiter.api.Test;
 
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -262,6 +264,7 @@ class MessageHandlerMapTest {
     @Test
     void finishLoadMapIsAcceptedInGameWithoutConsumingViolationBudget() {
         Session session = newSession(TestServices.authService());
+        session.bindPlayer(TestPlayerProfiles.initial(1L, 7, "alpha1", 0));
         session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
         session.transition(SessionState.HANDSHAKE_DONE, SessionState.AUTHENTICATED);
         session.transition(SessionState.AUTHENTICATED, SessionState.IN_GAME);
@@ -288,6 +291,68 @@ class MessageHandlerMapTest {
 
         assertEquals(SessionState.CLOSED, session.state());
         assertEquals(0, maps.memberCount(0, 0));
+    }
+
+    @Test
+    void finishLoadMapClosesSessionWhenZoneIsFull() throws Exception {
+        Map<Integer, MapTemplate> mapCatalog = policyMaps("ONLINE", "ONLINE", 1, 1);
+        GameResources resources = GameResources.fromFrameRoot(
+                Path.of("resources", "json"), mapCatalog, 2,
+                com.project.game.testsupport.MonsterTestSupport.canonicalRepository());
+        GameplayServices gameplay = new GameplayServices(mapCatalog, resources);
+        SessionServices services = TestServices.serverServices(
+                TestServices.authService(), resources, gameplay);
+        Session first = inGameSession(services,
+                TestPlayerProfiles.initial(1L, 1, "alpha1", 0));
+        Session second = inGameSession(services,
+                TestPlayerProfiles.initial(2L, 2, "beta22", 0));
+
+        newHandler(first, services, ClientConfig.defaults())
+                .onMessage(new Message(MessageName.FINISH_LOAD_MAP));
+        drainMessages(first);
+        newHandler(second, services, ClientConfig.defaults())
+                .onMessage(new Message(MessageName.FINISH_LOAD_MAP));
+
+        assertEquals(SessionState.IN_GAME, first.state());
+        assertEquals(SessionState.CLOSED, second.state());
+        assertEquals(1, gameplay.memberCount(0, 0));
+    }
+
+    @Test
+    void requestChangeMapDoesNotEmitMapInfoWhenDestinationIsOffline() throws Exception {
+        Map<Integer, MapTemplate> mapCatalog = policyMaps("ONLINE", "OFFLINE", 1, 1);
+        GameResources resources = GameResources.fromFrameRoot(
+                Path.of("resources", "json"), mapCatalog, 2,
+                com.project.game.testsupport.MonsterTestSupport.canonicalRepository());
+        GameplayServices gameplay = new GameplayServices(mapCatalog, resources);
+        SessionServices services = TestServices.serverServices(
+                TestServices.authService(), resources, gameplay);
+        PlayerProfile start = TestPlayerProfiles.initial(1L, 7, "alpha1", 0)
+                .withLocation(0, 0, 4464, 936);
+        Session session = inGameSession(services, start);
+        MessageHandler handler = newHandler(session, services, ClientConfig.defaults());
+
+        handler.onMessage(new Message(MessageName.REQUEST_CHANGE_MAP));
+
+        assertEquals(SessionState.IN_GAME, session.state());
+        assertEquals(start, session.player());
+        assertEquals(0, session.queuedMessages());
+        assertEquals(0, gameplay.memberCount(0, 0));
+    }
+
+    private static Map<Integer, MapTemplate> policyMaps(
+            String map0Type, String map1Type, int map0MaxPlayer, int map1MaxPlayer) {
+        Map<Integer, MapTemplate> canonical = MapTestSupport.canonicalMaps();
+        MapTemplate map0 = withPolicy(canonical.get(0), map0Type, 1, 3, map0MaxPlayer);
+        MapTemplate map1 = withPolicy(canonical.get(1), map1Type, 1, 3, map1MaxPlayer);
+        return Map.of(map0.id(), map0, map1.id(), map1);
+    }
+
+    private static MapTemplate withPolicy(
+            MapTemplate map, String type, int minZone, int maxZone, int maxPlayer) {
+        return new MapTemplate(
+                map.id(), map.name(), type, map.planet(), minZone, maxZone, maxPlayer,
+                map.dataId(), map.data(), map.waypoints());
     }
 
     @Test

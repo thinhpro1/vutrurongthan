@@ -21,12 +21,17 @@ public final class Zone {
     private static final int MONSTER_CHASE_LEASH = 1200;
     private final int mapId;
     private final int zoneId;
+    private final int maxPlayer;
     private final ConcurrentHashMap<Integer, Session> members = new ConcurrentHashMap<>();
     private final LinkedHashMap<Integer, Monster> monsters = new LinkedHashMap<>();
 
-    public Zone(int mapId, int zoneId, List<Monster> monsters) {
+    public Zone(int mapId, int zoneId, int maxPlayer, List<Monster> monsters) {
+        if (maxPlayer <= 0) {
+            throw new IllegalArgumentException("maxPlayer must be positive");
+        }
         this.mapId = mapId;
         this.zoneId = zoneId;
+        this.maxPlayer = maxPlayer;
         Objects.requireNonNull(monsters, "monsters");
         for (Monster monster : monsters) {
             Objects.requireNonNull(monster, "monster");
@@ -50,10 +55,12 @@ public final class Zone {
         return zoneId;
     }
 
+    public int maxPlayer() {
+        return maxPlayer;
+    }
+
     public synchronized boolean add(Session session) {
-        Objects.requireNonNull(session, "session");
-        PlayerProfile player = requirePlayer(session);
-        return members.putIfAbsent(player.id(), session) == null;
+        return addAndSnapshot(session).status() == JoinStatus.ADDED;
     }
 
     public synchronized boolean remove(Session session) {
@@ -62,19 +69,35 @@ public final class Zone {
         return members.remove(player.id(), session);
     }
 
+    /** The outcome of one atomic admission attempt. */
+    enum JoinStatus {
+        ADDED,
+        ALREADY_PRESENT,
+        FULL
+    }
+
     /**
-     * Returns the members present before this session was added, or {@code null} when it was already
-     * a member. The snapshot and insertion share this Zone monitor so a join cannot miss another
-     * concurrent join.
+     * Returns the members present before an added session joined. Admission, capacity, and the
+     * snapshot share this Zone monitor so a join cannot miss another concurrent join.
      */
-    synchronized List<Session> addAndSnapshot(Session session) {
+    synchronized JoinResult addAndSnapshot(Session session) {
         Objects.requireNonNull(session, "session");
         PlayerProfile player = requirePlayer(session);
-        List<Session> existing = List.copyOf(members.values());
-        if (members.putIfAbsent(player.id(), session) != null) {
-            return null;
+        if (members.containsKey(player.id())) {
+            return new JoinResult(JoinStatus.ALREADY_PRESENT, List.of());
         }
-        return existing;
+        if (members.size() >= maxPlayer) {
+            return new JoinResult(JoinStatus.FULL, List.of());
+        }
+        List<Session> existing = List.copyOf(members.values());
+        members.put(player.id(), session);
+        return new JoinResult(JoinStatus.ADDED, existing);
+    }
+
+    synchronized boolean canAccept(Session session) {
+        Objects.requireNonNull(session, "session");
+        PlayerProfile player = requirePlayer(session);
+        return members.containsKey(player.id()) || members.size() < maxPlayer;
     }
 
     public synchronized boolean contains(Session session) {
@@ -254,5 +277,12 @@ public final class Zone {
             throw new IllegalStateException("zone membership requires a bound player");
         }
         return player;
+    }
+
+    record JoinResult(JoinStatus status, List<Session> existing) {
+        JoinResult {
+            Objects.requireNonNull(status, "status");
+            existing = List.copyOf(Objects.requireNonNull(existing, "existing"));
+        }
     }
 }

@@ -2,6 +2,7 @@ package com.project.game.network.handler;
 
 import com.project.game.map.MapService;
 import com.project.game.monster.MonsterService;
+import com.project.game.monster.MonsterSnapshot;
 import com.project.game.network.Session;
 import com.project.game.network.SessionState;
 import com.project.game.network.message.Message;
@@ -13,6 +14,7 @@ import com.project.game.resource.GameResources;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 
 /** Handles map presence, movement, transitions, death return, and MAP_INFO packets. */
@@ -38,7 +40,9 @@ final class MapHandler {
         if (message.payload().length != 0) {
             throw new IOException("trailing FINISH_LOAD_MAP payload bytes");
         }
-        mapService.finishLoad(session);
+        if (!mapService.finishLoad(session)) {
+            throw new IOException("cannot join map zone");
+        }
     }
 
     void handleReturnTownFromDie(Message message) throws IOException {
@@ -133,7 +137,15 @@ final class MapHandler {
                             "waypoint target map unavailable: " + waypoint.goMap()));
             waypointTargetNames.add(target.name());
         }
-        var monsters = monsterService.monsterSnapshots(map.id(), player.zoneId());
+        List<MonsterSnapshot> monsters;
+        if (!mapService.ensureZone(map.id(), player.zoneId())) {
+            throw new IOException("invalid map zone: " + map.id() + "/" + player.zoneId());
+        }
+        try {
+            monsters = monsterService.monsterSnapshots(map.id(), player.zoneId());
+        } catch (IllegalArgumentException exception) {
+            throw new IOException("invalid map zone: " + map.id() + "/" + player.zoneId(), exception);
+        }
         Message packet = mapPackets.mapInfo(
                 player, map, sendTemplate, waypointTargetNames, monsters);
         if (session.send(packet) && sendTemplate) {

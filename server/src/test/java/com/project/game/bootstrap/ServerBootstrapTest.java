@@ -423,7 +423,7 @@ class ServerBootstrapTest {
                 new MapRepository.MapRow(
                         0, "Núi Paozu", "ONLINE", "EARTH", 1, 3, 40, 1, true),
                 new MapRepository.MapRow(
-                        1, "Bờ sông Pu", "OFFLINE", "NAMEK", 1, 3, 40, 2, true));
+                        1, "Bờ sông Pu", "ONLINE", "NAMEK", 1, 3, 40, 2, true));
     }
 
     private static MapRepository mapRepository(List<MapRepository.MapRow> maps) {

@@ -17,6 +17,9 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.List;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -26,7 +29,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class ZoneTest {
     @Test
     void startsEmptyAndTracksBoundPlayer() {
-        Zone zone = new Zone(0, 0, List.of());
+        Zone zone = new Zone(0, 0, Integer.MAX_VALUE, List.of());
         Session session = session(TestPlayerProfiles.initial(1L, 7, "alpha1", 0));
 
         assertEquals(0, zone.size());
@@ -40,7 +43,7 @@ class ZoneTest {
 
     @Test
     void duplicateSameSessionIsIdempotent() {
-        Zone zone = new Zone(0, 0, List.of());
+        Zone zone = new Zone(0, 0, Integer.MAX_VALUE, List.of());
         Session session = session(TestPlayerProfiles.initial(1L, 7, "alpha1", 0));
 
         assertTrue(zone.add(session));
@@ -50,7 +53,7 @@ class ZoneTest {
 
     @Test
     void differentSessionCannotReplaceSamePlayerId() {
-        Zone zone = new Zone(0, 0, List.of());
+        Zone zone = new Zone(0, 0, Integer.MAX_VALUE, List.of());
         Session first = session(TestPlayerProfiles.initial(1L, 7, "alpha1", 0));
         Session second = session(TestPlayerProfiles.initial(2L, 7, "alpha2", 0));
 
@@ -61,7 +64,7 @@ class ZoneTest {
 
     @Test
     void snapshotIsImmutable() {
-        Zone zone = new Zone(0, 0, List.of());
+        Zone zone = new Zone(0, 0, Integer.MAX_VALUE, List.of());
         zone.add(session(TestPlayerProfiles.initial(1L, 7, "alpha1", 0)));
 
         List<Session> snapshot = zone.snapshot();
@@ -70,7 +73,7 @@ class ZoneTest {
 
     @Test
     void requiresBoundPlayer() {
-        Zone zone = new Zone(0, 0, List.of());
+        Zone zone = new Zone(0, 0, Integer.MAX_VALUE, List.of());
         assertThrows(IllegalStateException.class, () -> zone.add(session(null)));
     }
 
@@ -83,16 +86,72 @@ class ZoneTest {
 
     @Test
     void atomicallyReturnsExistingMembersWhileAddingNewMember() {
-        Zone zone = new Zone(0, 0, List.of());
+        Zone zone = new Zone(0, 0, Integer.MAX_VALUE, List.of());
         Session first = session(TestPlayerProfiles.initial(1L, 1, "alpha1", 0));
         Session second = session(TestPlayerProfiles.initial(2L, 2, "beta22", 0));
         zone.add(first);
 
-        List<Session> existing = zone.addAndSnapshot(second);
+        Zone.JoinResult result = zone.addAndSnapshot(second);
 
-        assertEquals(List.of(first), existing);
+        assertEquals(Zone.JoinStatus.ADDED, result.status());
+        assertEquals(List.of(first), result.existing());
         assertEquals(2, zone.size());
         assertTrue(zone.snapshot().containsAll(List.of(first, second)));
+    }
+
+    @Test
+    void maxPlayerDistinguishesDuplicateFromFull() {
+        Zone zone = new Zone(0, 0, 1, List.of());
+        Session first = session(TestPlayerProfiles.initial(1L, 1, "alpha1", 0));
+        Session second = session(TestPlayerProfiles.initial(2L, 2, "beta22", 0));
+
+        assertEquals(Zone.JoinStatus.ADDED, zone.addAndSnapshot(first).status());
+        assertEquals(Zone.JoinStatus.ALREADY_PRESENT, zone.addAndSnapshot(first).status());
+        assertEquals(Zone.JoinStatus.FULL, zone.addAndSnapshot(second).status());
+        assertEquals(1, zone.size());
+        assertEquals(1, zone.maxPlayer());
+    }
+
+    @Test
+    void concurrentAdmissionNeverExceedsMaxPlayer() throws Exception {
+        Zone zone = new Zone(0, 0, 1, List.of());
+        Session first = session(TestPlayerProfiles.initial(1L, 1, "alpha1", 0));
+        Session second = session(TestPlayerProfiles.initial(2L, 2, "beta22", 0));
+        CyclicBarrier start = new CyclicBarrier(3);
+        AtomicInteger admitted = new AtomicInteger();
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+
+        Thread firstJoin = Thread.ofVirtual().start(() -> admitAtBarrier(
+                start, zone, first, admitted, failure));
+        Thread secondJoin = Thread.ofVirtual().start(() -> admitAtBarrier(
+                start, zone, second, admitted, failure));
+
+        start.await();
+        firstJoin.join();
+        secondJoin.join();
+
+        if (failure.get() != null) {
+            throw new AssertionError("concurrent admission failed", failure.get());
+        }
+        assertEquals(1, admitted.get());
+        assertEquals(1, zone.size());
+        assertEquals(1, zone.maxPlayer());
+    }
+
+    private static void admitAtBarrier(
+            CyclicBarrier start,
+            Zone zone,
+            Session session,
+            AtomicInteger admitted,
+            AtomicReference<Throwable> failure) {
+        try {
+            start.await();
+            if (zone.add(session)) {
+                admitted.incrementAndGet();
+            }
+        } catch (Throwable exception) {
+            failure.compareAndSet(null, exception);
+        }
     }
 
     private static Session session(PlayerProfile player) {

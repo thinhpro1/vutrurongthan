@@ -173,6 +173,10 @@ public final class GameResources {
         return Optional.ofNullable(maps.get(mapId));
     }
 
+    public Map<Integer, MapTemplate> maps() {
+        return maps;
+    }
+
     public List<LevelTemplate> levels() {
         return levels;
     }

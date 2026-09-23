@@ -36,7 +36,7 @@ public final class TestServices {
     public static SessionServices serverServices(AuthService auth, GameResources resources) {
         PlayerPacketWriter playerPackets = new PlayerPacketWriter();
         MonsterPacketWriter monsterPackets = new MonsterPacketWriter();
-        ZoneRegistry zones = new ZoneRegistry(new MonsterFactory(resources));
+        ZoneRegistry zones = new ZoneRegistry(MapTestSupport.canonicalMaps(), new MonsterFactory(resources));
         MapService maps = new MapService(zones, playerPackets);
         CombatService combat = new CombatService(zones, playerPackets, monsterPackets);
         MonsterService monsters = new MonsterService(zones, monsterPackets, playerPackets);

@@ -24,7 +24,7 @@ public final class MapTestSupport {
         public List<MapRow> findAllMaps() {
             return List.of(
                     new MapRow(0, "Núi Paozu", "ONLINE", "EARTH", 1, 3, 40, 1, true),
-                    new MapRow(1, "Bờ sông Pu", "OFFLINE", "NAMEK", 1, 3, 40, 2, true));
+                    new MapRow(1, "Bờ sông Pu", "ONLINE", "NAMEK", 1, 3, 40, 2, true));
         }
 
         @Override

@@ -2,6 +2,7 @@ package com.project.game.testsupport;
 
 import com.project.game.combat.CombatService;
 import com.project.game.map.MapService;
+import com.project.game.map.MapTemplate;
 import com.project.game.map.Zone;
 import com.project.game.map.ZoneRegistry;
 import com.project.game.monster.MonsterFactory;
@@ -15,6 +16,7 @@ import com.project.game.resource.GameResources;
 
 import java.time.Clock;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.random.RandomGenerator;
 
@@ -28,7 +30,7 @@ public final class GameplayServices {
     public GameplayServices(PlayerPacketWriter playerPackets,
                              MonsterPacketWriter monsterPackets,
                              MonsterFactory monsterFactory) {
-        this(new ZoneRegistry(monsterFactory), playerPackets, monsterPackets,
+        this(new ZoneRegistry(MapTestSupport.canonicalMaps(), monsterFactory), playerPackets, monsterPackets,
                 Clock.systemUTC(), RandomGenerator.getDefault());
     }
 
@@ -36,7 +38,7 @@ public final class GameplayServices {
                              MonsterPacketWriter monsterPackets,
                              MonsterFactory monsterFactory,
                              Clock clock) {
-        this(new ZoneRegistry(monsterFactory), playerPackets, monsterPackets,
+        this(new ZoneRegistry(MapTestSupport.canonicalMaps(), monsterFactory), playerPackets, monsterPackets,
                 clock, RandomGenerator.getDefault());
     }
 
@@ -45,7 +47,8 @@ public final class GameplayServices {
                              MonsterFactory monsterFactory,
                              Clock clock,
                              RandomGenerator random) {
-        this(new ZoneRegistry(monsterFactory), playerPackets, monsterPackets, clock, random);
+        this(new ZoneRegistry(MapTestSupport.canonicalMaps(), monsterFactory), playerPackets,
+                monsterPackets, clock, random);
     }
 
     public GameplayServices(GameResources resources) {
@@ -59,8 +62,19 @@ public final class GameplayServices {
     public GameplayServices(GameResources resources, Clock clock, RandomGenerator random) {
         PlayerPacketWriter playerPackets = new PlayerPacketWriter();
         MonsterPacketWriter monsterPackets = new MonsterPacketWriter();
-        initialize(new ZoneRegistry(new MonsterFactory(resources)), playerPackets,
+        Map<Integer, MapTemplate> maps = resources.maps().isEmpty()
+                ? MapTestSupport.canonicalMaps()
+                : resources.maps();
+        initialize(new ZoneRegistry(maps, new MonsterFactory(resources)), playerPackets,
                 monsterPackets, clock, random);
+    }
+
+    public GameplayServices(Map<Integer, MapTemplate> maps,
+                            GameResources resources) {
+        PlayerPacketWriter playerPackets = new PlayerPacketWriter();
+        MonsterPacketWriter monsterPackets = new MonsterPacketWriter();
+        initialize(new ZoneRegistry(maps, new MonsterFactory(resources)), playerPackets,
+                monsterPackets, Clock.systemUTC(), RandomGenerator.getDefault());
     }
 
     private GameplayServices(ZoneRegistry zones, PlayerPacketWriter playerPackets,

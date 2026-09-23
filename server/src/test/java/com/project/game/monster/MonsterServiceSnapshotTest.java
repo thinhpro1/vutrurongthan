@@ -25,22 +25,27 @@ import static org.junit.jupiter.api.Assertions.*;
 class MonsterServiceSnapshotTest {
 
     @Test
-    void snapshotsCreateRuntimeZoneButLifecycleTickOnlyVisitsExistingZones() {
-        ZoneRegistry zones = new ZoneRegistry(new MonsterFactory(
+    void snapshotsUseOnlyPolicyValidZonesAndLifecycleVisitsRegisteredZones() {
+        ZoneRegistry zones = new ZoneRegistry(
+                com.project.game.testsupport.MapTestSupport.canonicalMaps(),
+                new MonsterFactory(
                 GameResources.fromFrameRoot(Path.of("resources", "json"),
                         com.project.game.testsupport.MapTestSupport.canonicalMaps(), 2,
                         com.project.game.testsupport.MonsterTestSupport.canonicalRepository())));
         MonsterService monsters = new MonsterService(
                 zones, new MonsterPacketWriter(), new PlayerPacketWriter());
 
-        assertEquals(0, zones.snapshot().size());
+        assertEquals(2, zones.snapshot().size());
         monsters.tickLifecycle();
-        assertEquals(0, zones.snapshot().size());
+        assertEquals(2, zones.snapshot().size());
 
-        assertNotNull(monsters.monsterSnapshots(1, 0));
-        assertEquals(1, zones.snapshot().size());
+        assertNotNull(monsters.monsterSnapshots(0, 0));
+        assertEquals(2, zones.snapshot().size());
+        assertNotNull(monsters.monsterSnapshots(0, 1));
+        assertEquals(3, zones.snapshot().size());
         monsters.tickLifecycle();
-        assertEquals(1, zones.snapshot().size());
+        assertEquals(3, zones.snapshot().size());
+        assertThrows(IllegalArgumentException.class, () -> monsters.monsterSnapshots(99, 0));
     }
 
     @Test

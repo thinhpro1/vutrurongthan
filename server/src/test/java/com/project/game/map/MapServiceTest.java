@@ -12,6 +12,7 @@ import com.project.game.account.*;
 import com.project.game.resource.*;
 import com.project.game.testsupport.MutableClock;
 import com.project.game.testsupport.GameplayServices;
+import com.project.game.testsupport.MapTestSupport;
 import org.junit.jupiter.api.Test;
 
 import java.io.*;
@@ -400,5 +401,88 @@ class MapServiceTest {
         assertEquals(List.of(MessageName.REMOVE_PLAYER, MessageName.ADD_PLAYER),
                 commands(drain(observer)));
         assertEquals(List.of(MessageName.ADD_PLAYER), commands(drain(joining)));
+    }
+
+    @Test
+    void finishLoadRejectsFullZoneWithoutBroadcast() throws Exception {
+        GameplayServices maps = policyMaps("ONLINE", "ONLINE", 1, 2);
+        Session first = session(player(1, 0, 0), maps);
+        Session second = session(player(2, 0, 0), maps);
+
+        assertTrue(maps.mapService().finishLoad(first));
+        drain(first);
+
+        assertFalse(maps.mapService().finishLoad(second));
+        assertEquals(1, maps.mapService().memberCount(0, 0));
+        assertEquals(0, second.queuedMessages());
+    }
+
+    @Test
+    void changeMapRejectsFullDestinationBeforeRemovingSourceMember() throws Exception {
+        GameplayServices maps = policyMaps("ONLINE", "ONLINE", 2, 1);
+        Session source = session(player(1, 0, 0), maps);
+        Session blocker = session(player(2, 1, 0), maps);
+        maps.mapService().finishLoad(source);
+        maps.mapService().finishLoad(blocker);
+        drain(source);
+        drain(blocker);
+        PlayerProfile before = source.player();
+
+        assertTrue(maps.mapService().changeMap(
+                source, 0, 0, 1, 0, 975, 648).isEmpty());
+
+        assertEquals(before, source.player());
+        assertEquals(1, maps.mapService().memberCount(0, 0));
+        assertEquals(1, maps.mapService().memberCount(1, 0));
+        assertEquals(List.of(), drain(source));
+    }
+
+    @Test
+    void changeMapRejectsOfflineAndOutOfRangeDestinations() throws Exception {
+        GameplayServices maps = policyMaps("ONLINE", "OFFLINE", 1, 1);
+        Session source = session(player(1, 0, 0), maps);
+        maps.mapService().finishLoad(source);
+        PlayerProfile before = source.player();
+
+        assertTrue(maps.mapService().changeMap(
+                source, 0, 0, 1, 0, 975, 648).isEmpty());
+        assertTrue(maps.mapService().changeMap(
+                source, 0, 0, 0, 2, 975, 648).isEmpty());
+        assertEquals(before, source.player());
+        assertEquals(1, maps.mapService().memberCount(0, 0));
+    }
+
+    @Test
+    void deathReturnRejectsFullTownWithoutRemovingSourceMember() throws Exception {
+        GameplayServices maps = policyMaps("ONLINE", "ONLINE", 1, 1);
+        Session dead = session(player(1, 1, 0).withHp(0), maps);
+        Session blocker = session(player(2, 0, 0), maps);
+        maps.mapService().finishLoad(dead);
+        maps.mapService().finishLoad(blocker);
+        PlayerProfile before = dead.player();
+
+        assertTrue(maps.mapService().returnTownFromDeath(dead).isEmpty());
+
+        assertEquals(before, dead.player());
+        assertEquals(1, maps.mapService().memberCount(1, 0));
+        assertEquals(1, maps.mapService().memberCount(0, 0));
+    }
+
+    private static GameplayServices policyMaps(
+            String map0Type, String map1Type, int map0MaxPlayer, int map1MaxPlayer) {
+        Map<Integer, MapTemplate> canonical = MapTestSupport.canonicalMaps();
+        MapTemplate map0 = withPolicy(
+                canonical.get(0), map0Type, 1, 2, map0MaxPlayer);
+        MapTemplate map1 = withPolicy(
+                canonical.get(1), map1Type, 1, 2, map1MaxPlayer);
+        return new GameplayServices(
+                Map.of(map0.id(), map0, map1.id(), map1), GameResources.unavailable());
+    }
+
+    private static MapTemplate withPolicy(
+            MapTemplate map, String type, int minZone, int maxZone, int maxPlayer) {
+        return new MapTemplate(
+                map.id(), map.name(), type, map.planet(), minZone, maxZone, maxPlayer,
+                map.dataId(), map.data(), map.waypoints());
     }
 }

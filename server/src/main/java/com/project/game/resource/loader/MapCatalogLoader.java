@@ -122,8 +122,8 @@ public final class MapCatalogLoader {
         if (!PLANETS.contains(row.planet())) {
             throw new IllegalArgumentException("unsupported map planet: " + row.planet());
         }
-        requireRange(row.minZone(), 1, 255, "minZone");
-        requireRange(row.maxZone(), 1, 255, "maxZone");
+        requireRange(row.minZone(), 1, 128, "minZone");
+        requireRange(row.maxZone(), 1, 128, "maxZone");
         if (row.maxZone() < row.minZone()) {
             throw new IllegalArgumentException("maxZone must be >= minZone");
         }

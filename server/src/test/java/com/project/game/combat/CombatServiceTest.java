@@ -31,13 +31,15 @@ import static org.junit.jupiter.api.Assertions.*;
 class CombatServiceTest {
     @Test
     void targetingAndAttackingDoNotCreateAbsentZones() {
-        ZoneRegistry zones = new ZoneRegistry(new MonsterFactory(GameResources.unavailable()));
+        ZoneRegistry zones = new ZoneRegistry(
+                com.project.game.testsupport.MapTestSupport.canonicalMaps(),
+                new MonsterFactory(GameResources.unavailable()));
         CombatService combat = new CombatService(
                 zones, new PlayerPacketWriter(), new MonsterPacketWriter());
 
         assertFalse(combat.canTargetMonster(null, 101));
         assertFalse(combat.attackMonster(null, 101, 1L));
-        assertNull(zones.find(1, 0));
+        assertNull(zones.find(1, 3));
     }
 
     @Test
@@ -45,10 +47,10 @@ class CombatServiceTest {
         GameplayServices maps = mapsWithMonsters();
         Session session = session(player(1, 1, 0), maps);
 
-        assertEquals(0, zoneRegistrySize(maps));
+        assertEquals(2, zoneRegistrySize(maps));
         assertFalse(maps.combatService().canTargetMonster(session, 101));
         assertFalse(maps.combatService().attackMonster(session, 101, 10));
-        assertEquals(0, zoneRegistrySize(maps));
+        assertEquals(2, zoneRegistrySize(maps));
     }
 
     @Test

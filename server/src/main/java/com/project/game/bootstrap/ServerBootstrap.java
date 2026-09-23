@@ -113,7 +113,7 @@ public final class ServerBootstrap {
             MonsterFactory monsterFactory = new MonsterFactory(resources);
             PlayerPacketWriter playerPackets = new PlayerPacketWriter();
             MonsterPacketWriter monsterPackets = new MonsterPacketWriter();
-            ZoneRegistry zones = new ZoneRegistry(monsterFactory);
+            ZoneRegistry zones = new ZoneRegistry(mapCatalog, monsterFactory);
             MapService maps = new MapService(zones, playerPackets);
             CombatService combat = new CombatService(zones, playerPackets, monsterPackets);
             MonsterService monsters = new MonsterService(zones, monsterPackets, playerPackets);

@@ -149,6 +149,32 @@ class MapCatalogLoaderTest {
     }
 
     @Test
+    void acceptsWireSafeMaximumZoneCount() {
+        MapRepository.MapRow row =
+                map(0, "Map", "ONLINE", "EARTH", 128, 128, 1, 1, true);
+
+        Map<Integer, MapTemplate> catalog =
+                MapCatalogLoader.load(repository(List.of(row), List.of()), PRODUCTION_MAP_ROOT);
+
+        assertEquals(128, catalog.get(0).minZone());
+        assertEquals(128, catalog.get(0).maxZone());
+    }
+
+    @Test
+    void rejectsZoneCountsThatCannotFitSignedByteZoneIds() {
+        List<MapRepository.MapRow> invalidRows = List.of(
+                map(0, "Map", "ONLINE", "EARTH", 129, 129, 1, 1, true),
+                map(0, "Map", "ONLINE", "EARTH", 128, 129, 1, 1, true));
+
+        for (MapRepository.MapRow row : invalidRows) {
+            assertThrows(IllegalArgumentException.class,
+                    () -> MapCatalogLoader.load(
+                            repository(List.of(row), List.of()), PRODUCTION_MAP_ROOT),
+                    row.toString());
+        }
+    }
+
+    @Test
     void validatesDisabledMapMetadataToo() {
         MapRepository.MapRow disabledWithBlankName =
                 map(9, " ", "OFFLINE", "EARTH", 1, 1, 1, 999, false);

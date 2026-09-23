@@ -2,7 +2,7 @@
 
 > **Status:** Authoritative server architecture contract  
 > **Scope:** `server/**`  
-> **Baseline:** `97202d13e8dee3f723767962746571b12d0d928c` — final production cleanup commit
+> **Audited baseline:** `cd1e9f65839ffc94958ec6fefbc4ea88ebd8ad37`
 >
 > Mục tiêu của tài liệu này là giữ server **dễ tìm code, dễ đọc, dễ sửa và khó phá nhầm** khi project lớn dần.
 > Readability quan trọng hơn việc ép code tuân thủ 100% một Design Pattern.
@@ -142,6 +142,7 @@ com.project.game/
 │   ├── PlayerProfileFactory.java
 │   └── PlayerService.java
 ├── map/
+│   ├── MapData.java
 │   ├── MapTemplate.java
 │   ├── Waypoint.java
 │   ├── Zone.java
@@ -150,7 +151,6 @@ com.project.game/
 ├── monster/
 │   ├── Monster.java
 │   ├── MonsterAttack.java
-│   ├── MonsterCombatTemplate.java
 │   ├── MonsterDart.java
 │   ├── MonsterFactory.java
 │   ├── MonsterLifecycleScheduler.java
@@ -172,9 +172,10 @@ com.project.game/
 │       ├── GameResourcesLoader.java
 │       ├── JsonResourceReader.java
 │       ├── LevelLoader.java
-│       ├── MapLoader.java
-│       ├── MonsterCombatLoader.java
-│       ├── MonsterLoader.java
+│       ├── MapCatalogLoader.java
+│       ├── MapDataLoader.java
+│       ├── MonsterCatalogLoader.java
+│       ├── MonsterDartLoader.java
 │       └── SkillLoader.java
 ├── network/
 │   ├── ClientConfig.java
@@ -203,6 +204,8 @@ com.project.game/
     ├── DatabaseConfig.java
     ├── DatabaseManager.java
     ├── account/
+    ├── map/
+    ├── monster/
     └── player/
 ```
 
@@ -717,8 +720,10 @@ Target pattern:
 GameResources
 → catalog/read API
 
-MapLoader
-MonsterLoader
+MapDataLoader
+MapCatalogLoader
+MonsterCatalogLoader
+MonsterDartLoader
 SkillLoader
 FrameLoader
 LevelLoader
@@ -1157,8 +1162,10 @@ testsupport/
 Loader test nên ở gần loader ownership:
 
 ```text
-resource/loader/MapLoaderTest
-resource/loader/MonsterLoaderTest
+resource/loader/MapDataLoaderTest
+resource/loader/MapCatalogLoaderTest
+resource/loader/MonsterCatalogLoaderTest
+resource/loader/MonsterDartLoaderTest
 resource/loader/SkillLoaderTest
 ```
 
@@ -1399,11 +1406,13 @@ Hai JSON/file/table khác nhau không bắt buộc phải tạo hai domain class
 Ví dụ:
 
 ```text
-MonsterBootstrap.json
-MonsterCombatBootstrap.json
+monster_template DB row
++
+MonsterDartTemplate.json dart reference
+→ compose one canonical MonsterTemplate + referenced MonsterDart catalog
 ```
 
-có thể vẫn compose thành một `MonsterTemplate` nếu domain coi đó là một definition duy nhất.
+cho phép compose nhiều nguồn thành một `MonsterTemplate` nếu domain coi đó là một definition duy nhất.
 
 Ngược lại, một JSON duy nhất có thể load thành nhiều type nếu domain thật sự có nhiều concept độc lập.
 

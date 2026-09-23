@@ -27,7 +27,7 @@ mvn -q package
 java -cp target/classes com.project.game.GameApplication
 ```
 
-Maven test suite thông thường bao gồm TLS tests và không cần MySQL. Server khi chạy cần database đã cấu hình cùng hai bảng `account` và `player`. Mặc định server nghe tại `127.0.0.1:1707` qua `LEGACY_TCP`.
+Maven test suite thông thường bao gồm TLS tests và không cần MySQL. Server khi chạy cần database đã cấu hình cùng sáu bảng runtime: `account`, `player`, `map_template`, `map_waypoint`, `monster_template` và `monster_spawn`. Mặc định server nghe tại `127.0.0.1:1707` qua `LEGACY_TCP`.
 
 ## Kiểm tra protocol với server thật
 
@@ -50,11 +50,26 @@ Mặc định `game.resource.json-dir` là `resources/json`. Xem [hướng dẫn
 java '-Dgame.resource.icon-dir=../client/Assets/Resources/SmallImages' '-Dgame.resource.image-version=2' -cp target/classes com.project.game.GameApplication
 ```
 
-## Lưu account và player
+## Database schema và catalog runtime
 
-`REGISTER` và `LOGIN` dùng bảng MySQL `account`; player được lưu trong bảng `player`. Áp dụng `database/schema/account.sql`, sau đó `database/schema/player.sql` vào database đã cấu hình. Ứng dụng không tự chạy các schema tham khảo này. Server kiểm tra hai bảng khi khởi động. Inventory, skill progression và quest state hiện chưa thuộc phạm vi persistence. `zoneId` của player chỉ tồn tại trong runtime; vị trí bền vững lưu `mapId`, `x` và `y`. `exp` là tổng kinh nghiệm tích lũy, không có cột `max_exp`.
+`REGISTER` và `LOGIN` dùng bảng MySQL `account`; player được lưu trong bảng `player`. Runtime map/monster cần thêm `map_template`, `map_waypoint`, `monster_template` và `monster_spawn` để `ServerBootstrap` dựng catalog trước khi mở `NetworkServer`.
 
-Cấu hình JDBC URL, username và tên biến môi trường mật khẩu qua `game.db.url`, `game.db.username` và `game.db.password-env`. Biến mật khẩu mặc định là `GAME_DB_PASSWORD`. Real MySQL tests là opt-in, cần database `rongthanchibi` cùng hai bảng trên. Với database local không có mật khẩu:
+Các file schema tham khảo/manual hiện có là:
+
+```text
+database/schema/account.sql
+database/schema/player.sql
+database/schema/map.sql
+database/schema/monster.sql
+```
+
+Ứng dụng hiện không tự chạy hoặc migrate các schema này. Schema tồn tại không đồng nghĩa production đã có dữ liệu catalog. Normal runtime cần các row sử dụng được trong `map_template`, topology `map_waypoint` khi map yêu cầu, `monster_template`, và các `monster_spawn` mong muốn theo map. Catalog map không có enabled map, catalog monster rỗng/không hợp lệ, hoặc reference/topology không hợp lệ sẽ làm startup thất bại.
+
+Plan 9B không populate production map/monster rows. Production data bootstrap/seed là follow-up riêng.
+
+Inventory, skill progression và quest state hiện chưa thuộc phạm vi persistence. `zoneId` của player chỉ tồn tại trong runtime; vị trí bền vững lưu `mapId`, `x` và `y`. `exp` là tổng kinh nghiệm tích lũy, không có cột `max_exp`.
+
+Cấu hình JDBC URL, username và tên biến môi trường mật khẩu qua `game.db.url`, `game.db.username` và `game.db.password-env`. Biến mật khẩu mặc định là `GAME_DB_PASSWORD`. Real MySQL account/player tests là opt-in, cần database `rongthanchibi` cùng hai bảng account/player. Với database local không có mật khẩu:
 
 ```powershell
 mvn `
@@ -78,6 +93,22 @@ mvn `
   '-Dgame.db.allow-empty-password=false' `
   '-Dtest=JdbcAccountRepositoryIntegrationTest,AuthServiceDatabaseIntegrationTest,JdbcPlayerRepositoryIntegrationTest,PlayerServiceDatabaseIntegrationTest' `
   test
+```
+
+### Real MySQL map/monster bootstrap smoke
+
+Không có automated real-DB test riêng cho map/monster catalog tại baseline này; không được coi Maven test thường là bằng chứng cho real MySQL readiness. Smoke thủ công cần xác nhận:
+
+1. Cả sáu bảng runtime tồn tại: `account`, `player`, `map_template`, `map_waypoint`, `monster_template`, `monster_spawn`.
+2. Catalog map/monster có row production hợp lệ: enabled map, waypoint topology hợp lệ, monster template tồn tại và spawn references hợp lệ.
+3. Các resource được cấu hình tồn tại: `resources/maps/{data}.json` và `resources/json/MonsterDartTemplate.json`.
+4. `ServerBootstrap` compose thành công trước khi `NetworkServer` start.
+
+Nếu chưa populate dữ liệu production/local map/monster, readiness là:
+
+```text
+REAL DB CATALOG GATE:
+BLOCKED — production map/monster rows not populated
 ```
 
 ## TLS 1.3 tùy chọn

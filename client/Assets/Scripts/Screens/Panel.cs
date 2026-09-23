@@ -3435,117 +3435,117 @@ namespace Assets.Scripts.Screens
                         break;
                     }
                 case 21:
-                /*{
-                    // cmd upgrade
-                    if (typeUpgrade == 0)
-                    {
-                        if (itemUpgrade.item == null)
+                    /*{
+                        // cmd upgrade
+                        if (typeUpgrade == 0)
                         {
-                            InfoMe.addInfo("Vui lòng chọn vật phẩm", 0);
-                        }
-                        else if (itemsUpgrade.Count == 0)
-                        {
-                            InfoMe.addInfo("Vui lòng chọn đá nâng cấp", 0);
-                        }
-                        else
-                        {
-                            try
+                            if (itemUpgrade.item == null)
                             {
-                                Item item = itemUpgrade.item;
-                                if (item == null)
-                                {
-                                    InfoMe.addInfo("Vui lòng chọn vật phẩm", 0);
-                                }
-                                else if (item.template.type >= 8)
-                                {
-                                    InfoMe.addInfo("Vui lòng chọn vật phẩm", 0);
-                                }
-                                else
-                                {
-                                    InfoDlg.ShowWait();
-                                    Service.Upgrade(item, indexsUpgrade);
-                                }
+                                InfoMe.addInfo("Vui lòng chọn vật phẩm", 0);
                             }
-                            catch { }
+                            else if (itemsUpgrade.Count == 0)
+                            {
+                                InfoMe.addInfo("Vui lòng chọn đá nâng cấp", 0);
+                            }
+                            else
+                            {
+                                try
+                                {
+                                    Item item = itemUpgrade.item;
+                                    if (item == null)
+                                    {
+                                        InfoMe.addInfo("Vui lòng chọn vật phẩm", 0);
+                                    }
+                                    else if (item.template.type >= 8)
+                                    {
+                                        InfoMe.addInfo("Vui lòng chọn vật phẩm", 0);
+                                    }
+                                    else
+                                    {
+                                        InfoDlg.ShowWait();
+                                        Service.Upgrade(item, indexsUpgrade);
+                                    }
+                                }
+                                catch { }
+                            }
                         }
-                    }
-                    else if (typeUpgrade == 1)
+                        else if (typeUpgrade == 1)
+                        {
+                            if (indexsUpgrade.Count == 0)
+                            {
+                                InfoMe.addInfo("Vui lòng chọn đá cường hóa", 0);
+                            }
+                            else
+                            {
+                                InfoDlg.ShowWait();
+                                Service.StoneUpgrade(indexsUpgrade);
+                            }
+                        }
+                        else if (typeUpgrade == 2)
+                        {
+                            if (indexsUpgrade.Count > 0)
+                            {
+                                Service.Upgrade(indexsUpgrade);
+                                InfoDlg.ShowWait();
+                            }
+                        }
+                        break;
+                    }*/
+
+                    //mxh
                     {
-                        if (indexsUpgrade.Count == 0)
+                        if (typeUpgrade == 0)
                         {
-                            InfoMe.addInfo("Vui lòng chọn đá cường hóa", 0);
+                            if (itemUpgrade.item == null)
+                            {
+                                InfoMe.addInfo("Vui lòng chọn vật phẩm", 0);
+                                break;
+                            }
+                            if (itemsUpgrade.Count == 0)
+                            {
+                                InfoMe.addInfo("Vui lòng chọn đá nâng cấp", 0);
+                                break;
+                            }
+                            if (indexsUpgrade == null || indexsUpgrade.Count == 0)
+                            {
+                                InfoMe.addInfo("Vui lòng chọn đá nâng cấp", 0);
+                                break;
+                            }
+
+                            Item item = itemUpgrade.item;
+                            if (item.template.type >= 8)
+                            {
+                                InfoMe.addInfo("Vật phẩm không hợp lệ", 0);
+                                break;
+                            }
+                            InfoDlg.ShowWait();
+                            Service.Upgrade(item, indexsUpgrade);
                         }
-                        else
+                        else if (typeUpgrade == 1)
                         {
+                            if (itemsUpgrade.Count == 0 || indexsUpgrade.Count == 0)
+                            {
+                                InfoMe.addInfo("Vui lòng chọn đá cường hóa", 0);
+                                break;
+                            }
+
                             InfoDlg.ShowWait();
                             Service.StoneUpgrade(indexsUpgrade);
                         }
-                    }
-                    else if (typeUpgrade == 2)
-                    {
-                        if (indexsUpgrade.Count > 0)
+                        else if (typeUpgrade == 2)
                         {
-                            Service.Upgrade(indexsUpgrade);
+                            if (itemsUpgrade.Count == 0 || indexsUpgrade.Count == 0)
+                            {
+                                InfoMe.addInfo("Vui lòng chọn đá nâng cấp", 0);
+                                break;
+                            }
+
                             InfoDlg.ShowWait();
+                            Service.Upgrade(indexsUpgrade);
                         }
+
+                        break;
                     }
-                    break;
-                }*/
-
-                //mxh
-                {
-                    if (typeUpgrade == 0)
-                    {
-                        if (itemUpgrade.item == null)
-                        {
-                            InfoMe.addInfo("Vui lòng chọn vật phẩm", 0);
-                            break;
-                        }
-                        if (itemsUpgrade.Count == 0)
-                        {
-                            InfoMe.addInfo("Vui lòng chọn đá nâng cấp", 0);
-                            break;
-                        }
-                        if (indexsUpgrade == null || indexsUpgrade.Count == 0)
-                        {
-                            InfoMe.addInfo("Vui lòng chọn đá nâng cấp", 0);
-                            break;
-                        }
-
-                        Item item = itemUpgrade.item;
-                        if (item.template.type >= 8)
-                        {
-                            InfoMe.addInfo("Vật phẩm không hợp lệ", 0);
-                            break;
-                        }
-                        InfoDlg.ShowWait();
-                        Service.Upgrade(item, indexsUpgrade);
-                    }
-                    else if (typeUpgrade == 1)
-                    {
-                        if (itemsUpgrade.Count == 0 || indexsUpgrade.Count == 0)
-                        {
-                            InfoMe.addInfo("Vui lòng chọn đá cường hóa", 0);
-                            break;
-                        }
-
-                        InfoDlg.ShowWait();
-                        Service.StoneUpgrade(indexsUpgrade);
-                    }
-                    else if (typeUpgrade == 2)
-                    {
-                        if (itemsUpgrade.Count == 0 || indexsUpgrade.Count == 0)
-                        {
-                            InfoMe.addInfo("Vui lòng chọn đá nâng cấp", 0);
-                            break;
-                        }
-
-                        InfoDlg.ShowWait();
-                        Service.Upgrade(indexsUpgrade);
-                    }
-
-                    break;
-                }
                 case 22:
                     {
                         // tháo item upgrade
@@ -5674,9 +5674,9 @@ namespace Assets.Scripts.Screens
                 {
                     MyFont.text_mini_white.DrawString(g, "Tộc: Saiyan", xInfoPlayerBag + 20, yInfoPlayerBag + (num += dis), 0);
                 }
-                MyFont.text_mini_white.DrawString(g, GameCanvas.levels[Player.me.level].name.Replace("#", Player.me.gender == 0 ? "Nhân" : (Player.me.gender == 1 ? "Namek" : "Sayain")) + ": " + Utils.FormatNumber(Player.me.power) + " sức mạnh", 
+                MyFont.text_mini_white.DrawString(g, GameCanvas.levels[Player.me.level].name.Replace("#", Player.me.gender == 0 ? "Nhân" : (Player.me.gender == 1 ? "Namek" : "Sayain")) + ": " + Utils.FormatNumber(Player.me.power) + " sức mạnh",
                         xInfoPlayerBag + 20, yInfoPlayerBag + (num += dis), 0);
-                
+
                 MyFont.text_mini_white.DrawString(g, "Cấp: " + Player.me.level + " + " + Player.me.GetStrPercentLevel() + "%",
                         xInfoPlayerBag + 20, yInfoPlayerBag + (num += dis), 0);
 
@@ -8953,7 +8953,7 @@ namespace Assets.Scripts.Screens
             g.Reset();
             g.DrawImage(imgWallBag, xPlayerBag, yPlayerBag, StaticObj.BOTTOM_HCENTER);
             petMenu.Update();
-            GraphicManager.instance.Draw(g, petMenu.iconPaint, xPlayerBag + petMenu.template.dx, yPlayerBag + petMenu.template.dx - 25, 0, StaticObj.BOTTOM_HCENTER);
+            GraphicManager.instance.Draw(g, petMenu.iconPaint, xPlayerBag, yPlayerBag - 25, 0, StaticObj.BOTTOM_HCENTER);
         }
 
         public void SetTabIntrinsic()
@@ -9188,7 +9188,7 @@ namespace Assets.Scripts.Screens
             int xItem = xScroll
                 + (wScroll - col * items[0].w - (col - 1) * dis_item) / 2;
 
-            int yItem = yScroll + 40; 
+            int yItem = yScroll + 40;
 
             for (int i = 0; i < items.Count; i++)
             {

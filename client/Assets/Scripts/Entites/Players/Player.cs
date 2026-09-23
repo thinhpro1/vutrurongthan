@@ -1503,6 +1503,31 @@ namespace Assets.Scripts.Entites.Players
 
         private void UpdateStand()
         {
+            if (isMoveDown && Map.template != null && Map.template.isLine)
+            {
+                bool previousDropThrough = Map.isDropThrough;
+                Map.isDropThrough = true;
+                try
+                {
+                    if (!IsWallBottom())
+                    {
+                        y += 3;
+                        SetStatus(PlayerStatus.FALL);
+                        vy = 2;
+                        vx = 0;
+                        if (Equals(me))
+                        {
+                            Service.instance.PlayerMove();
+                        }
+                        return;
+                    }
+                }
+                finally
+                {
+                    Map.isDropThrough = previousDropThrough;
+                }
+            }
+
             frameTick++;
             if (frameTick > 30)
             {
@@ -1536,18 +1561,20 @@ namespace Assets.Scripts.Entites.Players
                 int slopeRange = Math.Abs(vx) + 2;
                 if (IsWallBottom())
                 {
-                    for (int step = 0; step < slopeRange && IsWallBottom(); step++)
+                    int pushed = 0;
+                    while (pushed < slopeRange && Map.IsWall(x, y - 1))
                     {
                         y--;
+                        pushed++;
                     }
                 }
                 else
                 {
-                    for (int step = 0; step < slopeRange; step++)
+                    for (int dy = 1; dy <= slopeRange; dy++)
                     {
-                        y++;
-                        if (IsWallBottom())
+                        if (Map.IsWall(x, y + dy))
                         {
+                            y += dy;
                             break;
                         }
                     }

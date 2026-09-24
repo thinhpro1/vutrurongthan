@@ -217,6 +217,9 @@ public final class MapService {
 
     private Join finishLoadInZone(Zone zone, Session session) {
         synchronized (zone) {
+            if (session.state() == SessionState.CLOSED) {
+                return new Join(false, List.of());
+            }
             PlayerProfile joining = session.player();
             if (joining == null) {
                 return new Join(false, List.of());
@@ -286,6 +289,9 @@ public final class MapService {
             }
 
             boolean currentMember = zone.contains(session);
+            if (session.state() == SessionState.CLOSED && !currentMember) {
+                return new MoveResult(false, List.of());
+            }
             PlayerProfile moved = current.withPosition(x, y);
             session.bindPlayer(moved);
             if (!currentMember) {

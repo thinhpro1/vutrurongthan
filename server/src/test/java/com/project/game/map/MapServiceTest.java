@@ -458,6 +458,45 @@ class MapServiceTest {
     }
 
     @Test
+    void finishLoadDoesNotReaddClosedSessionAfterQueuedLeave() throws Exception {
+        GameplayServices maps = mapsWithoutMonsters();
+        Session joining = session(player(1, 0, 0), maps);
+        Zone zone = maps.findZone(0, 0);
+        CountDownLatch priorStarted = new CountDownLatch(1);
+        CountDownLatch releasePrior = new CountDownLatch(1);
+        assertTrue(zone.submit(() -> {
+            priorStarted.countDown();
+            awaitRelease(releasePrior);
+        }));
+        assertTrue(priorStarted.await(5, TimeUnit.SECONDS));
+
+        CountDownLatch finishStarted = new CountDownLatch(1);
+        AtomicBoolean joined = new AtomicBoolean();
+        Thread finishLoad = Thread.ofVirtual().start(() -> {
+            finishStarted.countDown();
+            joined.set(maps.mapService().finishLoad(joining));
+        });
+        assertTrue(finishStarted.await(5, TimeUnit.SECONDS));
+
+        CountDownLatch closeStarted = new CountDownLatch(1);
+        Thread close = Thread.ofVirtual().start(() -> {
+            closeStarted.countDown();
+            joining.close();
+        });
+        assertTrue(closeStarted.await(5, TimeUnit.SECONDS));
+        awaitClosed(joining);
+
+        releasePrior.countDown();
+        finishLoad.join(1_000);
+        close.join(1_000);
+
+        assertFalse(finishLoad.isAlive());
+        assertFalse(close.isAlive());
+        assertFalse(joined.get());
+        assertEquals(0, maps.mapService().memberCount(0, 0));
+    }
+
+    @Test
     void deadPlayerCannotMove() throws Exception {
         GameplayServices maps = mapsWithoutMonsters();
         Session dead = session(player(1, 0, 0).withHp(0), maps);
@@ -470,6 +509,20 @@ class MapServiceTest {
         assertEquals(xBefore, dead.player().x());
         assertEquals(yBefore, dead.player().y());
         assertEquals(List.of(), drain(dead));
+    }
+
+    @Test
+    void closedNonMemberCannotMoveOrMutatePlayer() throws Exception {
+        GameplayServices maps = mapsWithoutMonsters();
+        Session closed = session(player(1, 0, 0), maps);
+        maps.mapService().finishLoad(closed);
+        drain(closed);
+        closed.close();
+
+        PlayerProfile before = closed.player();
+        assertFalse(maps.mapService().movePlayer(closed, before.x() + 100, before.y() + 100));
+        assertEquals(before, closed.player());
+        assertEquals(0, maps.mapService().memberCount(0, 0));
     }
 
     @Test
@@ -706,5 +759,13 @@ class MapServiceTest {
             Thread.currentThread().interrupt();
             throw new AssertionError(exception);
         }
+    }
+
+    private static void awaitClosed(Session session) throws InterruptedException {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        while (session.state() != SessionState.CLOSED && System.nanoTime() < deadline) {
+            Thread.sleep(1);
+        }
+        assertEquals(SessionState.CLOSED, session.state());
     }
 }

@@ -14,24 +14,46 @@ import java.util.List;
 import java.util.Objects;
 import java.util.random.RandomGenerator;
 import java.util.Optional;
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /** Concurrent runtime membership for one map zone. */
 public final class Zone {
     private static final int MONSTER_CHASE_LEASH = 1200;
+    private static final int DEFAULT_RUNTIME_INPUT_CAPACITY = 1024;
+    private static final Logger LOGGER = Logger.getLogger(Zone.class.getName());
     private final int mapId;
     private final int zoneId;
     private final int maxPlayer;
     private final ConcurrentHashMap<Integer, Session> members = new ConcurrentHashMap<>();
     private final LinkedHashMap<Integer, Monster> monsters = new LinkedHashMap<>();
+    private final ArrayBlockingQueue<Runnable> runtimeInputs;
+    private final Object runtimeLock = new Object();
+    private RuntimeState runtimeState = RuntimeState.FROZEN;
+    private Thread runtimeWorker;
 
     public Zone(int mapId, int zoneId, int maxPlayer, List<Monster> monsters) {
+        this(mapId, zoneId, maxPlayer, monsters, DEFAULT_RUNTIME_INPUT_CAPACITY);
+    }
+
+    Zone(
+            int mapId,
+            int zoneId,
+            int maxPlayer,
+            List<Monster> monsters,
+            int inputCapacity) {
         if (maxPlayer <= 0) {
             throw new IllegalArgumentException("maxPlayer must be positive");
+        }
+        if (inputCapacity <= 0) {
+            throw new IllegalArgumentException("inputCapacity must be positive");
         }
         this.mapId = mapId;
         this.zoneId = zoneId;
         this.maxPlayer = maxPlayer;
+        this.runtimeInputs = new ArrayBlockingQueue<>(inputCapacity);
         Objects.requireNonNull(monsters, "monsters");
         for (Monster monster : monsters) {
             Objects.requireNonNull(monster, "monster");
@@ -43,6 +65,87 @@ public final class Zone {
                                 + mapId
                                 + " zone "
                                 + zoneId);
+            }
+        }
+    }
+
+    /**
+     * Enqueues one action for this Zone's serialized runtime writer. The offer is deliberately
+     * non-blocking: callers must handle a full input queue explicitly.
+     */
+    public boolean submit(Runnable action) {
+        Objects.requireNonNull(action, "action");
+        synchronized (runtimeLock) {
+            if (runtimeState == RuntimeState.STOPPED || !runtimeInputs.offer(action)) {
+                return false;
+            }
+            if (runtimeWorker == null) {
+                startRuntimeWorkerLocked();
+            }
+            return true;
+        }
+    }
+
+    public RuntimeState runtimeState() {
+        synchronized (runtimeLock) {
+            return runtimeState;
+        }
+    }
+
+    /**
+     * Stops this Zone runtime permanently. An action already running is allowed to finish;
+     * queued actions are discarded and future submissions are rejected.
+     */
+    public void stopRuntime() {
+        synchronized (runtimeLock) {
+            runtimeState = RuntimeState.STOPPED;
+            runtimeInputs.clear();
+        }
+    }
+
+    private void startRuntimeWorkerLocked() {
+        Thread worker = Thread.ofVirtual().unstarted(this::runRuntime);
+        runtimeWorker = worker;
+        runtimeState = RuntimeState.ACTIVE;
+        worker.start();
+    }
+
+    private void runRuntime() {
+        try {
+            while (true) {
+                Runnable action;
+                synchronized (runtimeLock) {
+                    if (runtimeState == RuntimeState.STOPPED) {
+                        runtimeInputs.clear();
+                        return;
+                    }
+                    action = runtimeInputs.poll();
+                    if (action == null) {
+                        runtimeState = RuntimeState.FROZEN;
+                        return;
+                    }
+                }
+                try {
+                    action.run();
+                } catch (RuntimeException exception) {
+                    LOGGER.log(
+                            Level.WARNING,
+                            "Zone runtime action failed for map " + mapId + " zone " + zoneId,
+                            exception);
+                }
+            }
+        } finally {
+            synchronized (runtimeLock) {
+                if (runtimeWorker == Thread.currentThread()) {
+                    runtimeWorker = null;
+                    if (runtimeState == RuntimeState.STOPPED) {
+                        runtimeInputs.clear();
+                    } else if (runtimeInputs.isEmpty()) {
+                        runtimeState = RuntimeState.FROZEN;
+                    } else {
+                        startRuntimeWorkerLocked();
+                    }
+                }
             }
         }
     }
@@ -281,6 +384,12 @@ public final class Zone {
             throw new IllegalStateException("zone membership requires a bound player");
         }
         return player;
+    }
+
+    public enum RuntimeState {
+        ACTIVE,
+        FROZEN,
+        STOPPED
     }
 
     /** The outcome of one atomic admission attempt. */

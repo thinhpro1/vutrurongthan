@@ -1,4 +1,10 @@
 package com.project.game.map;
+
+import com.project.game.monster.Monster;
+import com.project.game.monster.MonsterFactory;
+import com.project.game.resource.GameResources;
+import com.project.game.testsupport.MapTestSupport;
+import com.project.game.testsupport.MonsterTestSupport;
 import com.project.game.testsupport.TestPlayerProfiles;
 
 import com.project.game.testsupport.TestServices;
@@ -16,8 +22,14 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -152,6 +164,267 @@ class ZoneTest {
         assertEquals(1, admitted.get());
         assertEquals(1, zone.size());
         assertEquals(1, zone.maxPlayer());
+    }
+
+    @Test
+    void runtimeStartsFrozenWithoutCreatingAnActiveWorker() {
+        Zone zone = new Zone(1, 0, 10, List.of());
+
+        assertEquals(Zone.RuntimeState.FROZEN, zone.runtimeState());
+    }
+
+    @Test
+    void runtimeRejectsNullActionsAndInvalidInputCapacity() {
+        Zone zone = new Zone(1, 0, 10, List.of());
+
+        assertThrows(NullPointerException.class, () -> zone.submit(null));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new Zone(1, 0, 10, List.of(), 0));
+    }
+
+    @Test
+    void queuedActionsRunInFifoOrderOnOneVirtualWriter() throws Exception {
+        Zone zone = new Zone(1, 0, 10, List.of());
+        List<Integer> order = Collections.synchronizedList(new ArrayList<>());
+        AtomicReference<Thread> writer = new AtomicReference<>();
+        AtomicBoolean allVirtual = new AtomicBoolean(true);
+        AtomicBoolean oneWriter = new AtomicBoolean(true);
+        CountDownLatch firstStarted = new CountDownLatch(1);
+        CountDownLatch releaseFirst = new CountDownLatch(1);
+        CountDownLatch finished = new CountDownLatch(3);
+
+        assertTrue(zone.submit(() -> {
+            Thread current = Thread.currentThread();
+            writer.set(current);
+            allVirtual.set(current.isVirtual());
+            order.add(1);
+            firstStarted.countDown();
+            try {
+                if (!releaseFirst.await(5, TimeUnit.SECONDS)) {
+                    throw new AssertionError("first action was not released");
+                }
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                throw new AssertionError(exception);
+            } finally {
+                finished.countDown();
+            }
+        }));
+        assertTrue(firstStarted.await(5, TimeUnit.SECONDS));
+
+        assertTrue(zone.submit(() -> {
+            Thread current = Thread.currentThread();
+            allVirtual.set(allVirtual.get() && current.isVirtual());
+            oneWriter.set(oneWriter.get() && writer.get() == current);
+            order.add(2);
+            finished.countDown();
+        }));
+        assertTrue(zone.submit(() -> {
+            Thread current = Thread.currentThread();
+            allVirtual.set(allVirtual.get() && current.isVirtual());
+            oneWriter.set(oneWriter.get() && writer.get() == current);
+            order.add(3);
+            finished.countDown();
+        }));
+
+        releaseFirst.countDown();
+        assertTrue(finished.await(5, TimeUnit.SECONDS));
+        awaitRuntimeState(zone, Zone.RuntimeState.FROZEN);
+
+        assertEquals(List.of(1, 2, 3), order);
+        assertTrue(allVirtual.get());
+        assertTrue(oneWriter.get());
+    }
+
+    @Test
+    void simultaneousSubmissionsShareOneVirtualWriter() throws Exception {
+        Zone zone = new Zone(1, 0, 10, List.of());
+        CountDownLatch firstStarted = new CountDownLatch(1);
+        CountDownLatch releaseFirst = new CountDownLatch(1);
+        CountDownLatch submitted = new CountDownLatch(2);
+        CountDownLatch finished = new CountDownLatch(3);
+        AtomicReference<Thread> writer = new AtomicReference<>();
+        AtomicBoolean oneWriter = new AtomicBoolean(true);
+        CyclicBarrier barrier = new CyclicBarrier(3);
+
+        assertTrue(zone.submit(() -> {
+            writer.set(Thread.currentThread());
+            firstStarted.countDown();
+            try {
+                if (!releaseFirst.await(5, TimeUnit.SECONDS)) {
+                    throw new AssertionError("first action was not released");
+                }
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                throw new AssertionError(exception);
+            } finally {
+                finished.countDown();
+            }
+        }));
+        assertTrue(firstStarted.await(5, TimeUnit.SECONDS));
+
+        Thread submitterOne = Thread.ofVirtual().start(() -> submitFromBarrier(
+                zone, barrier, submitted, finished, writer, oneWriter));
+        Thread submitterTwo = Thread.ofVirtual().start(() -> submitFromBarrier(
+                zone, barrier, submitted, finished, writer, oneWriter));
+        barrier.await();
+
+        assertTrue(submitted.await(5, TimeUnit.SECONDS));
+        releaseFirst.countDown();
+        assertTrue(finished.await(5, TimeUnit.SECONDS));
+        submitterOne.join();
+        submitterTwo.join();
+        awaitRuntimeState(zone, Zone.RuntimeState.FROZEN);
+
+        assertTrue(oneWriter.get());
+    }
+
+    @Test
+    void runtimeReturnsToFrozenAfterQueueDrains() throws Exception {
+        Zone zone = new Zone(1, 0, 10, List.of());
+        CountDownLatch completed = new CountDownLatch(1);
+
+        assertTrue(zone.submit(completed::countDown));
+        assertTrue(completed.await(5, TimeUnit.SECONDS));
+        awaitRuntimeState(zone, Zone.RuntimeState.FROZEN);
+    }
+
+    @Test
+    void freezeWakeKeepsExistingMonsterRuntimeState() throws Exception {
+        Monster monster = monsterForTest();
+        Zone zone = new Zone(1, 0, 10, List.of(monster));
+        CountDownLatch damaged = new CountDownLatch(1);
+        CountDownLatch woke = new CountDownLatch(1);
+
+        assertTrue(zone.submit(() -> {
+            zone.damageMonster(monster.id(), 1, 10, 0);
+            damaged.countDown();
+        }));
+        assertTrue(damaged.await(5, TimeUnit.SECONDS));
+        awaitRuntimeState(zone, Zone.RuntimeState.FROZEN);
+        assertEquals(290, monster.snapshot().hp());
+
+        assertTrue(zone.submit(woke::countDown));
+        assertTrue(woke.await(5, TimeUnit.SECONDS));
+        awaitRuntimeState(zone, Zone.RuntimeState.FROZEN);
+        assertEquals(290, monster.snapshot().hp());
+    }
+
+    @Test
+    void boundedRuntimeQueueRejectsOverflowWithoutBlocking() throws Exception {
+        Zone zone = new Zone(1, 0, 10, List.of(), 1);
+        CountDownLatch firstStarted = new CountDownLatch(1);
+        CountDownLatch releaseFirst = new CountDownLatch(1);
+        CountDownLatch secondRan = new CountDownLatch(1);
+
+        assertTrue(zone.submit(() -> {
+            firstStarted.countDown();
+            try {
+                if (!releaseFirst.await(5, TimeUnit.SECONDS)) {
+                    throw new AssertionError("first action was not released");
+                }
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                throw new AssertionError(exception);
+            }
+        }));
+        assertTrue(firstStarted.await(5, TimeUnit.SECONDS));
+        assertTrue(zone.submit(secondRan::countDown));
+
+        long startedAt = System.nanoTime();
+        assertFalse(zone.submit(() -> {
+            throw new AssertionError("overflow action must not run");
+        }));
+        long elapsed = System.nanoTime() - startedAt;
+
+        assertTrue(elapsed < TimeUnit.SECONDS.toNanos(1));
+        releaseFirst.countDown();
+        assertTrue(secondRan.await(5, TimeUnit.SECONDS));
+        awaitRuntimeState(zone, Zone.RuntimeState.FROZEN);
+    }
+
+    @Test
+    void runtimeTaskFailureDoesNotStrandLifecycle() throws Exception {
+        Zone zone = new Zone(1, 0, 10, List.of());
+        CountDownLatch continued = new CountDownLatch(1);
+
+        assertTrue(zone.submit(() -> {
+            throw new IllegalStateException("expected test failure");
+        }));
+        assertTrue(zone.submit(continued::countDown));
+
+        assertTrue(continued.await(5, TimeUnit.SECONDS));
+        awaitRuntimeState(zone, Zone.RuntimeState.FROZEN);
+    }
+
+    @Test
+    void stoppedRuntimeRejectsNewActionsAndDiscardsPendingActions() throws Exception {
+        Zone zone = new Zone(1, 0, 10, List.of());
+        CountDownLatch firstStarted = new CountDownLatch(1);
+        CountDownLatch releaseFirst = new CountDownLatch(1);
+        AtomicBoolean pendingRan = new AtomicBoolean();
+
+        assertTrue(zone.submit(() -> {
+            firstStarted.countDown();
+            try {
+                if (!releaseFirst.await(5, TimeUnit.SECONDS)) {
+                    throw new AssertionError("first action was not released");
+                }
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                throw new AssertionError(exception);
+            }
+        }));
+        assertTrue(firstStarted.await(5, TimeUnit.SECONDS));
+        assertTrue(zone.submit(() -> pendingRan.set(true)));
+
+        zone.stopRuntime();
+        assertEquals(Zone.RuntimeState.STOPPED, zone.runtimeState());
+        assertFalse(zone.submit(() -> {
+            throw new AssertionError("stopped action must not run");
+        }));
+
+        releaseFirst.countDown();
+        awaitRuntimeState(zone, Zone.RuntimeState.STOPPED);
+        assertFalse(pendingRan.get());
+    }
+
+    private static void submitFromBarrier(
+            Zone zone,
+            CyclicBarrier barrier,
+            CountDownLatch submitted,
+            CountDownLatch finished,
+            AtomicReference<Thread> writer,
+            AtomicBoolean oneWriter) {
+        try {
+            barrier.await();
+            assertTrue(zone.submit(() -> {
+                oneWriter.set(oneWriter.get() && Thread.currentThread().isVirtual());
+                oneWriter.set(oneWriter.get() && writer.get() == Thread.currentThread());
+                finished.countDown();
+            }));
+            submitted.countDown();
+        } catch (Exception exception) {
+            throw new AssertionError(exception);
+        }
+    }
+
+    private static void awaitRuntimeState(Zone zone, Zone.RuntimeState expected) {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        while (zone.runtimeState() != expected && System.nanoTime() < deadline) {
+            Thread.onSpinWait();
+        }
+        assertEquals(expected, zone.runtimeState());
+    }
+
+    private static Monster monsterForTest() {
+        MonsterFactory factory = new MonsterFactory(GameResources.fromFrameRoot(
+                Path.of("resources", "json"),
+                MapTestSupport.canonicalMaps(),
+                2,
+                MonsterTestSupport.canonicalRepository()));
+        return factory.createForMap(1).getFirst();
     }
 
     private static void admitAtBarrier(

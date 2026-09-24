@@ -52,12 +52,12 @@ public final class JdbcPlayerRepository implements PlayerRepository {
         this.dataSource = Objects.requireNonNull(dataSource, "dataSource");
     }
 
-    /** Verifies table availability without reading or deserializing any player row. */
+    /** Kiểm tra bảng tồn tại mà không đọc hoặc deserialize row Player nào. */
     public void probeTable() {
         try (var connection = dataSource.getConnection();
              PreparedStatement statement = connection.prepareStatement(PROBE_TABLE_SQL);
              ResultSet ignored = statement.executeQuery()) {
-            // The query itself is the health check. Existing rows are intentionally not mapped.
+            // Chính query là health check; cố ý không map các row hiện có.
         } catch (SQLException exception) {
             throw new PlayerRepositoryException("failed to probe player table", exception);
         }
@@ -122,9 +122,8 @@ public final class JdbcPlayerRepository implements PlayerRepository {
     }
 
     @Override
-    public void updateCheckpoint(PlayerSaveData player, Instant playedAt) {
+    public void save(PlayerSaveData player) {
         Objects.requireNonNull(player, "player");
-        Objects.requireNonNull(playedAt, "playedAt");
         if (player.id() <= 0) {
             throw new IllegalArgumentException("persisted player id must be positive");
         }
@@ -145,7 +144,7 @@ public final class JdbcPlayerRepository implements PlayerRepository {
             statement.setInt(index++, player.diamond());
             statement.setInt(index++, player.ruby());
             statement.setString(index++, positionJson(player));
-            statement.setTimestamp(index++, Timestamp.from(playedAt));
+            statement.setTimestamp(index++, Timestamp.from(Instant.now()));
             statement.setInt(index++, player.id());
             statement.setLong(index, player.accountId());
             if (statement.executeUpdate() != 1) {

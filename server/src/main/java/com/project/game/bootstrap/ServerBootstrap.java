@@ -1,7 +1,7 @@
 package com.project.game.bootstrap;
 
-import com.project.game.account.AuthService;
-import com.project.game.combat.CombatService;
+import com.project.game.account.AccountAuth;
+import com.project.game.combat.Combat;
 import com.project.game.map.MapManager;
 import com.project.game.monster.MonsterFactory;
 import com.project.game.monster.MonsterManager;
@@ -20,7 +20,6 @@ import com.project.game.persistence.map.MapRepository;
 import com.project.game.persistence.monster.JdbcMonsterRepository;
 import com.project.game.persistence.monster.MonsterRepository;
 import com.project.game.persistence.player.JdbcPlayerRepository;
-import com.project.game.player.PlayerService;
 import com.project.game.resource.GameResources;
 import com.project.game.map.MapTemplate;
 import com.project.game.resource.loader.MapCatalogLoader;
@@ -114,7 +113,7 @@ public final class ServerBootstrap {
             PlayerPacketWriter playerPackets = new PlayerPacketWriter();
             MonsterPacketWriter monsterPackets = new MonsterPacketWriter();
             MapManager maps = new MapManager(mapCatalog, monsterFactory, playerPackets);
-            CombatService combat = new CombatService(maps, playerPackets, monsterPackets);
+            Combat combat = new Combat(maps, playerPackets, monsterPackets);
             MonsterManager monsterManager = new MonsterManager(maps, monsterPackets, playerPackets);
 
             JdbcAccountRepository accountRepository =
@@ -124,9 +123,9 @@ public final class ServerBootstrap {
                     new JdbcPlayerRepository(databaseManager.dataSource());
             playerRepository.probeTable();
 
-            AuthService auth = new AuthService(accountRepository);
+            AccountAuth auth = new AccountAuth(accountRepository);
             SessionServices services = new SessionServices(
-                    auth, resources, maps, combat, monsterManager, new PlayerService(playerRepository));
+                    auth, resources, maps, combat, monsterManager, playerRepository);
             NetworkServer server = new NetworkServer(
                     properties.getProperty("game.network.host", "127.0.0.1"),
                     integer(properties, "game.network.port", 1707),

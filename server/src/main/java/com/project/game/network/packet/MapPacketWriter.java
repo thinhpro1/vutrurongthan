@@ -9,23 +9,23 @@ import com.project.game.monster.MonsterSnapshot;
 import com.project.game.network.message.Message;
 import com.project.game.network.message.MessageName;
 import com.project.game.network.message.MessageWriter;
-import com.project.game.player.Player;
 
 import java.io.IOException;
 import java.util.List;
 import java.util.Objects;
 
-/** Serializes the legacy MAP_INFO payload without owning map/session state. */
+/** Tuần tự hóa payload MAP_INFO legacy mà không sở hữu state Map hoặc Session. */
 public final class MapPacketWriter {
     private static final Gson GSON = new Gson();
 
     public Message mapInfo(
-            Player player,
+            int zoneId,
+            int x,
+            int y,
             MapTemplate map,
             boolean includeTemplate,
             List<String> waypointTargetNames,
             List<MonsterSnapshot> monsters) throws IOException {
-        Objects.requireNonNull(player, "player");
         Objects.requireNonNull(map, "map");
         Objects.requireNonNull(waypointTargetNames, "waypointTargetNames");
         Objects.requireNonNull(monsters, "monsters");
@@ -39,16 +39,16 @@ public final class MapPacketWriter {
         if (monsters.size() > Byte.MAX_VALUE) {
             throw new IOException("too many monsters for map " + map.id());
         }
-        PlayerPacketValidator.validateMapInfo(player, map.id());
+        PlayerPacketValidator.validateMapInfo(zoneId, x, y, map.id());
 
         MessageWriter writer = new MessageWriter().writeShort(map.id());
         if (includeTemplate) {
             writeTemplate(writer, map);
         }
 
-        writer.writeByte(player.zoneId())
-                .writeShort(player.x())
-                .writeShort(player.y())
+        writer.writeByte(zoneId)
+                .writeShort(x)
+                .writeShort(y)
                 .writeByte(map.waypoints().size());
         for (int index = 0; index < map.waypoints().size(); index++) {
             var waypoint = map.waypoints().get(index);

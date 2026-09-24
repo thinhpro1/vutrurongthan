@@ -8,7 +8,7 @@ import com.project.game.network.codec.LegacyPacketCodec;
 import com.project.game.network.message.Message;
 import com.project.game.network.message.MessageName;
 import com.project.game.network.message.MessageWriter;
-import com.project.game.account.AuthService;
+import com.project.game.account.AccountAuth;
 import com.project.game.resource.GameResources;
 import com.project.game.network.SessionServices;
 import org.junit.jupiter.api.Test;
@@ -48,7 +48,7 @@ class ClientConfigTest {
 
     @Test
     void handlerUsesConfiguredClientVersionAndLoginVersion() throws Exception {
-        AuthService auth = TestServices.authService();
+        AccountAuth auth = TestServices.authService();
         auth.register("user01", "secret1", "127.0.0.1");
         SessionManager manager = new SessionManager();
         Session session = new Session(manager.nextId(), new TestTransport(), manager,

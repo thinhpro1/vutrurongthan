@@ -10,7 +10,7 @@ import com.project.game.network.handler.MessageHandler;
 import com.project.game.network.message.Message;
 import com.project.game.network.message.MessageName;
 import com.project.game.network.message.MessageWriter;
-import com.project.game.account.AuthService;
+import com.project.game.account.AccountAuth;
 import com.project.game.resource.GameResources;
 import com.project.game.network.SessionServices;
 import com.project.game.player.Player;
@@ -26,7 +26,7 @@ import java.util.concurrent.BlockingQueue;
 
 final class MessageHandlerTestSupport {
 
-    static MessageHandler newHandler(Session session, AuthService authService) {
+    static MessageHandler newHandler(Session session, AccountAuth authService) {
         return newHandler(session, TestServices.serverServices(authService, GameResources.unavailable()),
                 ClientConfig.defaults());
     }
@@ -39,15 +39,15 @@ final class MessageHandlerTestSupport {
         return new MessageHandler(session, services, config);
     }
 
-    static Session newSession(AuthService authService) {
+    static Session newSession(AccountAuth authService) {
         return newSession(authService, 1024);
     }
 
-    static Session newSession(AuthService authService, int maxPacketSize) {
+    static Session newSession(AccountAuth authService, int maxPacketSize) {
         return newSession(authService, maxPacketSize, new SessionManager(), "127.0.0.1");
     }
 
-    static Session newSession(AuthService authService, int maxPacketSize,
+    static Session newSession(AccountAuth authService, int maxPacketSize,
                                       SessionManager manager, String remoteAddress) {
         return new Session(manager.nextId(), new TestTransport(
                 new ByteArrayInputStream(new byte[0]), new ByteArrayOutputStream(), remoteAddress), manager,
@@ -55,7 +55,7 @@ final class MessageHandlerTestSupport {
                 TestServices.serverServices(authService, GameResources.unavailable()), ClientConfig.defaults());
     }
 
-    static Session inGameSessionWithPlayer(AuthService auth) {
+    static Session inGameSessionWithPlayer(AccountAuth auth) {
         Session session = newSession(auth);
         session.bindPlayer(TestPlayers.initial(1L, 7, "alpha1", 0));
         session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);

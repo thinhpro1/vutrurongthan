@@ -45,38 +45,14 @@ public record PlayerRecord(
         }
     }
 
-    public static PlayerRecord withoutId(Player player) {
+    public static PlayerRecord withoutId(PlayerSaveData player) {
         Objects.requireNonNull(player, "player");
-        return fromPlayer(player, 0);
-    }
-
-    public static PlayerRecord fromPlayer(Player player) {
-        Objects.requireNonNull(player, "player");
-        return fromPlayer(player, player.id());
-    }
-
-    private static PlayerRecord fromPlayer(Player player, int id) {
-        return new PlayerRecord(
-                id,
-                player.accountId(),
-                player.name(),
-                player.gender(),
-                player.power(),
-                player.potential(),
-                player.level(),
-                player.exp(),
-                player.baseStats(),
-                player.currentStats(),
-                player.hp(),
-                player.mp(),
-                player.appearance(),
-                player.coin(),
-                player.coinLock(),
-                player.diamond(),
-                player.ruby(),
-                player.mapId(),
-                player.x(),
-                player.y());
+        return fromSaveData(new PlayerSaveData(
+                0, player.accountId(), player.name(), player.gender(), player.power(),
+                player.potential(), player.level(), player.exp(), player.baseStats(),
+                player.currentStats(), player.hp(), player.mp(), player.appearance(),
+                player.coin(), player.coinLock(), player.diamond(), player.ruby(),
+                player.mapId(), player.x(), player.y()));
     }
 
     public static PlayerRecord fromSaveData(PlayerSaveData player) {

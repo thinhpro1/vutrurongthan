@@ -35,8 +35,7 @@ class MapPacketWriterTest {
         player.changeMap(0, 3, 1234, 567);
         List<String> targets = List.of("target-1");
 
-        Message message = new MapPacketWriter().mapInfo(
-                player, map, true, targets, List.of());
+        Message message = new MapPacketWriter().mapInfo(player.zoneId(), player.x(), player.y(), map, true, targets, List.of());
 
         assertEquals(MessageName.MAP_INFO, message.command());
         var reader = message.reader();
@@ -82,7 +81,7 @@ class MapPacketWriterTest {
         player.changeMap(1, 0, 1, 2);
 
         var reader = new MapPacketWriter()
-                .mapInfo(player, map, true, List.of(), List.of())
+                .mapInfo(player.zoneId(), player.x(), player.y(), map, true, List.of(), List.of())
                 .reader();
 
         assertEquals(1, reader.readShort());
@@ -96,7 +95,7 @@ class MapPacketWriterTest {
         player.changeMap(4, 0, 1, 2);
 
         var reader = new MapPacketWriter()
-                .mapInfo(player, map, true, List.of(), List.of())
+                .mapInfo(player.zoneId(), player.x(), player.y(), map, true, List.of(), List.of())
                 .reader();
 
         assertEquals(4, reader.readShort());
@@ -139,7 +138,7 @@ class MapPacketWriterTest {
         player.changeMap(4, 0, 123, 456);
 
         var reader = new MapPacketWriter()
-                .mapInfo(player, map, true, List.of(), List.of())
+                .mapInfo(player.zoneId(), player.x(), player.y(), map, true, List.of(), List.of())
                 .reader();
 
         assertEquals(4, reader.readShort());
@@ -186,8 +185,7 @@ class MapPacketWriterTest {
         Player player = TestPlayers.initial(1L, 7, "alpha1", 0);
         player.changeMap(4, 2, 123, 456);
 
-        Message message = new MapPacketWriter().mapInfo(
-                player, map, false, List.of("next"), List.of());
+        Message message = new MapPacketWriter().mapInfo(player.zoneId(), player.x(), player.y(), map, false, List.of("next"), List.of());
 
         var reader = message.reader();
         assertEquals(4, reader.readShort());
@@ -213,7 +211,7 @@ class MapPacketWriterTest {
         player.changeMap(4, 0, 1, 2);
 
         var reader = new MapPacketWriter()
-                .mapInfo(player, map, true, List.of(), List.of())
+                .mapInfo(player.zoneId(), player.x(), player.y(), map, true, List.of(), List.of())
                 .reader();
 
         assertEquals(4, reader.readShort());
@@ -246,10 +244,8 @@ class MapPacketWriterTest {
         player.changeMap(4, 0, 1, 2);
         MapPacketWriter writer = new MapPacketWriter();
 
-        assertThrows(IOException.class, () -> writer.mapInfo(
-                player, simpleMapWithImages(List.of(), -2, -1, -1), true, List.of(), List.of()));
-        assertThrows(IOException.class, () -> writer.mapInfo(
-                player, simpleMapWithImages(List.of(), 32768, -1, -1), true, List.of(), List.of()));
+        assertThrows(IOException.class, () -> writer.mapInfo(player.zoneId(), player.x(), player.y(), simpleMapWithImages(List.of(), -2, -1, -1), true, List.of(), List.of()));
+        assertThrows(IOException.class, () -> writer.mapInfo(player.zoneId(), player.x(), player.y(), simpleMapWithImages(List.of(), 32768, -1, -1), true, List.of(), List.of()));
     }
 
     @Test
@@ -260,7 +256,7 @@ class MapPacketWriterTest {
         player.changeMap(4, 0, 1, 2);
 
         assertThrows(IllegalArgumentException.class, () ->
-                new MapPacketWriter().mapInfo(player, map, false, List.of(), List.of()));
+                new MapPacketWriter().mapInfo(player.zoneId(), player.x(), player.y(), map, false, List.of(), List.of()));
     }
 
     @Test
@@ -280,10 +276,10 @@ class MapPacketWriterTest {
         }
 
         assertThrows(IOException.class, () ->
-                new MapPacketWriter().mapInfo(player, map, false, names, List.of()));
+                new MapPacketWriter().mapInfo(player.zoneId(), player.x(), player.y(), map, false, names, List.of()));
         MapTemplate smallMap = simpleMap(List.of());
         assertThrows(IOException.class, () ->
-                new MapPacketWriter().mapInfo(player, smallMap, false, List.of(), monsters));
+                new MapPacketWriter().mapInfo(player.zoneId(), player.x(), player.y(), smallMap, false, List.of(), monsters));
     }
 
     private static MapTemplate map0() {

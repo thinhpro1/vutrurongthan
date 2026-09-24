@@ -3,82 +3,86 @@ package com.project.game.map;
 import com.project.game.monster.MonsterFactory;
 import com.project.game.network.Session;
 import com.project.game.network.SessionState;
-import com.project.game.network.message.Message;
 import com.project.game.network.packet.PlayerPacketWriter;
 import com.project.game.player.Player;
+import com.project.game.player.PlayerSaveData;
+import com.project.game.service.AreaService;
 
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.TreeMap;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
-/** Sở hữu danh mục bản đồ, Zone và điều phối các chuyển động cấp bản đồ. */
+/** Quản lý các runtime Map và điều phối chuyển Player giữa các Map. */
 public final class MapManager {
+    private static final Logger LOGGER = Logger.getLogger(MapManager.class.getName());
     private static final int DEATH_RETURN_MAP_ID = 0;
     private static final int DEATH_RETURN_ZONE_ID = 0;
     private static final int DEATH_RETURN_X = 1250;
     private static final int DEATH_RETURN_Y = 648;
 
-    private record ZoneKey(int mapId, int zoneId) {
-    }
+    private final java.util.Map<Integer, Map> maps;
+    private final AreaService area;
 
-    private final Map<Integer, MapTemplate> maps;
-    private final MonsterFactory monsterFactory;
-    private final ConcurrentHashMap<ZoneKey, Zone> zones = new ConcurrentHashMap<>();
-    private final PlayerPacketWriter packets;
-
-    public MapManager(Map<Integer, MapTemplate> maps, MonsterFactory monsterFactory,
+    public MapManager(java.util.Map<Integer, MapTemplate> catalog,
+                      MonsterFactory monsterFactory,
                       PlayerPacketWriter packets) {
-        Objects.requireNonNull(maps, "maps");
-        TreeMap<Integer, MapTemplate> copiedMaps = new TreeMap<>();
-        maps.forEach((mapId, map) -> {
-            if (mapId == null || map == null) {
-                throw new NullPointerException("maps must not contain null entries");
+        Objects.requireNonNull(catalog, "catalog");
+        Objects.requireNonNull(monsterFactory, "monsterFactory");
+        this.area = new AreaService(Objects.requireNonNull(packets, "packets"));
+
+        TreeMap<Integer, Map> runtimeMaps = new TreeMap<>();
+        catalog.forEach((mapId, template) -> {
+            if (mapId == null || template == null) {
+                throw new NullPointerException("catalog must not contain null entries");
             }
-            if (mapId != map.id()) {
+            if (mapId != template.id()) {
                 throw new IllegalArgumentException("map catalog key does not match map id");
             }
-            copiedMaps.put(mapId, map);
-        });
-        this.maps = Collections.unmodifiableMap(copiedMaps);
-        this.monsterFactory = Objects.requireNonNull(monsterFactory, "monsterFactory");
-        this.packets = Objects.requireNonNull(packets, "packets");
-        for (MapTemplate map : this.maps.values()) {
-            if ("ONLINE".equals(map.type())) {
-                for (int zoneId = 0; zoneId < map.minZone(); zoneId++) {
-                    zones.put(new ZoneKey(map.id(), zoneId), create(map, zoneId));
-                }
+            if ("ONLINE".equals(template.type())) {
+                runtimeMaps.put(mapId, new Map(template, monsterFactory));
             }
+        });
+        this.maps = java.util.Collections.unmodifiableMap(runtimeMaps);
+    }
+
+    /** Tìm runtime Map đang mở mà không tạo Map mới. */
+    public Map findMap(int mapId) {
+        return maps.get(mapId);
+    }
+
+    /** Lấy runtime Map đang mở hoặc báo lỗi nếu Map không hợp lệ. */
+    public Map getMap(int mapId) {
+        Map map = findMap(mapId);
+        if (map == null) {
+            throw new IllegalArgumentException("unknown or offline map " + mapId);
         }
+        return map;
     }
 
-    /** Trả về Zone hiện có mà không tạo mới. */
+    /** Tìm Zone hiện có qua cây sở hữu Map → Zone. */
     public Zone findZone(int mapId, int zoneId) {
-        return zones.get(new ZoneKey(mapId, zoneId));
+        Map map = findMap(mapId);
+        return map == null ? null : map.findZone(zoneId);
     }
 
-    /** Trả về Zone hợp lệ theo chính sách, tạo nguyên tử khi được yêu cầu lần đầu. */
+    /** Lấy hoặc tạo Zone hợp lệ qua runtime Map tương ứng. */
     public Zone getZone(int mapId, int zoneId) {
-        MapTemplate map = requireOnlineMap(mapId, zoneId);
-        ZoneKey key = new ZoneKey(mapId, zoneId);
-        return zones.computeIfAbsent(key, ignored -> create(map, zoneId));
+        return getMap(mapId).getZone(zoneId);
     }
 
-    /** Trả về toàn bộ Zone theo thứ tự bản đồ/khu vực ổn định. */
+    /** Trả về toàn bộ Zone hiện có theo thứ tự Map rồi Zone. */
     public List<Zone> zones() {
-        return zones.entrySet().stream()
-                .sorted(Map.Entry.comparingByKey(
-                        Comparator.comparingInt(ZoneKey::mapId)
-                                .thenComparingInt(ZoneKey::zoneId)))
-                .map(Map.Entry::getValue)
+        return maps.values().stream()
+                .sorted(Comparator.comparingInt(Map::id))
+                .flatMap(map -> map.zones().stream())
                 .toList();
     }
 
+    /** Gia nhập Zone sau khi client hoàn tất tải bản đồ. */
     public boolean finishLoad(Session session) {
         if (session == null || session.state() == SessionState.CLOSED) {
             return false;
@@ -118,22 +122,8 @@ public final class MapManager {
                         return new Join(true, List.of());
                     }
 
-                    Player current = session.player();
-                    List<Session> rejectedObservers = new ArrayList<>();
-                    for (Session member : admission.existing()) {
-                        if (member == session || member.state() == SessionState.CLOSED
-                                || member.player() == null) {
-                            continue;
-                        }
-                        if (!session.trySend(packets.addPlayer(member.player()))) {
-                            rejectedObservers.add(session);
-                            return new Join(true, rejectedObservers);
-                        }
-                        if (!member.trySend(packets.addPlayer(current))) {
-                            rejectedObservers.add(member);
-                        }
-                    }
-                    return new Join(true, rejectedObservers);
+                    return new Join(true,
+                            area.addPlayer(session, session.player(), admission.existing()));
                 }
             });
             closeRejected(result.rejectedObservers());
@@ -143,43 +133,45 @@ public final class MapManager {
         }
     }
 
-    /** Rời membership theo liên kết định tuyến Zone hiện tại của Session. */
-    public void leave(Session session) {
+    /** Tách Session và trả về bản PlayerSaveData được chụp trong Zone owner. */
+    public PlayerSaveData leave(Session session) {
         if (session == null || session.player() == null) {
-            return;
+            return null;
         }
         Zone zone = session.zone();
         if (zone == null) {
-            return;
+            return PlayerSaveData.capture(session.player());
         }
-        Player leaving = session.player();
 
         try {
-            List<Session> rejectedObservers = zone.call(() -> {
+            LeaveResult result = zone.call(() -> {
                 synchronized (zone) {
-                    if (!zone.removePlayer(session)) {
+                    Player player = session.player();
+                    if (player == null) {
+                        return new LeaveResult(null, List.of());
+                    }
+                    if (!zone.hasPlayer(session)) {
                         session.clearZone(zone);
-                        return List.of();
+                        return new LeaveResult(PlayerSaveData.capture(player), List.of());
                     }
-
+                    if (!zone.removePlayer(session)) {
+                        return new LeaveResult(null, List.of());
+                    }
+                    var rejected = area.removePlayer(session, player.id(), zone.members());
                     session.clearZone(zone);
-                    Message packet = packets.removePlayer(leaving.id());
-                    List<Session> rejected = new ArrayList<>();
-                    for (Session member : zone.members()) {
-                        if (member != session && member.state() != SessionState.CLOSED
-                                && !member.trySend(packet)) {
-                            rejected.add(member);
-                        }
-                    }
-                    return List.copyOf(rejected);
+                    return new LeaveResult(PlayerSaveData.capture(player), rejected);
                 }
             });
-            closeRejected(rejectedObservers);
+            closeRejected(result.rejectedObservers());
+            return result.saveData();
         } catch (RejectedExecutionException exception) {
-            // Zone đã dừng, không thể nhận thêm tác vụ có thẩm quyền.
+            LOGGER.log(Level.WARNING,
+                    "Không thể detach Player vì Zone đã dừng: session=" + session.id(), exception);
+            return null;
         }
     }
 
+    /** Di chuyển Player trong Zone owner rồi phát thông báo ra khu vực. */
     public boolean movePlayer(Session session, int x, int y) {
         if (session == null || session.state() == SessionState.CLOSED) {
             return false;
@@ -197,16 +189,8 @@ public final class MapManager {
                             || !player.move(x, y)) {
                         return new MoveDelivery(false, List.of());
                     }
-
-                    Message packet = packets.movePlayer(player.id(), player.x(), player.y());
-                    List<Session> rejectedObservers = new ArrayList<>();
-                    for (Session member : zone.members()) {
-                        if (member != session && member.state() != SessionState.CLOSED
-                                && !member.trySend(packet)) {
-                            rejectedObservers.add(member);
-                        }
-                    }
-                    return new MoveDelivery(true, rejectedObservers);
+                    return new MoveDelivery(true,
+                            area.move(session, player, zone.members()));
                 }
             });
             closeRejected(result.rejectedObservers());
@@ -216,16 +200,18 @@ public final class MapManager {
         }
     }
 
-    public boolean returnTownFromDeath(Session session) {
-        if (session == null || session.state() == SessionState.CLOSED
-                || session.player() == null || !session.player().isDead()) {
-            return false;
+    /** Trả Player đã chết về town và trả handoff bất biến cho handler. */
+    public MapChange returnTownFromDeath(Session session) {
+        if (session == null || session.state() == SessionState.CLOSED) {
+            return null;
         }
-
-        Zone townZone = resolveZone(DEATH_RETURN_MAP_ID, DEATH_RETURN_ZONE_ID);
         Zone sourceZone = session.zone();
-        if (townZone == null || sourceZone == null || !canAddPlayer(townZone, session)) {
-            return false;
+        Zone townZone = resolveZone(DEATH_RETURN_MAP_ID, DEATH_RETURN_ZONE_ID);
+        if (sourceZone == null || townZone == null) {
+            return null;
+        }
+        if (sourceZone != townZone && !sourceZoneCanAdd(townZone, session)) {
+            return null;
         }
 
         try {
@@ -233,104 +219,115 @@ public final class MapManager {
                 synchronized (sourceZone) {
                     Player player = session.player();
                     if (player == null || !player.isDead() || !sourceZone.hasPlayer(session)) {
-                        return new Transition(false, List.of());
+                        return new Transition(null, List.of());
                     }
                     if (sourceZone == townZone) {
                         player.revive(DEATH_RETURN_MAP_ID, DEATH_RETURN_ZONE_ID,
                                 DEATH_RETURN_X, DEATH_RETURN_Y);
-                        return new Transition(true, List.of());
+                        return new Transition(
+                                new MapChange(PlayerSaveData.capture(player), townZone.zoneId()),
+                                List.of());
                     }
 
-                    boolean removed = sourceZone.removePlayer(session);
-                    if (!removed) {
-                        return new Transition(false, List.of());
+                    if (!sourceZone.removePlayer(session)) {
+                        return new Transition(null, List.of());
                     }
-                    Message packet = packets.removePlayer(player.id());
-                    session.clearZone(sourceZone);
                     player.revive(DEATH_RETURN_MAP_ID, DEATH_RETURN_ZONE_ID,
                             DEATH_RETURN_X, DEATH_RETURN_Y);
-                    List<Session> rejectedObservers = new ArrayList<>();
-                    for (Session member : sourceZone.members()) {
-                        if (member != session && member.state() != SessionState.CLOSED
-                                && !member.trySend(packet)) {
-                            rejectedObservers.add(member);
-                        }
-                    }
-                    return new Transition(true, rejectedObservers);
+                    session.clearZone(sourceZone);
+                    var rejected = area.removePlayer(
+                            session, player.id(), sourceZone.members());
+                    return new Transition(
+                            new MapChange(PlayerSaveData.capture(player), townZone.zoneId()),
+                            rejected);
                 }
             });
             closeRejected(result.rejectedObservers());
-            return result.success();
+            return result.change();
         } catch (RejectedExecutionException exception) {
-            return false;
+            return null;
         }
     }
 
-    /** Chọn waypoint và chuyển Player sau khi Zone nguồn nhận quyền thay đổi trạng thái. */
-    public boolean changeMap(Session session) {
-        if (session == null || session.state() == SessionState.CLOSED
-                || session.player() == null || session.zone() == null) {
-            return false;
+    /** Chọn waypoint và chuyển Player sau khi Zone nguồn xác nhận trạng thái. */
+    public MapChange changeMap(Session session) {
+        if (session == null || session.state() == SessionState.CLOSED) {
+            return null;
         }
-        Player observed = session.player();
-        int observedMapId = observed.mapId();
-        int observedZoneId = observed.zoneId();
-        int observedX = observed.x();
-        int observedY = observed.y();
-        MapTemplate sourceMap = maps.get(observedMapId);
-        if (sourceMap == null || observed.isDead()) {
-            return false;
+        Zone sourceZone = session.zone();
+        if (sourceZone == null) {
+            return null;
         }
-        Waypoint waypoint = sourceMap.waypoints().stream()
-                .filter(candidate -> candidate.contains(observedX, observedY))
-                .findFirst()
-                .orElse(null);
-        if (waypoint == null) {
-            return false;
+        Map sourceMap = findMap(sourceZone.mapId());
+        if (sourceMap == null) {
+            return null;
         }
 
-        Zone destinationZone = resolveZone(waypoint.goMap(), 0);
-        Zone sourceZone = session.zone();
-        if (destinationZone == null || !canAddPlayer(destinationZone, session)) {
-            return false;
+        TransitionIntent intent;
+        try {
+            intent = sourceZone.call(() -> {
+                synchronized (sourceZone) {
+                    Player player = session.player();
+                    if (player == null || player.isDead() || !sourceZone.hasPlayer(session)) {
+                        return null;
+                    }
+                    Waypoint waypoint = sourceMap.findWaypoint(player.x(), player.y());
+                    if (waypoint == null) {
+                        return null;
+                    }
+                    return new TransitionIntent(
+                            player.mapId(), player.zoneId(), player.x(), player.y(), waypoint);
+                }
+            });
+        } catch (RejectedExecutionException exception) {
+            return null;
+        }
+        if (intent == null) {
+            return null;
+        }
+
+        Zone destinationZone = resolveZone(intent.waypoint().goMap(), 0);
+        if (destinationZone == null || !sourceZoneCanAdd(destinationZone, session)) {
+            return null;
         }
 
         try {
             Transition result = sourceZone.call(() -> {
                 synchronized (sourceZone) {
                     Player player = session.player();
+                    Waypoint currentWaypoint = sourceMap.findWaypoint(intent.x(), intent.y());
                     if (player == null || player.isDead() || !sourceZone.hasPlayer(session)
-                            || player.mapId() != observedMapId
-                            || player.zoneId() != observedZoneId
-                            || player.x() != observedX || player.y() != observedY) {
-                        return new Transition(false, List.of());
+                            || player.mapId() != intent.mapId()
+                            || player.zoneId() != intent.zoneId()
+                            || player.x() != intent.x() || player.y() != intent.y()
+                            || !intent.waypoint().equals(currentWaypoint)) {
+                        return new Transition(null, List.of());
                     }
                     if (sourceZone == destinationZone) {
-                        player.changeMap(waypoint.goMap(), 0, waypoint.goX(), waypoint.goY());
-                        return new Transition(true, List.of());
+                        player.changeMap(intent.waypoint().goMap(), 0,
+                                intent.waypoint().goX(), intent.waypoint().goY());
+                        return new Transition(
+                                new MapChange(PlayerSaveData.capture(player), destinationZone.zoneId()),
+                                List.of());
                     }
 
-                    boolean removed = sourceZone.removePlayer(session);
-                    if (!removed) {
-                        return new Transition(false, List.of());
+                    if (!sourceZone.removePlayer(session)) {
+                        return new Transition(null, List.of());
                     }
-                    Message packet = packets.removePlayer(player.id());
+                    player.changeMap(intent.waypoint().goMap(), 0,
+                            intent.waypoint().goX(), intent.waypoint().goY());
                     session.clearZone(sourceZone);
-                    player.changeMap(waypoint.goMap(), 0, waypoint.goX(), waypoint.goY());
-                    List<Session> rejectedObservers = new ArrayList<>();
-                    for (Session member : sourceZone.members()) {
-                        if (member != session && member.state() != SessionState.CLOSED
-                                && !member.trySend(packet)) {
-                            rejectedObservers.add(member);
-                        }
-                    }
-                    return new Transition(true, rejectedObservers);
+                    var rejected = area.removePlayer(
+                            session, player.id(), sourceZone.members());
+                    return new Transition(
+                            new MapChange(PlayerSaveData.capture(player), destinationZone.zoneId()),
+                            rejected);
                 }
             });
             closeRejected(result.rejectedObservers());
-            return result.success();
+            return result.change();
         } catch (RejectedExecutionException exception) {
-            return false;
+            return null;
         }
     }
 
@@ -339,7 +336,7 @@ public final class MapManager {
         return zone == null ? 0 : zone.size();
     }
 
-    /** Phân giải Zone hợp lệ trước khi handler phát trạng thái bản đồ. */
+    /** Đảm bảo Zone tồn tại để handler đọc snapshot quái và gửi MAP_INFO. */
     public boolean ensureZone(int mapId, int zoneId) {
         return resolveZone(mapId, zoneId) != null;
     }
@@ -352,28 +349,8 @@ public final class MapManager {
         }
     }
 
-    private static boolean canAddPlayer(Zone zone, Session session) {
+    private static boolean sourceZoneCanAdd(Zone zone, Session session) {
         return zone.canAddPlayer(session);
-    }
-
-    private MapTemplate requireOnlineMap(int mapId, int zoneId) {
-        MapTemplate map = maps.get(mapId);
-        if (map == null) {
-            throw new IllegalArgumentException("unknown map " + mapId);
-        }
-        if (!"ONLINE".equals(map.type())) {
-            throw new IllegalArgumentException("map " + mapId + " is not ONLINE");
-        }
-        if (zoneId < 0 || zoneId >= map.maxZone()) {
-            throw new IllegalArgumentException(
-                    "zone " + zoneId + " is outside map " + mapId + " bound 0.."
-                            + (map.maxZone() - 1));
-        }
-        return map;
-    }
-
-    private Zone create(MapTemplate map, int zoneId) {
-        return new Zone(map.id(), zoneId, map.maxPlayer(), monsterFactory.createForMap(map.id()));
     }
 
     private static void closeRejected(List<Session> rejectedObservers) {
@@ -382,8 +359,26 @@ public final class MapManager {
         }
     }
 
+    public record MapChange(PlayerSaveData player, int zoneId) {
+        public MapChange {
+            Objects.requireNonNull(player, "player");
+            if (zoneId < 0) {
+                throw new IllegalArgumentException("zoneId must be non-negative");
+            }
+        }
+    }
+
+    private record TransitionIntent(int mapId, int zoneId, int x, int y, Waypoint waypoint) {
+    }
+
     private record Join(boolean accepted, List<Session> rejectedObservers) {
         private Join {
+            rejectedObservers = List.copyOf(rejectedObservers);
+        }
+    }
+
+    private record LeaveResult(PlayerSaveData saveData, List<Session> rejectedObservers) {
+        private LeaveResult {
             rejectedObservers = List.copyOf(rejectedObservers);
         }
     }
@@ -394,7 +389,7 @@ public final class MapManager {
         }
     }
 
-    private record Transition(boolean success, List<Session> rejectedObservers) {
+    private record Transition(MapChange change, List<Session> rejectedObservers) {
         private Transition {
             rejectedObservers = List.copyOf(rejectedObservers);
         }

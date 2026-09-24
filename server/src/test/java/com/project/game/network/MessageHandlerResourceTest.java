@@ -8,7 +8,7 @@ import com.project.game.network.handler.MessageHandler;
 import com.project.game.network.message.Message;
 import com.project.game.network.message.MessageName;
 import com.project.game.network.message.MessageWriter;
-import com.project.game.account.AuthService;
+import com.project.game.account.AccountAuth;
 import com.project.game.resource.IconFingerprint;
 import com.project.game.resource.GameResources;
 import org.junit.jupiter.api.Test;
@@ -34,7 +34,7 @@ class MessageHandlerResourceTest {
 
     @Test
     void closesWhenUpdateDataContainsTrailingBytes() {
-        AuthService auth = TestServices.authService();
+        AccountAuth auth = TestServices.authService();
         Session session = newSession(auth);
         session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
         MessageHandler handler = newHandler(session, auth);

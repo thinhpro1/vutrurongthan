@@ -1,7 +1,7 @@
 package com.project.game.bootstrap;
 import com.project.game.testsupport.TestPlayers;
 
-import com.project.game.account.AuthService;
+import com.project.game.account.AccountAuth;
 import com.project.game.network.ClientConfig;
 import com.project.game.network.NetworkServer;
 import com.project.game.network.Session;
@@ -15,7 +15,6 @@ import com.project.game.persistence.map.MapRepository;
 import com.project.game.persistence.player.PlayerRecord;
 import com.project.game.persistence.player.PlayerRepository;
 import com.project.game.player.PlayerSaveData;
-import com.project.game.player.PlayerService;
 import com.project.game.resource.GameResources;
 import com.project.game.network.SessionServices;
 import com.project.game.testsupport.GameplayServices;
@@ -38,7 +37,6 @@ import java.sql.DriverPropertyInfo;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Optional;
 import java.util.List;
@@ -393,7 +391,7 @@ class ServerBootstrapTest {
             }
 
             @Override
-            public void updateCheckpoint(PlayerSaveData player, Instant playedAt) {
+            public void save(PlayerSaveData player) {
                 checkpointCalled.set(true);
                 checkpointSawOpenDatabase.set(!isClosed(manager));
             }
@@ -431,7 +429,7 @@ class ServerBootstrapTest {
             }
 
             @Override
-            public void updateCheckpoint(PlayerSaveData player, Instant playedAt) {
+            public void save(PlayerSaveData player) {
                 checkpointCalled.set(true);
                 checkpointSawOpenDatabase.set(!isClosed(manager));
             }
@@ -464,7 +462,7 @@ class ServerBootstrapTest {
             }
 
             @Override
-            public void updateCheckpoint(PlayerSaveData player, Instant playedAt) {
+            public void save(PlayerSaveData player) {
                 checkpointCount.incrementAndGet();
             }
         };
@@ -485,8 +483,8 @@ class ServerBootstrapTest {
         GameResources resources = GameResources.unavailable();
         GameplayServices gameplay = new GameplayServices(resources);
         return TestServices.serverServices(
-                new AuthService(new TestAccountRepository()), resources, gameplay,
-                new PlayerService(repository));
+                new AccountAuth(new TestAccountRepository()), resources, gameplay,
+                repository);
     }
 
     private static Session addPlayerSession(NetworkServer server, SessionServices services) {

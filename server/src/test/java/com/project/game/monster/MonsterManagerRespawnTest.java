@@ -183,7 +183,7 @@ class MonsterManagerRespawnTest {
         assertEquals(0, reader.remaining());
     }
 
-    private static void killMonster(CombatService combat, Session attacker,
+    private static void killMonster(Combat combat, Session attacker,
                                      Session... observers) throws Exception {
         for (int hit = 0; hit < 29; hit++) {
             assertTrue(combat.attackMonster(attacker, 101));

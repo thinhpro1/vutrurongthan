@@ -17,19 +17,19 @@ import java.util.Objects;
 import java.util.concurrent.RejectedExecutionException;
 
 /** Điều phối việc Player đánh Monster; Player sở hữu chuyển trạng thái của mình. */
-public final class CombatService {
+public final class Combat {
     private final MapManager maps;
     private final PlayerPacketWriter packets;
     private final MonsterPacketWriter monsterPackets;
     private final Clock clock;
 
-    public CombatService(MapManager maps,
+    public Combat(MapManager maps,
                          PlayerPacketWriter packets,
                          MonsterPacketWriter monsterPackets) {
         this(maps, packets, monsterPackets, Clock.systemUTC());
     }
 
-    public CombatService(MapManager maps,
+    public Combat(MapManager maps,
                          PlayerPacketWriter packets,
                          MonsterPacketWriter monsterPackets,
                          Clock clock) {

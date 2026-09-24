@@ -7,8 +7,7 @@ import com.project.game.network.message.Message;
 import com.project.game.network.message.MessageName;
 import com.project.game.network.transport.ClientTransport;
 import com.project.game.network.SessionServices;
-import com.project.game.account.AuthService;
-import com.project.game.player.PlayerService;
+import com.project.game.account.AccountAuth;
 import com.project.game.persistence.player.PlayerRecord;
 import com.project.game.persistence.player.PlayerRepository;
 import com.project.game.persistence.player.PlayerRepositoryException;
@@ -40,7 +39,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
-import java.time.Instant;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -49,6 +47,13 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class SessionTest {
+    private static Player createPlayer(PlayerRepository repository,
+                                       long accountId, String name, int gender) {
+        Player initial = Player.create(accountId, name, gender);
+        return repository.create(PlayerRecord.withoutId(PlayerSaveData.capture(initial)))
+                .toPlayer(0);
+    }
+
     @Test
     void startFailureClosesTransportAndRemovesRegisteredSession() {
         SessionManager manager = new SessionManager();
@@ -122,13 +127,13 @@ class SessionTest {
     void trySendRejectsFullQueueWithoutClosingSession() throws Exception {
         TestPlayerRepository delegate = new TestPlayerRepository();
         BlockingPlayerRepository repository = new BlockingPlayerRepository(delegate);
-        AuthService auth = new AuthService(new TestAccountRepository());
+        AccountAuth auth = new AccountAuth(new TestAccountRepository());
         GameResources resources = GameResources.unavailable();
         GameplayServices gameplay = new GameplayServices(resources);
-        PlayerService players = new PlayerService(repository);
+        PlayerRepository players = repository;
         SessionServices services = TestServices.serverServices(auth, resources, gameplay, players);
         Session session = managedSession(
-                services, players.create(101L, "alpha1", 0).player(), "user01");
+                services, createPlayer(players, 101L, "alpha1", 0), "user01");
         ArrayBlockingQueue<Message> fullQueue = new ArrayBlockingQueue<>(1);
         assertTrue(fullQueue.offer(new Message(MessageName.DIALOG_OK)));
         GameplayTestSupport.replaceSendQueue(session, fullQueue);
@@ -146,15 +151,15 @@ class SessionTest {
     void movementCleansFailedObserverOutsideZoneExecution() throws Exception {
         TestPlayerRepository delegate = new TestPlayerRepository();
         BlockingPlayerRepository repository = new BlockingPlayerRepository(delegate);
-        AuthService auth = new AuthService(new TestAccountRepository());
+        AccountAuth auth = new AccountAuth(new TestAccountRepository());
         GameResources resources = GameResources.unavailable();
         GameplayServices gameplay = new GameplayServices(resources);
-        PlayerService players = new PlayerService(repository);
+        PlayerRepository players = repository;
         SessionServices services = TestServices.serverServices(auth, resources, gameplay, players);
         Session mover = managedSession(
-                services, players.create(101L, "alpha1", 0).player(), "user01");
+                services, createPlayer(players, 101L, "alpha1", 0), "user01");
         Session observer = managedSession(
-                services, players.create(202L, "beta22", 0).player(), "user02");
+                services, createPlayer(players, 202L, "beta22", 0), "user02");
         gameplay.mapManager().finishLoad(mover);
         gameplay.mapManager().finishLoad(observer);
         GameplayTestSupport.drain(mover);
@@ -191,13 +196,13 @@ class SessionTest {
     void disconnectWaitsForSaturatedZoneQueueBeforeCheckpoint() throws Exception {
         TestPlayerRepository delegate = new TestPlayerRepository();
         BlockingPlayerRepository repository = new BlockingPlayerRepository(delegate);
-        AuthService auth = new AuthService(new TestAccountRepository());
+        AccountAuth auth = new AccountAuth(new TestAccountRepository());
         GameResources resources = GameResources.unavailable();
         GameplayServices gameplay = new GameplayServices(resources);
-        PlayerService players = new PlayerService(repository);
+        PlayerRepository players = repository;
         SessionServices services = TestServices.serverServices(auth, resources, gameplay, players);
         Session session = managedSession(
-                services, players.create(101L, "alpha1", 0).player(), "user01");
+                services, createPlayer(players, 101L, "alpha1", 0), "user01");
         assertTrue(gameplay.mapManager().finishLoad(session));
         GameplayTestSupport.drain(session);
         var zone = gameplay.findZone(0, 0);
@@ -243,15 +248,15 @@ class SessionTest {
     void finishLoadCleansFailedObserverOutsideZoneExecution() throws Exception {
         TestPlayerRepository delegate = new TestPlayerRepository();
         BlockingPlayerRepository repository = new BlockingPlayerRepository(delegate);
-        AuthService auth = new AuthService(new TestAccountRepository());
+        AccountAuth auth = new AccountAuth(new TestAccountRepository());
         GameResources resources = GameResources.unavailable();
         GameplayServices gameplay = new GameplayServices(resources);
-        PlayerService players = new PlayerService(repository);
+        PlayerRepository players = repository;
         SessionServices services = TestServices.serverServices(auth, resources, gameplay, players);
         Session observer = managedSession(
-                services, players.create(101L, "alpha1", 0).player(), "user01");
+                services, createPlayer(players, 101L, "alpha1", 0), "user01");
         Session joining = managedSession(
-                services, players.create(202L, "beta22", 0).player(), "user02");
+                services, createPlayer(players, 202L, "beta22", 0), "user02");
         assertTrue(gameplay.mapManager().finishLoad(observer));
         GameplayTestSupport.drain(observer);
 
@@ -284,12 +289,12 @@ class SessionTest {
     void closeKeepsAccountReservedUntilFinalPlayerCheckpointCompletes() throws Exception {
         TestPlayerRepository delegate = new TestPlayerRepository();
         BlockingPlayerRepository repository = new BlockingPlayerRepository(delegate);
-        AuthService auth = new AuthService(new TestAccountRepository());
+        AccountAuth auth = new AccountAuth(new TestAccountRepository());
         GameResources resources = GameResources.unavailable();
         GameplayServices maps = new GameplayServices(new PlayerPacketWriter(), new MonsterPacketWriter(),
                 new MonsterFactory(resources));
-        PlayerService players = new PlayerService(repository);
-        Player player = players.create(101L, "alpha1", 0).player();
+        PlayerRepository players = repository;
+        Player player = createPlayer(players, 101L, "alpha1", 0);
         player.injure(player.hp() - 77);
         SessionServices services = TestServices.serverServices(auth, resources, maps, players);
         SessionManager manager = new SessionManager();
@@ -318,13 +323,13 @@ class SessionTest {
     void disconnectCheckpointsLatestPositionAfterInFlightZoneMutation() throws Exception {
         TestPlayerRepository delegate = new TestPlayerRepository();
         BlockingPlayerRepository repository = new BlockingPlayerRepository(delegate);
-        PlayerService players = new PlayerService(repository);
-        AuthService auth = new AuthService(new TestAccountRepository());
+        PlayerRepository players = repository;
+        AccountAuth auth = new AccountAuth(new TestAccountRepository());
         GameplayServices gameplay = new GameplayServices(GameResources.unavailable());
         SessionServices services = TestServices.serverServices(
                 auth, GameResources.unavailable(), gameplay, players);
-        Player moverProfile = players.create(101L, "alpha1", 0).player();
-        Player observerProfile = players.create(202L, "beta22", 0).player();
+        Player moverProfile = createPlayer(players, 101L, "alpha1", 0);
+        Player observerProfile = createPlayer(players, 202L, "beta22", 0);
         Session mover = managedSession(services, moverProfile, "user01");
         Session observer = managedSession(services, observerProfile, "user02");
         gameplay.mapManager().finishLoad(mover);
@@ -373,14 +378,14 @@ class SessionTest {
                 new java.util.Random(0L));
         TestPlayerRepository delegate = new TestPlayerRepository();
         BlockingPlayerRepository repository = new BlockingPlayerRepository(delegate);
-        PlayerService players = new PlayerService(repository);
-        AuthService auth = new AuthService(new TestAccountRepository());
+        PlayerRepository players = repository;
+        AccountAuth auth = new AccountAuth(new TestAccountRepository());
         SessionServices services = TestServices.serverServices(
                 auth, GameResources.unavailable(), gameplay, players);
-        Player targetProfile = players.create(101L, "alpha1", 0).player();
+        Player targetProfile = createPlayer(players, 101L, "alpha1", 0);
         targetProfile.changeMap(1, 0, 1250, 648);
         targetProfile.injure(targetProfile.hp() - 100);
-        Player observerProfile = players.create(202L, "beta22", 0).player();
+        Player observerProfile = createPlayer(players, 202L, "beta22", 0);
         observerProfile.changeMap(1, 0, 1250, 648);
         Session target = managedSession(services, targetProfile, "user01");
         Session observer = managedSession(services, observerProfile, "user02");
@@ -421,13 +426,13 @@ class SessionTest {
     void readerThreadCloseDoesNotSelfInterruptBeforeCheckpoint() throws Exception {
         TestPlayerRepository delegate = new TestPlayerRepository();
         BlockingPlayerRepository repository = new BlockingPlayerRepository(delegate);
-        PlayerService players = new PlayerService(repository);
-        Player player = players.create(101L, "alpha1", 0).player();
+        PlayerRepository players = repository;
+        Player player = createPlayer(players, 101L, "alpha1", 0);
         player.injure(player.hp() - 77);
         SessionManager manager = new SessionManager();
         Session session = new Session(manager.nextId(), new TestTransport(), manager,
                 new LegacyPacketCodec(1024), "abc".getBytes(StandardCharsets.US_ASCII), 4,
-                TestServices.serverServices(new AuthService(new TestAccountRepository()),
+                TestServices.serverServices(new AccountAuth(new TestAccountRepository()),
                         GameResources.unavailable(),
                         new GameplayServices(new PlayerPacketWriter(), new MonsterPacketWriter(),
                                 new MonsterFactory(GameResources.unavailable())),
@@ -455,14 +460,14 @@ class SessionTest {
     void preInterruptedCloseStillCheckpointsAndRestoresInterruptStatus() throws Exception {
         TestPlayerRepository delegate = new TestPlayerRepository();
         BlockingPlayerRepository repository = new BlockingPlayerRepository(delegate);
-        PlayerService players = new PlayerService(repository);
-        Player player = players.create(101L, "alpha1", 0).player();
+        PlayerRepository players = repository;
+        Player player = createPlayer(players, 101L, "alpha1", 0);
         player.injure(player.hp() - 66);
         SessionManager manager = new SessionManager();
         TestTransport transport = new TestTransport();
         Session session = new Session(manager.nextId(), transport, manager,
                 new LegacyPacketCodec(1024), "abc".getBytes(StandardCharsets.US_ASCII), 4,
-                TestServices.serverServices(new AuthService(new TestAccountRepository()),
+                TestServices.serverServices(new AccountAuth(new TestAccountRepository()),
                         GameResources.unavailable(),
                         new GameplayServices(new PlayerPacketWriter(), new MonsterPacketWriter(),
                                 new MonsterFactory(GameResources.unavailable())),
@@ -498,13 +503,13 @@ class SessionTest {
     void checkpointFailureStillReleasesAccountAndSession() {
         TestPlayerRepository repository = new TestPlayerRepository();
         repository.failUpdate(true);
-        PlayerService players = new PlayerService(repository);
-        Player player = players.create(101L, "alpha1", 0).player();
+        PlayerRepository players = repository;
+        Player player = createPlayer(players, 101L, "alpha1", 0);
         SessionManager manager = new SessionManager();
         TestTransport transport = new TestTransport();
         Session session = new Session(manager.nextId(), transport, manager,
                 new LegacyPacketCodec(1024), "abc".getBytes(StandardCharsets.US_ASCII), 4,
-                TestServices.serverServices(new AuthService(new TestAccountRepository()),
+                TestServices.serverServices(new AccountAuth(new TestAccountRepository()),
                         GameResources.unavailable(),
                         new GameplayServices(new PlayerPacketWriter(), new MonsterPacketWriter(),
                                 new MonsterFactory(GameResources.unavailable())),
@@ -545,7 +550,7 @@ class SessionTest {
         }
 
         @Override
-        public void updateCheckpoint(PlayerSaveData player, Instant playedAt) {
+        public void save(PlayerSaveData player) {
             checkpointCalls.incrementAndGet();
             interruptedAtCheckpoint.set(Thread.currentThread().isInterrupted());
             updateEntered.countDown();
@@ -557,7 +562,7 @@ class SessionTest {
                 Thread.currentThread().interrupt();
                 throw new PlayerRepositoryException("interrupted in test", exception);
             }
-            delegate.updateCheckpoint(player, playedAt);
+            delegate.save(player);
         }
     }
 

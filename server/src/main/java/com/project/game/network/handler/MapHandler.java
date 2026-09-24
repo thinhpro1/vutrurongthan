@@ -8,31 +8,35 @@ import com.project.game.network.SessionState;
 import com.project.game.network.message.Message;
 import com.project.game.network.packet.MapPacketWriter;
 import com.project.game.network.packet.PlayerPacketWriter;
+import com.project.game.persistence.player.PlayerRepository;
+import com.project.game.persistence.player.PlayerRepositoryException;
 import com.project.game.player.Player;
 import com.project.game.player.PlayerSaveData;
-import com.project.game.player.PlayerService;
 import com.project.game.resource.GameResources;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
-/** Handles map presence, movement, transitions, death return, and MAP_INFO packets. */
+/** Xử lý hiện diện, di chuyển, chuyển Map, hồi sinh và packet MAP_INFO. */
 final class MapHandler {
+    private static final Logger LOGGER = Logger.getLogger(MapHandler.class.getName());
     private final Session session;
     private final MapManager mapManager;
     private final MonsterManager monsterManager;
-    private final PlayerService playerService;
+    private final PlayerRepository playerRepository;
     private final GameResources resources;
     private final PlayerPacketWriter playerPackets = new PlayerPacketWriter();
     private final MapPacketWriter mapPackets = new MapPacketWriter();
 
     MapHandler(Session session, MapManager mapManager, MonsterManager monsterManager,
-               PlayerService playerService, GameResources resources) {
+               PlayerRepository playerRepository, GameResources resources) {
         this.session = session;
         this.mapManager = mapManager;
         this.monsterManager = monsterManager;
-        this.playerService = playerService;
+        this.playerRepository = playerRepository;
         this.resources = resources;
     }
 
@@ -49,15 +53,17 @@ final class MapHandler {
         if (message.payload().length != 0) {
             throw new IOException("trailing RETURN_TOWN_FROM_DIE payload bytes");
         }
-        if (!mapManager.returnTownFromDeath(session)) {
+        MapManager.MapChange change = mapManager.returnTownFromDeath(session);
+        if (change == null) {
             return;
         }
 
-        Player player = session.player();
-        playerService.checkpoint(PlayerSaveData.capture(player));
-        sendMapInfo(player);
+        save(change.player());
+        sendMapInfo(change.player(), change.zoneId());
         if (session.state() != SessionState.CLOSED) {
-            session.send(playerPackets.wakeUpFromDie(player));
+            PlayerSaveData player = change.player();
+            session.send(playerPackets.wakeUpFromDie(
+                    player.id(), player.x(), player.y(), player.hp(), player.mp()));
         }
     }
 
@@ -71,17 +77,12 @@ final class MapHandler {
         if (message.payload().length != 0) {
             throw new IOException("trailing REQUEST_CHANGE_MAP payload bytes");
         }
-        Player player = session.player();
-        if (player == null) {
-            throw new IOException("REQUEST_CHANGE_MAP without bound player");
-        }
-
-        if (!mapManager.changeMap(session)) {
+        MapManager.MapChange change = mapManager.changeMap(session);
+        if (change == null) {
             return;
         }
-        Player changedPlayer = session.player();
-        playerService.checkpoint(PlayerSaveData.capture(changedPlayer));
-        sendMapInfo(changedPlayer);
+        save(change.player());
+        sendMapInfo(change.player(), change.zoneId());
     }
 
     void handlePlayerMove(Message message) throws IOException {
@@ -101,6 +102,18 @@ final class MapHandler {
     }
 
     void sendMapInfo(Player player) throws IOException {
+        sendMapInfo(PlayerSaveData.capture(player), player.zoneId());
+    }
+
+    private void save(PlayerSaveData player) {
+        try {
+            playerRepository.save(player);
+        } catch (PlayerRepositoryException exception) {
+            LOGGER.log(Level.WARNING, "PLAYER transition save failed playerId=" + player.id(), exception);
+        }
+    }
+
+    private void sendMapInfo(PlayerSaveData player, int zoneId) throws IOException {
         var map = resources.map(player.mapId())
                 .orElseThrow(() -> new IOException(
                         "map unavailable: " + player.mapId()));
@@ -113,16 +126,16 @@ final class MapHandler {
             waypointTargetNames.add(target.name());
         }
         List<MonsterSnapshot> monsters;
-        if (!mapManager.ensureZone(map.id(), player.zoneId())) {
-            throw new IOException("invalid map zone: " + map.id() + "/" + player.zoneId());
+        if (!mapManager.ensureZone(map.id(), zoneId)) {
+            throw new IOException("invalid map zone: " + map.id() + "/" + zoneId);
         }
         try {
-            monsters = monsterManager.monsterSnapshots(map.id(), player.zoneId());
+            monsters = monsterManager.monsterSnapshots(map.id(), zoneId);
         } catch (IllegalArgumentException exception) {
-            throw new IOException("invalid map zone: " + map.id() + "/" + player.zoneId(), exception);
+            throw new IOException("invalid map zone: " + map.id() + "/" + zoneId, exception);
         }
         Message packet = mapPackets.mapInfo(
-                player, map, sendTemplate, waypointTargetNames, monsters);
+                zoneId, player.x(), player.y(), map, sendTemplate, waypointTargetNames, monsters);
         if (session.send(packet) && sendTemplate) {
             session.markMapTemplateSent(map.id());
         }

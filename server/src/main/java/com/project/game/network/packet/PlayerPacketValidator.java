@@ -3,7 +3,7 @@ package com.project.game.network.packet;
 import com.project.game.player.Appearance;
 import com.project.game.player.Player;
 
-/** Validates values before they are narrowed to the legacy signed wire fields. */
+/** Kiểm tra giá trị trước khi thu hẹp vào field signed trên wire legacy. */
 public final class PlayerPacketValidator {
     private PlayerPacketValidator() {
     }
@@ -18,11 +18,11 @@ public final class PlayerPacketValidator {
         validatePlayerIdentityAndAppearance(player);
     }
 
-    public static void validateMapInfo(Player player, int mapId) {
+    public static void validateMapInfo(int zoneId, int x, int y, int mapId) {
         requireNonNegativeSignedShort(mapId, "mapId");
-        requireSignedByte(player.zoneId(), "zoneId");
-        requireSignedShort(player.x(), "player.x");
-        requireSignedShort(player.y(), "player.y");
+        requireSignedByte(zoneId, "zoneId");
+        requireSignedShort(x, "x");
+        requireSignedShort(y, "y");
     }
 
     public static void validatePosition(int x, int y) {

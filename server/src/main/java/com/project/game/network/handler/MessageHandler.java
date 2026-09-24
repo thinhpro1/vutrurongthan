@@ -12,7 +12,7 @@ import java.util.Objects;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-/** Thin stateful protocol dispatcher for the legacy session. */
+/** Bộ điều phối protocol có trạng thái cho một Session legacy. */
 public final class MessageHandler {
     private static final Logger LOGGER = Logger.getLogger(MessageHandler.class.getName());
 
@@ -32,9 +32,10 @@ public final class MessageHandler {
         this.connectionHandler = new ConnectionHandler(session, networkConfig);
         this.resourceHandler = new ResourceHandler(session, services.resources());
         this.mapHandler = new MapHandler(session, services.maps(), services.monsterManager(),
-                services.players(), services.resources());
-        this.playerHandler = new PlayerHandler(session, services.players(), services.resources(), mapHandler);
-        this.authHandler = new AuthHandler(session, services.auth(), services.players(),
+                services.playerRepository(), services.resources());
+        this.playerHandler = new PlayerHandler(session, services.playerRepository(),
+                services.resources(), mapHandler);
+        this.authHandler = new AuthHandler(session, services.auth(), services.playerRepository(),
                 networkConfig, playerHandler);
         this.combatHandler = new CombatHandler(session, services.combat());
     }

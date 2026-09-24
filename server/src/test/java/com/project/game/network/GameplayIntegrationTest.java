@@ -12,7 +12,7 @@ import com.project.game.network.transport.LegacyTcpTransport;
 import com.project.game.testsupport.GameplayServices;
 import com.project.game.testsupport.MapTestSupport;
 import com.project.game.monster.MonsterFactory;
-import com.project.game.account.AuthService;
+import com.project.game.account.AccountAuth;
 import com.project.game.resource.GameResources;
 import com.project.game.testsupport.MutableClock;
 import org.junit.jupiter.api.Test;
@@ -41,7 +41,7 @@ class GameplayIntegrationTest {
         GameResources resources = GameResources.fromFrameRoot(
                 Path.of("resources", "json"), MapTestSupport.canonicalMaps(), 2,
                 com.project.game.testsupport.MonsterTestSupport.canonicalRepository());
-        AuthService auth = TestServices.authService();
+        AccountAuth auth = TestServices.authService();
         MutableClock clock = new MutableClock(1_000_000L);
         BlockingLifecycleRandom random = new BlockingLifecycleRandom();
         assertTrue(auth.register(victimAccount, "secret1", "127.0.0.1").success());
@@ -195,7 +195,7 @@ class GameplayIntegrationTest {
         GameResources resources = GameResources.fromFrameRoot(
                 Path.of("resources", "json"), MapTestSupport.canonicalMaps(), 2,
                 com.project.game.testsupport.MonsterTestSupport.canonicalRepository());
-        AuthService auth = TestServices.authService();
+        AccountAuth auth = TestServices.authService();
         assertTrue(auth.register(accountName, "secret1", "127.0.0.1").success());
         NetworkServer server = new NetworkServer(
                 "127.0.0.1", 0, 2, 262_144, 8, 1_000,
@@ -241,7 +241,7 @@ class GameplayIntegrationTest {
         GameResources resources = GameResources.fromFrameRoot(
                 Path.of("resources", "json"), MapTestSupport.canonicalMaps(), 2,
                 com.project.game.testsupport.MonsterTestSupport.canonicalRepository());
-        AuthService auth = TestServices.authService();
+        AccountAuth auth = TestServices.authService();
         assertTrue(auth.register("mapround1", "secret1", "127.0.0.1").success());
         NetworkServer server = new NetworkServer("127.0.0.1", 0, 2, 262_144, 8, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
@@ -312,7 +312,7 @@ class GameplayIntegrationTest {
         GameResources resources = GameResources.fromFrameRoot(
                 Path.of("resources", "json"), MapTestSupport.canonicalMaps(), 2,
                 com.project.game.testsupport.MonsterTestSupport.canonicalRepository());
-        AuthService auth = TestServices.authService();
+        AccountAuth auth = TestServices.authService();
         assertTrue(auth.register("mapzonea", "secret1", "127.0.0.1").success());
         assertTrue(auth.register("mapzoneb", "secret1", "127.0.0.1").success());
         GameplayServices maps = new GameplayServices(
@@ -393,7 +393,7 @@ class GameplayIntegrationTest {
         GameResources resources = GameResources.fromFrameRoot(
                 Path.of("resources", "json"), MapTestSupport.canonicalMaps(), 2,
                 com.project.game.testsupport.MonsterTestSupport.canonicalRepository());
-        AuthService auth = TestServices.authService();
+        AccountAuth auth = TestServices.authService();
         MutableClock clock = new MutableClock(1_000_000L);
         assertTrue(auth.register("chasetcp1", "secret1", "127.0.0.1").success());
         assertTrue(auth.register("chasetcp2", "secret1", "127.0.0.1").success());
@@ -496,7 +496,7 @@ class GameplayIntegrationTest {
         GameResources resources = GameResources.fromFrameRoot(
                 Path.of("resources", "json"), MapTestSupport.canonicalMaps(), 2,
                 com.project.game.testsupport.MonsterTestSupport.canonicalRepository());
-        AuthService auth = TestServices.authService();
+        AccountAuth auth = TestServices.authService();
         assertTrue(auth.register("zonea1", "secret1", "127.0.0.1").success());
         assertTrue(auth.register("zoneb1", "secret1", "127.0.0.1").success());
         GameplayServices maps = new GameplayServices(
@@ -561,7 +561,7 @@ class GameplayIntegrationTest {
         GameResources resources = GameResources.fromFrameRoot(
                 Path.of("resources", "json"), MapTestSupport.canonicalMaps(), 2,
                 com.project.game.testsupport.MonsterTestSupport.canonicalRepository());
-        AuthService auth = TestServices.authService();
+        AccountAuth auth = TestServices.authService();
         MutableClock clock = new MutableClock(1_000_000L);
         assertTrue(auth.register("combatza", "secret1", "127.0.0.1").success());
         assertTrue(auth.register("combatzb", "secret1", "127.0.0.1").success());
@@ -697,7 +697,7 @@ class GameplayIntegrationTest {
         GameResources resources = GameResources.fromFrameRoot(
                 Path.of("resources", "json"), MapTestSupport.canonicalMaps(), 2,
                 com.project.game.testsupport.MonsterTestSupport.canonicalRepository());
-        AuthService auth = TestServices.authService();
+        AccountAuth auth = TestServices.authService();
         assertTrue(auth.register(accountName, "secret1", "127.0.0.1").success());
         GameplayServices maps = new GameplayServices(
                 new com.project.game.network.packet.PlayerPacketWriter(),
@@ -778,7 +778,7 @@ class GameplayIntegrationTest {
         GameResources resources = GameResources.fromFrameRoot(
                 Path.of("resources", "json"), MapTestSupport.canonicalMaps(), 2,
                 com.project.game.testsupport.MonsterTestSupport.canonicalRepository());
-        AuthService auth = TestServices.authService();
+        AccountAuth auth = TestServices.authService();
         MutableClock clock = new MutableClock(1_000_000L);
         assertTrue(auth.register("retaliatea", "secret1", "127.0.0.1").success());
         assertTrue(auth.register("retaliateb", "secret1", "127.0.0.1").success());
@@ -905,7 +905,7 @@ class GameplayIntegrationTest {
         GameResources resources = GameResources.fromFrameRoot(
                 Path.of("resources", "json"), MapTestSupport.canonicalMaps(), 2,
                 com.project.game.testsupport.MonsterTestSupport.canonicalRepository());
-        AuthService auth = TestServices.authService();
+        AccountAuth auth = TestServices.authService();
         MutableClock clock = new MutableClock(1_000_000L);
         assertTrue(auth.register("retaliaterace", "secret1", "127.0.0.1").success());
         GameplayServices maps = new GameplayServices(
@@ -979,7 +979,7 @@ class GameplayIntegrationTest {
         GameResources resources = GameResources.fromFrameRoot(
                 Path.of("resources", "json"), MapTestSupport.canonicalMaps(), 2,
                 com.project.game.testsupport.MonsterTestSupport.canonicalRepository());
-        AuthService auth = TestServices.authService();
+        AccountAuth auth = TestServices.authService();
         NetworkServer server = new NetworkServer(
                 "127.0.0.1", 0, 2, 262_144, 8, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),

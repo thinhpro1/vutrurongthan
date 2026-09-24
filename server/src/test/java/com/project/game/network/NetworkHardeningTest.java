@@ -6,7 +6,7 @@ import com.project.game.network.codec.LegacyPacketCodec;
 import com.project.game.network.message.Message;
 import com.project.game.network.message.MessageName;
 import com.project.game.network.message.MessageWriter;
-import com.project.game.account.AuthService;
+import com.project.game.account.AccountAuth;
 import com.project.game.resource.GameResources;
 import com.project.game.network.SessionServices;
 import org.junit.jupiter.api.Test;

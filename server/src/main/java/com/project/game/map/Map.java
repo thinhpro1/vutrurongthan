@@ -1,0 +1,72 @@
+package com.project.game.map;
+
+import com.project.game.monster.MonsterFactory;
+
+import java.util.Comparator;
+import java.util.List;
+import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
+
+/** Runtime của một bản đồ và các Zone thuộc về bản đồ đó. */
+public final class Map {
+    private final MapTemplate template;
+    private final MonsterFactory monsterFactory;
+    private final ConcurrentHashMap<Integer, Zone> zones = new ConcurrentHashMap<>();
+
+    public Map(MapTemplate template, MonsterFactory monsterFactory) {
+        this.template = Objects.requireNonNull(template, "template");
+        this.monsterFactory = Objects.requireNonNull(monsterFactory, "monsterFactory");
+        if (!"ONLINE".equals(template.type())) {
+            throw new IllegalArgumentException("runtime map must be ONLINE: " + template.id());
+        }
+        for (int zoneId = 0; zoneId < template.minZone(); zoneId++) {
+            zones.put(zoneId, createZone(zoneId));
+        }
+    }
+
+    public int id() {
+        return template.id();
+    }
+
+    public MapTemplate template() {
+        return template;
+    }
+
+    /** Tìm Zone đang tồn tại mà không tạo runtime mới. */
+    public Zone findZone(int zoneId) {
+        return zones.get(zoneId);
+    }
+
+    /** Tìm hoặc tạo Zone hợp lệ trong giới hạn của Map. */
+    public Zone getZone(int zoneId) {
+        validateZoneId(zoneId);
+        return zones.computeIfAbsent(zoneId, this::createZone);
+    }
+
+    /** Trả về các Zone hiện có theo thứ tự id ổn định. */
+    public List<Zone> zones() {
+        return zones.values().stream()
+                .sorted(Comparator.comparingInt(Zone::zoneId))
+                .toList();
+    }
+
+    /** Tìm waypoint thuộc Map theo luật contains của waypoint. */
+    public Waypoint findWaypoint(int x, int y) {
+        return template.waypoints().stream()
+                .filter(waypoint -> waypoint.contains(x, y))
+                .findFirst()
+                .orElse(null);
+    }
+
+    private void validateZoneId(int zoneId) {
+        if (zoneId < 0 || zoneId >= template.maxZone()) {
+            throw new IllegalArgumentException(
+                    "zone " + zoneId + " is outside map " + id() + " bound 0.."
+                            + (template.maxZone() - 1));
+        }
+    }
+
+    private Zone createZone(int zoneId) {
+        return new Zone(id(), zoneId, template.maxPlayer(), monsterFactory.createForMap(id()));
+    }
+}

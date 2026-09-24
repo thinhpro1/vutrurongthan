@@ -1,6 +1,9 @@
 package com.project.game.network.handler;
 
-import com.project.game.account.AuthService;
+import com.project.game.account.AccountAuth;
+import com.project.game.persistence.player.PlayerRecord;
+import com.project.game.persistence.player.PlayerRepository;
+import com.project.game.persistence.player.PlayerRepositoryException;
 import com.project.game.network.ClientConfig;
 import com.project.game.network.Session;
 import com.project.game.network.SessionState;
@@ -8,23 +11,27 @@ import com.project.game.network.message.Message;
 import com.project.game.network.message.MessageName;
 import com.project.game.network.message.MessageWriter;
 import com.project.game.player.Player;
-import com.project.game.player.PlayerService;
 
 import java.io.IOException;
+import java.util.Optional;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
-/** Handles login, registration, and account-admission protocol flows. */
+/** Xử lý luồng protocol đăng nhập, đăng ký và tiếp nhận tài khoản. */
 final class AuthHandler {
+    private static final Logger LOGGER = Logger.getLogger(AuthHandler.class.getName());
+    private static final String SYSTEM_BUSY = "Hệ thống đang bận, vui lòng thử lại";
     private final Session session;
-    private final AuthService authService;
-    private final PlayerService playerService;
+    private final AccountAuth authService;
+    private final PlayerRepository playerRepository;
     private final ClientConfig networkConfig;
     private final PlayerHandler playerHandler;
 
-    AuthHandler(Session session, AuthService authService, PlayerService playerService,
+    AuthHandler(Session session, AccountAuth authService, PlayerRepository playerRepository,
                 ClientConfig networkConfig, PlayerHandler playerHandler) {
         this.session = session;
         this.authService = authService;
-        this.playerService = playerService;
+        this.playerRepository = playerRepository;
         this.networkConfig = networkConfig;
         this.playerHandler = playerHandler;
     }
@@ -45,7 +52,7 @@ final class AuthHandler {
         if (reader.remaining() != 0) {
             throw new IOException("trailing login payload bytes");
         }
-        AuthService.LoginResult result = authService.login(username, password);
+        AccountAuth.LoginResult result = authService.login(username, password);
         if (!result.success()) {
             sendDialog(result.message());
             return;
@@ -57,7 +64,7 @@ final class AuthHandler {
         }
         boolean admissionSucceeded = false;
         try {
-            AuthService.AuthResult metadata =
+            AccountAuth.AuthResult metadata =
                     authService.markSuccessfulLogin(result.accountId(), session.remoteAddress());
             if (!metadata.success()) {
                 if (session.state() != SessionState.CLOSED) {
@@ -65,10 +72,21 @@ final class AuthHandler {
                 }
                 return;
             }
-            PlayerService.PlayerLoadResult loaded = playerService.load(result.accountId());
-            if (!loaded.success()) {
+            Optional<PlayerRecord> loaded;
+            try {
+                loaded = playerRepository.findByAccountId(result.accountId());
+            } catch (PlayerRepositoryException exception) {
+                LOGGER.log(Level.WARNING,
+                        "PLAYER load repository failure accountId=" + result.accountId(), exception);
                 if (session.state() != SessionState.CLOSED) {
-                    sendDialog(loaded.message());
+                    sendDialog(SYSTEM_BUSY);
+                }
+                return;
+            } catch (RuntimeException exception) {
+                LOGGER.log(Level.WARNING,
+                        "PLAYER load invalid persisted data accountId=" + result.accountId(), exception);
+                if (session.state() != SessionState.CLOSED) {
+                    sendDialog(SYSTEM_BUSY);
                 }
                 return;
             }
@@ -76,10 +94,10 @@ final class AuthHandler {
                 return;
             }
             admissionSucceeded = true;
-            if (!loaded.found()) {
+            if (loaded.isEmpty()) {
                 session.send(new Message(MessageName.START_CREATE_PLAYER_SCREEN));
             } else {
-                Player player = loaded.player();
+                Player player = loaded.orElseThrow().toPlayer(0);
                 session.bindPlayer(player);
                 session.transition(SessionState.AUTHENTICATED, SessionState.IN_GAME);
                 playerHandler.enterGame(player);
@@ -96,7 +114,7 @@ final class AuthHandler {
         if (reader.remaining() != 0) {
             throw new IOException("trailing register payload bytes");
         }
-        AuthService.AuthResult result = authService.register(username, password, session.remoteAddress());
+        AccountAuth.AuthResult result = authService.register(username, password, session.remoteAddress());
         sendDialog(result.value());
     }
 

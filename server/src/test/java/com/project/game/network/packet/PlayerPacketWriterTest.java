@@ -75,7 +75,8 @@ class PlayerPacketWriterTest {
         Player player = TestPlayers.initial(77L, 77, "wake1", 0);
         player.revive(0, 0, 1250, 648);
 
-        Message packet = new PlayerPacketWriter().wakeUpFromDie(player);
+        Message packet = new PlayerPacketWriter().wakeUpFromDie(
+                player.id(), player.x(), player.y(), player.hp(), player.mp());
 
         assertEquals(MessageName.WAKE_UP_FROM_DIE, packet.command());
         var reader = packet.reader();

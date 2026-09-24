@@ -240,7 +240,7 @@ class MapManagerTest {
         Thread changeMap = Thread.ofVirtual().start(() -> {
             changeStarted.countDown();
             try {
-                changed.set(maps.mapManager().changeMap(mover));
+                changed.set(maps.mapManager().changeMap(mover) != null);
             } finally {
                 changeFinished.countDown();
             }
@@ -324,7 +324,7 @@ class MapManagerTest {
         CountDownLatch changeFinished = new CountDownLatch(1);
         Thread changeMap = Thread.ofVirtual().start(() -> {
             try {
-                changed.set(maps.mapManager().changeMap(source));
+                changed.set(maps.mapManager().changeMap(source) != null);
             } finally {
                 changeFinished.countDown();
             }
@@ -637,10 +637,80 @@ class MapManagerTest {
         drain(observer);
 
         Player before = dead.player();
-        assertFalse(maps.mapManager().changeMap(dead));
+        assertNull(maps.mapManager().changeMap(dead));
         assertEquals(before, dead.player());
         assertEquals(2, maps.mapManager().memberCount(0, 0));
         assertEquals(List.of(), drain(observer));
+    }
+
+    @Test
+    void returnTownWaitsForPriorLethalDamageInTheSourceZone() throws Exception {
+        GameplayServices maps = mapsWithoutMonsters();
+        Session dead = session(player(1, 1, 0), maps);
+        assertTrue(maps.mapManager().finishLoad(dead));
+        Zone source = maps.findZone(1, 0);
+        CountDownLatch priorStarted = new CountDownLatch(1);
+        CountDownLatch releasePrior = new CountDownLatch(1);
+        assertTrue(source.submit(() -> {
+            priorStarted.countDown();
+            awaitRelease(releasePrior);
+            dead.player().injure(dead.player().hp());
+        }));
+        assertTrue(priorStarted.await(5, TimeUnit.SECONDS));
+
+        AtomicReference<MapManager.MapChange> change = new AtomicReference<>();
+        CountDownLatch finished = new CountDownLatch(1);
+        Thread returnTown = Thread.ofVirtual().start(() -> {
+            try {
+                change.set(maps.mapManager().returnTownFromDeath(dead));
+            } finally {
+                finished.countDown();
+            }
+        });
+
+        assertFalse(finished.await(100, TimeUnit.MILLISECONDS));
+        releasePrior.countDown();
+        assertTrue(finished.await(5, TimeUnit.SECONDS));
+        returnTown.join();
+
+        assertNotNull(change.get());
+        assertEquals(0, change.get().player().mapId());
+        assertTrue(change.get().player().hp() > 0);
+    }
+
+    @Test
+    void changeMapWaitsForPriorMovementBeforeFindingWaypoint() throws Exception {
+        GameplayServices maps = mapsWithoutMonsters();
+        Session mover = session(player(1, 0, 0), maps);
+        assertTrue(maps.mapManager().finishLoad(mover));
+        Zone source = maps.findZone(0, 0);
+        CountDownLatch priorStarted = new CountDownLatch(1);
+        CountDownLatch releasePrior = new CountDownLatch(1);
+        assertTrue(source.submit(() -> {
+            priorStarted.countDown();
+            awaitRelease(releasePrior);
+            mover.player().move(4464, 936);
+        }));
+        assertTrue(priorStarted.await(5, TimeUnit.SECONDS));
+
+        AtomicReference<MapManager.MapChange> change = new AtomicReference<>();
+        CountDownLatch finished = new CountDownLatch(1);
+        Thread changeMap = Thread.ofVirtual().start(() -> {
+            try {
+                change.set(maps.mapManager().changeMap(mover));
+            } finally {
+                finished.countDown();
+            }
+        });
+
+        assertFalse(finished.await(100, TimeUnit.MILLISECONDS));
+        releasePrior.countDown();
+        assertTrue(finished.await(5, TimeUnit.SECONDS));
+        changeMap.join();
+
+        assertNotNull(change.get());
+        assertEquals(1, change.get().player().mapId());
+        assertEquals(0, change.get().zoneId());
     }
 
     @Test
@@ -654,7 +724,7 @@ class MapManagerTest {
         drain(observer);
 
         Player revived = dead.player();
-        assertTrue(maps.mapManager().returnTownFromDeath(dead));
+        assertNotNull(maps.mapManager().returnTownFromDeath(dead));
 
         assertEquals(0, revived.mapId());
         assertEquals(0, revived.zoneId());
@@ -679,8 +749,31 @@ class MapManagerTest {
         Session alive = session(player(1, 0, 0), maps);
         Player original = alive.player();
 
-        assertFalse(maps.mapManager().returnTownFromDeath(alive));
+        assertNull(maps.mapManager().returnTownFromDeath(alive));
         assertEquals(original, alive.player());
+    }
+
+    @Test
+    void sameZoneReturnTownCapturesStableStateWithoutRemovingPresence() throws Exception {
+        GameplayServices maps = mapsWithoutMonsters();
+        Session dead = session(hp(player(1, 0, 0), 0), maps);
+        Session observer = session(player(2, 0, 0), maps);
+        maps.mapManager().finishLoad(dead);
+        maps.mapManager().finishLoad(observer);
+        drain(dead);
+        drain(observer);
+
+        MapManager.MapChange change = maps.mapManager().returnTownFromDeath(dead);
+        assertNotNull(change);
+        assertEquals(2, maps.mapManager().memberCount(0, 0));
+        assertEquals(List.of(), drain(observer));
+
+        PlayerSaveData stable = change.player();
+        assertTrue(maps.mapManager().movePlayer(dead, 1260, 640));
+        assertEquals(1260, dead.player().x());
+        assertEquals(stable.x(), change.player().x());
+        assertEquals(stable.y(), change.player().y());
+        assertEquals(List.of(MessageName.PLAYER_MOVE), commands(drain(observer)));
     }
 
     @Test
@@ -690,8 +783,8 @@ class MapManagerTest {
         maps.mapManager().finishLoad(dead);
 
         Player once = dead.player();
-        assertTrue(maps.mapManager().returnTownFromDeath(dead));
-        assertFalse(maps.mapManager().returnTownFromDeath(dead));
+        assertNotNull(maps.mapManager().returnTownFromDeath(dead));
+        assertNull(maps.mapManager().returnTownFromDeath(dead));
         assertSame(once, dead.player());
     }
 
@@ -761,7 +854,7 @@ class MapManagerTest {
         Player before = source.player();
 
         source.player().changeMap(0, 0, 4464, 936);
-        assertFalse(maps.mapManager().changeMap(source));
+        assertNull(maps.mapManager().changeMap(source));
 
         assertEquals(before, source.player());
         assertEquals(1, maps.mapManager().memberCount(0, 0));
@@ -777,8 +870,8 @@ class MapManagerTest {
         Player before = source.player();
 
         source.player().changeMap(0, 0, 4464, 936);
-        assertFalse(maps.mapManager().changeMap(source));
-        assertFalse(maps.mapManager().changeMap(source));
+        assertNull(maps.mapManager().changeMap(source));
+        assertNull(maps.mapManager().changeMap(source));
         assertEquals(before, source.player());
         assertEquals(1, maps.mapManager().memberCount(0, 0));
     }
@@ -792,7 +885,7 @@ class MapManagerTest {
         maps.mapManager().finishLoad(blocker);
         Player before = dead.player();
 
-        assertFalse(maps.mapManager().returnTownFromDeath(dead));
+        assertNull(maps.mapManager().returnTownFromDeath(dead));
 
         assertEquals(before, dead.player());
         assertEquals(1, maps.mapManager().memberCount(1, 0));
@@ -801,13 +894,13 @@ class MapManagerTest {
 
     private static GameplayServices policyMaps(
             String map0Type, String map1Type, int map0MaxPlayer, int map1MaxPlayer) {
-        Map<Integer, MapTemplate> canonical = MapTestSupport.canonicalMaps();
+        java.util.Map<Integer, MapTemplate> canonical = MapTestSupport.canonicalMaps();
         MapTemplate map0 = withPolicy(
                 canonical.get(0), map0Type, 1, 2, map0MaxPlayer);
         MapTemplate map1 = withPolicy(
                 canonical.get(1), map1Type, 1, 2, map1MaxPlayer);
         return new GameplayServices(
-                Map.of(map0.id(), map0, map1.id(), map1), GameResources.unavailable());
+                java.util.Map.of(map0.id(), map0, map1.id(), map1), GameResources.unavailable());
     }
 
     private static MapTemplate withPolicy(

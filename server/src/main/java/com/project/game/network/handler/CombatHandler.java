@@ -1,21 +1,21 @@
 package com.project.game.network.handler;
 
-import com.project.game.combat.CombatService;
+import com.project.game.combat.Combat;
 import com.project.game.network.Session;
 import com.project.game.network.message.Message;
 
 import java.io.IOException;
 
-/** Handles combat command parsing and protocol-local pending monster attacks. */
+/** Phân tích lệnh chiến đấu và quản lý đòn đánh quái đang chờ ở protocol. */
 final class CombatHandler {
     private record PendingMonsterAttack(int skillId, int monsterId) {
     }
 
     private final Session session;
-    private final CombatService combatService;
+    private final Combat combatService;
     private PendingMonsterAttack pendingMonsterAttack;
 
-    CombatHandler(Session session, CombatService combatService) {
+    CombatHandler(Session session, Combat combatService) {
         this.session = session;
         this.combatService = combatService;
     }

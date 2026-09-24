@@ -5,7 +5,6 @@ import com.project.game.persistence.DatabaseManager;
 import com.project.game.persistence.account.JdbcAccountRepository;
 import com.project.game.player.Player;
 import com.project.game.player.PlayerSaveData;
-import com.project.game.player.PlayerService;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 
@@ -33,7 +32,7 @@ class JdbcPlayerRepositoryIntegrationTest {
             long accountId = new JdbcAccountRepository(manager.dataSource())
                     .create(username, new byte[32], new byte[16], "127.0.0.1");
             Player createdPlayer = Player.create(accountId, "alpha1", 0);
-            PlayerRecord initial = PlayerRecord.withoutId(createdPlayer);
+            PlayerRecord initial = PlayerRecord.withoutId(PlayerSaveData.capture(createdPlayer));
             JdbcPlayerRepository repository = new JdbcPlayerRepository(manager.dataSource());
             PlayerRecord created = repository.create(initial);
 
@@ -42,8 +41,7 @@ class JdbcPlayerRepositoryIntegrationTest {
             assertThrows(DuplicatePlayerException.class, () -> repository.create(initial));
 
             createdPlayer.addPotential(98);
-            repository.updateCheckpoint(PlayerSaveData.capture(createdPlayer),
-                    java.time.Instant.parse("2026-01-02T03:04:05Z"));
+            repository.save(PlayerSaveData.capture(createdPlayer));
             assertEquals(99, repository.findByAccountId(accountId).orElseThrow().potential());
         } finally {
             try (Connection connection = manager.dataSource().getConnection();
@@ -97,12 +95,8 @@ class JdbcPlayerRepositoryIntegrationTest {
                 statement.executeUpdate();
             }
 
-            PlayerService.PlayerLoadResult loaded = new PlayerService(
-                    new JdbcPlayerRepository(manager.dataSource())).load(accountId);
-
-            assertTrue(!loaded.success());
-            assertTrue(!loaded.found());
-            assertEquals("Hệ thống đang bận, vui lòng thử lại", loaded.message());
+            assertThrows(PlayerRepositoryException.class,
+                    () -> new JdbcPlayerRepository(manager.dataSource()).findByAccountId(accountId));
         } finally {
             try (Connection connection = manager.dataSource().getConnection();
                  PreparedStatement statement = connection.prepareStatement(

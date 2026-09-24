@@ -9,13 +9,13 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-class AuthServiceTest {
+class AccountAuthTest {
     @Test
     void registerPersistsNormalizedCredentialAndRegistrationIp() {
         TestAccountRepository repository = new TestAccountRepository();
-        AuthService auth = new AuthService(repository);
+        AccountAuth auth = new AccountAuth(repository);
 
-        AuthService.AuthResult result = auth.register("USER01", "secret1", "192.0.2.10");
+        AccountAuth.AuthResult result = auth.register("USER01", "secret1", "192.0.2.10");
 
         assertTrue(result.success());
         assertEquals("Đăng ký thành công", result.value());
@@ -29,10 +29,10 @@ class AuthServiceTest {
     @Test
     void duplicateRegisterUsesExistingVietnameseMessage() {
         TestAccountRepository repository = new TestAccountRepository();
-        AuthService auth = new AuthService(repository);
+        AccountAuth auth = new AccountAuth(repository);
         assertTrue(auth.register("user01", "secret1", "192.0.2.10").success());
 
-        AuthService.AuthResult duplicate = auth.register("USER01", "secret2", "192.0.2.11");
+        AccountAuth.AuthResult duplicate = auth.register("USER01", "secret2", "192.0.2.11");
 
         assertFalse(duplicate.success());
         assertEquals("Tài khoản đã tồn tại", duplicate.value());
@@ -42,9 +42,9 @@ class AuthServiceTest {
     @Test
     void invalidRegisterCreatesNoAccount() {
         TestAccountRepository repository = new TestAccountRepository();
-        AuthService auth = new AuthService(repository);
+        AccountAuth auth = new AccountAuth(repository);
 
-        AuthService.AuthResult result = auth.register("bad", "secret1", "192.0.2.10");
+        AccountAuth.AuthResult result = auth.register("bad", "secret1", "192.0.2.10");
 
         assertFalse(result.success());
         assertEquals("Tài khoản hoặc mật khẩu không hợp lệ", result.value());
@@ -55,9 +55,9 @@ class AuthServiceTest {
     void repositoryRegisterFailureReturnsSafeMessage() {
         TestAccountRepository repository = new TestAccountRepository();
         repository.failCreate(true);
-        AuthService auth = new AuthService(repository);
+        AccountAuth auth = new AccountAuth(repository);
 
-        AuthService.AuthResult result = auth.register("user01", "secret1", "192.0.2.10");
+        AccountAuth.AuthResult result = auth.register("user01", "secret1", "192.0.2.10");
 
         assertFalse(result.success());
         assertEquals("Hệ thống đang bận, vui lòng thử lại", result.value());
@@ -66,10 +66,10 @@ class AuthServiceTest {
     @Test
     void loginReturnsPersistentIdentityForCorrectNormalizedCredential() {
         TestAccountRepository repository = new TestAccountRepository();
-        AuthService auth = new AuthService(repository);
+        AccountAuth auth = new AccountAuth(repository);
         assertTrue(auth.register("user01", "secret1", "192.0.2.10").success());
 
-        AuthService.LoginResult result = auth.login("USER01", "secret1");
+        AccountAuth.LoginResult result = auth.login("USER01", "secret1");
 
         assertTrue(result.success());
         assertTrue(result.accountId() > 0);
@@ -79,11 +79,11 @@ class AuthServiceTest {
     @Test
     void wrongPasswordAndMissingAccountUseSameGenericMessage() {
         TestAccountRepository repository = new TestAccountRepository();
-        AuthService auth = new AuthService(repository);
+        AccountAuth auth = new AccountAuth(repository);
         assertTrue(auth.register("user01", "secret1", "192.0.2.10").success());
 
-        AuthService.LoginResult wrongPassword = auth.login("user01", "secret2");
-        AuthService.LoginResult missing = auth.login("user02", "secret2");
+        AccountAuth.LoginResult wrongPassword = auth.login("user01", "secret2");
+        AccountAuth.LoginResult missing = auth.login("user02", "secret2");
 
         assertFalse(wrongPassword.success());
         assertFalse(missing.success());
@@ -94,11 +94,11 @@ class AuthServiceTest {
     @Test
     void lockedAccountCannotLoginOrReceiveMetadataUpdate() {
         TestAccountRepository repository = new TestAccountRepository();
-        AuthService auth = new AuthService(repository);
+        AccountAuth auth = new AccountAuth(repository);
         assertTrue(auth.register("user01", "secret1", "192.0.2.10").success());
         repository.lock("user01");
 
-        AuthService.LoginResult result = auth.login("user01", "secret1");
+        AccountAuth.LoginResult result = auth.login("user01", "secret1");
 
         assertFalse(result.success());
         assertEquals("Tài khoản đã bị khóa", result.message());
@@ -109,9 +109,9 @@ class AuthServiceTest {
     void repositoryLoginFailureReturnsSafeMessage() {
         TestAccountRepository repository = new TestAccountRepository();
         repository.failFind(true);
-        AuthService auth = new AuthService(repository);
+        AccountAuth auth = new AccountAuth(repository);
 
-        AuthService.LoginResult result = auth.login("user01", "secret1");
+        AccountAuth.LoginResult result = auth.login("user01", "secret1");
 
         assertFalse(result.success());
         assertEquals("Hệ thống đang bận, vui lòng thử lại", result.message());
@@ -120,11 +120,11 @@ class AuthServiceTest {
     @Test
     void markSuccessfulLoginUpdatesIpAndTimestamp() {
         TestAccountRepository repository = new TestAccountRepository();
-        AuthService auth = new AuthService(repository);
+        AccountAuth auth = new AccountAuth(repository);
         assertTrue(auth.register("user01", "secret1", "192.0.2.10").success());
         long accountId = auth.login("user01", "secret1").accountId();
 
-        AuthService.AuthResult result = auth.markSuccessfulLogin(accountId, "198.51.100.20");
+        AccountAuth.AuthResult result = auth.markSuccessfulLogin(accountId, "198.51.100.20");
 
         assertTrue(result.success());
         AccountRecord account = repository.requireAccount("user01");
@@ -136,23 +136,23 @@ class AuthServiceTest {
     @Test
     void metadataRepositoryFailureReturnsSafeMessage() {
         TestAccountRepository repository = new TestAccountRepository();
-        AuthService auth = new AuthService(repository);
+        AccountAuth auth = new AccountAuth(repository);
         assertTrue(auth.register("user01", "secret1", "192.0.2.10").success());
         long accountId = auth.login("user01", "secret1").accountId();
         repository.failUpdate(true);
 
-        AuthService.AuthResult result = auth.markSuccessfulLogin(accountId, "198.51.100.20");
+        AccountAuth.AuthResult result = auth.markSuccessfulLogin(accountId, "198.51.100.20");
 
         assertFalse(result.success());
         assertEquals("Hệ thống đang bận, vui lòng thử lại", result.value());
     }
 
-    private static AuthService registeredAuth() {
+    private static AccountAuth registeredAuth() {
         return registeredAuthFor("user01");
     }
 
-    private static AuthService registeredAuthFor(String username) {
-        AuthService auth = new AuthService(new TestAccountRepository());
+    private static AccountAuth registeredAuthFor(String username) {
+        AccountAuth auth = new AccountAuth(new TestAccountRepository());
         assertTrue(auth.register(username, "secret1", "127.0.0.1").success());
         return auth;
     }

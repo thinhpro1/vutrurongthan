@@ -8,9 +8,10 @@ import com.project.game.network.transport.ClientTransport;
 import com.project.game.map.Zone;
 import com.project.game.map.MapManager;
 import com.project.game.network.SessionServices;
+import com.project.game.persistence.player.PlayerRepository;
+import com.project.game.persistence.player.PlayerRepositoryException;
 import com.project.game.player.Player;
 import com.project.game.player.PlayerSaveData;
-import com.project.game.player.PlayerService;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -38,7 +39,7 @@ public final class Session implements AutoCloseable {
     private final AtomicReference<SessionState> state = new AtomicReference<>(SessionState.CONNECTED);
     private final AtomicBoolean closed = new AtomicBoolean();
     private final MapManager mapManager;
-    private final PlayerService playerService;
+    private final PlayerRepository playerRepository;
     private final Object writeLock = new Object();
     private final MessageHandler handler;
     private final Set<Integer> sentMapTemplates = ConcurrentHashMap.newKeySet();
@@ -67,7 +68,7 @@ public final class Session implements AutoCloseable {
         this.cipher = new LegacyCipher(handshakeKey);
         this.sendQueue = new ArrayBlockingQueue<>(queueSize);
         this.mapManager = Objects.requireNonNull(services, "services").maps();
-        this.playerService = services.players();
+        this.playerRepository = services.playerRepository();
         this.handler = new MessageHandler(this, services, networkConfig);
     }
 
@@ -235,17 +236,20 @@ public final class Session implements AutoCloseable {
         if (writerThread != null && writerThread != currentThread) {
             writerThread.interrupt();
         }
+        PlayerSaveData finalSave = null;
         try {
-            mapManager.leave(this);
+            finalSave = mapManager.leave(this);
         } catch (RuntimeException exception) {
             LOGGER.log(Level.WARNING, "Map cleanup failed for session id=" + id, exception);
         }
         Player currentPlayer = player;
         try {
-            if (currentPlayer != null && currentPlayer.id() > 0 && accountId > 0L) {
+            if (finalSave != null && finalSave.id() > 0 && accountId > 0L) {
                 boolean interruptedBeforeCheckpoint = Thread.interrupted();
                 try {
-                    playerService.checkpoint(PlayerSaveData.capture(currentPlayer));
+                    playerRepository.save(finalSave);
+                } catch (PlayerRepositoryException exception) {
+                    LOGGER.log(Level.WARNING, "Player checkpoint failed for session id=" + id, exception);
                 } catch (RuntimeException exception) {
                     LOGGER.log(Level.WARNING, "Player checkpoint failed for session id=" + id, exception);
                 } finally {
@@ -253,6 +257,8 @@ public final class Session implements AutoCloseable {
                         Thread.currentThread().interrupt();
                     }
                 }
+            } else if (currentPlayer != null && currentPlayer.id() > 0 && accountId > 0L) {
+                LOGGER.warning("Không lưu Player vì chưa detach được khỏi Zone: session id=" + id);
             }
         } finally {
             manager.unbindAccount(this);

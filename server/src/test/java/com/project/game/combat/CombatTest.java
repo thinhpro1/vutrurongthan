@@ -28,13 +28,13 @@ import com.project.game.testsupport.GameplayTestSupport.BlockingOfferQueue;
 import com.project.game.testsupport.GameplayTestSupport.BlockingRandom;
 import static org.junit.jupiter.api.Assertions.*;
 
-class CombatServiceTest {
+class CombatTest {
     @Test
     void targetingAndAttackingDoNotCreateAbsentZones() {
         MapManager zones = new MapManager(
                 com.project.game.testsupport.MapTestSupport.canonicalMaps(),
                 new MonsterFactory(GameResources.unavailable()), new PlayerPacketWriter());
-        CombatService combat = new CombatService(
+        Combat combat = new Combat(
                 zones, new PlayerPacketWriter(), new MonsterPacketWriter());
 
         assertFalse(combat.canTargetMonster(null, 101));
@@ -253,7 +253,7 @@ class CombatServiceTest {
         assertEquals(rewarded, attacker.player().potential());
 
         assertTrue(maps.mapManager().movePlayer(attacker, 0, 1008));
-        assertTrue(maps.mapManager().changeMap(attacker));
+        assertNotNull(maps.mapManager().changeMap(attacker));
 
         assertEquals(rewarded, attacker.player().potential());
         assertEquals(rewarded, attacker.player().potential());
@@ -346,7 +346,7 @@ class CombatServiceTest {
         assertEquals(1L, rewardPackets);
     }
 
-    private static void killMonster(CombatService combat, Session session) throws Exception {
+    private static void killMonster(Combat combat, Session session) throws Exception {
         for (int hit = 0; hit < 29; hit++) {
             assertTrue(combat.attackMonster(session, 101));
             drain(session);

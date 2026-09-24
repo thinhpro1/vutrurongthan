@@ -10,7 +10,7 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Objects;
 
-/** Writes the legacy server-to-client player presence packets. */
+/** Ghi các packet hiện diện Player từ server đến client legacy. */
 public final class PlayerPacketWriter {
     public Message playerInfo(Player player, List<SkillTemplate> skills)
             throws IOException {
@@ -94,14 +94,14 @@ public final class PlayerPacketWriter {
                     .writeShort(player.y())
                     .writeLong(player.currentStats().maxHp())
                     .writeLong(player.hp())
-                    .writeByte(0) // normal typePk
-                    .writeByte(0) // normal typeFlag
+                    .writeByte(0) // typePk bình thường
+                    .writeByte(0) // typeFlag bình thường
                     .writeShort(player.level())
                     .writeByte(player.appearance().spaceship())
                     .writeByte(player.currentStats().speed())
-                    .writeInt(-1) // no clan
-                    .writeByte(-1) // no equipped upgrade
-                    .writeByte(0); // no runtime effects
+                    .writeInt(-1) // không có clan
+                    .writeByte(-1) // không có nâng cấp trang bị
+                    .writeByte(0); // không có hiệu ứng runtime
             return new Message(MessageName.ADD_PLAYER, writer.toByteArray());
         } catch (IOException exception) {
             throw new IllegalStateException("cannot encode player name", exception);
@@ -137,20 +137,19 @@ public final class PlayerPacketWriter {
                         .toByteArray());
     }
 
-    public Message wakeUpFromDie(Player player) {
-        Objects.requireNonNull(player, "player");
-        PlayerPacketValidator.validatePosition(player.x(), player.y());
-        if (player.hp() <= 0L) {
+    public Message wakeUpFromDie(int playerId, int x, int y, long hp, long mp) {
+        PlayerPacketValidator.validatePosition(x, y);
+        if (hp <= 0L) {
             throw new IllegalArgumentException("wake-up player must be alive");
         }
         return new Message(
                 MessageName.WAKE_UP_FROM_DIE,
                 new MessageWriter()
-                        .writeInt(player.id())
-                        .writeShort(player.x())
-                        .writeShort(player.y())
-                        .writeLong(player.hp())
-                        .writeLong(player.mp())
+                        .writeInt(playerId)
+                        .writeShort(x)
+                        .writeShort(y)
+                        .writeLong(hp)
+                        .writeLong(mp)
                         .toByteArray());
     }
 

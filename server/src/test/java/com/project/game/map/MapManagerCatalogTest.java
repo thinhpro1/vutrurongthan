@@ -21,7 +21,10 @@ class MapManagerCatalogTest {
     @Test
     void onlineStartupCreatesExactlyMinimumZonesAndOfflineCreatesNone() {
         MapManager registry = registry();
+        com.project.game.map.Map runtimeMap = registry.findMap(1);
 
+        assertNotNull(runtimeMap);
+        assertSame(runtimeMap.findZone(0), registry.findZone(1, 0));
         assertNotNull(registry.findZone(1, 0));
         assertNotNull(registry.findZone(1, 1));
         assertNull(registry.findZone(1, 2));
@@ -70,7 +73,7 @@ class MapManagerCatalogTest {
 
     @Test
     void catalogIsDefensivelyCopiedAndSnapshotContainsOnlyRegisteredZones() {
-        Map<Integer, MapTemplate> source = new HashMap<>(maps());
+        java.util.Map<Integer, MapTemplate> source = new HashMap<>(maps());
         MapManager registry = new MapManager(source, monsterFactory(), new PlayerPacketWriter());
         source.clear();
 
@@ -84,14 +87,14 @@ class MapManagerCatalogTest {
         return new MapManager(maps(), monsterFactory(), new PlayerPacketWriter());
     }
 
-    private static Map<Integer, MapTemplate> maps() {
-        Map<Integer, MapTemplate> canonical = MapTestSupport.canonicalMaps();
+    private static java.util.Map<Integer, MapTemplate> maps() {
+        java.util.Map<Integer, MapTemplate> canonical = MapTestSupport.canonicalMaps();
         MapTemplate online = withPolicy(canonical.get(1), "ONLINE", 2, 4, 2);
         MapTemplate offline = withPolicy(canonical.get(0), "OFFLINE", 2, 4, 2);
-        return Map.of(online.id(), online, offline.id(), offline);
+        return java.util.Map.of(online.id(), online, offline.id(), offline);
     }
 
-    private static Map<Integer, MapTemplate> canonicalMaps() {
+    private static java.util.Map<Integer, MapTemplate> canonicalMaps() {
         return MapTestSupport.canonicalMaps();
     }
 

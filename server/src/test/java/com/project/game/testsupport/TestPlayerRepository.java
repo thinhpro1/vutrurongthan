@@ -6,7 +6,6 @@ import com.project.game.persistence.player.PlayerRepository;
 import com.project.game.persistence.player.PlayerRepositoryException;
 import com.project.game.player.PlayerSaveData;
 
-import java.time.Instant;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
@@ -55,7 +54,7 @@ public final class TestPlayerRepository implements PlayerRepository {
     }
 
     @Override
-    public void updateCheckpoint(PlayerSaveData player, Instant playedAt) {
+    public void save(PlayerSaveData player) {
         if (failUpdate) {
             throw new PlayerRepositoryException("injected update failure");
         }

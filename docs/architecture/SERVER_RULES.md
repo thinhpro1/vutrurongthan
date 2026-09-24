@@ -599,6 +599,26 @@ feature lifecycle/update
 
 Use `Service` for a real cross-owner/use-case operation.
 
+## 10.1 Service naming convention
+
+Trong dự án này, `Service`/`AreaService` theo vocabulary gameplay legacy và
+dành cho việc gửi message, dispatch packet hoặc broadcast trong một khu vực.
+
+Không đặt tên các thành phần sau là `*Service` chỉ vì chúng thực hiện thao tác:
+
+```text
+persistence wrapper
+gameplay coordinator
+repository
+runtime owner
+```
+
+`Manager` chỉ dùng khi type thực sự sở hữu collection, catalog, init, find hoặc
+lifecycle có ý nghĩa. `Map` là runtime domain object khi nó sở hữu các `Zone`
+và hành vi chỉ thuộc về map; `MapTemplate` vẫn là dữ liệu template/config tĩnh.
+
+Không tạo một `Service` rỗng chỉ để giữ đối xứng tên trong kiến trúc.
+
 A Factory is justified only when object creation has meaningful composition or
 policy.
 

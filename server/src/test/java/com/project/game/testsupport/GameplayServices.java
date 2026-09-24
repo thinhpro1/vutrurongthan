@@ -1,6 +1,6 @@
 package com.project.game.testsupport;
 
-import com.project.game.combat.CombatService;
+import com.project.game.combat.Combat;
 import com.project.game.map.MapManager;
 import com.project.game.map.MapTemplate;
 import com.project.game.map.Zone;
@@ -21,7 +21,7 @@ import java.util.random.RandomGenerator;
 /** Test-only composition of the three gameplay services over one MapManager. */
 public final class GameplayServices {
     private MapManager maps;
-    private CombatService combat;
+    private Combat combat;
     private MonsterManager monsterManager;
 
     public GameplayServices(PlayerPacketWriter playerPackets,
@@ -84,7 +84,7 @@ public final class GameplayServices {
                             MonsterPacketWriter monsterPackets, Clock clock,
                             RandomGenerator random) {
         this.maps = manager;
-        this.combat = new CombatService(manager, playerPackets, monsterPackets, clock);
+        this.combat = new Combat(manager, playerPackets, monsterPackets, clock);
         this.monsterManager = new MonsterManager(manager, monsterPackets, playerPackets, clock, random);
     }
 
@@ -92,7 +92,7 @@ public final class GameplayServices {
         return maps;
     }
 
-    public CombatService combatService() {
+    public Combat combatService() {
         return combat;
     }
 
@@ -107,10 +107,10 @@ public final class GameplayServices {
     public void finishLoad(Session session) { maps.finishLoad(session); }
     public void leave(Session session) { maps.leave(session); }
     public boolean returnTownFromDeath(Session session) {
-        return maps.returnTownFromDeath(session);
+        return maps.returnTownFromDeath(session) != null;
     }
     public boolean changeMap(Session session) {
-        return maps.changeMap(session);
+        return maps.changeMap(session) != null;
     }
     public boolean movePlayer(Session session, int x, int y) { return maps.movePlayer(session, x, y); }
     public int memberCount(int mapId, int zoneId) { return maps.memberCount(mapId, zoneId); }

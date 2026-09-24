@@ -14,7 +14,7 @@ import com.project.game.network.message.MessageWriter;
 import com.project.game.network.packet.PlayerPacketWriter;
 import com.project.game.network.packet.MonsterPacketWriter;
 import com.project.game.monster.MonsterFactory;
-import com.project.game.account.AuthService;
+import com.project.game.account.AccountAuth;
 import com.project.game.resource.GameResources;
 import com.project.game.network.SessionServices;
 import com.project.game.player.Player;
@@ -229,7 +229,7 @@ class MessageHandlerMapTest {
 
     @Test
     void finishLoadRegistersPresenceAndMovementDoesNotAckMover() throws Exception {
-        AuthService auth = TestServices.authService();
+        AccountAuth auth = TestServices.authService();
         GameplayServices maps = new GameplayServices(
                 new PlayerPacketWriter(),
                 new MonsterPacketWriter(),
@@ -261,7 +261,7 @@ class MessageHandlerMapTest {
 
     @Test
     void playerMoveIsAcceptedInGameAndUpdatesSessionPosition() throws Exception {
-        AuthService auth = TestServices.authService();
+        AccountAuth auth = TestServices.authService();
         GameplayServices maps = new GameplayServices(GameResources.unavailable());
         SessionServices services = TestServices.serverServices(auth, GameResources.unavailable(), maps);
         Session session = inGameSession(services, TestPlayers.initial(1L, 7, "alpha1", 0));
@@ -338,7 +338,7 @@ class MessageHandlerMapTest {
 
     @Test
     void finishLoadMapClosesConflictingSessionWithoutReplacingOriginalMember() throws Exception {
-        AuthService auth = TestServices.authService();
+        AccountAuth auth = TestServices.authService();
         GameplayServices gameplay = new GameplayServices(
                 new PlayerPacketWriter(),
                 new MonsterPacketWriter(),
@@ -404,7 +404,7 @@ class MessageHandlerMapTest {
 
     @Test
     void playerMoveRejectsTruncatedPayload() {
-        AuthService auth = TestServices.authService();
+        AccountAuth auth = TestServices.authService();
         Session session = inGameSessionWithPlayer(auth);
         MessageHandler handler = newHandler(session, auth);
 
@@ -420,7 +420,7 @@ class MessageHandlerMapTest {
 
     @Test
     void playerMoveRejectsTrailingPayloadBytes() {
-        AuthService auth = TestServices.authService();
+        AccountAuth auth = TestServices.authService();
         Session session = inGameSessionWithPlayer(auth);
         MessageHandler handler = newHandler(session, auth);
 
@@ -437,7 +437,7 @@ class MessageHandlerMapTest {
 
     @Test
     void playerMoveRemainsRejectedBeforeInGame() {
-        AuthService auth = TestServices.authService();
+        AccountAuth auth = TestServices.authService();
         Session session = newSession(auth);
         session.bindPlayer(TestPlayers.initial(1L, 7, "alpha1", 0));
         session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
@@ -453,7 +453,7 @@ class MessageHandlerMapTest {
 
     @Test
     void playerMoveWithoutBoundPlayerFailsClosed() {
-        AuthService auth = TestServices.authService();
+        AccountAuth auth = TestServices.authService();
         Session session = newSession(auth);
         session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
         session.transition(SessionState.HANDSHAKE_DONE, SessionState.AUTHENTICATED);

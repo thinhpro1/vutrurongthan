@@ -10,7 +10,7 @@ import com.project.game.network.handler.MessageHandler;
 import com.project.game.network.message.Message;
 import com.project.game.network.message.MessageName;
 import com.project.game.network.message.MessageWriter;
-import com.project.game.account.AuthService;
+import com.project.game.account.AccountAuth;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -29,7 +29,7 @@ class MessageHandlerAuthTest {
 
     @Test
     void closesWhenLoginOmitsRequiredLoginVersion() throws Exception {
-        AuthService auth = registeredAuth();
+        AccountAuth auth = registeredAuth();
         Session session = newSession(auth);
         session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
         MessageHandler handler = newHandler(session, auth);
@@ -43,7 +43,7 @@ class MessageHandlerAuthTest {
     @Test
     void registerUsesServerDerivedRemoteAddress() throws Exception {
         TestAccountRepository repository = new TestAccountRepository();
-        AuthService auth = new AuthService(repository);
+        AccountAuth auth = new AccountAuth(repository);
         SessionManager manager = new SessionManager();
         Session session = newSession(auth, 1024, manager, "192.0.2.44");
         session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
@@ -58,7 +58,7 @@ class MessageHandlerAuthTest {
     @Test
     void closesWhenRegisterContainsTrailingBytes() throws Exception {
         TestAccountRepository repository = new TestAccountRepository();
-        AuthService auth = new AuthService(repository);
+        AccountAuth auth = new AccountAuth(repository);
         Session session = newSession(auth);
         session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
         Message register = new Message(MessageName.REGISTER_USER,
@@ -73,7 +73,7 @@ class MessageHandlerAuthTest {
     @Test
     void validLoginBindsThenUpdatesMetadataThenAuthenticates() throws Exception {
         TestAccountRepository repository = new TestAccountRepository();
-        AuthService auth = new AuthService(repository);
+        AccountAuth auth = new AccountAuth(repository);
         assertTrue(auth.register("user01", "secret1", "192.0.2.10").success());
         SessionManager manager = new SessionManager();
         Session session = newSession(auth, 1024, manager, "198.51.100.1");
@@ -91,7 +91,7 @@ class MessageHandlerAuthTest {
     @Test
     void duplicateOnlineLoginDoesNotUpdateSuccessfulLoginMetadata() throws Exception {
         TestAccountRepository repository = new TestAccountRepository();
-        AuthService auth = new AuthService(repository);
+        AccountAuth auth = new AccountAuth(repository);
         assertTrue(auth.register("user01", "secret1", "192.0.2.10").success());
         SessionManager manager = new SessionManager();
         Session first = newSession(auth, 1024, manager, "198.51.100.1");
@@ -115,7 +115,7 @@ class MessageHandlerAuthTest {
     @Test
     void metadataFailureRollsBackAccountBindingAndStaysUnauthenticated() throws Exception {
         TestAccountRepository repository = new TestAccountRepository();
-        AuthService auth = new AuthService(repository);
+        AccountAuth auth = new AccountAuth(repository);
         assertTrue(auth.register("user01", "secret1", "192.0.2.10").success());
         repository.failUpdate(true);
         SessionManager manager = new SessionManager();
@@ -135,7 +135,7 @@ class MessageHandlerAuthTest {
     @Test
     void closeFinishesWhileSuccessfulLoginMetadataUpdateIsBlocked() throws Exception {
         BlockingMetadataRepository repository = new BlockingMetadataRepository();
-        AuthService auth = new AuthService(repository);
+        AccountAuth auth = new AccountAuth(repository);
         assertTrue(auth.register("user01", "secret1", "192.0.2.10").success());
         SessionManager manager = new SessionManager();
         Session session = newSession(auth, 1024, manager, "198.51.100.1");
@@ -179,7 +179,7 @@ class MessageHandlerAuthTest {
     @Test
     void reconnectWaitsForClosedSessionLoginAdmissionToFinish() throws Exception {
         BlockingMetadataRepository repository = new BlockingMetadataRepository();
-        AuthService auth = new AuthService(repository);
+        AccountAuth auth = new AccountAuth(repository);
         assertTrue(auth.register("user01", "secret1", "192.0.2.10").success());
         SessionManager manager = new SessionManager();
         Session first = newSession(auth, 1024, manager, "198.51.100.1");
@@ -230,7 +230,7 @@ class MessageHandlerAuthTest {
 
     @Test
     void closesWhenLoginContainsTrailingBytes() throws Exception {
-        AuthService auth = registeredAuth();
+        AccountAuth auth = registeredAuth();
         Session session = newSession(auth);
         session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
         MessageHandler handler = newHandler(session, auth);
@@ -244,7 +244,7 @@ class MessageHandlerAuthTest {
 
     @Test
     void closesWhenCreatePlayerContainsTrailingBytes() throws Exception {
-        AuthService auth = registeredAuth();
+        AccountAuth auth = registeredAuth();
         Session session = newSession(auth);
         session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
         session.bindAccount(1L, "user01");
@@ -260,8 +260,8 @@ class MessageHandlerAuthTest {
         assertEquals(SessionState.CLOSED, session.state());
     }
 
-    private static AuthService registeredAuth() {
-        AuthService auth = TestServices.authService();
+    private static AccountAuth registeredAuth() {
+        AccountAuth auth = TestServices.authService();
         auth.register("user01", "secret1", "127.0.0.1");
         return auth;
     }

@@ -19,9 +19,9 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-class AuthServiceDatabaseIntegrationTest {
+class AccountAuthDatabaseIntegrationTest {
     @Test
-    void accountCredentialSurvivesAuthServiceRestart() throws Exception {
+    void accountCredentialSurvivesAccountAuthRestart() throws Exception {
         Assumptions.assumeTrue(
                 Boolean.getBoolean("game.db.integration-test"),
                 "real MySQL integration test is opt-in");
@@ -32,8 +32,8 @@ class AuthServiceDatabaseIntegrationTest {
         String username = "it" + UUID.randomUUID().toString().replace("-", "").substring(0, 18);
         String password = "secret1";
         try {
-            AuthService firstServer = new AuthService(repository);
-            AuthService.AuthResult registered =
+            AccountAuth firstServer = new AccountAuth(repository);
+            AccountAuth.AuthResult registered =
                     firstServer.register(username, password, "192.0.2.10");
             assertTrue(registered.success());
 
@@ -42,8 +42,8 @@ class AuthServiceDatabaseIntegrationTest {
             assertEquals(16, created.passwordSalt().length);
             assertEquals("192.0.2.10", created.ipAddress());
 
-            AuthService restartedServer = new AuthService(repository);
-            AuthService.LoginResult login = restartedServer.login(username, password);
+            AccountAuth restartedServer = new AccountAuth(repository);
+            AccountAuth.LoginResult login = restartedServer.login(username, password);
             assertTrue(login.success());
             assertEquals(created.id(), login.accountId());
             assertEquals(username, login.accountName());
@@ -70,7 +70,7 @@ class AuthServiceDatabaseIntegrationTest {
 
     private static Properties loadDatabaseProperties() throws IOException {
         Properties properties = new Properties();
-        try (InputStream input = AuthServiceDatabaseIntegrationTest.class
+        try (InputStream input = AccountAuthDatabaseIntegrationTest.class
                 .getResourceAsStream("/application.properties")) {
             properties.load(input);
         }

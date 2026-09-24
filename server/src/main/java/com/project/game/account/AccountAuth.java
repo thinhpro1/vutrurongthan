@@ -17,11 +17,11 @@ import java.util.logging.Logger;
 import java.util.regex.Pattern;
 
 /**
- * Account authentication boundary backed by the configured account repository. Player state
- * is deliberately limited to account authentication and metadata.
+ * Biên giới xác thực tài khoản dựa trên repository đã cấu hình. Trạng thái
+ * Player chỉ được dùng cho xác thực tài khoản và metadata.
  */
-public final class AuthService {
-    private static final Logger LOGGER = Logger.getLogger(AuthService.class.getName());
+public final class AccountAuth {
+    private static final Logger LOGGER = Logger.getLogger(AccountAuth.class.getName());
     private static final String SYSTEM_BUSY = "Hệ thống đang bận, vui lòng thử lại";
     private static final Pattern USERNAME = Pattern.compile("^[a-z0-9]{5,25}$");
     private static final Pattern PASSWORD = Pattern.compile("^[a-z0-9]{5,25}$");
@@ -30,7 +30,7 @@ public final class AuthService {
     private final SecureRandom random = new SecureRandom();
     private final AccountRepository accountRepository;
 
-    public AuthService(AccountRepository accountRepository) {
+    public AccountAuth(AccountRepository accountRepository) {
         this.accountRepository = Objects.requireNonNull(accountRepository, "accountRepository");
     }
 

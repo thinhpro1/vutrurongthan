@@ -86,7 +86,7 @@ public final class Zone {
         }
     }
 
-    public RuntimeState runtimeState() {
+    RuntimeState runtimeState() {
         synchronized (runtimeLock) {
             return runtimeState;
         }
@@ -96,7 +96,7 @@ public final class Zone {
      * Stops this Zone runtime permanently. An action already running is allowed to finish;
      * queued actions are discarded and future submissions are rejected.
      */
-    public void stopRuntime() {
+    void stopRuntime() {
         synchronized (runtimeLock) {
             runtimeState = RuntimeState.STOPPED;
             runtimeInputs.clear();
@@ -121,7 +121,6 @@ public final class Zone {
                     }
                     action = runtimeInputs.poll();
                     if (action == null) {
-                        runtimeState = RuntimeState.FROZEN;
                         return;
                     }
                 }
@@ -386,7 +385,7 @@ public final class Zone {
         return player;
     }
 
-    public enum RuntimeState {
+    enum RuntimeState {
         ACTIVE,
         FROZEN,
         STOPPED

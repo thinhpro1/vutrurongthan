@@ -22,6 +22,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.lang.reflect.Modifier;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -174,6 +175,17 @@ class ZoneTest {
     }
 
     @Test
+    void lifecycleControlsStayPackagePrivateExceptSubmitBoundary() throws Exception {
+        assertFalse(Modifier.isPublic(Zone.RuntimeState.class.getModifiers()));
+        assertFalse(Modifier.isPublic(
+                Zone.class.getDeclaredMethod("runtimeState").getModifiers()));
+        assertFalse(Modifier.isPublic(
+                Zone.class.getDeclaredMethod("stopRuntime").getModifiers()));
+        assertTrue(Modifier.isPublic(
+                Zone.class.getDeclaredMethod("submit", Runnable.class).getModifiers()));
+    }
+
+    @Test
     void runtimeRejectsNullActionsAndInvalidInputCapacity() {
         Zone zone = new Zone(1, 0, 10, List.of());
 
@@ -212,6 +224,7 @@ class ZoneTest {
             }
         }));
         assertTrue(firstStarted.await(5, TimeUnit.SECONDS));
+        assertEquals(Zone.RuntimeState.ACTIVE, zone.runtimeState());
 
         assertTrue(zone.submit(() -> {
             Thread current = Thread.currentThread();

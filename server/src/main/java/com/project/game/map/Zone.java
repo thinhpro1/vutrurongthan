@@ -105,45 +105,13 @@ public final class Zone {
             return action.get();
         }
 
-        CountDownLatch completed = new CountDownLatch(1);
-        AtomicReference<T> result = new AtomicReference<>();
-        AtomicReference<Throwable> failure = new AtomicReference<>();
-        boolean accepted = submit(() -> {
-            try {
-                result.set(action.get());
-            } catch (RuntimeException | Error exception) {
-                failure.set(exception);
-                throw exception;
-            } finally {
-                completed.countDown();
-            }
-        });
+        Call<T> call = new Call<>(action, mapId, zoneId);
+        boolean accepted = submit(call);
         if (!accepted) {
             throw new RejectedExecutionException(
                     "Zone runtime rejected action for map " + mapId + " zone " + zoneId);
         }
-
-        boolean interrupted = false;
-        while (true) {
-            try {
-                completed.await();
-                break;
-            } catch (InterruptedException exception) {
-                interrupted = true;
-            }
-        }
-        if (interrupted) {
-            Thread.currentThread().interrupt();
-        }
-
-        Throwable exception = failure.get();
-        if (exception instanceof RuntimeException runtimeException) {
-            throw runtimeException;
-        }
-        if (exception instanceof Error error) {
-            throw error;
-        }
-        return result.get();
+        return call.await();
     }
 
     RuntimeState runtimeState() {
@@ -154,11 +122,16 @@ public final class Zone {
 
     /**
      * Stops this Zone runtime permanently. An action already running is allowed to finish;
-     * queued actions are discarded and future submissions are rejected.
+     * queued calls are rejected and wake their callers; other queued actions are discarded.
      */
     void stopRuntime() {
         synchronized (runtimeLock) {
             runtimeState = RuntimeState.STOPPED;
+            for (Runnable action : runtimeInputs) {
+                if (action instanceof Call<?> call) {
+                    call.cancel();
+                }
+            }
             runtimeInputs.clear();
         }
     }
@@ -443,6 +416,61 @@ public final class Zone {
             throw new IllegalStateException("zone membership requires a bound player");
         }
         return player;
+    }
+
+    private static final class Call<T> implements Runnable {
+        private final Supplier<T> action;
+        private final String rejectionMessage;
+        private final CountDownLatch completed = new CountDownLatch(1);
+        private final AtomicReference<T> result = new AtomicReference<>();
+        private final AtomicReference<Throwable> failure = new AtomicReference<>();
+
+        private Call(Supplier<T> action, int mapId, int zoneId) {
+            this.action = Objects.requireNonNull(action, "action");
+            this.rejectionMessage =
+                    "Zone runtime stopped for map " + mapId + " zone " + zoneId;
+        }
+
+        @Override
+        public void run() {
+            try {
+                result.set(action.get());
+            } catch (RuntimeException | Error exception) {
+                failure.set(exception);
+                throw exception;
+            } finally {
+                completed.countDown();
+            }
+        }
+
+        private void cancel() {
+            failure.set(new RejectedExecutionException(rejectionMessage));
+            completed.countDown();
+        }
+
+        private T await() {
+            boolean interrupted = false;
+            while (true) {
+                try {
+                    completed.await();
+                    break;
+                } catch (InterruptedException exception) {
+                    interrupted = true;
+                }
+            }
+            if (interrupted) {
+                Thread.currentThread().interrupt();
+            }
+
+            Throwable exception = failure.get();
+            if (exception instanceof RuntimeException runtimeException) {
+                throw runtimeException;
+            }
+            if (exception instanceof Error error) {
+                throw error;
+            }
+            return result.get();
+        }
     }
 
     enum RuntimeState {

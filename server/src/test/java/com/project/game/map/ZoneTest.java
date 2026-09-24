@@ -413,6 +413,47 @@ class ZoneTest {
     }
 
     @Test
+    void stoppedRuntimeRejectsAcceptedCallInsteadOfLeavingCallerWaiting() throws Exception {
+        Zone zone = new Zone(1, 0, 10, List.of());
+        CountDownLatch firstStarted = new CountDownLatch(1);
+        CountDownLatch releaseFirst = new CountDownLatch(1);
+        CountDownLatch callFinished = new CountDownLatch(1);
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+
+        assertTrue(zone.submit(() -> {
+            firstStarted.countDown();
+            try {
+                if (!releaseFirst.await(5, TimeUnit.SECONDS)) {
+                    throw new AssertionError("first action was not released");
+                }
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                throw new AssertionError(exception);
+            }
+        }));
+        assertTrue(firstStarted.await(5, TimeUnit.SECONDS));
+
+        Thread caller = Thread.ofVirtual().start(() -> {
+            try {
+                zone.call(() -> 42);
+            } catch (Throwable exception) {
+                failure.set(exception);
+            } finally {
+                callFinished.countDown();
+            }
+        });
+
+        assertFalse(callFinished.await(100, TimeUnit.MILLISECONDS));
+        zone.stopRuntime();
+        assertTrue(callFinished.await(5, TimeUnit.SECONDS));
+        releaseFirst.countDown();
+        caller.join();
+
+        assertTrue(failure.get() instanceof RejectedExecutionException);
+        awaitRuntimeState(zone, Zone.RuntimeState.STOPPED);
+    }
+
+    @Test
     void freezeWakeKeepsExistingMonsterRuntimeState() throws Exception {
         Monster monster = monsterForTest();
         Zone zone = new Zone(1, 0, 10, List.of(monster));

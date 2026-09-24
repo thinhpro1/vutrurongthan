@@ -33,6 +33,7 @@ import java.io.PipedOutputStream;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.util.List;
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.CountDownLatch;
@@ -114,6 +115,75 @@ class SessionTest {
             assertEquals(0, wire.available());
             session.close();
         }
+    }
+
+    @Test
+    void trySendRejectsFullQueueWithoutClosingSession() throws Exception {
+        TestPlayerRepository delegate = new TestPlayerRepository();
+        BlockingPlayerRepository repository = new BlockingPlayerRepository(delegate);
+        AuthService auth = new AuthService(new TestAccountRepository());
+        GameResources resources = GameResources.unavailable();
+        GameplayServices gameplay = new GameplayServices(resources);
+        PlayerService players = new PlayerService(repository);
+        SessionServices services = TestServices.serverServices(auth, resources, gameplay, players);
+        Session session = managedSession(
+                services, players.create(101L, "alpha1", 0).player(), "user01");
+        ArrayBlockingQueue<Message> fullQueue = new ArrayBlockingQueue<>(1);
+        assertTrue(fullQueue.offer(new Message(MessageName.DIALOG_OK)));
+        GameplayTestSupport.replaceSendQueue(session, fullQueue);
+
+        assertFalse(session.trySend(new Message(MessageName.PLAYER_MOVE)));
+        assertEquals(SessionState.IN_GAME, session.state());
+        assertEquals(0, repository.checkpointCalls.get());
+        assertEquals(session, session.manager().findByAccount("user01"));
+
+        repository.allowUpdate.countDown();
+        session.close();
+    }
+
+    @Test
+    void movementCleansFailedObserverOutsideZoneExecution() throws Exception {
+        TestPlayerRepository delegate = new TestPlayerRepository();
+        BlockingPlayerRepository repository = new BlockingPlayerRepository(delegate);
+        AuthService auth = new AuthService(new TestAccountRepository());
+        GameResources resources = GameResources.unavailable();
+        GameplayServices gameplay = new GameplayServices(resources);
+        PlayerService players = new PlayerService(repository);
+        SessionServices services = TestServices.serverServices(auth, resources, gameplay, players);
+        Session mover = managedSession(
+                services, players.create(101L, "alpha1", 0).player(), "user01");
+        Session observer = managedSession(
+                services, players.create(202L, "beta22", 0).player(), "user02");
+        gameplay.mapService().finishLoad(mover);
+        gameplay.mapService().finishLoad(observer);
+        GameplayTestSupport.drain(mover);
+        GameplayTestSupport.drain(observer);
+
+        ArrayBlockingQueue<Message> fullQueue = new ArrayBlockingQueue<>(1);
+        assertTrue(fullQueue.offer(new Message(MessageName.DIALOG_OK)));
+        GameplayTestSupport.replaceSendQueue(observer, fullQueue);
+
+        AtomicBoolean moved = new AtomicBoolean();
+        Thread movement = Thread.ofVirtual().start(() ->
+                moved.set(gameplay.mapService().movePlayer(mover, 1260, 640)));
+
+        assertTrue(repository.updateEntered.await(5, TimeUnit.SECONDS));
+        assertEquals(1260, mover.player().x());
+        assertEquals(640, mover.player().y());
+        assertTrue(movement.isAlive());
+
+        CountDownLatch nextZoneAction = new CountDownLatch(1);
+        assertTrue(gameplay.findZone(0, 0).submit(nextZoneAction::countDown));
+        assertTrue(nextZoneAction.await(5, TimeUnit.SECONDS));
+        assertFalse(moved.get());
+
+        repository.allowUpdate.countDown();
+        movement.join(1_000);
+        assertFalse(movement.isAlive());
+        assertTrue(moved.get());
+        assertEquals(SessionState.CLOSED, observer.state());
+
+        mover.close();
     }
 
     @Test

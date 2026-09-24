@@ -167,8 +167,12 @@ public final class Session implements AutoCloseable {
         LOGGER.info(() -> "HANDSHAKE_OK id=" + id);
     }
 
+    public boolean trySend(Message message) {
+        return message != null && state() != SessionState.CLOSED && sendQueue.offer(message);
+    }
+
     public boolean send(Message message) {
-        if (message == null || state() == SessionState.CLOSED || !sendQueue.offer(message)) {
+        if (!trySend(message)) {
             close("outbound queue overflow or closed session");
             return false;
         }

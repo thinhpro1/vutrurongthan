@@ -6,6 +6,8 @@ import com.project.game.network.message.Message;
 import com.project.game.network.packet.PlayerPacketWriter;
 import com.project.game.player.PlayerProfile;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.RejectedExecutionException;
@@ -222,13 +224,17 @@ public final class MapService {
         }
 
         try {
-            return zone.call(() -> movePlayerInZone(zone, session, observed, x, y));
+            MoveResult result = zone.call(() -> movePlayerInZone(zone, session, observed, x, y));
+            for (Session rejectedObserver : result.rejectedObservers()) {
+                rejectedObserver.close();
+            }
+            return result.moved();
         } catch (RejectedExecutionException exception) {
             return false;
         }
     }
 
-    private boolean movePlayerInZone(
+    private MoveResult movePlayerInZone(
             Zone zone,
             Session session,
             PlayerProfile observed,
@@ -238,23 +244,26 @@ public final class MapService {
             PlayerProfile current = session.player();
             if (current == null || current.hp() <= 0L
                     || current.mapId() != observed.mapId() || current.zoneId() != observed.zoneId()) {
-                return false;
+                return new MoveResult(false, List.of());
             }
 
             boolean currentMember = zone.contains(session);
             PlayerProfile moved = current.withPosition(x, y);
             session.bindPlayer(moved);
             if (!currentMember) {
-                return true;
+                return new MoveResult(true, List.of());
             }
 
             Message packet = packets.movePlayer(moved.id(), moved.x(), moved.y());
+            List<Session> rejectedObservers = new ArrayList<>();
             for (Session member : zone.snapshot()) {
                 if (member != session && member.state() != SessionState.CLOSED) {
-                    member.send(packet);
+                    if (!member.trySend(packet)) {
+                        rejectedObservers.add(member);
+                    }
                 }
             }
-            return true;
+            return new MoveResult(true, rejectedObservers);
         }
     }
 
@@ -279,6 +288,12 @@ public final class MapService {
     private static boolean canAccept(Zone zone, Session session) {
         synchronized (zone) {
             return zone.canAccept(session);
+        }
+    }
+
+    private record MoveResult(boolean moved, List<Session> rejectedObservers) {
+        private MoveResult {
+            rejectedObservers = List.copyOf(rejectedObservers);
         }
     }
 }

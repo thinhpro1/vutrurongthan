@@ -104,7 +104,7 @@ class GameplayIntegrationTest {
                 assertTrue(dead != null);
                 long expectedMaxHp = dead.player().currentStats().maxHp();
                 long expectedMaxMp = dead.player().currentStats().maxMp();
-        dead.bindPlayer(dead.player().withHp(10));
+        dead.player().injure(dead.player().hp() - 10);
                 random.release.countDown();
 
                 assertMonsterAttack(victim.readServerMessage(), 101, victim.playerInfo().id(), 10L);
@@ -469,6 +469,7 @@ class GameplayIntegrationTest {
 
                 try (LivePlayerClient late = LivePlayerClient.create(
                         server.localPort(), "chasetcp3", "chaser3", 0)) {
+                    late.finishLoadMap();
                     late.move(4464, 936);
                     late.requestChangeMap();
                     ParsedMapInfo lateMap = late.readMapInfo();

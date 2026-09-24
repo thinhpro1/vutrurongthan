@@ -5,7 +5,7 @@ import com.project.game.monster.MonsterFactory;
 import com.project.game.resource.GameResources;
 import com.project.game.testsupport.MapTestSupport;
 import com.project.game.testsupport.MonsterTestSupport;
-import com.project.game.testsupport.TestPlayerProfiles;
+import com.project.game.testsupport.TestPlayers;
 
 import com.project.game.testsupport.TestServices;
 import com.project.game.network.ClientConfig;
@@ -13,7 +13,7 @@ import com.project.game.network.Session;
 import com.project.game.network.SessionManager;
 import com.project.game.network.codec.LegacyPacketCodec;
 import com.project.game.network.transport.ClientTransport;
-import com.project.game.player.PlayerProfile;
+import com.project.game.player.Player;
 import com.project.game.network.SessionServices;
 import org.junit.jupiter.api.Test;
 
@@ -46,7 +46,7 @@ class ZoneTest {
     @Test
     void startsEmptyAndTracksBoundPlayer() {
         Zone zone = new Zone(0, 0, Integer.MAX_VALUE, List.of());
-        Session session = session(TestPlayerProfiles.initial(1L, 7, "alpha1", 0));
+        Session session = session(TestPlayers.initial(1L, 7, "alpha1", 0));
 
         assertEquals(0, zone.size());
         assertEquals(Zone.JoinStatus.ADDED, zone.addPlayer(session).status());
@@ -60,7 +60,7 @@ class ZoneTest {
     @Test
     void duplicateSameSessionIsIdempotent() {
         Zone zone = new Zone(0, 0, Integer.MAX_VALUE, List.of());
-        Session session = session(TestPlayerProfiles.initial(1L, 7, "alpha1", 0));
+        Session session = session(TestPlayers.initial(1L, 7, "alpha1", 0));
 
         assertEquals(Zone.JoinStatus.ADDED, zone.addPlayer(session).status());
         assertEquals(Zone.JoinStatus.ALREADY_PRESENT, zone.addPlayer(session).status());
@@ -70,24 +70,24 @@ class ZoneTest {
     @Test
     void differentSessionCannotReplaceSamePlayerId() {
         Zone zone = new Zone(0, 0, Integer.MAX_VALUE, List.of());
-        Session first = session(TestPlayerProfiles.initial(1L, 7, "alpha1", 0));
-        Session second = session(TestPlayerProfiles.initial(2L, 7, "alpha2", 0));
+        Session first = session(TestPlayers.initial(1L, 7, "alpha1", 0));
+        Session second = session(TestPlayers.initial(2L, 7, "alpha2", 0));
 
         assertEquals(Zone.JoinStatus.ADDED, zone.addPlayer(first).status());
         assertEquals(Zone.JoinStatus.PLAYER_ID_CONFLICT, zone.addPlayer(second).status());
-        assertEquals(List.of(first), zone.players());
+        assertEquals(List.of(first), zone.members());
     }
 
     @Test
     void differentSessionWithSamePlayerIdIsAnIdentityConflict() {
         Zone zone = new Zone(0, 0, 2, List.of());
-        Session first = session(TestPlayerProfiles.initial(1L, 7, "alpha1", 0));
-        Session second = session(TestPlayerProfiles.initial(2L, 7, "alpha2", 0));
+        Session first = session(TestPlayers.initial(1L, 7, "alpha1", 0));
+        Session second = session(TestPlayers.initial(2L, 7, "alpha2", 0));
 
         assertEquals(Zone.JoinStatus.ADDED, zone.addPlayer(first).status());
         assertEquals(Zone.JoinStatus.PLAYER_ID_CONFLICT, zone.addPlayer(second).status());
         assertEquals(1, zone.size());
-        assertEquals(List.of(first), zone.players());
+        assertEquals(List.of(first), zone.members());
         assertTrue(zone.hasPlayer(first));
         assertFalse(zone.hasPlayer(second));
         assertTrue(zone.canAddPlayer(first));
@@ -97,9 +97,9 @@ class ZoneTest {
     @Test
     void snapshotIsImmutable() {
         Zone zone = new Zone(0, 0, Integer.MAX_VALUE, List.of());
-        zone.addPlayer(session(TestPlayerProfiles.initial(1L, 7, "alpha1", 0)));
+        zone.addPlayer(session(TestPlayers.initial(1L, 7, "alpha1", 0)));
 
-        List<Session> snapshot = zone.players();
+        List<Session> snapshot = zone.members();
         assertThrows(UnsupportedOperationException.class, snapshot::clear);
     }
 
@@ -119,8 +119,8 @@ class ZoneTest {
     @Test
     void atomicallyReturnsExistingMembersWhileAddingNewMember() {
         Zone zone = new Zone(0, 0, Integer.MAX_VALUE, List.of());
-        Session first = session(TestPlayerProfiles.initial(1L, 1, "alpha1", 0));
-        Session second = session(TestPlayerProfiles.initial(2L, 2, "beta22", 0));
+        Session first = session(TestPlayers.initial(1L, 1, "alpha1", 0));
+        Session second = session(TestPlayers.initial(2L, 2, "beta22", 0));
         zone.addPlayer(first);
 
         Zone.JoinResult result = zone.addPlayer(second);
@@ -128,14 +128,14 @@ class ZoneTest {
         assertEquals(Zone.JoinStatus.ADDED, result.status());
         assertEquals(List.of(first), result.existing());
         assertEquals(2, zone.size());
-        assertTrue(zone.players().containsAll(List.of(first, second)));
+        assertTrue(zone.members().containsAll(List.of(first, second)));
     }
 
     @Test
     void maxPlayerDistinguishesDuplicateFromFull() {
         Zone zone = new Zone(0, 0, 1, List.of());
-        Session first = session(TestPlayerProfiles.initial(1L, 1, "alpha1", 0));
-        Session second = session(TestPlayerProfiles.initial(2L, 2, "beta22", 0));
+        Session first = session(TestPlayers.initial(1L, 1, "alpha1", 0));
+        Session second = session(TestPlayers.initial(2L, 2, "beta22", 0));
 
         assertEquals(Zone.JoinStatus.ADDED, zone.addPlayer(first).status());
         assertEquals(Zone.JoinStatus.ALREADY_PRESENT, zone.addPlayer(first).status());
@@ -147,8 +147,8 @@ class ZoneTest {
     @Test
     void concurrentAdmissionNeverExceedsMaxPlayer() throws Exception {
         Zone zone = new Zone(0, 0, 1, List.of());
-        Session first = session(TestPlayerProfiles.initial(1L, 1, "alpha1", 0));
-        Session second = session(TestPlayerProfiles.initial(2L, 2, "beta22", 0));
+        Session first = session(TestPlayers.initial(1L, 1, "alpha1", 0));
+        Session second = session(TestPlayers.initial(2L, 2, "beta22", 0));
         CyclicBarrier start = new CyclicBarrier(3);
         AtomicInteger admitted = new AtomicInteger();
         AtomicReference<Throwable> failure = new AtomicReference<>();
@@ -184,7 +184,7 @@ class ZoneTest {
                 Zone.class.getDeclaredMethod("runtimeState").getModifiers()));
         assertFalse(Modifier.isPublic(
                 Zone.class.getDeclaredMethod("stopRuntime").getModifiers()));
-        assertFalse(Modifier.isPublic(
+        assertTrue(Modifier.isPublic(
                 Zone.class.getDeclaredMethod("call", Supplier.class).getModifiers()));
         assertTrue(Modifier.isPublic(
                 Zone.class.getDeclaredMethod("submit", Runnable.class).getModifiers()));
@@ -760,7 +760,7 @@ class ZoneTest {
         }
     }
 
-    private static Session session(PlayerProfile player) {
+    private static Session session(Player player) {
         SessionManager manager = new SessionManager();
         Session session = new Session(manager.nextId(), new NoopTransport(), manager,
                 new LegacyPacketCodec(1024), "abc".getBytes(), 8,

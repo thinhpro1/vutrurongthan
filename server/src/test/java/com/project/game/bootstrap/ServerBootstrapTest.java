@@ -1,5 +1,5 @@
 package com.project.game.bootstrap;
-import com.project.game.testsupport.TestPlayerProfiles;
+import com.project.game.testsupport.TestPlayers;
 
 import com.project.game.account.AuthService;
 import com.project.game.network.ClientConfig;
@@ -14,7 +14,7 @@ import com.project.game.persistence.DatabaseManager;
 import com.project.game.persistence.map.MapRepository;
 import com.project.game.persistence.player.PlayerRecord;
 import com.project.game.persistence.player.PlayerRepository;
-import com.project.game.player.PlayerProfile;
+import com.project.game.player.PlayerSaveData;
 import com.project.game.player.PlayerService;
 import com.project.game.resource.GameResources;
 import com.project.game.network.SessionServices;
@@ -393,7 +393,7 @@ class ServerBootstrapTest {
             }
 
             @Override
-            public void updateCheckpoint(PlayerProfile player, Instant playedAt) {
+            public void updateCheckpoint(PlayerSaveData player, Instant playedAt) {
                 checkpointCalled.set(true);
                 checkpointSawOpenDatabase.set(!isClosed(manager));
             }
@@ -431,7 +431,7 @@ class ServerBootstrapTest {
             }
 
             @Override
-            public void updateCheckpoint(PlayerProfile player, Instant playedAt) {
+            public void updateCheckpoint(PlayerSaveData player, Instant playedAt) {
                 checkpointCalled.set(true);
                 checkpointSawOpenDatabase.set(!isClosed(manager));
             }
@@ -464,7 +464,7 @@ class ServerBootstrapTest {
             }
 
             @Override
-            public void updateCheckpoint(PlayerProfile player, Instant playedAt) {
+            public void updateCheckpoint(PlayerSaveData player, Instant playedAt) {
                 checkpointCount.incrementAndGet();
             }
         };
@@ -497,7 +497,7 @@ class ServerBootstrapTest {
         assertTrue(sessions.tryAdd(session, 1));
         assertTrue(sessions.beginAccountAdmission(session, 10L, "alpha1"));
         sessions.finishAccountAdmission(session, true);
-        session.bindPlayer(TestPlayerProfiles.initial(10L, 1, "alpha1", 0));
+        session.bindPlayer(TestPlayers.initial(10L, 1, "alpha1", 0));
         return session;
     }
 

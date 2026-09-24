@@ -8,14 +8,14 @@ import com.project.game.network.SessionState;
 import com.project.game.network.message.Message;
 import com.project.game.network.packet.MapPacketWriter;
 import com.project.game.network.packet.PlayerPacketWriter;
-import com.project.game.player.PlayerProfile;
+import com.project.game.player.Player;
+import com.project.game.player.PlayerSaveData;
 import com.project.game.player.PlayerService;
 import com.project.game.resource.GameResources;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 
 /** Handles map presence, movement, transitions, death return, and MAP_INFO packets. */
 final class MapHandler {
@@ -49,13 +49,12 @@ final class MapHandler {
         if (message.payload().length != 0) {
             throw new IOException("trailing RETURN_TOWN_FROM_DIE payload bytes");
         }
-        Optional<PlayerProfile> revived = mapManager.returnTownFromDeath(session);
-        if (revived.isEmpty()) {
+        if (!mapManager.returnTownFromDeath(session)) {
             return;
         }
 
-        PlayerProfile player = revived.orElseThrow();
-        playerService.checkpoint(player);
+        Player player = session.player();
+        playerService.checkpoint(PlayerSaveData.capture(player));
         sendMapInfo(player);
         if (session.state() != SessionState.CLOSED) {
             session.send(playerPackets.wakeUpFromDie(player));
@@ -72,45 +71,21 @@ final class MapHandler {
         if (message.payload().length != 0) {
             throw new IOException("trailing REQUEST_CHANGE_MAP payload bytes");
         }
-        PlayerProfile player = session.player();
+        Player player = session.player();
         if (player == null) {
             throw new IOException("REQUEST_CHANGE_MAP without bound player");
         }
 
-        var map = resources.map(player.mapId())
-                .orElseThrow(() -> new IOException(
-                        "map unavailable: " + player.mapId()));
-        var waypoint = map.waypoints().stream()
-                .filter(candidate -> candidate.contains(player.x(), player.y()))
-                .findFirst()
-                .orElse(null);
-        if (waypoint == null) {
+        if (!mapManager.changeMap(session)) {
             return;
         }
-
-        var destination = resources.map(waypoint.goMap()).orElse(null);
-        if (destination == null) {
-            return;
-        }
-
-        Optional<PlayerProfile> changed = mapManager.changeMap(
-                session,
-                player.mapId(),
-                player.zoneId(),
-                waypoint.goMap(),
-                0,
-                waypoint.goX(),
-                waypoint.goY());
-        if (changed.isEmpty()) {
-            return;
-        }
-        PlayerProfile changedPlayer = changed.orElseThrow();
-        playerService.checkpoint(changedPlayer);
+        Player changedPlayer = session.player();
+        playerService.checkpoint(PlayerSaveData.capture(changedPlayer));
         sendMapInfo(changedPlayer);
     }
 
     void handlePlayerMove(Message message) throws IOException {
-        PlayerProfile player = session.player();
+        Player player = session.player();
         if (player == null) {
             throw new IOException("PLAYER_MOVE without bound player");
         }
@@ -125,7 +100,7 @@ final class MapHandler {
         mapManager.movePlayer(session, x, y);
     }
 
-    void sendMapInfo(PlayerProfile player) throws IOException {
+    void sendMapInfo(Player player) throws IOException {
         var map = resources.map(player.mapId())
                 .orElseThrow(() -> new IOException(
                         "map unavailable: " + player.mapId()));

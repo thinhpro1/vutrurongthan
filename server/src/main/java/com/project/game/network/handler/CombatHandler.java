@@ -3,13 +3,12 @@ package com.project.game.network.handler;
 import com.project.game.combat.CombatService;
 import com.project.game.network.Session;
 import com.project.game.network.message.Message;
-import com.project.game.player.PlayerProfile;
 
 import java.io.IOException;
 
 /** Handles combat command parsing and protocol-local pending monster attacks. */
 final class CombatHandler {
-    private record PendingMonsterAttack(int skillId, int mapId, int zoneId, int monsterId) {
+    private record PendingMonsterAttack(int skillId, int monsterId) {
     }
 
     private final Session session;
@@ -54,16 +53,11 @@ final class CombatHandler {
             throw new IOException("unsupported -72 target type " + targetType);
         }
 
-        PlayerProfile player = session.player();
-        if (player == null || !combatService.canTargetMonster(session, targetId)) {
+        if (session.player() == null || !combatService.canTargetMonster(session, targetId)) {
             return;
         }
 
-        pendingMonsterAttack = new PendingMonsterAttack(
-                skillId,
-                player.mapId(),
-                player.zoneId(),
-                targetId);
+        pendingMonsterAttack = new PendingMonsterAttack(skillId, targetId);
     }
 
     void handleMonsterAttackImpact(Message message) throws IOException {
@@ -99,14 +93,6 @@ final class CombatHandler {
             return;
         }
 
-        PlayerProfile player = session.player();
-        if (player == null
-                || player.mapId() != pending.mapId()
-                || player.zoneId() != pending.zoneId()
-                || player.currentStats().damage() <= 0) {
-            return;
-        }
-
-        combatService.attackMonster(session, targetId, player.currentStats().damage());
+        combatService.attackMonster(session, targetId);
     }
 }

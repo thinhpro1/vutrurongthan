@@ -1,7 +1,5 @@
 package com.project.game.player;
 
-import com.project.game.player.PlayerProfileFactory;
-import com.project.game.player.PlayerProfile;
 import com.project.game.testsupport.TestPlayerRepository;
 import org.junit.jupiter.api.Test;
 
@@ -17,9 +15,7 @@ class PlayerServiceTest {
     @Test
     void missingPlayerIsDistinguishedFromRepositoryFailure() {
         TestPlayerRepository repository = new TestPlayerRepository();
-        PlayerService service = new PlayerService(repository);
-
-        PlayerService.PlayerLoadResult result = service.load(101L);
+        PlayerService.PlayerLoadResult result = new PlayerService(repository).load(101L);
 
         assertTrue(result.success());
         assertFalse(result.found());
@@ -29,13 +25,13 @@ class PlayerServiceTest {
     @Test
     void existingPlayerLoadsWithRuntimeZoneZero() {
         TestPlayerRepository repository = new TestPlayerRepository();
-        PlayerProfile created = new PlayerService(repository).create(101L, "alpha1", 0).player();
+        Player created = new PlayerService(repository).create(101L, "alpha1", 0).player();
 
         PlayerService.PlayerLoadResult result = new PlayerService(repository).load(101L);
 
         assertTrue(result.success());
         assertTrue(result.found());
-        assertEquals(created, result.player());
+        assertEquals(created.id(), result.player().id());
         assertEquals(0, result.player().zoneId());
     }
 
@@ -85,16 +81,22 @@ class PlayerServiceTest {
     }
 
     @Test
-    void checkpointPersistsUpdatedRuntimeProfile() {
+    void checkpointPersistsStableSaveData() {
         TestPlayerRepository repository = new TestPlayerRepository();
         PlayerService service = new PlayerService(
-                repository,
-                new PlayerProfileFactory(),
-                Clock.fixed(Instant.parse("2026-01-02T03:04:05Z"), ZoneOffset.UTC));
-        PlayerProfile created = service.create(101L, "alpha1", 0).player();
-        PlayerProfile changed = created.withHp(77).withPotential(99).withLocation(1, 0, 90, 1008);
+                repository, Clock.fixed(Instant.parse("2026-01-02T03:04:05Z"), ZoneOffset.UTC));
+        Player player = service.create(101L, "alpha1", 0).player();
+        player.injure(123);
+        player.addPotential(98);
+        player.changeMap(1, 2, 90, 1008);
 
-        assertTrue(service.checkpoint(changed));
-        assertEquals(changed, service.load(101L).player());
+        assertTrue(service.checkpoint(PlayerSaveData.capture(player)));
+        Player loaded = service.load(101L).player();
+        assertEquals(77, loaded.hp());
+        assertEquals(99, loaded.potential());
+        assertEquals(1, loaded.mapId());
+        assertEquals(90, loaded.x());
+        assertEquals(1008, loaded.y());
+        assertEquals(0, loaded.zoneId());
     }
 }

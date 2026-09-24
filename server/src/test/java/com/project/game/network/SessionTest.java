@@ -12,7 +12,8 @@ import com.project.game.player.PlayerService;
 import com.project.game.persistence.player.PlayerRecord;
 import com.project.game.persistence.player.PlayerRepository;
 import com.project.game.persistence.player.PlayerRepositoryException;
-import com.project.game.player.PlayerProfile;
+import com.project.game.player.Player;
+import com.project.game.player.PlayerSaveData;
 import com.project.game.testsupport.GameplayServices;
 import com.project.game.testsupport.GameplayTestSupport;
 import com.project.game.testsupport.MutableClock;
@@ -204,7 +205,7 @@ class SessionTest {
         CountDownLatch priorStarted = new CountDownLatch(1);
         CountDownLatch releasePrior = new CountDownLatch(1);
         assertTrue(zone.submit(() -> {
-            session.bindPlayer(session.player().withPosition(1260, 640));
+            session.player().move(1260, 640);
             priorStarted.countDown();
             try {
                 if (!releasePrior.await(5, TimeUnit.SECONDS)) {
@@ -288,7 +289,8 @@ class SessionTest {
         GameplayServices maps = new GameplayServices(new PlayerPacketWriter(), new MonsterPacketWriter(),
                 new MonsterFactory(resources));
         PlayerService players = new PlayerService(repository);
-        PlayerProfile player = players.create(101L, "alpha1", 0).player().withHp(77);
+        Player player = players.create(101L, "alpha1", 0).player();
+        player.injure(player.hp() - 77);
         SessionServices services = TestServices.serverServices(auth, resources, maps, players);
         SessionManager manager = new SessionManager();
         Session session = new Session(manager.nextId(), new TestTransport(), manager,
@@ -321,8 +323,8 @@ class SessionTest {
         GameplayServices gameplay = new GameplayServices(GameResources.unavailable());
         SessionServices services = TestServices.serverServices(
                 auth, GameResources.unavailable(), gameplay, players);
-        PlayerProfile moverProfile = players.create(101L, "alpha1", 0).player();
-        PlayerProfile observerProfile = players.create(202L, "beta22", 0).player();
+        Player moverProfile = players.create(101L, "alpha1", 0).player();
+        Player observerProfile = players.create(202L, "beta22", 0).player();
         Session mover = managedSession(services, moverProfile, "user01");
         Session observer = managedSession(services, observerProfile, "user02");
         gameplay.mapManager().finishLoad(mover);
@@ -375,18 +377,18 @@ class SessionTest {
         AuthService auth = new AuthService(new TestAccountRepository());
         SessionServices services = TestServices.serverServices(
                 auth, GameResources.unavailable(), gameplay, players);
-        PlayerProfile targetProfile = players.create(101L, "alpha1", 0).player()
-                .withLocation(1, 0, 1250, 648)
-                .withHp(100);
-        PlayerProfile observerProfile = players.create(202L, "beta22", 0).player()
-                .withLocation(1, 0, 1250, 648);
+        Player targetProfile = players.create(101L, "alpha1", 0).player();
+        targetProfile.changeMap(1, 0, 1250, 648);
+        targetProfile.injure(targetProfile.hp() - 100);
+        Player observerProfile = players.create(202L, "beta22", 0).player();
+        observerProfile.changeMap(1, 0, 1250, 648);
         Session target = managedSession(services, targetProfile, "user01");
         Session observer = managedSession(services, observerProfile, "user02");
         gameplay.mapManager().finishLoad(target);
         gameplay.mapManager().finishLoad(observer);
         GameplayTestSupport.drain(target);
         GameplayTestSupport.drain(observer);
-        assertTrue(gameplay.combatService().attackMonster(target, 101, 10L));
+        assertTrue(gameplay.combatService().attackMonster(target, 101));
         GameplayTestSupport.drain(target);
         GameplayTestSupport.drain(observer);
         clock.advanceMillis(1L);
@@ -420,7 +422,8 @@ class SessionTest {
         TestPlayerRepository delegate = new TestPlayerRepository();
         BlockingPlayerRepository repository = new BlockingPlayerRepository(delegate);
         PlayerService players = new PlayerService(repository);
-        PlayerProfile player = players.create(101L, "alpha1", 0).player().withHp(77);
+        Player player = players.create(101L, "alpha1", 0).player();
+        player.injure(player.hp() - 77);
         SessionManager manager = new SessionManager();
         Session session = new Session(manager.nextId(), new TestTransport(), manager,
                 new LegacyPacketCodec(1024), "abc".getBytes(StandardCharsets.US_ASCII), 4,
@@ -453,7 +456,8 @@ class SessionTest {
         TestPlayerRepository delegate = new TestPlayerRepository();
         BlockingPlayerRepository repository = new BlockingPlayerRepository(delegate);
         PlayerService players = new PlayerService(repository);
-        PlayerProfile player = players.create(101L, "alpha1", 0).player().withHp(66);
+        Player player = players.create(101L, "alpha1", 0).player();
+        player.injure(player.hp() - 66);
         SessionManager manager = new SessionManager();
         TestTransport transport = new TestTransport();
         Session session = new Session(manager.nextId(), transport, manager,
@@ -495,7 +499,7 @@ class SessionTest {
         TestPlayerRepository repository = new TestPlayerRepository();
         repository.failUpdate(true);
         PlayerService players = new PlayerService(repository);
-        PlayerProfile player = players.create(101L, "alpha1", 0).player();
+        Player player = players.create(101L, "alpha1", 0).player();
         SessionManager manager = new SessionManager();
         TestTransport transport = new TestTransport();
         Session session = new Session(manager.nextId(), transport, manager,
@@ -541,7 +545,7 @@ class SessionTest {
         }
 
         @Override
-        public void updateCheckpoint(PlayerProfile player, Instant playedAt) {
+        public void updateCheckpoint(PlayerSaveData player, Instant playedAt) {
             checkpointCalls.incrementAndGet();
             interruptedAtCheckpoint.set(Thread.currentThread().isInterrupted());
             updateEntered.countDown();
@@ -559,7 +563,7 @@ class SessionTest {
 
     private static Session managedSession(
             SessionServices services,
-            PlayerProfile player,
+            Player player,
             String accountName) {
         SessionManager manager = new SessionManager();
         Session session = new Session(manager.nextId(), new TestTransport(), manager,

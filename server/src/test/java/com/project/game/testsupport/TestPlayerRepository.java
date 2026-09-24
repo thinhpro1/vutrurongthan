@@ -4,7 +4,7 @@ import com.project.game.persistence.player.DuplicatePlayerException;
 import com.project.game.persistence.player.PlayerRecord;
 import com.project.game.persistence.player.PlayerRepository;
 import com.project.game.persistence.player.PlayerRepositoryException;
-import com.project.game.player.PlayerProfile;
+import com.project.game.player.PlayerSaveData;
 
 import java.time.Instant;
 import java.util.Map;
@@ -55,11 +55,11 @@ public final class TestPlayerRepository implements PlayerRepository {
     }
 
     @Override
-    public void updateCheckpoint(PlayerProfile player, Instant playedAt) {
+    public void updateCheckpoint(PlayerSaveData player, Instant playedAt) {
         if (failUpdate) {
             throw new PlayerRepositoryException("injected update failure");
         }
-        PlayerRecord updated = PlayerRecord.fromProfile(player);
+        PlayerRecord updated = PlayerRecord.fromSaveData(player);
         byAccount.compute(player.accountId(), (ignored, current) -> {
             if (current == null || current.id() != player.id()) {
                 throw new PlayerRepositoryException("missing test player");

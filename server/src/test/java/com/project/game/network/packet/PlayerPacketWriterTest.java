@@ -1,9 +1,9 @@
 package com.project.game.network.packet;
-import com.project.game.testsupport.TestPlayerProfiles;
+import com.project.game.testsupport.TestPlayers;
 
 import com.project.game.network.message.Message;
 import com.project.game.network.message.MessageName;
-import com.project.game.player.PlayerProfile;
+import com.project.game.player.Player;
 import com.project.game.resource.SkillTemplate;
 import com.project.game.resource.GameResources;
 import org.junit.jupiter.api.Test;
@@ -18,7 +18,7 @@ class PlayerPacketWriterTest {
     @Test
     void usesLegacyCommandIds() {
         PlayerPacketWriter writer = new PlayerPacketWriter();
-        PlayerProfile player = TestPlayerProfiles.initial(1L, 7, "alpha1", 0);
+        Player player = TestPlayers.initial(1L, 7, "alpha1", 0);
 
         assertEquals(MessageName.ADD_PLAYER, writer.addPlayer(player).command());
         assertEquals(MessageName.REMOVE_PLAYER, writer.removePlayer(player.id()).command());
@@ -72,8 +72,8 @@ class PlayerPacketWriterTest {
 
     @Test
     void writesWakeUpFromDiePacketExactly() throws Exception {
-        PlayerProfile player = TestPlayerProfiles.initial(77L, 77, "wake1", 0)
-                .revivedAt(0, 0, 1250, 648);
+        Player player = TestPlayers.initial(77L, 77, "wake1", 0);
+        player.revive(0, 0, 1250, 648);
 
         Message packet = new PlayerPacketWriter().wakeUpFromDie(player);
 
@@ -100,7 +100,7 @@ class PlayerPacketWriterTest {
 
     @Test
     void serializesCanonicalNormalPlayerPayload() throws Exception {
-        PlayerProfile player = TestPlayerProfiles.initial(1L, 0x01020304, "alpha1", 0);
+        Player player = TestPlayers.initial(1L, 0x01020304, "alpha1", 0);
         Message message = new PlayerPacketWriter().addPlayer(player);
         var reader = message.reader();
 
@@ -130,7 +130,7 @@ class PlayerPacketWriterTest {
 
     @Test
     void serializesCanonicalPlayerInfoWithActiveSkillWireShape() throws Exception {
-        PlayerProfile player = TestPlayerProfiles.initial(1L, 7, "alpha1", 0);
+        Player player = TestPlayers.initial(1L, 7, "alpha1", 0);
         List<SkillTemplate> skills = GameResources
                 .fromRoots(null, Path.of("resources", "json"))
                 .playerSkills(0);
@@ -286,12 +286,12 @@ class PlayerPacketWriterTest {
                 () -> writer.addPlayer(playerWith(1, 12, 0, Short.MAX_VALUE + 1, 648)));
     }
 
-    private static PlayerProfile playerWith(
+    private static Player playerWith(
             int level, int speed, int spaceship, int x, int y) {
         var base = new com.project.game.player.BaseStats(200, 200, 10, 0, 0, 0, 5, speed);
         var current = new com.project.game.player.CurrentStats(
                 200, 200, 10, 0, 0, 0, 5, speed);
-        return new PlayerProfile(
+        return new Player(
                 7, 1L, "alpha1", 0, 1L, 1L, level, 0L,
                 base, current, 200, 200,
                 new com.project.game.player.Appearance(5, 6, -1, -1, -1, -1, spaceship),

@@ -1,5 +1,5 @@
 package com.project.game.map;
-import com.project.game.testsupport.TestPlayerProfiles;
+import com.project.game.testsupport.TestPlayers;
 
 import com.project.game.testsupport.TestServices;
 
@@ -13,7 +13,7 @@ import com.project.game.network.SessionManager;
 import com.project.game.network.SessionState;
 import com.project.game.network.codec.LegacyPacketCodec;
 import com.project.game.network.transport.ClientTransport;
-import com.project.game.player.PlayerProfile;
+import com.project.game.player.Player;
 import com.project.game.resource.GameResources;
 import com.project.game.network.SessionServices;
 import org.junit.jupiter.api.Test;
@@ -93,8 +93,8 @@ class ZoneMonsterCombatTest {
     @Test
     void containsRequiresExactSessionIdentity() {
         Zone zone = new Zone(1, 0, Integer.MAX_VALUE, List.of());
-        Session first = session(TestPlayerProfiles.initial(1L, 7, "alpha1", 1));
-        Session equivalent = session(TestPlayerProfiles.initial(2L, 7, "alpha2", 1));
+        Session first = session(TestPlayers.initial(1L, 7, "alpha1", 1));
+        Session equivalent = session(TestPlayers.initial(2L, 7, "alpha2", 1));
 
         zone.addPlayer(first);
 
@@ -123,7 +123,7 @@ class ZoneMonsterCombatTest {
     @Test
     void oneMemberDeathRespawnsOnlyAfterNineSecondDeadline() {
         Zone zone = map1Zone();
-        Session player = session(TestPlayerProfiles.initial(1L, 1, "alpha1", 1));
+        Session player = session(TestPlayers.initial(1L, 1, "alpha1", 1));
         zone.addPlayer(player);
 
         zone.damageMonster(101, 1, 500, NOW).orElseThrow();
@@ -140,8 +140,8 @@ class ZoneMonsterCombatTest {
     @Test
     void respawnDeadlineDoesNotChangeWhenMembershipChangesAfterDeath() {
         Zone zone = map1Zone();
-        Session first = session(TestPlayerProfiles.initial(1L, 1, "alpha1", 1));
-        Session second = session(TestPlayerProfiles.initial(2L, 2, "beta22", 1));
+        Session first = session(TestPlayers.initial(1L, 1, "alpha1", 1));
+        Session second = session(TestPlayers.initial(2L, 2, "beta22", 1));
 
         zone.addPlayer(first);
         zone.addPlayer(second);
@@ -157,13 +157,13 @@ class ZoneMonsterCombatTest {
     @Test
     void joinsAfterDeathDoNotShortenExistingRespawnDeadline() {
         Zone zone = map1Zone();
-        Session first = session(TestPlayerProfiles.initial(1L, 1, "alpha1", 1));
+        Session first = session(TestPlayers.initial(1L, 1, "alpha1", 1));
         zone.addPlayer(first);
 
         zone.damageMonster(101, 1, 500, NOW).orElseThrow();
 
         for (int id = 2; id <= 6; id++) {
-            zone.addPlayer(session(TestPlayerProfiles.initial(
+            zone.addPlayer(session(TestPlayers.initial(
                     (long) id, id, "player" + id, 1)));
         }
 
@@ -176,7 +176,7 @@ class ZoneMonsterCombatTest {
     @Test
     void returnsMultipleDueRespawnsOnceInRuntimeOrder() {
         Zone zone = map1Zone();
-        Session first = session(TestPlayerProfiles.initial(1L, 1, "alpha1", 1));
+        Session first = session(TestPlayers.initial(1L, 1, "alpha1", 1));
         zone.addPlayer(first);
 
         zone.damageMonster(101, 1, 500, NOW).orElseThrow();
@@ -222,16 +222,16 @@ class ZoneMonsterCombatTest {
     @Test
     void attackAllowsExactLethalMonsterDamage() {
         Zone allowed = map1Zone();
-        Session twenty = playerAt(20, 975, 936);
-        twenty.bindPlayer(twenty.player().withHp(20));
+        Session twenty = playerAtWithFullHealth(20, 975, 936);
+        twenty.player().injure(180);
         allowed.addPlayer(twenty);
         allowed.damageMonster(101, 20, 10, NOW).orElseThrow();
         assertEquals(10L, allowed.attackDueMonsters(NOW + 1, new Random(1L))
                 .getFirst().hpAfter());
 
         Zone lethal = map1Zone();
-        Session ten = playerAt(10, 975, 936);
-        ten.bindPlayer(ten.player().withHp(10));
+        Session ten = playerAtWithFullHealth(10, 975, 936);
+        ten.player().injure(190);
         lethal.addPlayer(ten);
         lethal.damageMonster(101, 10, 10, NOW).orElseThrow();
         assertEquals(List.of(new MonsterAttack(101, 10, 10L, 0L, true)),
@@ -264,7 +264,7 @@ class ZoneMonsterCombatTest {
         zone.damageMonster(101, 7, 10, NOW).orElseThrow();
 
         assertTrue(zone.attackDueMonsters(NOW + 1, new Random(1L)).isEmpty());
-        player.bindPlayer(player.player().withPosition(975, 936));
+        player.player().changeMap(1, 0, 975, 936);
         assertTrue(zone.attackDueMonsters(NOW + 1_601, new Random(1L)).isEmpty());
         assertEquals(90L, zone.attackDueMonsters(NOW + 1_602, new Random(1L))
                 .getFirst().hpAfter());
@@ -299,7 +299,7 @@ class ZoneMonsterCombatTest {
         assertTrue(zone.attackDueMonsters(NOW + 9_002, new Random(1L)).isEmpty());
     }
 
-    private static PlayerProfile attackAtX(int x) {
+    private static Player attackAtX(int x) {
         Zone zone = map1Zone();
         Session player = playerAt(7, x, 936);
         zone.addPlayer(player);
@@ -309,9 +309,16 @@ class ZoneMonsterCombatTest {
     }
 
     private static Session playerAt(int id, int x, int y) {
-        return session(TestPlayerProfiles.initial((long) id, id, "player" + id, 1)
-                .withLocation(1, 0, x, y)
-                .withHp(100));
+        Player player = TestPlayers.at(
+                TestPlayers.initial((long) id, id, "player" + id, 1), 1, 0, x, y);
+        player.injure(100);
+        return session(player);
+    }
+
+    private static Session playerAtWithFullHealth(int id, int x, int y) {
+        Player player = TestPlayers.at(
+                TestPlayers.initial((long) id, id, "player" + id, 1), 1, 0, x, y);
+        return session(player);
     }
 
     private static Zone map1Zone() {
@@ -322,7 +329,7 @@ class ZoneMonsterCombatTest {
         return new Zone(1, 0, Integer.MAX_VALUE, factory.createForMap(1));
     }
 
-    private static Session session(PlayerProfile player) {
+    private static Session session(Player player) {
         SessionManager manager = new SessionManager();
         Session session = new Session(manager.nextId(), new NoopTransport(), manager,
                 new LegacyPacketCodec(1024), "abc".getBytes(), 8,

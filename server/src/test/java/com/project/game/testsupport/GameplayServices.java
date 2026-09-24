@@ -10,7 +10,6 @@ import com.project.game.monster.MonsterSnapshot;
 import com.project.game.network.Session;
 import com.project.game.network.packet.MonsterPacketWriter;
 import com.project.game.network.packet.PlayerPacketWriter;
-import com.project.game.player.PlayerProfile;
 import com.project.game.resource.GameResources;
 
 import java.time.Clock;
@@ -107,22 +106,19 @@ public final class GameplayServices {
 
     public void finishLoad(Session session) { maps.finishLoad(session); }
     public void leave(Session session) { maps.leave(session); }
-    public Optional<PlayerProfile> returnTownFromDeath(Session session) {
+    public boolean returnTownFromDeath(Session session) {
         return maps.returnTownFromDeath(session);
     }
-    public Optional<PlayerProfile> changeMap(Session session, int expectedMapId, int expectedZoneId,
-                                             int destinationMapId, int destinationZoneId,
-                                             int destinationX, int destinationY) {
-        return maps.changeMap(session, expectedMapId, expectedZoneId, destinationMapId,
-                destinationZoneId, destinationX, destinationY);
+    public boolean changeMap(Session session) {
+        return maps.changeMap(session);
     }
     public boolean movePlayer(Session session, int x, int y) { return maps.movePlayer(session, x, y); }
     public int memberCount(int mapId, int zoneId) { return maps.memberCount(mapId, zoneId); }
     public boolean canTargetMonster(Session session, int monsterId) {
         return combat.canTargetMonster(session, monsterId);
     }
-    public boolean attackMonster(Session session, int monsterId, long damage) {
-        return combat.attackMonster(session, monsterId, damage);
+    public boolean attackMonster(Session session, int monsterId) {
+        return combat.attackMonster(session, monsterId);
     }
     public void tickMonsterLifecycle() { monsterManager.update(); }
     public List<MonsterSnapshot> monsterSnapshots(int mapId, int zoneId) {

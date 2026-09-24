@@ -7,7 +7,7 @@ import com.project.game.network.SessionState;
 import com.project.game.network.message.Message;
 import com.project.game.network.message.MessageName;
 import com.project.game.network.message.MessageWriter;
-import com.project.game.player.PlayerProfile;
+import com.project.game.player.Player;
 import com.project.game.player.PlayerService;
 
 import java.io.IOException;
@@ -79,7 +79,7 @@ final class AuthHandler {
             if (!loaded.found()) {
                 session.send(new Message(MessageName.START_CREATE_PLAYER_SCREEN));
             } else {
-                PlayerProfile player = loaded.player();
+                Player player = loaded.player();
                 session.bindPlayer(player);
                 session.transition(SessionState.AUTHENTICATED, SessionState.IN_GAME);
                 playerHandler.enterGame(player);

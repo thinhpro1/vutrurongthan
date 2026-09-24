@@ -1,6 +1,6 @@
 package com.project.game.persistence.player;
 
-import com.project.game.player.PlayerProfile;
+import com.project.game.player.PlayerSaveData;
 
 import java.time.Instant;
 import java.util.Optional;
@@ -10,5 +10,5 @@ public interface PlayerRepository {
 
     PlayerRecord create(PlayerRecord initialWithoutId);
 
-    void updateCheckpoint(PlayerProfile player, Instant playedAt);
+    void updateCheckpoint(PlayerSaveData player, Instant playedAt);
 }

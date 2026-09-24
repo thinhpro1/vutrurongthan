@@ -6,7 +6,7 @@ import com.project.game.network.message.Message;
 import com.project.game.network.message.MessageName;
 import com.project.game.network.message.MessageWriter;
 import com.project.game.network.packet.PlayerPacketWriter;
-import com.project.game.player.PlayerProfile;
+import com.project.game.player.Player;
 import com.project.game.player.PlayerService;
 import com.project.game.resource.GameResources;
 
@@ -46,7 +46,7 @@ final class PlayerHandler {
         enterGame(result.player());
     }
 
-    void enterGame(PlayerProfile player) throws IOException {
+    void enterGame(Player player) throws IOException {
         var skills = resources.playerSkills(player.gender());
         if (skills.size() != 11) {
             throw new IOException(

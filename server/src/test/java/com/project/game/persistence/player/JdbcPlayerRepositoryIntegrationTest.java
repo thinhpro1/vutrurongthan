@@ -3,7 +3,8 @@ package com.project.game.persistence.player;
 import com.project.game.persistence.DatabaseConfig;
 import com.project.game.persistence.DatabaseManager;
 import com.project.game.persistence.account.JdbcAccountRepository;
-import com.project.game.player.PlayerProfileFactory;
+import com.project.game.player.Player;
+import com.project.game.player.PlayerSaveData;
 import com.project.game.player.PlayerService;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
@@ -31,8 +32,8 @@ class JdbcPlayerRepositoryIntegrationTest {
         try {
             long accountId = new JdbcAccountRepository(manager.dataSource())
                     .create(username, new byte[32], new byte[16], "127.0.0.1");
-            PlayerRecord initial = PlayerRecord.withoutId(
-                    new PlayerProfileFactory().create(accountId, "alpha1", 0));
+            Player createdPlayer = Player.create(accountId, "alpha1", 0);
+            PlayerRecord initial = PlayerRecord.withoutId(createdPlayer);
             JdbcPlayerRepository repository = new JdbcPlayerRepository(manager.dataSource());
             PlayerRecord created = repository.create(initial);
 
@@ -40,7 +41,8 @@ class JdbcPlayerRepositoryIntegrationTest {
             assertEquals(created, repository.findByAccountId(accountId).orElseThrow());
             assertThrows(DuplicatePlayerException.class, () -> repository.create(initial));
 
-            repository.updateCheckpoint(created.toProfile(0).withPotential(99),
+            createdPlayer.addPotential(98);
+            repository.updateCheckpoint(PlayerSaveData.capture(createdPlayer),
                     java.time.Instant.parse("2026-01-02T03:04:05Z"));
             assertEquals(99, repository.findByAccountId(accountId).orElseThrow().potential());
         } finally {

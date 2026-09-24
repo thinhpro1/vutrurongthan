@@ -5,7 +5,7 @@ import com.project.game.monster.MonsterAttack;
 import com.project.game.monster.Monster;
 import com.project.game.network.Session;
 import com.project.game.network.SessionState;
-import com.project.game.player.PlayerProfile;
+import com.project.game.player.Player;
 
 import java.util.LinkedHashMap;
 import java.util.Comparator;
@@ -89,12 +89,12 @@ public final class Zone {
     }
 
     /** Chạy một tác vụ trên writer của Zone và từ chối ngay khi hàng đợi giới hạn đã đầy. */
-    <T> T tryCall(Supplier<T> action) {
+    public <T> T tryCall(Supplier<T> action) {
         return executeCall(action, false);
     }
 
     /** Chạy một tác vụ bắt buộc trên writer của Zone, chờ chỗ trống nếu hàng đợi đã đầy. */
-    <T> T call(Supplier<T> action) {
+    public <T> T call(Supplier<T> action) {
         return executeCall(action, true);
     }
 
@@ -237,7 +237,7 @@ public final class Zone {
     /** Thử cho Session vào Zone và trả về các thành viên đã có trước khi gia nhập. */
     synchronized JoinResult addPlayer(Session session) {
         Objects.requireNonNull(session, "session");
-        PlayerProfile player = requirePlayer(session);
+        Player player = requirePlayer(session);
         Session existingSession = members.get(player.id());
         if (existingSession == session) {
             return new JoinResult(JoinStatus.ALREADY_PRESENT, List.of());
@@ -255,13 +255,19 @@ public final class Zone {
 
     synchronized boolean removePlayer(Session session) {
         Objects.requireNonNull(session, "session");
-        PlayerProfile player = requirePlayer(session);
-        return members.remove(player.id(), session);
+        Player player = requirePlayer(session);
+        boolean removed = members.remove(player.id(), session);
+        if (removed) {
+            for (Monster monster : monsters.values()) {
+                monster.removeEnemy(player.id());
+            }
+        }
+        return removed;
     }
 
     synchronized boolean canAddPlayer(Session session) {
         Objects.requireNonNull(session, "session");
-        PlayerProfile player = requirePlayer(session);
+        Player player = requirePlayer(session);
         Session existing = members.get(player.id());
         if (existing == session) {
             return true;
@@ -287,32 +293,8 @@ public final class Zone {
         return members.size();
     }
 
-    public synchronized List<Session> players() {
+    public synchronized List<Session> members() {
         return List.copyOf(members.values());
-    }
-
-    /** Cập nhật một người chơi trong Zone và trả về danh sách quan sát cho biên packet. */
-    synchronized Move movePlayer(
-            Session session,
-            int expectedMapId,
-            int expectedZoneId,
-            int x,
-            int y) {
-        PlayerProfile current = session == null ? null : session.player();
-        if (current == null || current.hp() <= 0L
-                || current.mapId() != expectedMapId
-                || current.zoneId() != expectedZoneId) {
-            return Move.rejected();
-        }
-
-        boolean currentMember = hasPlayer(session);
-        if (session.state() == SessionState.CLOSED && !currentMember) {
-            return Move.rejected();
-        }
-
-        PlayerProfile moved = current.withPosition(x, y);
-        session.bindPlayer(moved);
-        return new Move(moved, currentMember ? players() : List.of());
     }
 
     public synchronized List<MonsterSnapshot> monsterSnapshots() {
@@ -355,7 +337,7 @@ public final class Zone {
                     .filter(member -> member.state() != SessionState.CLOSED)
                     .filter(member -> member.player() != null)
                     .filter(member -> {
-                        PlayerProfile player = member.player();
+                        Player player = member.player();
                         return player.mapId() == mapId
                                 && player.zoneId() == zoneId
                                 && player.hp() > 0L
@@ -366,11 +348,9 @@ public final class Zone {
                 continue;
             }
             Session target = eligible.get(random.nextInt(eligible.size()));
-            PlayerProfile player = target.player();
-            int hpAfter = Math.toIntExact(
-                    Math.max(0L, (long) player.hp() - monster.damage()));
+            Player player = target.player();
+            int hpAfter = player.injure(monster.damage());
             boolean killed = hpAfter == 0L;
-            target.bindPlayer(player.withHp(hpAfter));
             if (killed) {
                 for (Monster runtime : monsters.values()) {
                     runtime.removeEnemy(player.id());
@@ -420,7 +400,7 @@ public final class Zone {
 
     private static boolean isWithinMonsterAttackRange(
             MonsterSnapshot monster,
-            PlayerProfile player) {
+            Player player) {
         return squaredDistance(monster, player) < 900L * 900L;
     }
 
@@ -451,7 +431,7 @@ public final class Zone {
                 .filter(member -> member.state() != SessionState.CLOSED)
                 .filter(member -> member.player() != null)
                 .filter(member -> {
-                    PlayerProfile player = member.player();
+                    Player player = member.player();
                     return player.mapId() == mapId
                             && player.zoneId() == zoneId
                             && player.hp() > 0L;
@@ -461,14 +441,14 @@ public final class Zone {
 
     private static long squaredDistance(
             MonsterSnapshot monster,
-            PlayerProfile player) {
+            Player player) {
         long dx = (long) monster.x() - player.x();
         long dy = (long) monster.y() - player.y();
         return dx * dx + dy * dy;
     }
 
-    private static PlayerProfile requirePlayer(Session session) {
-        PlayerProfile player = session.player();
+    private static Player requirePlayer(Session session) {
+        Player player = session.player();
         if (player == null) {
             throw new IllegalStateException("zone membership requires a bound player");
         }
@@ -550,18 +530,4 @@ public final class Zone {
         }
     }
 
-    /** Kết quả thay đổi di chuyển cục bộ cùng các thành viên cần quan sát. */
-    record Move(PlayerProfile player, List<Session> observers) {
-        public Move {
-            observers = List.copyOf(Objects.requireNonNull(observers, "observers"));
-        }
-
-        private static Move rejected() {
-            return new Move(null, List.of());
-        }
-
-        public boolean moved() {
-            return player != null;
-        }
-    }
 }

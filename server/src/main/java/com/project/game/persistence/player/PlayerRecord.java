@@ -3,11 +3,12 @@ package com.project.game.persistence.player;
 import com.project.game.player.Appearance;
 import com.project.game.player.BaseStats;
 import com.project.game.player.CurrentStats;
-import com.project.game.player.PlayerProfile;
+import com.project.game.player.Player;
+import com.project.game.player.PlayerSaveData;
 
 import java.util.Objects;
 
-/** Durable player row without runtime-only zone membership. */
+/** Bản ghi Player bền vững, không chứa membership Zone chỉ dành cho runtime. */
 public record PlayerRecord(
         int id,
         long accountId,
@@ -44,17 +45,17 @@ public record PlayerRecord(
         }
     }
 
-    public static PlayerRecord withoutId(PlayerProfile player) {
+    public static PlayerRecord withoutId(Player player) {
         Objects.requireNonNull(player, "player");
-        return fromProfile(player, 0);
+        return fromPlayer(player, 0);
     }
 
-    public static PlayerRecord fromProfile(PlayerProfile player) {
+    public static PlayerRecord fromPlayer(Player player) {
         Objects.requireNonNull(player, "player");
-        return fromProfile(player, player.id());
+        return fromPlayer(player, player.id());
     }
 
-    private static PlayerRecord fromProfile(PlayerProfile player, int id) {
+    private static PlayerRecord fromPlayer(Player player, int id) {
         return new PlayerRecord(
                 id,
                 player.accountId(),
@@ -78,8 +79,33 @@ public record PlayerRecord(
                 player.y());
     }
 
-    public PlayerProfile toProfile(int zoneId) {
-        return new PlayerProfile(
+    public static PlayerRecord fromSaveData(PlayerSaveData player) {
+        Objects.requireNonNull(player, "player");
+        return new PlayerRecord(
+                player.id(),
+                player.accountId(),
+                player.name(),
+                player.gender(),
+                player.power(),
+                player.potential(),
+                player.level(),
+                player.exp(),
+                player.baseStats(),
+                player.currentStats(),
+                player.hp(),
+                player.mp(),
+                player.appearance(),
+                player.coin(),
+                player.coinLock(),
+                player.diamond(),
+                player.ruby(),
+                player.mapId(),
+                player.x(),
+                player.y());
+    }
+
+    public Player toPlayer(int zoneId) {
+        return new Player(
                 id, accountId, name, gender, power, potential, level, exp,
                 baseStats, currentStats, hp, mp, appearance, coin, coinLock,
                 diamond, ruby, mapId, zoneId, x, y);

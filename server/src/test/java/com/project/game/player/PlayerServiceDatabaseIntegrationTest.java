@@ -4,7 +4,6 @@ import com.project.game.persistence.DatabaseConfig;
 import com.project.game.persistence.DatabaseManager;
 import com.project.game.persistence.account.JdbcAccountRepository;
 import com.project.game.persistence.player.JdbcPlayerRepository;
-import com.project.game.player.PlayerProfile;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 
@@ -33,27 +32,29 @@ class PlayerServiceDatabaseIntegrationTest {
             long accountId = accounts.create(username, new byte[32], new byte[16], "127.0.0.1");
             JdbcPlayerRepository firstRepository = new JdbcPlayerRepository(manager.dataSource());
             PlayerService first = new PlayerService(firstRepository);
-            PlayerProfile created = first.create(accountId, playerName, 0).player();
-            PlayerProfile changed = created.withPotential(123).withHp(77)
-                    .withLocation(1, 0, 90, 1008);
+            Player created = first.create(accountId, playerName, 0).player();
+            created.addPotential(122);
+            created.injure(created.hp() - 77);
+            created.changeMap(1, 0, 90, 1008);
+            PlayerSaveData changed = PlayerSaveData.capture(created);
             assertTrue(first.checkpoint(changed));
 
             PlayerService restarted = new PlayerService(
                     new JdbcPlayerRepository(manager.dataSource()));
-            PlayerProfile loaded = restarted.load(accountId).player();
-            assertEquals(changed.id(), loaded.id());
+            Player loaded = restarted.load(accountId).player();
+            assertEquals(created.id(), loaded.id());
             assertEquals(accountId, loaded.accountId());
             assertEquals(playerName, loaded.name());
-            assertEquals(changed.gender(), loaded.gender());
-            assertEquals(changed.potential(), loaded.potential());
-            assertEquals(changed.hp(), loaded.hp());
-            assertEquals(changed.baseStats(), loaded.baseStats());
-            assertEquals(changed.currentStats(), loaded.currentStats());
-            assertEquals(changed.appearance(), loaded.appearance());
+            assertEquals(created.gender(), loaded.gender());
+            assertEquals(created.potential(), loaded.potential());
+            assertEquals(created.hp(), loaded.hp());
+            assertEquals(created.baseStats(), loaded.baseStats());
+            assertEquals(created.currentStats(), loaded.currentStats());
+            assertEquals(created.appearance(), loaded.appearance());
             assertEquals(0, loaded.zoneId());
-            assertEquals(changed.mapId(), loaded.mapId());
-            assertEquals(changed.x(), loaded.x());
-            assertEquals(changed.y(), loaded.y());
+            assertEquals(created.mapId(), loaded.mapId());
+            assertEquals(created.x(), loaded.x());
+            assertEquals(created.y(), loaded.y());
         } finally {
             try (Connection connection = manager.dataSource().getConnection();
                  PreparedStatement statement = connection.prepareStatement(

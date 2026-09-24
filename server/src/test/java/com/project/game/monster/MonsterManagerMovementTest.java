@@ -47,7 +47,7 @@ class MonsterManagerMovementTest {
     @Test
     void nearbyUnhostilePlayerDoesNotRedirectIdlePatrol() throws Exception {
         GameplayServices maps = mapsWithMonsters();
-        Session player = session(player(1, 1, 0).withPosition(100, 936), maps);
+        Session player = session(at(player(1, 1, 0), 100, 936), maps);
         maps.mapManager().finishLoad(player);
         drain(player);
 
@@ -60,14 +60,14 @@ class MonsterManagerMovementTest {
     @Test
     void successfulDamageMakesMonsterChaseHostilePlayer() throws Exception {
         GameplayServices maps = mapsWithMonsters();
-        Session player = session(player(1, 1, 0).withPosition(1900, 936), maps);
+        Session player = session(at(player(1, 1, 0), 1900, 936), maps);
         maps.mapManager().finishLoad(player);
         drain(player);
 
         Zone zone = zoneFor(maps, 1, 0);
         zone.moveMonsters();
 
-        assertTrue(maps.combatService().attackMonster(player, 101, 10));
+        assertTrue(maps.combatService().attackMonster(player, 101));
         drain(player);
 
         MonsterSnapshot before = zone.monsterSnapshots().getFirst();
@@ -86,15 +86,15 @@ class MonsterManagerMovementTest {
     @Test
     void nearestHostilePlayerWinsAndLowerIdBreaksEqualDistance() throws Exception {
         GameplayServices maps = mapsWithMonsters();
-        Session lowerId = session(player(7, 1, 0).withPosition(25, 936), maps);
-        Session higherId = session(player(8, 1, 0).withPosition(1925, 936), maps);
+        Session lowerId = session(at(player(7, 1, 0), 25, 936), maps);
+        Session higherId = session(at(player(8, 1, 0), 1925, 936), maps);
         maps.mapManager().finishLoad(lowerId);
         maps.mapManager().finishLoad(higherId);
         drain(lowerId);
         drain(higherId);
 
-        assertTrue(maps.combatService().attackMonster(lowerId, 101, 10));
-        assertTrue(maps.combatService().attackMonster(higherId, 101, 10));
+        assertTrue(maps.combatService().attackMonster(lowerId, 101));
+        assertTrue(maps.combatService().attackMonster(higherId, 101));
         drain(lowerId);
         drain(higherId);
 
@@ -111,10 +111,10 @@ class MonsterManagerMovementTest {
     @Test
     void hostileMonsterStopsInsideAttackRangeButChasesAtExactNineHundred() throws Exception {
         GameplayServices insideRangeMaps = mapsWithMonsters();
-        Session insideRange = session(player(1, 1, 0).withPosition(1874, 936), insideRangeMaps);
+        Session insideRange = session(at(player(1, 1, 0), 1874, 936), insideRangeMaps);
         insideRangeMaps.mapManager().finishLoad(insideRange);
         drain(insideRange);
-        assertTrue(insideRangeMaps.combatService().attackMonster(insideRange, 101, 10));
+        assertTrue(insideRangeMaps.combatService().attackMonster(insideRange, 101));
         drain(insideRange);
 
         Zone insideRangeZone = zoneFor(insideRangeMaps, 1, 0);
@@ -123,10 +123,10 @@ class MonsterManagerMovementTest {
         assertEquals(975, insideRangeZone.monsterSnapshots().getFirst().x());
 
         GameplayServices exactRangeMaps = mapsWithMonsters();
-        Session exactRange = session(player(1, 1, 0).withPosition(1875, 936), exactRangeMaps);
+        Session exactRange = session(at(player(1, 1, 0), 1875, 936), exactRangeMaps);
         exactRangeMaps.mapManager().finishLoad(exactRange);
         drain(exactRange);
-        assertTrue(exactRangeMaps.combatService().attackMonster(exactRange, 101, 10));
+        assertTrue(exactRangeMaps.combatService().attackMonster(exactRange, 101));
         drain(exactRange);
 
         Zone exactRangeZone = zoneFor(exactRangeMaps, 1, 0);
@@ -140,10 +140,10 @@ class MonsterManagerMovementTest {
     @Test
     void leashDoesNotClearHostilityAndReentryResumesChase() throws Exception {
         GameplayServices maps = mapsWithMonsters();
-        Session player = session(player(1, 1, 0).withPosition(-300, 936), maps);
+        Session player = session(at(player(1, 1, 0), -300, 936), maps);
         maps.mapManager().finishLoad(player);
         drain(player);
-        assertTrue(maps.combatService().attackMonster(player, 101, 10));
+        assertTrue(maps.combatService().attackMonster(player, 101));
         drain(player);
 
         Zone zone = zoneFor(maps, 1, 0);
@@ -166,10 +166,10 @@ class MonsterManagerMovementTest {
     @Test
     void unavailableHostileTargetWalksMonsterBackToPatrolCorridor() throws Exception {
         GameplayServices maps = mapsWithMonsters();
-        Session player = session(player(1, 1, 0).withPosition(2200, 936), maps);
+        Session player = session(at(player(1, 1, 0), 2200, 936), maps);
         maps.mapManager().finishLoad(player);
         drain(player);
-        assertTrue(maps.combatService().attackMonster(player, 101, 10));
+        assertTrue(maps.combatService().attackMonster(player, 101));
         drain(player);
 
         Monster monster = runtimeMonsters(maps, 1, 0).getFirst();
@@ -189,11 +189,11 @@ class MonsterManagerMovementTest {
     @Test
     void chaseBoundaryTransitionReturnsInwardImmediatelyWhenLeashEnds() throws Exception {
         GameplayServices maps = mapsWithMonsters();
-        Session player = session(player(1, 1, 0).withPosition(1971, 936), maps);
+        Session player = session(at(player(1, 1, 0), 1971, 936), maps);
         maps.mapManager().finishLoad(player);
         drain(player);
 
-        assertTrue(maps.combatService().attackMonster(player, 101, 10));
+        assertTrue(maps.combatService().attackMonster(player, 101));
         drain(player);
 
         Monster monster = runtimeMonsters(maps, 1, 0).getFirst();
@@ -224,12 +224,12 @@ class MonsterManagerMovementTest {
     void hostilePlayerJustOutsideLeashDoesNotPinReturningMonster() throws Exception {
         GameplayServices maps = mapsWithMonsters();
         Session player = session(
-                player(1, 1, 0).withPosition(2176, 936),
+                at(player(1, 1, 0), 2176, 936),
                 maps);
         maps.mapManager().finishLoad(player);
         drain(player);
 
-        assertTrue(maps.combatService().attackMonster(player, 101, 10));
+        assertTrue(maps.combatService().attackMonster(player, 101));
         drain(player);
 
         Monster monster = runtimeMonsters(maps, 1, 0).getFirst();
@@ -302,10 +302,10 @@ class MonsterManagerMovementTest {
     void monsterMovementIsBroadcastBeforeSameTickAttack() throws Exception {
         MutableClock clock = new MutableClock(1_000_000L);
         GameplayServices maps = mapsWithMonsters(clock, new Random(0));
-        Session target = session(player(1, 1, 0).withPosition(1875, 936), maps);
+        Session target = session(at(player(1, 1, 0), 1875, 936), maps);
         maps.mapManager().finishLoad(target);
         drain(target);
-        assertTrue(maps.combatService().attackMonster(target, 101, 10));
+        assertTrue(maps.combatService().attackMonster(target, 101));
         drain(target);
 
         clock.advanceMillis(1L);
@@ -322,10 +322,10 @@ class MonsterManagerMovementTest {
     void hostileMonsterAlreadyInsideAttackRangeDoesNotMoveThatTick() throws Exception {
         MutableClock clock = new MutableClock(1_000_000L);
         GameplayServices maps = mapsWithMonsters(clock, new Random(0));
-        Session target = session(player(1, 1, 0).withPosition(1874, 936), maps);
+        Session target = session(at(player(1, 1, 0), 1874, 936), maps);
         maps.mapManager().finishLoad(target);
         drain(target);
-        assertTrue(maps.combatService().attackMonster(target, 101, 10));
+        assertTrue(maps.combatService().attackMonster(target, 101));
         drain(target);
 
         clock.advanceMillis(1L);

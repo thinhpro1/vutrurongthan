@@ -1,5 +1,5 @@
 package com.project.game.network;
-import com.project.game.testsupport.TestPlayerProfiles;
+import com.project.game.testsupport.TestPlayers;
 
 import com.project.game.testsupport.TestServices;
 
@@ -13,7 +13,7 @@ import com.project.game.network.message.MessageWriter;
 import com.project.game.account.AuthService;
 import com.project.game.resource.GameResources;
 import com.project.game.network.SessionServices;
-import com.project.game.player.PlayerProfile;
+import com.project.game.player.Player;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -57,14 +57,14 @@ final class MessageHandlerTestSupport {
 
     static Session inGameSessionWithPlayer(AuthService auth) {
         Session session = newSession(auth);
-        session.bindPlayer(TestPlayerProfiles.initial(1L, 7, "alpha1", 0));
+        session.bindPlayer(TestPlayers.initial(1L, 7, "alpha1", 0));
         session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
         session.transition(SessionState.HANDSHAKE_DONE, SessionState.AUTHENTICATED);
         session.transition(SessionState.AUTHENTICATED, SessionState.IN_GAME);
         return session;
     }
 
-    static Session inGameSession(SessionServices services, PlayerProfile player) {
+    static Session inGameSession(SessionServices services, Player player) {
         SessionManager manager = new SessionManager();
         Session session = new Session(manager.nextId(), new TestTransport(), manager,
                 new LegacyPacketCodec(1024), "abc".getBytes(StandardCharsets.US_ASCII), 4,

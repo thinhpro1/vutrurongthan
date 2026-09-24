@@ -12,7 +12,7 @@ import com.project.game.network.codec.LegacyPacketCodec;
 import com.project.game.network.message.Message;
 import com.project.game.network.message.MessageName;
 import com.project.game.network.transport.ClientTransport;
-import com.project.game.player.PlayerProfile;
+import com.project.game.player.Player;
 import com.project.game.resource.GameResources;
 import com.project.game.network.SessionServices;
 
@@ -49,13 +49,27 @@ public static void joinAtBarrier(CyclicBarrier start, GameplayServices maps,
         }
     }
 
-    public static PlayerProfile player(int id, int mapId, int zoneId) {
-        return TestPlayerProfiles.initial((long) id, id, "player" + id, 0)
-                .withLocation(mapId, zoneId, 1250, 648)
-                .withHp(100);
+    public static Player player(int id, int mapId, int zoneId) {
+        Player player = TestPlayers.initial((long) id, id, "player" + id, 0);
+        player.changeMap(mapId, zoneId, 1250, 648);
+        player.injure(100);
+        return player;
     }
 
-    public static Session session(PlayerProfile player) {
+    public static Player at(Player player, int x, int y) {
+        player.changeMap(player.mapId(), player.zoneId(), x, y);
+        return player;
+    }
+
+    public static Player hp(Player player, int value) {
+        if (value < 0 || value > player.currentStats().maxHp()) {
+            throw new IllegalArgumentException("test hp is outside bounds");
+        }
+        player.injure((long) player.hp() - value);
+        return player;
+    }
+
+    public static Session session(Player player) {
         return session(player, TestServices.serverServices());
     }
 
@@ -64,7 +78,7 @@ public static void joinAtBarrier(CyclicBarrier start, GameplayServices maps,
                                         AtomicReference<Throwable> failure) {
         try {
             start.await();
-            result.set(maps.combatService().attackMonster(session, 101, 10));
+            result.set(maps.combatService().attackMonster(session, 101));
         } catch (Throwable exception) {
             failure.compareAndSet(null, exception);
         }
@@ -108,12 +122,12 @@ public static void joinAtBarrier(CyclicBarrier start, GameplayServices maps,
         }
     }
 
-    public static Session session(PlayerProfile player, GameplayServices maps) {
+    public static Session session(Player player, GameplayServices maps) {
         return session(player, TestServices.serverServices(TestServices.authService(),
                 GameResources.unavailable(), maps));
     }
 
-    public static Session session(PlayerProfile player, SessionServices services) {
+    public static Session session(Player player, SessionServices services) {
         SessionManager manager = new SessionManager();
         Session session = new Session(manager.nextId(), new NoopTransport(), manager,
                 new LegacyPacketCodec(1024), "abc".getBytes(), 8,

@@ -1,24 +1,24 @@
 package com.project.game.network.packet;
 
 import com.project.game.player.Appearance;
-import com.project.game.player.PlayerProfile;
+import com.project.game.player.Player;
 
 /** Validates values before they are narrowed to the legacy signed wire fields. */
 public final class PlayerPacketValidator {
     private PlayerPacketValidator() {
     }
 
-    public static void validateAddPlayer(PlayerProfile player) {
+    public static void validateAddPlayer(Player player) {
         validatePlayerIdentityAndAppearance(player);
         requireSignedShort(player.x(), "player.x");
         requireSignedShort(player.y(), "player.y");
     }
 
-    public static void validatePlayerInfo(PlayerProfile player) {
+    public static void validatePlayerInfo(Player player) {
         validatePlayerIdentityAndAppearance(player);
     }
 
-    public static void validateMapInfo(PlayerProfile player, int mapId) {
+    public static void validateMapInfo(Player player, int mapId) {
         requireNonNegativeSignedShort(mapId, "mapId");
         requireSignedByte(player.zoneId(), "zoneId");
         requireSignedShort(player.x(), "player.x");
@@ -30,7 +30,7 @@ public final class PlayerPacketValidator {
         requireSignedShort(y, "y");
     }
 
-    private static void validatePlayerIdentityAndAppearance(PlayerProfile player) {
+    private static void validatePlayerIdentityAndAppearance(Player player) {
         if (player == null) {
             throw new NullPointerException("player");
         }

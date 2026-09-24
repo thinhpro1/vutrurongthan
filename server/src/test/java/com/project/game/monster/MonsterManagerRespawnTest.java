@@ -42,7 +42,7 @@ class MonsterManagerRespawnTest {
 
         maps.mapManager().finishLoad(attacker);
         drain(attacker);
-        assertTrue(maps.combatService().attackMonster(attacker, 101, 500));
+        killMonster(maps.combatService(), attacker);
         assertEquals(List.of(MessageName.MONSTER_START_DIE, MessageName.PLAYER_INFO),
                 commands(drain(attacker)));
 
@@ -76,7 +76,7 @@ class MonsterManagerRespawnTest {
         maps.mapManager().finishLoad(peer);
         drain(attacker);
         drain(peer);
-        assertTrue(maps.combatService().attackMonster(attacker, 101, 500));
+        killMonster(maps.combatService(), attacker, peer);
         drain(attacker);
         drain(peer);
 
@@ -104,7 +104,7 @@ class MonsterManagerRespawnTest {
         maps.mapManager().finishLoad(other);
         drain(attacker);
         drain(other);
-        assertTrue(maps.combatService().attackMonster(attacker, 101, 500));
+        killMonster(maps.combatService(), attacker);
         drain(attacker);
 
         clock.advanceMillis(9_001L);
@@ -126,9 +126,7 @@ class MonsterManagerRespawnTest {
         maps.mapManager().finishLoad(peer);
         drain(attacker);
         drain(peer);
-        assertTrue(maps.combatService().attackMonster(attacker, 101, 500));
-        drain(attacker);
-        drain(peer);
+        killMonster(maps.combatService(), attacker, peer);
         peer.close();
         drain(attacker);
 
@@ -147,8 +145,7 @@ class MonsterManagerRespawnTest {
 
         maps.mapManager().finishLoad(attacker);
         drain(attacker);
-        assertTrue(maps.combatService().attackMonster(attacker, 101, 500));
-        drain(attacker);
+        killMonster(maps.combatService(), attacker);
         maps.mapManager().leave(attacker);
 
         assertEquals(0, maps.mapManager().memberCount(1, 0));
@@ -169,14 +166,13 @@ class MonsterManagerRespawnTest {
 
         maps.mapManager().finishLoad(attacker);
         drain(attacker);
-        maps.combatService().attackMonster(attacker, 101, 500);
-        drain(attacker);
+        killMonster(maps.combatService(), attacker);
         clock.advanceMillis(9_001L);
         maps.monsterManager().update();
         drain(attacker);
 
         assertTrue(maps.combatService().canTargetMonster(attacker, 101));
-        assertTrue(maps.combatService().attackMonster(attacker, 101, 10));
+        assertTrue(maps.combatService().attackMonster(attacker, 101));
         List<Message> messages = drain(attacker);
         assertEquals(List.of(MessageName.MONSTER_INJURE), commands(messages));
         var reader = messages.getFirst().reader();
@@ -185,5 +181,17 @@ class MonsterManagerRespawnTest {
         assertEquals(290L, reader.readLong());
         assertFalse(reader.readBoolean());
         assertEquals(0, reader.remaining());
+    }
+
+    private static void killMonster(CombatService combat, Session attacker,
+                                     Session... observers) throws Exception {
+        for (int hit = 0; hit < 29; hit++) {
+            assertTrue(combat.attackMonster(attacker, 101));
+            drain(attacker);
+            for (Session observer : observers) {
+                drain(observer);
+            }
+        }
+        assertTrue(combat.attackMonster(attacker, 101));
     }
 }

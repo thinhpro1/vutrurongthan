@@ -9,7 +9,7 @@ import com.project.game.monster.MonsterSnapshot;
 import com.project.game.network.message.Message;
 import com.project.game.network.message.MessageName;
 import com.project.game.network.message.MessageWriter;
-import com.project.game.player.PlayerProfile;
+import com.project.game.player.Player;
 
 import java.io.IOException;
 import java.util.List;
@@ -20,7 +20,7 @@ public final class MapPacketWriter {
     private static final Gson GSON = new Gson();
 
     public Message mapInfo(
-            PlayerProfile player,
+            Player player,
             MapTemplate map,
             boolean includeTemplate,
             List<String> waypointTargetNames,

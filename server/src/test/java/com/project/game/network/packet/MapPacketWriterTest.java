@@ -8,9 +8,9 @@ import com.project.game.map.Waypoint;
 import com.project.game.monster.MonsterSnapshot;
 import com.project.game.network.message.Message;
 import com.project.game.network.message.MessageName;
-import com.project.game.player.PlayerProfile;
+import com.project.game.player.Player;
 import com.project.game.resource.loader.MapDataLoader;
-import com.project.game.testsupport.TestPlayerProfiles;
+import com.project.game.testsupport.TestPlayers;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -31,8 +31,8 @@ class MapPacketWriterTest {
     @Test
     void serializesCanonicalMap0TemplateAndRuntimeStateInLegacyFieldOrder() throws Exception {
         MapTemplate map = map0();
-        PlayerProfile player = TestPlayerProfiles.initial(1L, 7, "alpha1", 0)
-                .withLocation(0, 3, 1234, 567);
+        Player player = TestPlayers.initial(1L, 7, "alpha1", 0);
+        player.changeMap(0, 3, 1234, 567);
         List<String> targets = List.of("target-1");
 
         Message message = new MapPacketWriter().mapInfo(
@@ -78,8 +78,8 @@ class MapPacketWriterTest {
         MapTemplate map = new MapTemplate(
                 1, "Bờ sông Pu", "OFFLINE", "NAMEK", 1, 3, 40, 2,
                 MapDataLoader.load(MAP_ROOT, 2), List.of());
-        PlayerProfile player = TestPlayerProfiles.initial(1L, 7, "alpha1", 0)
-                .withLocation(1, 0, 1, 2);
+        Player player = TestPlayers.initial(1L, 7, "alpha1", 0);
+        player.changeMap(1, 0, 1, 2);
 
         var reader = new MapPacketWriter()
                 .mapInfo(player, map, true, List.of(), List.of())
@@ -92,8 +92,8 @@ class MapPacketWriterTest {
     @Test
     void serializesBlockOnlyLineMapAsCompatibilityJson() throws Exception {
         MapTemplate map = lineMap();
-        PlayerProfile player = TestPlayerProfiles.initial(1L, 7, "alpha1", 0)
-                .withLocation(4, 0, 1, 2);
+        Player player = TestPlayers.initial(1L, 7, "alpha1", 0);
+        player.changeMap(4, 0, 1, 2);
 
         var reader = new MapPacketWriter()
                 .mapInfo(player, map, true, List.of(), List.of())
@@ -135,8 +135,8 @@ class MapPacketWriterTest {
     @Test
     void serializesMixedBlockAndPlatformLineMapAndKeepsRuntimeBytesAligned() throws Exception {
         MapTemplate map = mixedLineMap();
-        PlayerProfile player = TestPlayerProfiles.initial(1L, 7, "alpha1", 0)
-                .withLocation(4, 0, 123, 456);
+        Player player = TestPlayers.initial(1L, 7, "alpha1", 0);
+        player.changeMap(4, 0, 123, 456);
 
         var reader = new MapPacketWriter()
                 .mapInfo(player, map, true, List.of(), List.of())
@@ -183,8 +183,8 @@ class MapPacketWriterTest {
     void cachedMapInfoOmitsTemplateButKeepsRuntimeLayout() throws Exception {
         MapTemplate map = simpleMap(List.of(
                 new Waypoint(1, 2, 100, 200, 300, 400, 0)));
-        PlayerProfile player = TestPlayerProfiles.initial(1L, 7, "alpha1", 0)
-                .withLocation(4, 2, 123, 456);
+        Player player = TestPlayers.initial(1L, 7, "alpha1", 0);
+        player.changeMap(4, 2, 123, 456);
 
         Message message = new MapPacketWriter().mapInfo(
                 player, map, false, List.of("next"), List.of());
@@ -209,8 +209,8 @@ class MapPacketWriterTest {
     @Test
     void serializesBackgroundImageSentinelAndKeepsPacketAligned() throws Exception {
         MapTemplate map = simpleMap(List.of());
-        PlayerProfile player = TestPlayerProfiles.initial(1L, 7, "alpha1", 0)
-                .withLocation(4, 0, 1, 2);
+        Player player = TestPlayers.initial(1L, 7, "alpha1", 0);
+        player.changeMap(4, 0, 1, 2);
 
         var reader = new MapPacketWriter()
                 .mapInfo(player, map, true, List.of(), List.of())
@@ -242,8 +242,8 @@ class MapPacketWriterTest {
 
     @Test
     void rejectsBackgroundImageOutsideSentinelRange() {
-        PlayerProfile player = TestPlayerProfiles.initial(1L, 7, "alpha1", 0)
-                .withLocation(4, 0, 1, 2);
+        Player player = TestPlayers.initial(1L, 7, "alpha1", 0);
+        player.changeMap(4, 0, 1, 2);
         MapPacketWriter writer = new MapPacketWriter();
 
         assertThrows(IOException.class, () -> writer.mapInfo(
@@ -256,8 +256,8 @@ class MapPacketWriterTest {
     void rejectsWaypointNameCountMismatch() {
         MapTemplate map = simpleMap(List.of(
                 new Waypoint(1, 2, 10, 20, 30, 40, 0)));
-        PlayerProfile player = TestPlayerProfiles.initial(1L, 7, "alpha1", 0)
-                .withLocation(4, 0, 1, 2);
+        Player player = TestPlayers.initial(1L, 7, "alpha1", 0);
+        player.changeMap(4, 0, 1, 2);
 
         assertThrows(IllegalArgumentException.class, () ->
                 new MapPacketWriter().mapInfo(player, map, false, List.of(), List.of()));
@@ -270,8 +270,8 @@ class MapPacketWriterTest {
             waypoints.add(new Waypoint(index, 2, 10, 20, 30, 40, 0));
         }
         MapTemplate map = simpleMap(waypoints);
-        PlayerProfile player = TestPlayerProfiles.initial(1L, 7, "alpha1", 0)
-                .withLocation(4, 0, 1, 2);
+        Player player = TestPlayers.initial(1L, 7, "alpha1", 0);
+        player.changeMap(4, 0, 1, 2);
         List<String> names = waypoints.stream().map(ignored -> "target").toList();
         List<MonsterSnapshot> monsters = new ArrayList<>();
         for (int index = 0; index < 128; index++) {

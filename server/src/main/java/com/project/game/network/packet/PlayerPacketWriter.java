@@ -3,7 +3,7 @@ package com.project.game.network.packet;
 import com.project.game.network.message.Message;
 import com.project.game.network.message.MessageName;
 import com.project.game.network.message.MessageWriter;
-import com.project.game.player.PlayerProfile;
+import com.project.game.player.Player;
 import com.project.game.resource.SkillTemplate;
 
 import java.io.IOException;
@@ -12,7 +12,7 @@ import java.util.Objects;
 
 /** Writes the legacy server-to-client player presence packets. */
 public final class PlayerPacketWriter {
-    public Message playerInfo(PlayerProfile player, List<SkillTemplate> skills)
+    public Message playerInfo(Player player, List<SkillTemplate> skills)
             throws IOException {
         Objects.requireNonNull(player, "player");
         Objects.requireNonNull(skills, "skills");
@@ -76,7 +76,7 @@ public final class PlayerPacketWriter {
         return new Message(MessageName.PLAYER_INFO, writer.toByteArray());
     }
 
-    public Message addPlayer(PlayerProfile player) {
+    public Message addPlayer(Player player) {
         Objects.requireNonNull(player, "player");
         PlayerPacketValidator.validateAddPlayer(player);
         try {
@@ -137,7 +137,7 @@ public final class PlayerPacketWriter {
                         .toByteArray());
     }
 
-    public Message wakeUpFromDie(PlayerProfile player) {
+    public Message wakeUpFromDie(Player player) {
         Objects.requireNonNull(player, "player");
         PlayerPacketValidator.validatePosition(player.x(), player.y());
         if (player.hp() <= 0L) {

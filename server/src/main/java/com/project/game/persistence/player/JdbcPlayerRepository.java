@@ -7,7 +7,7 @@ import com.google.gson.JsonParser;
 import com.project.game.player.Appearance;
 import com.project.game.player.BaseStats;
 import com.project.game.player.CurrentStats;
-import com.project.game.player.PlayerProfile;
+import com.project.game.player.PlayerSaveData;
 
 import javax.sql.DataSource;
 import java.sql.PreparedStatement;
@@ -122,7 +122,7 @@ public final class JdbcPlayerRepository implements PlayerRepository {
     }
 
     @Override
-    public void updateCheckpoint(PlayerProfile player, Instant playedAt) {
+    public void updateCheckpoint(PlayerSaveData player, Instant playedAt) {
         Objects.requireNonNull(player, "player");
         Objects.requireNonNull(playedAt, "playedAt");
         if (player.id() <= 0) {
@@ -215,7 +215,7 @@ public final class JdbcPlayerRepository implements PlayerRepository {
         return GSON.toJson(position);
     }
 
-    private static String positionJson(PlayerProfile player) {
+    private static String positionJson(PlayerSaveData player) {
         JsonObject position = new JsonObject();
         position.addProperty("mapId", player.mapId());
         position.addProperty("x", player.x());

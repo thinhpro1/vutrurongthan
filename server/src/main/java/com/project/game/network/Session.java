@@ -5,9 +5,11 @@ import com.project.game.network.codec.LegacyPacketCodec;
 import com.project.game.network.handler.MessageHandler;
 import com.project.game.network.message.Message;
 import com.project.game.network.transport.ClientTransport;
-import com.project.game.player.PlayerProfile;
+import com.project.game.map.Zone;
 import com.project.game.map.MapManager;
 import com.project.game.network.SessionServices;
+import com.project.game.player.Player;
+import com.project.game.player.PlayerSaveData;
 import com.project.game.player.PlayerService;
 
 import java.io.IOException;
@@ -23,7 +25,7 @@ import java.util.Objects;
 import java.util.logging.Logger;
 import java.util.logging.Level;
 
-/** One client connection: transport, protocol cursors, lifecycle and bounded writer queue. */
+/** Một kết nối client gồm transport, con trỏ giao thức, vòng đời và hàng đợi ghi có giới hạn. */
 public final class Session implements AutoCloseable {
     private static final Logger LOGGER = Logger.getLogger(Session.class.getName());
     private final int id;
@@ -43,7 +45,8 @@ public final class Session implements AutoCloseable {
     private volatile String accountName;
     private volatile long accountId;
     private boolean accountAdmissionPending;
-    private volatile PlayerProfile player;
+    private volatile Player player;
+    private volatile Zone zone;
     private int protocolViolations;
     private volatile InputStream input;
     private volatile OutputStream output;
@@ -100,7 +103,7 @@ public final class Session implements AutoCloseable {
         return accountId;
     }
 
-    public PlayerProfile player() {
+    public Player player() {
         return player;
     }
 
@@ -124,8 +127,32 @@ public final class Session implements AutoCloseable {
         accountAdmissionPending = false;
     }
 
-    public void bindPlayer(PlayerProfile player) {
+    public void bindPlayer(Player player) {
+        Objects.requireNonNull(player, "player");
+        Player current = this.player;
+        if (current != null && current != player) {
+            throw new IllegalStateException("Session player identity cannot be replaced");
+        }
         this.player = player;
+    }
+
+    public Zone zone() {
+        return zone;
+    }
+
+    public void bindZone(Zone zone) {
+        Objects.requireNonNull(zone, "zone");
+        Zone current = this.zone;
+        if (current != null && current != zone) {
+            throw new IllegalStateException("Session Zone identity cannot be replaced while joined");
+        }
+        this.zone = zone;
+    }
+
+    public void clearZone(Zone expected) {
+        if (expected == null || zone == expected) {
+            zone = null;
+        }
     }
 
     public boolean hasSentMapTemplate(int mapId) {
@@ -213,12 +240,12 @@ public final class Session implements AutoCloseable {
         } catch (RuntimeException exception) {
             LOGGER.log(Level.WARNING, "Map cleanup failed for session id=" + id, exception);
         }
-        PlayerProfile snapshot = player;
+        Player currentPlayer = player;
         try {
-            if (snapshot != null && snapshot.id() > 0 && accountId > 0L) {
+            if (currentPlayer != null && currentPlayer.id() > 0 && accountId > 0L) {
                 boolean interruptedBeforeCheckpoint = Thread.interrupted();
                 try {
-                    playerService.checkpoint(snapshot);
+                    playerService.checkpoint(PlayerSaveData.capture(currentPlayer));
                 } catch (RuntimeException exception) {
                     LOGGER.log(Level.WARNING, "Player checkpoint failed for session id=" + id, exception);
                 } finally {
@@ -233,7 +260,7 @@ public final class Session implements AutoCloseable {
         try {
             transport.close();
         } catch (IOException ignored) {
-            // Closing an already broken socket is best-effort.
+            // Đóng socket đã hỏng chỉ được thực hiện theo khả năng tốt nhất.
         }
         manager.remove(this);
     }

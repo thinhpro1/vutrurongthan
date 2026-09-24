@@ -210,7 +210,7 @@ public final class MapManager {
         if (sourceZone == null || townZone == null) {
             return null;
         }
-        if (sourceZone != townZone && !sourceZoneCanAdd(townZone, session)) {
+        if (sourceZone != townZone && !canJoin(townZone, session)) {
             return null;
         }
 
@@ -287,7 +287,7 @@ public final class MapManager {
         }
 
         Zone destinationZone = resolveZone(intent.waypoint().goMap(), 0);
-        if (destinationZone == null || !sourceZoneCanAdd(destinationZone, session)) {
+        if (destinationZone == null || !canJoin(destinationZone, session)) {
             return null;
         }
 
@@ -349,7 +349,7 @@ public final class MapManager {
         }
     }
 
-    private static boolean sourceZoneCanAdd(Zone zone, Session session) {
+    private static boolean canJoin(Zone zone, Session session) {
         return zone.canAddPlayer(session);
     }
 

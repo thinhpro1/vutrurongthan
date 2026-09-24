@@ -67,7 +67,7 @@ class MonsterManagerMovementTest {
         Zone zone = zoneFor(maps, 1, 0);
         zone.moveMonsters();
 
-        assertTrue(maps.combatService().attackMonster(player, 101));
+        assertTrue(maps.combat().attackMonster(player, 101));
         drain(player);
 
         MonsterSnapshot before = zone.monsterSnapshots().getFirst();
@@ -93,8 +93,8 @@ class MonsterManagerMovementTest {
         drain(lowerId);
         drain(higherId);
 
-        assertTrue(maps.combatService().attackMonster(lowerId, 101));
-        assertTrue(maps.combatService().attackMonster(higherId, 101));
+        assertTrue(maps.combat().attackMonster(lowerId, 101));
+        assertTrue(maps.combat().attackMonster(higherId, 101));
         drain(lowerId);
         drain(higherId);
 
@@ -114,7 +114,7 @@ class MonsterManagerMovementTest {
         Session insideRange = session(at(player(1, 1, 0), 1874, 936), insideRangeMaps);
         insideRangeMaps.mapManager().finishLoad(insideRange);
         drain(insideRange);
-        assertTrue(insideRangeMaps.combatService().attackMonster(insideRange, 101));
+        assertTrue(insideRangeMaps.combat().attackMonster(insideRange, 101));
         drain(insideRange);
 
         Zone insideRangeZone = zoneFor(insideRangeMaps, 1, 0);
@@ -126,7 +126,7 @@ class MonsterManagerMovementTest {
         Session exactRange = session(at(player(1, 1, 0), 1875, 936), exactRangeMaps);
         exactRangeMaps.mapManager().finishLoad(exactRange);
         drain(exactRange);
-        assertTrue(exactRangeMaps.combatService().attackMonster(exactRange, 101));
+        assertTrue(exactRangeMaps.combat().attackMonster(exactRange, 101));
         drain(exactRange);
 
         Zone exactRangeZone = zoneFor(exactRangeMaps, 1, 0);
@@ -143,7 +143,7 @@ class MonsterManagerMovementTest {
         Session player = session(at(player(1, 1, 0), -300, 936), maps);
         maps.mapManager().finishLoad(player);
         drain(player);
-        assertTrue(maps.combatService().attackMonster(player, 101));
+        assertTrue(maps.combat().attackMonster(player, 101));
         drain(player);
 
         Zone zone = zoneFor(maps, 1, 0);
@@ -169,7 +169,7 @@ class MonsterManagerMovementTest {
         Session player = session(at(player(1, 1, 0), 2200, 936), maps);
         maps.mapManager().finishLoad(player);
         drain(player);
-        assertTrue(maps.combatService().attackMonster(player, 101));
+        assertTrue(maps.combat().attackMonster(player, 101));
         drain(player);
 
         Monster monster = runtimeMonsters(maps, 1, 0).getFirst();
@@ -193,7 +193,7 @@ class MonsterManagerMovementTest {
         maps.mapManager().finishLoad(player);
         drain(player);
 
-        assertTrue(maps.combatService().attackMonster(player, 101));
+        assertTrue(maps.combat().attackMonster(player, 101));
         drain(player);
 
         Monster monster = runtimeMonsters(maps, 1, 0).getFirst();
@@ -229,7 +229,7 @@ class MonsterManagerMovementTest {
         maps.mapManager().finishLoad(player);
         drain(player);
 
-        assertTrue(maps.combatService().attackMonster(player, 101));
+        assertTrue(maps.combat().attackMonster(player, 101));
         drain(player);
 
         Monster monster = runtimeMonsters(maps, 1, 0).getFirst();
@@ -305,7 +305,7 @@ class MonsterManagerMovementTest {
         Session target = session(at(player(1, 1, 0), 1875, 936), maps);
         maps.mapManager().finishLoad(target);
         drain(target);
-        assertTrue(maps.combatService().attackMonster(target, 101));
+        assertTrue(maps.combat().attackMonster(target, 101));
         drain(target);
 
         clock.advanceMillis(1L);
@@ -325,7 +325,7 @@ class MonsterManagerMovementTest {
         Session target = session(at(player(1, 1, 0), 1874, 936), maps);
         maps.mapManager().finishLoad(target);
         drain(target);
-        assertTrue(maps.combatService().attackMonster(target, 101));
+        assertTrue(maps.combat().attackMonster(target, 101));
         drain(target);
 
         clock.advanceMillis(1L);

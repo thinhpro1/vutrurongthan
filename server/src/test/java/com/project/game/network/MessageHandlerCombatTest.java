@@ -138,7 +138,7 @@ class MessageHandlerCombatTest {
                 com.project.game.testsupport.MonsterTestSupport.canonicalRepository());
         GameplayServices maps = new GameplayServices(new PlayerPacketWriter(), new MonsterPacketWriter(),
                 new MonsterFactory(resources));
-        SessionServices services = TestServices.serverServices(TestServices.authService(), resources, maps);
+        SessionServices services = TestServices.serverServices(TestServices.auth(), resources, maps);
         Session session = inGameSession(services,
                 TestPlayers.at(TestPlayers.initial(1L, 7, "alpha1", 0), 1, 0, 90, 1008));
         MessageHandler handler = newHandler(session, services, ClientConfig.defaults());
@@ -156,7 +156,10 @@ class MessageHandlerCombatTest {
         CombatContext context = combatContext();
 
         context.handler().onMessage(prepareMonster(7, 101));
-        context.session().player().changeMap(1, 0, 0, 1008);
+        context.maps().findZone(1, 0).call(() -> {
+            context.session().player().changeMap(1, 0, 0, 1008);
+            return null;
+        });
         context.handler().onMessage(new Message(MessageName.REQUEST_CHANGE_MAP));
         context.handler().onMessage(monsterImpact(101));
 
@@ -182,7 +185,7 @@ class MessageHandlerCombatTest {
                 com.project.game.testsupport.MonsterTestSupport.canonicalRepository());
         GameplayServices maps = new GameplayServices(new PlayerPacketWriter(), new MonsterPacketWriter(),
                 new MonsterFactory(resources));
-        SessionServices services = TestServices.serverServices(TestServices.authService(), resources, maps);
+        SessionServices services = TestServices.serverServices(TestServices.auth(), resources, maps);
         Session session = inGameSession(services,
                 TestPlayers.at(TestPlayers.initial(1L, 7, "alpha1", 0), 1, 0, 90, 1008));
         MessageHandler handler = newHandler(session, services, ClientConfig.defaults());

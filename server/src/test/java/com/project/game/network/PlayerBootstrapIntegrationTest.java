@@ -26,7 +26,7 @@ class PlayerBootstrapIntegrationTest {
                 com.project.game.testsupport.MonsterTestSupport.canonicalRepository());
         NetworkServer server = new NetworkServer("127.0.0.1", 0, 2, 262_144, 8, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
-                TestServices.serverServices(TestServices.authService(), resources), null,
+                TestServices.serverServices(TestServices.auth(), resources), null,
                 ClientConfig.defaults());
         AtomicReference<Throwable> serverFailure = new AtomicReference<>();
         Thread serverThread = Thread.ofVirtual().start(() -> {
@@ -75,7 +75,7 @@ class PlayerBootstrapIntegrationTest {
                 com.project.game.testsupport.MonsterTestSupport.canonicalRepository());
         NetworkServer server = new NetworkServer("127.0.0.1", 0, 2, 262_144, 8, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
-                TestServices.serverServices(TestServices.authService(), resources), null,
+                TestServices.serverServices(TestServices.auth(), resources), null,
                 ClientConfig.defaults());
         AtomicReference<Throwable> serverFailure = new AtomicReference<>();
         Thread serverThread = Thread.ofVirtual().start(() -> {

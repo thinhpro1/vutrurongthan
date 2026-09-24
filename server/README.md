@@ -83,7 +83,7 @@ mvn `
   '-Dgame.db.url=jdbc:mysql://localhost:3306/rongthanchibi' `
   '-Dgame.db.username=root' `
   '-Dgame.db.allow-empty-password=true' `
-  '-Dtest=JdbcAccountRepositoryIntegrationTest,AuthServiceDatabaseIntegrationTest,JdbcPlayerRepositoryIntegrationTest,PlayerServiceDatabaseIntegrationTest' `
+  '-Dtest=JdbcAccountRepositoryIntegrationTest,AccountAuthDatabaseIntegrationTest,JdbcPlayerRepositoryIntegrationTest' `
   test
 ```
 
@@ -97,7 +97,7 @@ mvn `
   '-Dgame.db.url=jdbc:mysql://localhost:3306/rongthanchibi' `
   '-Dgame.db.username=root' `
   '-Dgame.db.allow-empty-password=false' `
-  '-Dtest=JdbcAccountRepositoryIntegrationTest,AuthServiceDatabaseIntegrationTest,JdbcPlayerRepositoryIntegrationTest,PlayerServiceDatabaseIntegrationTest' `
+  '-Dtest=JdbcAccountRepositoryIntegrationTest,AccountAuthDatabaseIntegrationTest,JdbcPlayerRepositoryIntegrationTest' `
   test
 ```
 

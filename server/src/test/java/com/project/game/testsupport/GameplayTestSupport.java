@@ -78,7 +78,7 @@ public static void joinAtBarrier(CyclicBarrier start, GameplayServices maps,
                                         AtomicReference<Throwable> failure) {
         try {
             start.await();
-            result.set(maps.combatService().attackMonster(session, 101));
+            result.set(maps.combat().attackMonster(session, 101));
         } catch (Throwable exception) {
             failure.compareAndSet(null, exception);
         }
@@ -123,7 +123,7 @@ public static void joinAtBarrier(CyclicBarrier start, GameplayServices maps,
     }
 
     public static Session session(Player player, GameplayServices maps) {
-        return session(player, TestServices.serverServices(TestServices.authService(),
+        return session(player, TestServices.serverServices(TestServices.auth(),
                 GameResources.unavailable(), maps));
     }
 

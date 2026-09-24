@@ -48,7 +48,7 @@ class ClientConfigTest {
 
     @Test
     void handlerUsesConfiguredClientVersionAndLoginVersion() throws Exception {
-        AccountAuth auth = TestServices.authService();
+        AccountAuth auth = TestServices.auth();
         auth.register("user01", "secret1", "127.0.0.1");
         SessionManager manager = new SessionManager();
         Session session = new Session(manager.nextId(), new TestTransport(), manager,

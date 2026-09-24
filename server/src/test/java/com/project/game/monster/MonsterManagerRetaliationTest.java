@@ -36,7 +36,7 @@ class MonsterManagerRetaliationTest {
         drain(attacker);
         drain(observer);
 
-        assertTrue(maps.combatService().attackMonster(attacker, 101));
+        assertTrue(maps.combat().attackMonster(attacker, 101));
         drain(attacker);
         drain(observer);
         clock.advanceMillis(1L);
@@ -59,7 +59,7 @@ class MonsterManagerRetaliationTest {
         maps.mapManager().finishLoad(target);
         drain(target);
 
-        assertTrue(maps.combatService().attackMonster(target, 101));
+        assertTrue(maps.combat().attackMonster(target, 101));
         drain(target);
 
         clock.advanceMillis(1L);
@@ -77,7 +77,7 @@ class MonsterManagerRetaliationTest {
         maps.mapManager().finishLoad(target);
         drain(target);
 
-        assertTrue(maps.combatService().attackMonster(target, 101));
+        assertTrue(maps.combat().attackMonster(target, 101));
         drain(target);
 
         clock.advanceMillis(1L);
@@ -95,7 +95,7 @@ class MonsterManagerRetaliationTest {
         drain(target);
 
         for (int monsterId = 101; monsterId <= 106; monsterId++) {
-            assertTrue(maps.combatService().attackMonster(target, monsterId));
+            assertTrue(maps.combat().attackMonster(target, monsterId));
             drain(target);
         }
 
@@ -123,7 +123,7 @@ class MonsterManagerRetaliationTest {
         drain(victim);
         drain(observer);
 
-        assertTrue(maps.combatService().attackMonster(victim, 101));
+        assertTrue(maps.combat().attackMonster(victim, 101));
         drain(victim);
         drain(observer);
         clock.advanceMillis(1L);
@@ -160,7 +160,7 @@ class MonsterManagerRetaliationTest {
         drain(attacker);
         drain(otherZone);
 
-        assertTrue(maps.combatService().attackMonster(attacker, 101));
+        assertTrue(maps.combat().attackMonster(attacker, 101));
         drain(attacker);
         clock.advanceMillis(1L);
         maps.monsterManager().update();
@@ -178,16 +178,22 @@ class MonsterManagerRetaliationTest {
         Session attacker = session(player(1, 1, 0), maps);
         maps.mapManager().finishLoad(attacker);
         drain(attacker);
-        assertTrue(maps.combatService().attackMonster(attacker, 101));
+        assertTrue(maps.combat().attackMonster(attacker, 101));
         drain(attacker);
 
-        attacker.player().changeMap(1, 0, 975 + 901, 936);
+        maps.findZone(attacker.player().mapId(), attacker.player().zoneId()).call(() -> {
+            attacker.player().changeMap(1, 0, 975 + 901, 936);
+            return null;
+        });
         clock.advanceMillis(1L);
         maps.monsterManager().update();
         assertEquals(List.of(MessageName.MONSTER_ATTACK),
                 commands(withoutMonsterMoves(drain(attacker))));
 
-        attacker.player().changeMap(1, 0, 975, 936);
+        maps.findZone(attacker.player().mapId(), attacker.player().zoneId()).call(() -> {
+            attacker.player().changeMap(1, 0, 975, 936);
+            return null;
+        });
         clock.advanceMillis(1_600L);
         maps.monsterManager().update();
         assertEquals(List.of(), withoutMonsterMoves(drain(attacker)));
@@ -209,7 +215,7 @@ class MonsterManagerRetaliationTest {
         maps.mapManager().finishLoad(attacker);
         drain(attacker);
 
-        assertTrue(maps.combatService().attackMonster(attacker, 101));
+        assertTrue(maps.combat().attackMonster(attacker, 101));
         drain(attacker);
         clock.advanceMillis(1L);
         maps.monsterManager().update();
@@ -244,10 +250,10 @@ class MonsterManagerRetaliationTest {
         drain(survivor);
 
         for (int hit = 0; hit < 28; hit++) {
-            assertTrue(maps.combatService().attackMonster(survivor, 101));
+            assertTrue(maps.combat().attackMonster(survivor, 101));
             drain(survivor);
         }
-        assertTrue(maps.combatService().attackMonster(survivor, 101));
+        assertTrue(maps.combat().attackMonster(survivor, 101));
         drain(survivor);
         clock.advanceMillis(9_000L);
         maps.monsterManager().update();

@@ -34,7 +34,7 @@ class MessageHandlerResourceTest {
 
     @Test
     void closesWhenUpdateDataContainsTrailingBytes() {
-        AccountAuth auth = TestServices.authService();
+        AccountAuth auth = TestServices.auth();
         Session session = newSession(auth);
         session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
         MessageHandler handler = newHandler(session, auth);
@@ -46,7 +46,7 @@ class MessageHandlerResourceTest {
 
     @Test
     void doesNotSendEmptyFrameDatasetWhenFrameResourcesAreUnavailable() {
-        Session session = newSession(TestServices.authService());
+        Session session = newSession(TestServices.auth());
         session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
 
         newHandler(session, GameResources.unavailable()).onMessage(
@@ -66,7 +66,7 @@ class MessageHandlerResourceTest {
             byte[] key = "abc".getBytes(StandardCharsets.US_ASCII);
             Session session = new Session(manager.nextId(), new TestTransport(input, output, "127.0.0.1"),
                     manager, new LegacyPacketCodec(262_144), key, 4,
-                    TestServices.serverServices(TestServices.authService(), resources), ClientConfig.defaults());
+                    TestServices.serverServices(TestServices.auth(), resources), ClientConfig.defaults());
             try {
                 session.start();
                 session.completeHandshake();
@@ -111,7 +111,7 @@ class MessageHandlerResourceTest {
                     new LegacyPacketCodec(262_144),
                     key,
                     4,
-                    TestServices.serverServices(TestServices.authService(), resources),
+                    TestServices.serverServices(TestServices.auth(), resources),
                     ClientConfig.defaults());
             try {
                 session.start();
@@ -165,7 +165,7 @@ class MessageHandlerResourceTest {
             byte[] key = "abc".getBytes(StandardCharsets.US_ASCII);
             Session session = new Session(manager.nextId(), new TestTransport(input, output, "127.0.0.1"),
                     manager, new LegacyPacketCodec(262_144), key, 4,
-                    TestServices.serverServices(TestServices.authService(), resources), ClientConfig.defaults());
+                    TestServices.serverServices(TestServices.auth(), resources), ClientConfig.defaults());
             try {
                 session.start();
                 session.completeHandshake();
@@ -254,7 +254,7 @@ class MessageHandlerResourceTest {
 
     @Test
     void doesNotSendEmptyMonsterDatasetWhenMonsterResourcesAreUnavailable() {
-        Session session = newSession(TestServices.authService());
+        Session session = newSession(TestServices.auth());
         session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
 
         newHandler(session, GameResources.unavailable()).onMessage(new Message(
@@ -295,7 +295,7 @@ class MessageHandlerResourceTest {
 
     @Test
     void doesNotSendEmptyEffectDatasetWhenEffectResourcesAreUnavailable() {
-        Session session = newSession(TestServices.authService());
+        Session session = newSession(TestServices.auth());
         session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
 
         newHandler(session, GameResources.unavailable()).onMessage(
@@ -309,29 +309,29 @@ class MessageHandlerResourceTest {
     void requestIconIsAllowedOnlyAfterHandshake() {
         GameResources resources = GameResources.unavailable();
 
-        Session connected = newSession(TestServices.authService());
+        Session connected = newSession(TestServices.auth());
         newHandler(connected, resources).onMessage(iconRequest(5));
         assertEquals(SessionState.CONNECTED, connected.state());
 
-        Session handshakeDone = newSession(TestServices.authService());
+        Session handshakeDone = newSession(TestServices.auth());
         handshakeDone.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
         newHandler(handshakeDone, resources).onMessage(iconRequest(5));
         assertEquals(SessionState.HANDSHAKE_DONE, handshakeDone.state());
 
-        Session authenticated = newSession(TestServices.authService());
+        Session authenticated = newSession(TestServices.auth());
         authenticated.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
         authenticated.transition(SessionState.HANDSHAKE_DONE, SessionState.AUTHENTICATED);
         newHandler(authenticated, resources).onMessage(iconRequest(5));
         assertEquals(SessionState.AUTHENTICATED, authenticated.state());
 
-        Session inGame = newSession(TestServices.authService());
+        Session inGame = newSession(TestServices.auth());
         inGame.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
         inGame.transition(SessionState.HANDSHAKE_DONE, SessionState.AUTHENTICATED);
         inGame.transition(SessionState.AUTHENTICATED, SessionState.IN_GAME);
         newHandler(inGame, resources).onMessage(iconRequest(5));
         assertEquals(SessionState.IN_GAME, inGame.state());
 
-        Session closed = newSession(TestServices.authService());
+        Session closed = newSession(TestServices.auth());
         closed.close();
         newHandler(closed, resources).onMessage(iconRequest(5));
         assertEquals(SessionState.CLOSED, closed.state());
@@ -340,7 +340,7 @@ class MessageHandlerResourceTest {
     @Test
     void parsesRequestIconIdAndQueuesAvailableIcon(@TempDir Path root) throws IOException {
         Files.write(root.resolve("5.png"), new byte[]{1, 2, 3});
-        Session session = newSession(TestServices.authService());
+        Session session = newSession(TestServices.auth());
         session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
 
         newHandler(session, GameResources.fromIconRoot(root)).onMessage(iconRequest(5));
@@ -351,7 +351,7 @@ class MessageHandlerResourceTest {
 
     @Test
     void rejectsRequestIconTrailingBytes() {
-        Session session = newSession(TestServices.authService());
+        Session session = newSession(TestServices.auth());
         session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
 
         newHandler(session, GameResources.unavailable()).onMessage(
@@ -362,7 +362,7 @@ class MessageHandlerResourceTest {
 
     @Test
     void missingIconDoesNotCloseAuthenticatedSessionOrQueueResponse() {
-        Session session = newSession(TestServices.authService());
+        Session session = newSession(TestServices.auth());
         session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
         session.transition(SessionState.HANDSHAKE_DONE, SessionState.AUTHENTICATED);
 
@@ -382,7 +382,7 @@ class MessageHandlerResourceTest {
     @Test
     void oversizedIconIsNotQueuedPastConfiguredPacketLimit(@TempDir Path root) throws IOException {
         Files.write(root.resolve("5.png"), new byte[70_000]);
-        Session session = newSession(TestServices.authService(), 9);
+        Session session = newSession(TestServices.auth(), 9);
         session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
 
         newHandler(session, GameResources.fromIconRoot(root))
@@ -396,7 +396,7 @@ class MessageHandlerResourceTest {
     void oversizedIconManifestClosesSession(@TempDir Path root) throws IOException {
         Files.write(root.resolve("2.png"), new byte[]{1});
         Files.write(root.resolve("10.png"), new byte[]{2});
-        Session session = newSession(TestServices.authService(), 9);
+        Session session = newSession(TestServices.auth(), 9);
         session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
 
         newHandler(session, GameResources.fromIconRoot(root)).onMessage(
@@ -429,7 +429,7 @@ class MessageHandlerResourceTest {
                         new LegacyPacketCodec(262_144),
                         key,
                         4,
-                        TestServices.serverServices(TestServices.authService(), resources),
+                        TestServices.serverServices(TestServices.auth(), resources),
                         ClientConfig.defaults());
                 try {
                     session.start();
@@ -500,7 +500,7 @@ class MessageHandlerResourceTest {
             byte[] key = "abc".getBytes(StandardCharsets.US_ASCII);
             Session session = new Session(manager.nextId(), new TestTransport(input, output, "127.0.0.1"),
                     manager, new LegacyPacketCodec(262_144), key, 4,
-                    TestServices.serverServices(TestServices.authService(), resources), ClientConfig.defaults());
+                    TestServices.serverServices(TestServices.auth(), resources), ClientConfig.defaults());
             try {
                 session.start();
                 session.completeHandshake();
@@ -535,7 +535,7 @@ class MessageHandlerResourceTest {
             byte[] key = "abc".getBytes(StandardCharsets.US_ASCII);
             Session session = new Session(manager.nextId(), new TestTransport(input, output, "127.0.0.1"),
                     manager, new LegacyPacketCodec(262_144), key, 4,
-                    TestServices.serverServices(TestServices.authService(), resources), ClientConfig.defaults());
+                    TestServices.serverServices(TestServices.auth(), resources), ClientConfig.defaults());
             try {
                 session.start();
                 session.completeHandshake();

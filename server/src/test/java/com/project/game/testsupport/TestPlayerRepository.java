@@ -84,6 +84,11 @@ public final class TestPlayerRepository implements PlayerRepository {
         failUpdate = value;
     }
 
+    public void seed(PlayerRecord player) {
+        byAccount.put(player.accountId(), player);
+        byName.put(player.name(), player);
+    }
+
     public PlayerRecord requireByAccountId(long accountId) {
         return byAccount.get(accountId);
     }

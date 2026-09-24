@@ -93,7 +93,7 @@ class MapManagerTest {
         maps.mapManager().finishLoad(player);
         drain(player);
 
-        assertTrue(maps.combatService().attackMonster(player, 101));
+        assertTrue(maps.combat().attackMonster(player, 101));
         assertEquals(List.of(MessageName.MONSTER_INJURE), commands(drain(player)));
         clock.advanceMillis(1L);
 
@@ -133,7 +133,7 @@ class MapManagerTest {
         maps.mapManager().finishLoad(player);
         drain(player);
 
-        assertTrue(maps.combatService().attackMonster(player, 101));
+        assertTrue(maps.combat().attackMonster(player, 101));
         drain(player);
         clock.advanceMillis(1L);
 
@@ -845,7 +845,9 @@ class MapManagerTest {
     @Test
     void changeMapRejectsFullDestinationBeforeRemovingSourceMember() throws Exception {
         GameplayServices maps = policyMaps("ONLINE", "ONLINE", 2, 1);
-        Session source = session(player(1, 0, 0), maps);
+        Player sourcePlayer = player(1, 0, 0);
+        sourcePlayer.changeMap(0, 0, 4464, 936);
+        Session source = session(sourcePlayer, maps);
         Session blocker = session(player(2, 1, 0), maps);
         maps.mapManager().finishLoad(source);
         maps.mapManager().finishLoad(blocker);
@@ -853,7 +855,6 @@ class MapManagerTest {
         drain(blocker);
         Player before = source.player();
 
-        source.player().changeMap(0, 0, 4464, 936);
         assertNull(maps.mapManager().changeMap(source));
 
         assertEquals(before, source.player());
@@ -865,11 +866,12 @@ class MapManagerTest {
     @Test
     void changeMapRejectsOfflineAndOutOfRangeDestinations() throws Exception {
         GameplayServices maps = policyMaps("ONLINE", "OFFLINE", 1, 1);
-        Session source = session(player(1, 0, 0), maps);
+        Player sourcePlayer = player(1, 0, 0);
+        sourcePlayer.changeMap(0, 0, 4464, 936);
+        Session source = session(sourcePlayer, maps);
         maps.mapManager().finishLoad(source);
         Player before = source.player();
 
-        source.player().changeMap(0, 0, 4464, 936);
         assertNull(maps.mapManager().changeMap(source));
         assertNull(maps.mapManager().changeMap(source));
         assertEquals(before, source.player());

@@ -2,15 +2,19 @@ package com.project.game.network;
 
 import com.project.game.testsupport.TestServices;
 import com.project.game.testsupport.TestAccountRepository;
+import com.project.game.testsupport.TestPlayerRepository;
 import com.project.game.persistence.account.AccountRecord;
 import com.project.game.persistence.account.AccountRepository;
 import com.project.game.persistence.account.AccountRepositoryException;
+import com.project.game.persistence.player.PlayerRecord;
 
 import com.project.game.network.handler.MessageHandler;
 import com.project.game.network.message.Message;
 import com.project.game.network.message.MessageName;
 import com.project.game.network.message.MessageWriter;
 import com.project.game.account.AccountAuth;
+import com.project.game.player.Player;
+import com.project.game.player.PlayerSaveData;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -127,6 +131,34 @@ class MessageHandlerAuthTest {
         assertEquals(SessionState.HANDSHAKE_DONE, session.state());
         assertEquals(null, manager.findByAccount("user01"));
         assertEquals(null, session.player());
+        Message dialog = drainMessages(session).getFirst();
+        assertEquals(MessageName.DIALOG_OK, dialog.command());
+        assertEquals("Hệ thống đang bận, vui lòng thử lại", dialog.reader().readUtf());
+    }
+
+    @Test
+    void invalidPersistedPlayerConversionIsReportedAsSystemBusy() throws Exception {
+        AccountAuth auth = TestServices.auth();
+        assertTrue(auth.register("user01", "secret1", "192.0.2.10").success());
+        TestPlayerRepository players = (TestPlayerRepository) TestServices.playerRepositoryFor(auth);
+        Player valid = Player.create(1L, "alpha1", 0);
+        PlayerSaveData saved = PlayerSaveData.capture(valid);
+        PlayerRecord record = PlayerRecord.fromSaveData(saved);
+        players.seed(new PlayerRecord(
+                record.id(), record.accountId(), record.name(), 99, record.power(), record.potential(),
+                record.level(), record.exp(), record.baseStats(), record.currentStats(), record.hp(), record.mp(),
+                record.appearance(), record.coin(), record.coinLock(), record.diamond(), record.ruby(),
+                record.mapId(), record.x(), record.y()));
+
+        SessionManager manager = new SessionManager();
+        Session session = newSession(auth, 1024, manager, "198.51.100.1");
+        session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
+
+        newHandler(session, auth).onMessage(loginMessage("user01", "secret1"));
+
+        assertEquals(SessionState.HANDSHAKE_DONE, session.state());
+        assertEquals(null, session.player());
+        assertEquals(null, manager.findByAccount("user01"));
         Message dialog = drainMessages(session).getFirst();
         assertEquals(MessageName.DIALOG_OK, dialog.command());
         assertEquals("Hệ thống đang bận, vui lòng thử lại", dialog.reader().readUtf());
@@ -261,7 +293,7 @@ class MessageHandlerAuthTest {
     }
 
     private static AccountAuth registeredAuth() {
-        AccountAuth auth = TestServices.authService();
+        AccountAuth auth = TestServices.auth();
         auth.register("user01", "secret1", "127.0.0.1");
         return auth;
     }

@@ -92,7 +92,7 @@ public final class GameplayServices {
         return maps;
     }
 
-    public Combat combatService() {
+    public Combat combat() {
         return combat;
     }
 

@@ -36,7 +36,7 @@ class ResourceIntegrationTest {
                 Path.of("..", "client", "Assets", "Resources", "Jsons"));
         NetworkServer server = new NetworkServer("127.0.0.1", 0, 2, 4096, 8, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
-                TestServices.serverServices(TestServices.authService(), resources), null,
+                TestServices.serverServices(TestServices.auth(), resources), null,
                 ClientConfig.defaults());
         AtomicReference<Throwable> serverFailure = new AtomicReference<>();
         Thread serverThread = Thread.ofVirtual().start(() -> {
@@ -66,7 +66,7 @@ class ResourceIntegrationTest {
                 com.project.game.testsupport.MonsterTestSupport.canonicalRepository());
         NetworkServer server = new NetworkServer("127.0.0.1", 0, 2, 262_144, 8, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
-                TestServices.serverServices(TestServices.authService(), resources), null,
+                TestServices.serverServices(TestServices.auth(), resources), null,
                 ClientConfig.defaults());
         AtomicReference<Throwable> serverFailure = new AtomicReference<>();
         Thread serverThread = Thread.ofVirtual().start(() -> {
@@ -162,7 +162,7 @@ class ResourceIntegrationTest {
         NetworkServer server = new NetworkServer(
                 "127.0.0.1", 0, 2, 262_144, 8, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
-                TestServices.serverServices(TestServices.authService(), resources),
+                TestServices.serverServices(TestServices.auth(), resources),
                 null,
                 ClientConfig.defaults());
         AtomicReference<Throwable> serverFailure = new AtomicReference<>();
@@ -249,7 +249,7 @@ class ResourceIntegrationTest {
                 Path.of("..", "client", "Assets", "Resources", "Jsons"));
         NetworkServer server = new NetworkServer("127.0.0.1", 0, 2, 4096, 8, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
-                TestServices.serverServices(TestServices.authService(), resources), null,
+                TestServices.serverServices(TestServices.auth(), resources), null,
                 ClientConfig.defaults());
         AtomicReference<Throwable> serverFailure = new AtomicReference<>();
         Thread serverThread = Thread.ofVirtual().start(() -> {
@@ -276,7 +276,7 @@ class ResourceIntegrationTest {
         Files.write(iconRoot.resolve("5.png"), iconData);
         NetworkServer server = new NetworkServer("127.0.0.1", 0, 2, 1024, 8, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
-                TestServices.serverServices(TestServices.authService(), GameResources.fromIconRoot(iconRoot)),
+                TestServices.serverServices(TestServices.auth(), GameResources.fromIconRoot(iconRoot)),
                 null, ClientConfig.defaults());
         AtomicReference<Throwable> serverFailure = new AtomicReference<>();
         Thread serverThread = Thread.ofVirtual().start(() -> {
@@ -306,7 +306,7 @@ class ResourceIntegrationTest {
         GameResources resources = GameResources.fromIconRoot(iconRoot, 2);
         NetworkServer server = new NetworkServer("127.0.0.1", 0, 2, 1024, 8, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
-                TestServices.serverServices(TestServices.authService(), resources),
+                TestServices.serverServices(TestServices.auth(), resources),
                 null, ClientConfig.defaults());
         AtomicReference<Throwable> serverFailure = new AtomicReference<>();
         Thread serverThread = Thread.ofVirtual().start(() -> {
@@ -374,7 +374,7 @@ class ResourceIntegrationTest {
         Files.write(iconRoot.resolve("2170.png"), iconData);
         NetworkServer server = new NetworkServer("127.0.0.1", 0, 2, 262_144, 8, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
-                TestServices.serverServices(TestServices.authService(), GameResources.fromIconRoot(iconRoot)),
+                TestServices.serverServices(TestServices.auth(), GameResources.fromIconRoot(iconRoot)),
                 null, ClientConfig.defaults());
         AtomicReference<Throwable> serverFailure = new AtomicReference<>();
         Thread serverThread = Thread.ofVirtual().start(() -> {
@@ -401,7 +401,7 @@ class ResourceIntegrationTest {
         Files.write(iconRoot.resolve("2170.png"), iconData);
         NetworkServer server = new NetworkServer("127.0.0.1", 0, 2, 262_144, 8, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
-                TestServices.serverServices(TestServices.authService(), GameResources.fromIconRoot(iconRoot)),
+                TestServices.serverServices(TestServices.auth(), GameResources.fromIconRoot(iconRoot)),
                 null, ClientConfig.defaults());
         AtomicReference<Throwable> serverFailure = new AtomicReference<>();
         Thread serverThread = Thread.ofVirtual().start(() -> {
@@ -426,7 +426,7 @@ class ResourceIntegrationTest {
     void manifestDoesNotPushMonsterResourceWithoutRequest() throws Exception {
         NetworkServer server = new NetworkServer("127.0.0.1", 0, 2, 1024, 8, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
-                TestServices.serverServices(TestServices.authService(), GameResources.fromFrameRoot(
+                TestServices.serverServices(TestServices.auth(), GameResources.fromFrameRoot(
                         Path.of("resources", "json"),
                         com.project.game.testsupport.MapTestSupport.canonicalMaps(),
                         2,

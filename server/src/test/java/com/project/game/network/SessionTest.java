@@ -393,7 +393,7 @@ class SessionTest {
         gameplay.mapManager().finishLoad(observer);
         GameplayTestSupport.drain(target);
         GameplayTestSupport.drain(observer);
-        assertTrue(gameplay.combatService().attackMonster(target, 101));
+        assertTrue(gameplay.combat().attackMonster(target, 101));
         GameplayTestSupport.drain(target);
         GameplayTestSupport.drain(observer);
         clock.advanceMillis(1L);

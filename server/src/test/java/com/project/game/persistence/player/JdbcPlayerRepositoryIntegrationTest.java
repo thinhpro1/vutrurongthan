@@ -40,9 +40,17 @@ class JdbcPlayerRepositoryIntegrationTest {
             assertEquals(created, repository.findByAccountId(accountId).orElseThrow());
             assertThrows(DuplicatePlayerException.class, () -> repository.create(initial));
 
-            createdPlayer.addPotential(98);
-            repository.save(PlayerSaveData.capture(createdPlayer));
-            assertEquals(99, repository.findByAccountId(accountId).orElseThrow().potential());
+            Player persisted = created.toPlayer(0);
+            persisted.addPotential(98);
+            persisted.injure(17);
+            repository.save(PlayerSaveData.capture(persisted));
+            PlayerRecord reloaded = repository.findByAccountId(accountId).orElseThrow();
+            assertEquals(99, reloaded.potential());
+            assertEquals(183, reloaded.hp());
+            assertEquals(persisted.mapId(), reloaded.mapId());
+            assertEquals(persisted.x(), reloaded.x());
+            assertEquals(persisted.y(), reloaded.y());
+            assertEquals(0, reloaded.toPlayer(0).zoneId());
         } finally {
             try (Connection connection = manager.dataSource().getConnection();
                  PreparedStatement statement = connection.prepareStatement(

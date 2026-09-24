@@ -19,7 +19,7 @@ public final class TestServices {
             new WeakHashMap<>();
     private TestServices() { }
 
-    public static AccountAuth authService() {
+    public static AccountAuth auth() {
         AccountAuth auth = new AccountAuth(new TestAccountRepository());
         synchronized (PLAYER_REPOSITORIES) {
             PLAYER_REPOSITORIES.put(auth, new TestPlayerRepository());
@@ -28,7 +28,7 @@ public final class TestServices {
     }
 
     public static SessionServices serverServices() {
-        AccountAuth auth = authService();
+        AccountAuth auth = auth();
         return serverServices(auth, GameResources.unavailable());
     }
 
@@ -45,7 +45,7 @@ public final class TestServices {
     public static SessionServices serverServices(AccountAuth auth, GameResources resources,
                                                 GameplayServices gameplay) {
         return new SessionServices(auth, resources, gameplay.mapManager(),
-                gameplay.combatService(), gameplay.monsterManager(),
+                gameplay.combat(), gameplay.monsterManager(),
                 playerRepository(auth));
     }
 
@@ -53,7 +53,7 @@ public final class TestServices {
                                                 GameplayServices gameplay,
                                                 PlayerRepository players) {
         return new SessionServices(auth, resources, gameplay.mapManager(),
-                gameplay.combatService(), gameplay.monsterManager(), players);
+                gameplay.combat(), gameplay.monsterManager(), players);
     }
 
     public static PlayerRepository playerRepositoryFor(AccountAuth auth) {

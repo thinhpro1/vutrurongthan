@@ -12,12 +12,12 @@ final class CombatHandler {
     }
 
     private final Session session;
-    private final Combat combatService;
+    private final Combat combat;
     private PendingMonsterAttack pendingMonsterAttack;
 
-    CombatHandler(Session session, Combat combatService) {
+    CombatHandler(Session session, Combat combat) {
         this.session = session;
-        this.combatService = combatService;
+        this.combat = combat;
     }
 
     void clearPendingAttack() {
@@ -53,7 +53,7 @@ final class CombatHandler {
             throw new IOException("unsupported -72 target type " + targetType);
         }
 
-        if (session.player() == null || !combatService.canTargetMonster(session, targetId)) {
+        if (session.player() == null || !combat.canTargetMonster(session, targetId)) {
             return;
         }
 
@@ -93,6 +93,6 @@ final class CombatHandler {
             return;
         }
 
-        combatService.attackMonster(session, targetId);
+        combat.attackMonster(session, targetId);
     }
 }

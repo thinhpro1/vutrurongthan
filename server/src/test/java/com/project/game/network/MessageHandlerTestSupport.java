@@ -26,33 +26,33 @@ import java.util.concurrent.BlockingQueue;
 
 final class MessageHandlerTestSupport {
 
-    static MessageHandler newHandler(Session session, AccountAuth authService) {
-        return newHandler(session, TestServices.serverServices(authService, GameResources.unavailable()),
+    static MessageHandler newHandler(Session session, AccountAuth auth) {
+        return newHandler(session, TestServices.serverServices(auth, GameResources.unavailable()),
                 ClientConfig.defaults());
     }
 
     static MessageHandler newHandler(Session session, GameResources resources) {
-        return newHandler(session, TestServices.serverServices(TestServices.authService(), resources), ClientConfig.defaults());
+        return newHandler(session, TestServices.serverServices(TestServices.auth(), resources), ClientConfig.defaults());
     }
 
     static MessageHandler newHandler(Session session, SessionServices services, ClientConfig config) {
         return new MessageHandler(session, services, config);
     }
 
-    static Session newSession(AccountAuth authService) {
-        return newSession(authService, 1024);
+    static Session newSession(AccountAuth auth) {
+        return newSession(auth, 1024);
     }
 
-    static Session newSession(AccountAuth authService, int maxPacketSize) {
-        return newSession(authService, maxPacketSize, new SessionManager(), "127.0.0.1");
+    static Session newSession(AccountAuth auth, int maxPacketSize) {
+        return newSession(auth, maxPacketSize, new SessionManager(), "127.0.0.1");
     }
 
-    static Session newSession(AccountAuth authService, int maxPacketSize,
+    static Session newSession(AccountAuth auth, int maxPacketSize,
                                       SessionManager manager, String remoteAddress) {
         return new Session(manager.nextId(), new TestTransport(
                 new ByteArrayInputStream(new byte[0]), new ByteArrayOutputStream(), remoteAddress), manager,
                 new LegacyPacketCodec(maxPacketSize), "abc".getBytes(StandardCharsets.US_ASCII), 4,
-                TestServices.serverServices(authService, GameResources.unavailable()), ClientConfig.defaults());
+                TestServices.serverServices(auth, GameResources.unavailable()), ClientConfig.defaults());
     }
 
     static Session inGameSessionWithPlayer(AccountAuth auth) {

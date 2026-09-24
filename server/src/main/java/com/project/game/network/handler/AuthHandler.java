@@ -22,15 +22,15 @@ final class AuthHandler {
     private static final Logger LOGGER = Logger.getLogger(AuthHandler.class.getName());
     private static final String SYSTEM_BUSY = "Hệ thống đang bận, vui lòng thử lại";
     private final Session session;
-    private final AccountAuth authService;
+    private final AccountAuth auth;
     private final PlayerRepository playerRepository;
     private final ClientConfig networkConfig;
     private final PlayerHandler playerHandler;
 
-    AuthHandler(Session session, AccountAuth authService, PlayerRepository playerRepository,
+    AuthHandler(Session session, AccountAuth auth, PlayerRepository playerRepository,
                 ClientConfig networkConfig, PlayerHandler playerHandler) {
         this.session = session;
-        this.authService = authService;
+        this.auth = auth;
         this.playerRepository = playerRepository;
         this.networkConfig = networkConfig;
         this.playerHandler = playerHandler;
@@ -52,7 +52,7 @@ final class AuthHandler {
         if (reader.remaining() != 0) {
             throw new IOException("trailing login payload bytes");
         }
-        AccountAuth.LoginResult result = authService.login(username, password);
+        AccountAuth.LoginResult result = auth.login(username, password);
         if (!result.success()) {
             sendDialog(result.message());
             return;
@@ -65,16 +65,17 @@ final class AuthHandler {
         boolean admissionSucceeded = false;
         try {
             AccountAuth.AuthResult metadata =
-                    authService.markSuccessfulLogin(result.accountId(), session.remoteAddress());
+                    auth.markSuccessfulLogin(result.accountId(), session.remoteAddress());
             if (!metadata.success()) {
                 if (session.state() != SessionState.CLOSED) {
                     sendDialog(metadata.value());
                 }
                 return;
             }
-            Optional<PlayerRecord> loaded;
+            Player player;
             try {
-                loaded = playerRepository.findByAccountId(result.accountId());
+                Optional<PlayerRecord> loaded = playerRepository.findByAccountId(result.accountId());
+                player = loaded.map(record -> record.toPlayer(0)).orElse(null);
             } catch (PlayerRepositoryException exception) {
                 LOGGER.log(Level.WARNING,
                         "PLAYER load repository failure accountId=" + result.accountId(), exception);
@@ -94,10 +95,9 @@ final class AuthHandler {
                 return;
             }
             admissionSucceeded = true;
-            if (loaded.isEmpty()) {
+            if (player == null) {
                 session.send(new Message(MessageName.START_CREATE_PLAYER_SCREEN));
             } else {
-                Player player = loaded.orElseThrow().toPlayer(0);
                 session.bindPlayer(player);
                 session.transition(SessionState.AUTHENTICATED, SessionState.IN_GAME);
                 playerHandler.enterGame(player);
@@ -114,7 +114,7 @@ final class AuthHandler {
         if (reader.remaining() != 0) {
             throw new IOException("trailing register payload bytes");
         }
-        AccountAuth.AuthResult result = authService.register(username, password, session.remoteAddress());
+        AccountAuth.AuthResult result = auth.register(username, password, session.remoteAddress());
         sendDialog(result.value());
     }
 

@@ -187,6 +187,99 @@ class SessionTest {
     }
 
     @Test
+    void disconnectWaitsForSaturatedZoneQueueBeforeCheckpoint() throws Exception {
+        TestPlayerRepository delegate = new TestPlayerRepository();
+        BlockingPlayerRepository repository = new BlockingPlayerRepository(delegate);
+        AuthService auth = new AuthService(new TestAccountRepository());
+        GameResources resources = GameResources.unavailable();
+        GameplayServices gameplay = new GameplayServices(resources);
+        PlayerService players = new PlayerService(repository);
+        SessionServices services = TestServices.serverServices(auth, resources, gameplay, players);
+        Session session = managedSession(
+                services, players.create(101L, "alpha1", 0).player(), "user01");
+        assertTrue(gameplay.mapService().finishLoad(session));
+        GameplayTestSupport.drain(session);
+        var zone = gameplay.findZone(0, 0);
+
+        CountDownLatch priorStarted = new CountDownLatch(1);
+        CountDownLatch releasePrior = new CountDownLatch(1);
+        assertTrue(zone.submit(() -> {
+            session.bindPlayer(session.player().withPosition(1260, 640));
+            priorStarted.countDown();
+            try {
+                if (!releasePrior.await(5, TimeUnit.SECONDS)) {
+                    throw new AssertionError("prior Zone action was not released");
+                }
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                throw new AssertionError(exception);
+            }
+        }));
+        assertTrue(priorStarted.await(5, TimeUnit.SECONDS));
+        for (int index = 0; index < 1024; index++) {
+            assertTrue(zone.submit(() -> {
+            }));
+        }
+
+        Thread close = Thread.ofVirtual().start(session::close);
+        waitForCloseStarted(session);
+        assertEquals(1, gameplay.mapService().memberCount(0, 0));
+        assertFalse(repository.updateEntered.await(100, TimeUnit.MILLISECONDS));
+
+        releasePrior.countDown();
+        assertTrue(repository.updateEntered.await(5, TimeUnit.SECONDS));
+        assertEquals(0, gameplay.mapService().memberCount(0, 0));
+        repository.allowUpdate.countDown();
+        close.join(2_000);
+
+        assertFalse(close.isAlive());
+        assertEquals(1260, delegate.requireByAccountId(101L).x());
+        assertEquals(640, delegate.requireByAccountId(101L).y());
+        assertEquals(1, repository.checkpointCalls.get());
+    }
+
+    @Test
+    void finishLoadCleansFailedObserverOutsideZoneExecution() throws Exception {
+        TestPlayerRepository delegate = new TestPlayerRepository();
+        BlockingPlayerRepository repository = new BlockingPlayerRepository(delegate);
+        AuthService auth = new AuthService(new TestAccountRepository());
+        GameResources resources = GameResources.unavailable();
+        GameplayServices gameplay = new GameplayServices(resources);
+        PlayerService players = new PlayerService(repository);
+        SessionServices services = TestServices.serverServices(auth, resources, gameplay, players);
+        Session observer = managedSession(
+                services, players.create(101L, "alpha1", 0).player(), "user01");
+        Session joining = managedSession(
+                services, players.create(202L, "beta22", 0).player(), "user02");
+        assertTrue(gameplay.mapService().finishLoad(observer));
+        GameplayTestSupport.drain(observer);
+
+        ArrayBlockingQueue<Message> fullQueue = new ArrayBlockingQueue<>(1);
+        assertTrue(fullQueue.offer(new Message(MessageName.DIALOG_OK)));
+        GameplayTestSupport.replaceSendQueue(observer, fullQueue);
+
+        AtomicBoolean joined = new AtomicBoolean();
+        Thread finishLoad = Thread.ofVirtual().start(() ->
+                joined.set(gameplay.mapService().finishLoad(joining)));
+
+        assertTrue(repository.updateEntered.await(5, TimeUnit.SECONDS));
+        assertTrue(finishLoad.isAlive());
+        CountDownLatch nextZoneAction = new CountDownLatch(1);
+        assertTrue(gameplay.findZone(0, 0).submit(nextZoneAction::countDown));
+        assertTrue(nextZoneAction.await(5, TimeUnit.SECONDS));
+        assertEquals(1, gameplay.mapService().memberCount(0, 0));
+
+        repository.allowUpdate.countDown();
+        finishLoad.join(1_000);
+        assertFalse(finishLoad.isAlive());
+        assertTrue(joined.get());
+        assertEquals(SessionState.CLOSED, observer.state());
+        assertEquals(1, gameplay.mapService().memberCount(0, 0));
+
+        joining.close();
+    }
+
+    @Test
     void closeKeepsAccountReservedUntilFinalPlayerCheckpointCompletes() throws Exception {
         TestPlayerRepository delegate = new TestPlayerRepository();
         BlockingPlayerRepository repository = new BlockingPlayerRepository(delegate);

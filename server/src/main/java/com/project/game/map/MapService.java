@@ -41,26 +41,13 @@ public final class MapService {
         } catch (IllegalArgumentException exception) {
             return false;
         }
-        synchronized (zone) {
-            Zone.JoinResult result = zone.addAndSnapshot(session);
-            if (result.status() == Zone.JoinStatus.FULL
-                    || result.status() == Zone.JoinStatus.PLAYER_ID_CONFLICT) {
-                return false;
-            }
-            if (result.status() == Zone.JoinStatus.ALREADY_PRESENT) {
-                return true;
-            }
-            for (Session member : result.existing()) {
-                if (member == session || member.state() == SessionState.CLOSED || member.player() == null) {
-                    continue;
-                }
-                session.send(packets.addPlayer(member.player()));
-                if (session.state() != SessionState.CLOSED) {
-                    member.send(packets.addPlayer(joining));
-                }
-            }
+        try {
+            Join result = zone.tryCall(() -> finishLoadInZone(zone, session));
+            closeRejected(result.rejectedObservers());
+            return result.accepted();
+        } catch (RejectedExecutionException exception) {
+            return false;
         }
-        return true;
     }
 
     public void leave(Session session) {
@@ -75,15 +62,11 @@ public final class MapService {
         if (zone == null) {
             return;
         }
-        synchronized (zone) {
-            if (!zone.remove(session)) {
-                return;
-            }
-            for (Session member : zone.snapshot()) {
-                if (member != session && member.state() != SessionState.CLOSED) {
-                    member.send(packets.removePlayer(leaving.id()));
-                }
-            }
+        try {
+            Leave result = zone.call(() -> leaveInZone(zone, session, leaving));
+            closeRejected(result.rejectedObservers());
+        } catch (RejectedExecutionException exception) {
+            // A stopped Zone cannot accept more authoritative work.
         }
     }
 
@@ -224,13 +207,68 @@ public final class MapService {
         }
 
         try {
-            MoveResult result = zone.call(() -> movePlayerInZone(zone, session, observed, x, y));
-            for (Session rejectedObserver : result.rejectedObservers()) {
-                rejectedObserver.close();
-            }
+            MoveResult result = zone.tryCall(() -> movePlayerInZone(zone, session, observed, x, y));
+            closeRejected(result.rejectedObservers());
             return result.moved();
         } catch (RejectedExecutionException exception) {
             return false;
+        }
+    }
+
+    private Join finishLoadInZone(Zone zone, Session session) {
+        synchronized (zone) {
+            PlayerProfile joining = session.player();
+            if (joining == null) {
+                return new Join(false, List.of());
+            }
+
+            Zone.JoinResult result = zone.addAndSnapshot(session);
+            if (result.status() == Zone.JoinStatus.FULL
+                    || result.status() == Zone.JoinStatus.PLAYER_ID_CONFLICT) {
+                return new Join(false, List.of());
+            }
+            if (result.status() == Zone.JoinStatus.ALREADY_PRESENT) {
+                return new Join(true, List.of());
+            }
+
+            List<Session> rejectedObservers = new ArrayList<>();
+            for (Session member : result.existing()) {
+                if (member == session || member.state() == SessionState.CLOSED || member.player() == null) {
+                    continue;
+                }
+                if (!session.trySend(packets.addPlayer(member.player()))) {
+                    rejectedObservers.add(session);
+                    return new Join(true, rejectedObservers);
+                }
+                if (!member.trySend(packets.addPlayer(joining))) {
+                    rejectedObservers.add(member);
+                }
+            }
+            return new Join(true, rejectedObservers);
+        }
+    }
+
+    private Leave leaveInZone(Zone zone, Session session, PlayerProfile leaving) {
+        synchronized (zone) {
+            if (!zone.remove(session)) {
+                return new Leave(List.of());
+            }
+
+            Message packet = packets.removePlayer(leaving.id());
+            List<Session> rejectedObservers = new ArrayList<>();
+            for (Session member : zone.snapshot()) {
+                if (member != session && member.state() != SessionState.CLOSED
+                        && !member.trySend(packet)) {
+                    rejectedObservers.add(member);
+                }
+            }
+            return new Leave(rejectedObservers);
+        }
+    }
+
+    private static void closeRejected(List<Session> rejectedObservers) {
+        for (Session rejectedObserver : rejectedObservers) {
+            rejectedObserver.close();
         }
     }
 
@@ -293,6 +331,18 @@ public final class MapService {
 
     private record MoveResult(boolean moved, List<Session> rejectedObservers) {
         private MoveResult {
+            rejectedObservers = List.copyOf(rejectedObservers);
+        }
+    }
+
+    private record Join(boolean accepted, List<Session> rejectedObservers) {
+        private Join {
+            rejectedObservers = List.copyOf(rejectedObservers);
+        }
+    }
+
+    private record Leave(List<Session> rejectedObservers) {
+        private Leave {
             rejectedObservers = List.copyOf(rejectedObservers);
         }
     }

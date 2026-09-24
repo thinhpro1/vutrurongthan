@@ -83,15 +83,22 @@ public final class Zone {
             if (runtimeState == RuntimeState.STOPPED || !runtimeInputs.offer(action)) {
                 return false;
             }
-            if (runtimeWorker == null) {
-                startRuntimeWorkerLocked();
-            }
+            startRuntimeWorkerIfNeededLocked();
             return true;
         }
     }
 
-    /** Runs one action on this Zone writer and returns its result to the caller. */
+    /** Runs one action on this Zone writer and rejects immediately when the bounded queue is full. */
+    <T> T tryCall(Supplier<T> action) {
+        return executeCall(action, false);
+    }
+
+    /** Runs one required action on this Zone writer, waiting for bounded queue capacity if needed. */
     <T> T call(Supplier<T> action) {
+        return executeCall(action, true);
+    }
+
+    private <T> T executeCall(Supplier<T> action, boolean required) {
         Objects.requireNonNull(action, "action");
         boolean onRuntimeWorker;
         synchronized (runtimeLock) {
@@ -106,12 +113,37 @@ public final class Zone {
         }
 
         Call<T> call = new Call<>(action, mapId, zoneId);
-        boolean accepted = submit(call);
-        if (!accepted) {
+        if (required) {
+            boolean interruptedWhileAdmitting = submitRequired(call);
+            return call.await(interruptedWhileAdmitting);
+        }
+        if (!submit(call)) {
             throw new RejectedExecutionException(
                     "Zone runtime rejected action for map " + mapId + " zone " + zoneId);
         }
-        return call.await();
+        return call.await(false);
+    }
+
+    private boolean submitRequired(Call<?> action) {
+        boolean interrupted = false;
+        synchronized (runtimeLock) {
+            while (runtimeState != RuntimeState.STOPPED && !runtimeInputs.offer(action)) {
+                try {
+                    runtimeLock.wait();
+                } catch (InterruptedException exception) {
+                    interrupted = true;
+                }
+            }
+            if (runtimeState == RuntimeState.STOPPED) {
+                if (interrupted) {
+                    Thread.currentThread().interrupt();
+                }
+                throw new RejectedExecutionException(
+                        "Zone runtime is stopped for map " + mapId + " zone " + zoneId);
+            }
+            startRuntimeWorkerIfNeededLocked();
+        }
+        return interrupted;
     }
 
     RuntimeState runtimeState() {
@@ -133,6 +165,13 @@ public final class Zone {
                 }
             }
             runtimeInputs.clear();
+            runtimeLock.notifyAll();
+        }
+    }
+
+    private void startRuntimeWorkerIfNeededLocked() {
+        if (runtimeWorker == null) {
+            startRuntimeWorkerLocked();
         }
     }
 
@@ -156,6 +195,7 @@ public final class Zone {
                     if (action == null) {
                         return;
                     }
+                    runtimeLock.notifyAll();
                 }
                 try {
                     action.run();
@@ -448,8 +488,7 @@ public final class Zone {
             completed.countDown();
         }
 
-        private T await() {
-            boolean interrupted = false;
+        private T await(boolean interrupted) {
             while (true) {
                 try {
                     completed.await();

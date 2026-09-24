@@ -217,6 +217,73 @@ class MapServiceTest {
     }
 
     @Test
+    void finishLoadWaitsBehindPriorZoneAction() throws Exception {
+        GameplayServices maps = mapsWithoutMonsters();
+        Session joining = session(player(1, 0, 0), maps);
+        Zone zone = maps.findZone(0, 0);
+        CountDownLatch priorStarted = new CountDownLatch(1);
+        CountDownLatch releasePrior = new CountDownLatch(1);
+        assertTrue(zone.submit(() -> {
+            priorStarted.countDown();
+            awaitRelease(releasePrior);
+        }));
+        assertTrue(priorStarted.await(5, TimeUnit.SECONDS));
+
+        AtomicBoolean joined = new AtomicBoolean();
+        CountDownLatch joinFinished = new CountDownLatch(1);
+        Thread join = Thread.ofVirtual().start(() -> {
+            try {
+                joined.set(maps.mapService().finishLoad(joining));
+            } finally {
+                joinFinished.countDown();
+            }
+        });
+
+        assertFalse(joinFinished.await(100, TimeUnit.MILLISECONDS));
+        assertEquals(0, maps.mapService().memberCount(0, 0));
+        releasePrior.countDown();
+        assertTrue(joinFinished.await(5, TimeUnit.SECONDS));
+        join.join();
+
+        assertTrue(joined.get());
+        assertEquals(1, maps.mapService().memberCount(0, 0));
+    }
+
+    @Test
+    void leaveWaitsBehindPriorZoneAction() throws Exception {
+        GameplayServices maps = mapsWithoutMonsters();
+        Session leaving = session(player(1, 0, 0), maps);
+        assertTrue(maps.mapService().finishLoad(leaving));
+        drain(leaving);
+        Zone zone = maps.findZone(0, 0);
+        CountDownLatch priorStarted = new CountDownLatch(1);
+        CountDownLatch releasePrior = new CountDownLatch(1);
+        assertTrue(zone.submit(() -> {
+            priorStarted.countDown();
+            awaitRelease(releasePrior);
+        }));
+        assertTrue(priorStarted.await(5, TimeUnit.SECONDS));
+
+        CountDownLatch leaveFinished = new CountDownLatch(1);
+        Thread leave = Thread.ofVirtual().start(() -> {
+            try {
+                maps.mapService().leave(leaving);
+            } finally {
+                leaveFinished.countDown();
+            }
+        });
+
+        assertFalse(leaveFinished.await(100, TimeUnit.MILLISECONDS));
+        assertTrue(zone.contains(leaving));
+        releasePrior.countDown();
+        assertTrue(leaveFinished.await(5, TimeUnit.SECONDS));
+        leave.join();
+
+        assertFalse(zone.contains(leaving));
+        assertEquals(0, maps.mapService().memberCount(0, 0));
+    }
+
+    @Test
     void leaveNotifiesOtherMembersOnce() throws Exception {
         GameplayServices maps = mapsWithoutMonsters();
         Session first = session(player(1, 0, 0));
@@ -381,7 +448,7 @@ class MapServiceTest {
             leaving.close();
             disconnectFinished.countDown();
         });
-        assertFalse(disconnectFinished.await(1, TimeUnit.SECONDS));
+        assertFalse(disconnectFinished.await(100, TimeUnit.MILLISECONDS));
 
         joiningQueue.releaseOffer.countDown();
         join.join();
@@ -488,13 +555,23 @@ class MapServiceTest {
         Thread revive = Thread.ofVirtual().start(() -> maps.mapService().returnTownFromDeath(dead));
         assertTrue(observerQueue.offerEntered.await(5, TimeUnit.SECONDS));
 
-        Thread join = Thread.ofVirtual().start(() -> maps.mapService().finishLoad(joining));
-        awaitBlocked(join);
+        CountDownLatch joinFinished = new CountDownLatch(1);
+        AtomicBoolean joined = new AtomicBoolean();
+        Thread join = Thread.ofVirtual().start(() -> {
+            try {
+                joined.set(maps.mapService().finishLoad(joining));
+            } finally {
+                joinFinished.countDown();
+            }
+        });
+        assertFalse(joinFinished.await(100, TimeUnit.MILLISECONDS));
 
         observerQueue.releaseOffer.countDown();
         revive.join();
+        assertTrue(joinFinished.await(5, TimeUnit.SECONDS));
         join.join();
 
+        assertTrue(joined.get());
         assertEquals(2, maps.mapService().memberCount(1, 0));
         assertEquals(0, maps.mapService().memberCount(0, 0));
         assertEquals(List.of(MessageName.REMOVE_PLAYER, MessageName.ADD_PLAYER),
@@ -617,6 +694,17 @@ class MapServiceTest {
             moved.set(maps.mapService().movePlayer(session, x, y));
         } finally {
             finished.countDown();
+        }
+    }
+
+    private static void awaitRelease(CountDownLatch release) {
+        try {
+            if (!release.await(5, TimeUnit.SECONDS)) {
+                throw new AssertionError("prior Zone action was not released");
+            }
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new AssertionError(exception);
         }
     }
 }

@@ -217,6 +217,57 @@ class MapManagerTest {
     }
 
     @Test
+    void movementAdmissionBlocksConcurrentChangeMapUntilMovementPacketIsAdmitted()
+            throws Exception {
+        GameplayServices maps = mapsWithoutMonsters();
+        Session mover = session(player(1, 0, 0), maps);
+        Session observer = session(player(2, 0, 0), maps);
+        maps.mapManager().finishLoad(mover);
+        maps.mapManager().finishLoad(observer);
+        drain(mover);
+        drain(observer);
+
+        BlockingOfferQueue observerQueue = new BlockingOfferQueue();
+        replaceSendQueue(observer, observerQueue);
+        AtomicBoolean moved = new AtomicBoolean();
+        Thread movement = Thread.ofVirtual().start(() ->
+                moved.set(maps.mapManager().movePlayer(mover, 1260, 640)));
+        assertTrue(observerQueue.offerEntered.await(5, TimeUnit.SECONDS));
+
+        AtomicReference<Optional<PlayerProfile>> changed =
+                new AtomicReference<>(Optional.empty());
+        CountDownLatch changeStarted = new CountDownLatch(1);
+        CountDownLatch changeFinished = new CountDownLatch(1);
+        Thread changeMap = Thread.ofVirtual().start(() -> {
+            changeStarted.countDown();
+            try {
+                changed.set(maps.mapManager().changeMap(
+                        mover, 0, 0, 1, 0, 975, 648));
+            } finally {
+                changeFinished.countDown();
+            }
+        });
+        assertTrue(changeStarted.await(5, TimeUnit.SECONDS));
+
+        assertFalse(changeFinished.await(100, TimeUnit.MILLISECONDS));
+        assertEquals(0, mover.player().mapId());
+
+        observerQueue.releaseOffer.countDown();
+        movement.join(5_000);
+        changeMap.join(5_000);
+
+        assertFalse(movement.isAlive());
+        assertFalse(changeMap.isAlive());
+        assertTrue(moved.get());
+        assertTrue(changed.get().isPresent());
+        assertEquals(1, maps.mapManager().memberCount(0, 0));
+        assertEquals(0, maps.mapManager().memberCount(1, 0));
+        assertEquals(1, changed.get().orElseThrow().mapId());
+        assertEquals(List.of(MessageName.PLAYER_MOVE, MessageName.REMOVE_PLAYER),
+                commands(drain(observer)));
+    }
+
+    @Test
     void finishLoadWaitsBehindPriorZoneAction() throws Exception {
         GameplayServices maps = mapsWithoutMonsters();
         Session joining = session(player(1, 0, 0), maps);
@@ -247,6 +298,59 @@ class MapManagerTest {
 
         assertTrue(joined.get());
         assertEquals(1, maps.mapManager().memberCount(0, 0));
+    }
+
+    @Test
+    void finishLoadAdmissionBlocksConcurrentChangeMapUntilPresenceIsAdmitted()
+            throws Exception {
+        GameplayServices maps = mapsWithoutMonsters();
+        Session source = session(player(1, 0, 0), maps);
+        Session joining = session(player(2, 0, 0), maps);
+        assertTrue(maps.mapManager().finishLoad(source));
+        drain(source);
+
+        BlockingOfferQueue joiningQueue = new BlockingOfferQueue();
+        replaceSendQueue(joining, joiningQueue);
+        AtomicBoolean joined = new AtomicBoolean();
+        CountDownLatch joinFinished = new CountDownLatch(1);
+        Thread join = Thread.ofVirtual().start(() -> {
+            try {
+                joined.set(maps.mapManager().finishLoad(joining));
+            } finally {
+                joinFinished.countDown();
+            }
+        });
+        assertTrue(joiningQueue.offerEntered.await(5, TimeUnit.SECONDS));
+
+        AtomicReference<Optional<PlayerProfile>> changed =
+                new AtomicReference<>(Optional.empty());
+        CountDownLatch changeFinished = new CountDownLatch(1);
+        Thread changeMap = Thread.ofVirtual().start(() -> {
+            try {
+                changed.set(maps.mapManager().changeMap(
+                        source, 0, 0, 1, 0, 975, 648));
+            } finally {
+                changeFinished.countDown();
+            }
+        });
+
+        assertFalse(changeFinished.await(100, TimeUnit.MILLISECONDS));
+        assertEquals(0, source.player().mapId());
+
+        joiningQueue.releaseOffer.countDown();
+        join.join(5_000);
+        changeMap.join(5_000);
+
+        assertFalse(join.isAlive());
+        assertFalse(changeMap.isAlive());
+        assertTrue(joined.get());
+        assertTrue(changed.get().isPresent());
+        assertEquals(1, maps.mapManager().memberCount(0, 0));
+        assertEquals(0, maps.mapManager().memberCount(1, 0));
+        assertEquals(1, changed.get().orElseThrow().mapId());
+        assertEquals(List.of(MessageName.ADD_PLAYER), commands(drain(source)));
+        assertEquals(List.of(MessageName.ADD_PLAYER, MessageName.REMOVE_PLAYER),
+                commands(drain(joining)));
     }
 
     @Test

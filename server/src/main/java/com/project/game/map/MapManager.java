@@ -18,7 +18,7 @@ import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.RejectedExecutionException;
 
-/** Owns the map catalog, authoritative Zones, and map-level player orchestration. */
+/** Sở hữu danh mục bản đồ, các Zone có thẩm quyền và điều phối người chơi cấp bản đồ. */
 public final class MapManager {
     private static final int DEATH_RETURN_MAP_ID = 0;
     private static final int DEATH_RETURN_ZONE_ID = 0;
@@ -58,19 +58,19 @@ public final class MapManager {
         }
     }
 
-    /** Returns an existing Zone without creating one. */
+    /** Trả về Zone hiện có mà không tạo mới. */
     public Zone findZone(int mapId, int zoneId) {
         return zones.get(new ZoneKey(mapId, zoneId));
     }
 
-    /** Returns a policy-valid Zone, creating it atomically when first requested. */
+    /** Trả về Zone hợp lệ theo chính sách, tạo nguyên tử khi được yêu cầu lần đầu. */
     public Zone getZone(int mapId, int zoneId) {
         MapTemplate map = requireOnlineMap(mapId, zoneId);
         ZoneKey key = new ZoneKey(mapId, zoneId);
         return zones.computeIfAbsent(key, ignored -> create(map, zoneId));
     }
 
-    /** Returns all registered Zones in stable map/zone order. */
+    /** Trả về toàn bộ Zone đã đăng ký theo thứ tự bản đồ/khu vực ổn định. */
     public List<Zone> zones() {
         return zones.entrySet().stream()
                 .sorted(Map.Entry.comparingByKey(
@@ -95,35 +95,37 @@ public final class MapManager {
 
         try {
             Join result = zone.tryCall(() -> {
-                if (session.state() == SessionState.CLOSED || session.player() == null) {
-                    return new Join(false, List.of());
-                }
+                synchronized (zone) {
+                    if (session.state() == SessionState.CLOSED || session.player() == null) {
+                        return new Join(false, List.of());
+                    }
 
-                Zone.JoinResult admission = zone.addPlayer(session);
-                if (admission.status() == Zone.JoinStatus.FULL
-                        || admission.status() == Zone.JoinStatus.PLAYER_ID_CONFLICT) {
-                    return new Join(false, List.of());
-                }
-                if (admission.status() == Zone.JoinStatus.ALREADY_PRESENT) {
-                    return new Join(true, List.of());
-                }
+                    Zone.JoinResult admission = zone.addPlayer(session);
+                    if (admission.status() == Zone.JoinStatus.FULL
+                            || admission.status() == Zone.JoinStatus.PLAYER_ID_CONFLICT) {
+                        return new Join(false, List.of());
+                    }
+                    if (admission.status() == Zone.JoinStatus.ALREADY_PRESENT) {
+                        return new Join(true, List.of());
+                    }
 
-                PlayerProfile current = session.player();
-                List<Session> rejectedObservers = new ArrayList<>();
-                for (Session member : admission.existing()) {
-                    if (member == session || member.state() == SessionState.CLOSED
-                            || member.player() == null) {
-                        continue;
+                    PlayerProfile current = session.player();
+                    List<Session> rejectedObservers = new ArrayList<>();
+                    for (Session member : admission.existing()) {
+                        if (member == session || member.state() == SessionState.CLOSED
+                                || member.player() == null) {
+                            continue;
+                        }
+                        if (!session.trySend(packets.addPlayer(member.player()))) {
+                            rejectedObservers.add(session);
+                            return new Join(true, rejectedObservers);
+                        }
+                        if (!member.trySend(packets.addPlayer(current))) {
+                            rejectedObservers.add(member);
+                        }
                     }
-                    if (!session.trySend(packets.addPlayer(member.player()))) {
-                        rejectedObservers.add(session);
-                        return new Join(true, rejectedObservers);
-                    }
-                    if (!member.trySend(packets.addPlayer(current))) {
-                        rejectedObservers.add(member);
-                    }
+                    return new Join(true, rejectedObservers);
                 }
-                return new Join(true, rejectedObservers);
             });
             closeRejected(result.rejectedObservers());
             return result.accepted();
@@ -144,23 +146,25 @@ public final class MapManager {
 
         try {
             List<Session> rejectedObservers = zone.call(() -> {
-                if (!zone.removePlayer(session)) {
-                    return List.of();
-                }
-
-                Message packet = packets.removePlayer(leaving.id());
-                List<Session> rejected = new ArrayList<>();
-                for (Session member : zone.players()) {
-                    if (member != session && member.state() != SessionState.CLOSED
-                            && !member.trySend(packet)) {
-                        rejected.add(member);
+                synchronized (zone) {
+                    if (!zone.removePlayer(session)) {
+                        return List.of();
                     }
+
+                    Message packet = packets.removePlayer(leaving.id());
+                    List<Session> rejected = new ArrayList<>();
+                    for (Session member : zone.players()) {
+                        if (member != session && member.state() != SessionState.CLOSED
+                                && !member.trySend(packet)) {
+                            rejected.add(member);
+                        }
+                    }
+                    return List.copyOf(rejected);
                 }
-                return List.copyOf(rejected);
             });
             closeRejected(rejectedObservers);
         } catch (RejectedExecutionException exception) {
-            // A stopped Zone cannot accept more authoritative work.
+            // Zone đã dừng không thể nhận thêm tác vụ có thẩm quyền.
         }
     }
 
@@ -179,22 +183,24 @@ public final class MapManager {
 
         try {
             MoveDelivery result = zone.tryCall(() -> {
-                Zone.Move moved = zone.movePlayer(
-                        session, observed.mapId(), observed.zoneId(), x, y);
-                if (!moved.moved()) {
-                    return new MoveDelivery(false, List.of());
-                }
-
-                Message packet = packets.movePlayer(
-                        moved.player().id(), moved.player().x(), moved.player().y());
-                List<Session> rejectedObservers = new ArrayList<>();
-                for (Session member : moved.observers()) {
-                    if (member != session && member.state() != SessionState.CLOSED
-                            && !member.trySend(packet)) {
-                        rejectedObservers.add(member);
+                synchronized (zone) {
+                    Zone.Move moved = zone.movePlayer(
+                            session, observed.mapId(), observed.zoneId(), x, y);
+                    if (!moved.moved()) {
+                        return new MoveDelivery(false, List.of());
                     }
+
+                    Message packet = packets.movePlayer(
+                            moved.player().id(), moved.player().x(), moved.player().y());
+                    List<Session> rejectedObservers = new ArrayList<>();
+                    for (Session member : moved.observers()) {
+                        if (member != session && member.state() != SessionState.CLOSED
+                                && !member.trySend(packet)) {
+                            rejectedObservers.add(member);
+                        }
+                    }
+                    return new MoveDelivery(true, rejectedObservers);
                 }
-                return new MoveDelivery(true, rejectedObservers);
             });
             closeRejected(result.rejectedObservers());
             return result.moved();
@@ -329,7 +335,7 @@ public final class MapManager {
         return zone == null ? 0 : zone.size();
     }
 
-    /** Resolves a policy-valid normal Zone before a handler emits map state. */
+    /** Phân giải Zone thường hợp lệ theo chính sách trước khi handler phát trạng thái bản đồ. */
     public boolean ensureZone(int mapId, int zoneId) {
         return resolveZone(mapId, zoneId) != null;
     }

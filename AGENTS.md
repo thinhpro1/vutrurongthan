@@ -252,6 +252,12 @@ legacy threading code.
 
 ---
 
+## Comment language
+
+Comments added or modified in code MUST be written in Vietnamese. Preserve
+protocol literals, database values, class/method names, and externally required
+English text exactly when they are not code comments.
+
 ## Server work
 
 Before modifying `server/**`:

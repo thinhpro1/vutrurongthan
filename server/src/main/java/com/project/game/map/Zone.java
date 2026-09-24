@@ -23,7 +23,7 @@ import java.util.function.Supplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-/** Concurrent runtime membership for one map zone. */
+/** Trạng thái thành viên runtime đồng thời của một khu vực bản đồ. */
 public final class Zone {
     private static final int MONSTER_CHASE_LEASH = 1200;
     private static final int DEFAULT_RUNTIME_INPUT_CAPACITY = 1024;
@@ -74,8 +74,8 @@ public final class Zone {
     }
 
     /**
-     * Enqueues one action for this Zone's serialized runtime writer. The offer is deliberately
-     * non-blocking: callers must handle a full input queue explicitly.
+     * Xếp một tác vụ vào writer runtime tuần tự của Zone. Việc thêm tác vụ cố ý
+     * không chặn; bên gọi phải tự xử lý khi hàng đợi đầu vào đã đầy.
      */
     public boolean submit(Runnable action) {
         Objects.requireNonNull(action, "action");
@@ -88,12 +88,12 @@ public final class Zone {
         }
     }
 
-    /** Runs one action on this Zone writer and rejects immediately when the bounded queue is full. */
+    /** Chạy một tác vụ trên writer của Zone và từ chối ngay khi hàng đợi giới hạn đã đầy. */
     <T> T tryCall(Supplier<T> action) {
         return executeCall(action, false);
     }
 
-    /** Runs one required action on this Zone writer, waiting for bounded queue capacity if needed. */
+    /** Chạy một tác vụ bắt buộc trên writer của Zone, chờ chỗ trống nếu hàng đợi đã đầy. */
     <T> T call(Supplier<T> action) {
         return executeCall(action, true);
     }
@@ -153,8 +153,8 @@ public final class Zone {
     }
 
     /**
-     * Stops this Zone runtime permanently. An action already running is allowed to finish;
-     * queued calls are rejected and wake their callers; other queued actions are discarded.
+     * Dừng vĩnh viễn runtime của Zone. Tác vụ đang chạy được phép hoàn tất;
+     * các lời gọi đang xếp hàng bị từ chối và đánh thức bên gọi, các tác vụ khác bị loại bỏ.
      */
     void stopRuntime() {
         synchronized (runtimeLock) {
@@ -234,8 +234,8 @@ public final class Zone {
         return maxPlayer;
     }
 
-    /** Attempts to admit a session and returns the members that were present before it joined. */
-    public synchronized JoinResult addPlayer(Session session) {
+    /** Thử cho Session vào Zone và trả về các thành viên đã có trước khi gia nhập. */
+    synchronized JoinResult addPlayer(Session session) {
         Objects.requireNonNull(session, "session");
         PlayerProfile player = requirePlayer(session);
         Session existingSession = members.get(player.id());
@@ -253,13 +253,13 @@ public final class Zone {
         return new JoinResult(JoinStatus.ADDED, existing);
     }
 
-    public synchronized boolean removePlayer(Session session) {
+    synchronized boolean removePlayer(Session session) {
         Objects.requireNonNull(session, "session");
         PlayerProfile player = requirePlayer(session);
         return members.remove(player.id(), session);
     }
 
-    public synchronized boolean canAddPlayer(Session session) {
+    synchronized boolean canAddPlayer(Session session) {
         Objects.requireNonNull(session, "session");
         PlayerProfile player = requirePlayer(session);
         Session existing = members.get(player.id());
@@ -291,8 +291,8 @@ public final class Zone {
         return List.copyOf(members.values());
     }
 
-    /** Updates one local player and returns the observer snapshot for the packet boundary. */
-    public synchronized Move movePlayer(
+    /** Cập nhật một người chơi trong Zone và trả về danh sách quan sát cho biên packet. */
+    synchronized Move movePlayer(
             Session session,
             int expectedMapId,
             int expectedZoneId,
@@ -535,7 +535,7 @@ public final class Zone {
         STOPPED
     }
 
-    /** The outcome of one atomic admission attempt. */
+    /** Kết quả của một lần thử gia nhập nguyên tử. */
     enum JoinStatus {
         ADDED,
         ALREADY_PRESENT,
@@ -550,8 +550,8 @@ public final class Zone {
         }
     }
 
-    /** Result of a local movement mutation plus the members that should observe it. */
-    public record Move(PlayerProfile player, List<Session> observers) {
+    /** Kết quả thay đổi di chuyển cục bộ cùng các thành viên cần quan sát. */
+    record Move(PlayerProfile player, List<Session> observers) {
         public Move {
             observers = List.copyOf(Objects.requireNonNull(observers, "observers"));
         }

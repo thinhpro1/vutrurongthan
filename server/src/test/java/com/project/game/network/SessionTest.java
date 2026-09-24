@@ -37,6 +37,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
 import java.time.Instant;
 import java.util.Optional;
 
@@ -175,6 +176,7 @@ class SessionTest {
         assertTrue(observerQueue.offerEntered.await(5, java.util.concurrent.TimeUnit.SECONDS));
 
         Thread close = Thread.ofVirtual().start(mover::close);
+        waitForCloseStarted(mover);
         assertFalse(repository.updateEntered.await(100, java.util.concurrent.TimeUnit.MILLISECONDS));
 
         observerQueue.releaseOffer.countDown();
@@ -233,6 +235,7 @@ class SessionTest {
         assertEquals(90, target.player().hp());
 
         Thread close = Thread.ofVirtual().start(target::close);
+        waitForCloseStarted(target);
         assertFalse(repository.updateEntered.await(100, java.util.concurrent.TimeUnit.MILLISECONDS));
 
         observerQueue.releaseAttack.countDown();
@@ -438,6 +441,14 @@ class SessionTest {
             Thread.sleep(10);
         }
         assertEquals(SessionState.CLOSED, session.state(), "timed out waiting for session close");
+    }
+
+    private static void waitForCloseStarted(Session session) {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        while (session.state() != SessionState.CLOSED && System.nanoTime() < deadline) {
+            Thread.onSpinWait();
+        }
+        assertEquals(SessionState.CLOSED, session.state(), "close flow did not start");
     }
 
     private static void waitForAccountRelease(SessionManager manager) throws InterruptedException {

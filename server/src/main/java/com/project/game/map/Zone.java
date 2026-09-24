@@ -16,6 +16,10 @@ import java.util.random.RandomGenerator;
 import java.util.Optional;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -84,6 +88,62 @@ public final class Zone {
             }
             return true;
         }
+    }
+
+    /** Runs one action on this Zone writer and returns its result to the caller. */
+    <T> T call(Supplier<T> action) {
+        Objects.requireNonNull(action, "action");
+        boolean onRuntimeWorker;
+        synchronized (runtimeLock) {
+            if (runtimeState == RuntimeState.STOPPED) {
+                throw new RejectedExecutionException(
+                        "Zone runtime is stopped for map " + mapId + " zone " + zoneId);
+            }
+            onRuntimeWorker = runtimeWorker == Thread.currentThread();
+        }
+        if (onRuntimeWorker) {
+            return action.get();
+        }
+
+        CountDownLatch completed = new CountDownLatch(1);
+        AtomicReference<T> result = new AtomicReference<>();
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+        boolean accepted = submit(() -> {
+            try {
+                result.set(action.get());
+            } catch (RuntimeException | Error exception) {
+                failure.set(exception);
+                throw exception;
+            } finally {
+                completed.countDown();
+            }
+        });
+        if (!accepted) {
+            throw new RejectedExecutionException(
+                    "Zone runtime rejected action for map " + mapId + " zone " + zoneId);
+        }
+
+        boolean interrupted = false;
+        while (true) {
+            try {
+                completed.await();
+                break;
+            } catch (InterruptedException exception) {
+                interrupted = true;
+            }
+        }
+        if (interrupted) {
+            Thread.currentThread().interrupt();
+        }
+
+        Throwable exception = failure.get();
+        if (exception instanceof RuntimeException runtimeException) {
+            throw runtimeException;
+        }
+        if (exception instanceof Error error) {
+            throw error;
+        }
+        return result.get();
     }
 
     RuntimeState runtimeState() {

@@ -101,10 +101,13 @@ class MapServiceTest {
         assertTrue(random.entered.await(5, TimeUnit.SECONDS));
 
         AtomicBoolean moved = new AtomicBoolean();
+        CountDownLatch movementStarted = new CountDownLatch(1);
+        CountDownLatch movementFinished = new CountDownLatch(1);
         Thread movement = Thread.ofVirtual().start(() ->
-                moved.set(maps.mapService().movePlayer(player, 1260, 640)));
-        awaitBlocked(movement);
-        assertFalse(moved.get());
+                moveAndSignal(maps, player, 1260, 640, moved,
+                        movementStarted, movementFinished));
+        assertTrue(movementStarted.await(5, TimeUnit.SECONDS));
+        assertFalse(movementFinished.await(100, TimeUnit.MILLISECONDS));
 
         random.release.countDown();
         lifecycle.join();
@@ -138,10 +141,13 @@ class MapServiceTest {
         assertTrue(random.entered.await(5, TimeUnit.SECONDS));
 
         AtomicBoolean moved = new AtomicBoolean();
+        CountDownLatch movementStarted = new CountDownLatch(1);
+        CountDownLatch movementFinished = new CountDownLatch(1);
         Thread movement = Thread.ofVirtual().start(() ->
-                moved.set(maps.mapService().movePlayer(player, 2_100, 936)));
-        awaitBlocked(movement);
-        assertFalse(moved.get());
+                moveAndSignal(maps, player, 2_100, 936, moved,
+                        movementStarted, movementFinished));
+        assertTrue(movementStarted.await(5, TimeUnit.SECONDS));
+        assertFalse(movementFinished.await(100, TimeUnit.MILLISECONDS));
 
         random.release.countDown();
         lifecycle.join();
@@ -160,6 +166,54 @@ class MapServiceTest {
                 .toList();
         assertEquals(1, monsterMoves.size());
         assertMonsterMove(monsterMoves.getFirst(), 101, 979, 936, 1);
+    }
+
+    @Test
+    void movementWaitsForPriorZoneActionAndBroadcastsAfterItRuns() throws Exception {
+        GameplayServices maps = mapsWithoutMonsters();
+        Session mover = session(player(1, 0, 0), maps);
+        Session observer = session(player(2, 0, 0), maps);
+        maps.mapService().finishLoad(mover);
+        maps.mapService().finishLoad(observer);
+        drain(mover);
+        drain(observer);
+        Zone zone = maps.findZone(0, 0);
+        PlayerProfile before = mover.player();
+
+        CountDownLatch priorStarted = new CountDownLatch(1);
+        CountDownLatch releasePrior = new CountDownLatch(1);
+        assertTrue(zone.submit(() -> {
+            priorStarted.countDown();
+            try {
+                if (!releasePrior.await(5, TimeUnit.SECONDS)) {
+                    throw new AssertionError("prior Zone action was not released");
+                }
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                throw new AssertionError(exception);
+            }
+        }));
+        assertTrue(priorStarted.await(5, TimeUnit.SECONDS));
+
+        AtomicBoolean moved = new AtomicBoolean();
+        CountDownLatch movementStarted = new CountDownLatch(1);
+        CountDownLatch movementFinished = new CountDownLatch(1);
+        Thread movement = Thread.ofVirtual().start(() ->
+                moveAndSignal(maps, mover, 1260, 640, moved,
+                        movementStarted, movementFinished));
+        assertTrue(movementStarted.await(5, TimeUnit.SECONDS));
+        assertFalse(movementFinished.await(100, TimeUnit.MILLISECONDS));
+        assertEquals(before.x(), mover.player().x());
+        assertEquals(before.y(), mover.player().y());
+
+        releasePrior.countDown();
+        assertTrue(movementFinished.await(5, TimeUnit.SECONDS));
+        movement.join();
+
+        assertTrue(moved.get());
+        assertEquals(1260, mover.player().x());
+        assertEquals(640, mover.player().y());
+        assertEquals(List.of(MessageName.PLAYER_MOVE), commands(drain(observer)));
     }
 
     @Test
@@ -547,6 +601,22 @@ class MapServiceTest {
             }
         } catch (Throwable exception) {
             failure.compareAndSet(null, exception);
+        }
+    }
+
+    private static void moveAndSignal(
+            GameplayServices maps,
+            Session session,
+            int x,
+            int y,
+            AtomicBoolean moved,
+            CountDownLatch started,
+            CountDownLatch finished) {
+        started.countDown();
+        try {
+            moved.set(maps.mapService().movePlayer(session, x, y));
+        } finally {
+            finished.countDown();
         }
     }
 }

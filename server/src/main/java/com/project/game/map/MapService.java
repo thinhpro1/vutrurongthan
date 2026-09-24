@@ -8,6 +8,7 @@ import com.project.game.player.PlayerProfile;
 
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.RejectedExecutionException;
 
 /** Coordinates presence and movement within the current map/zone keys. */
 public final class MapService {
@@ -220,6 +221,19 @@ public final class MapService {
             return false;
         }
 
+        try {
+            return zone.call(() -> movePlayerInZone(zone, session, observed, x, y));
+        } catch (RejectedExecutionException exception) {
+            return false;
+        }
+    }
+
+    private boolean movePlayerInZone(
+            Zone zone,
+            Session session,
+            PlayerProfile observed,
+            int x,
+            int y) {
         synchronized (zone) {
             PlayerProfile current = session.player();
             if (current == null || current.hp() <= 0L

@@ -29,10 +29,12 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -181,6 +183,8 @@ class ZoneTest {
                 Zone.class.getDeclaredMethod("runtimeState").getModifiers()));
         assertFalse(Modifier.isPublic(
                 Zone.class.getDeclaredMethod("stopRuntime").getModifiers()));
+        assertFalse(Modifier.isPublic(
+                Zone.class.getDeclaredMethod("call", Supplier.class).getModifiers()));
         assertTrue(Modifier.isPublic(
                 Zone.class.getDeclaredMethod("submit", Runnable.class).getModifiers()));
     }
@@ -301,6 +305,111 @@ class ZoneTest {
         assertTrue(zone.submit(completed::countDown));
         assertTrue(completed.await(5, TimeUnit.SECONDS));
         awaitRuntimeState(zone, Zone.RuntimeState.FROZEN);
+    }
+
+    @Test
+    void synchronousCallWaitsForQueuedActionAndReturnsResult() throws Exception {
+        Zone zone = new Zone(1, 0, 10, List.of());
+        CountDownLatch firstStarted = new CountDownLatch(1);
+        CountDownLatch releaseFirst = new CountDownLatch(1);
+        CountDownLatch callFinished = new CountDownLatch(1);
+        AtomicReference<Integer> result = new AtomicReference<>();
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+
+        assertTrue(zone.submit(() -> {
+            firstStarted.countDown();
+            try {
+                if (!releaseFirst.await(5, TimeUnit.SECONDS)) {
+                    throw new AssertionError("first action was not released");
+                }
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                throw new AssertionError(exception);
+            }
+        }));
+        assertTrue(firstStarted.await(5, TimeUnit.SECONDS));
+
+        Thread caller = Thread.ofVirtual().start(() -> {
+            try {
+                result.set(zone.call(() -> 42));
+            } catch (Throwable exception) {
+                failure.set(exception);
+            } finally {
+                callFinished.countDown();
+            }
+        });
+
+        assertFalse(callFinished.await(100, TimeUnit.MILLISECONDS));
+        releaseFirst.countDown();
+        assertTrue(callFinished.await(5, TimeUnit.SECONDS));
+        caller.join();
+
+        if (failure.get() != null) {
+            throw new AssertionError("Zone call failed", failure.get());
+        }
+        assertEquals(42, result.get());
+    }
+
+    @Test
+    void synchronousCallExecutesInlineOnZoneWorker() throws Exception {
+        Zone zone = new Zone(1, 0, 10, List.of());
+        CountDownLatch finished = new CountDownLatch(1);
+        AtomicReference<Integer> result = new AtomicReference<>();
+
+        assertTrue(zone.submit(() -> {
+            result.set(zone.call(() -> 42));
+            finished.countDown();
+        }));
+
+        assertTrue(finished.await(5, TimeUnit.SECONDS));
+        awaitRuntimeState(zone, Zone.RuntimeState.FROZEN);
+        assertEquals(42, result.get());
+    }
+
+    @Test
+    void acceptedCallRestoresCallerInterruptAfterCompletion() throws Exception {
+        Zone zone = new Zone(1, 0, 10, List.of());
+        CountDownLatch firstStarted = new CountDownLatch(1);
+        CountDownLatch releaseFirst = new CountDownLatch(1);
+        CountDownLatch callFinished = new CountDownLatch(1);
+        AtomicBoolean interruptedAfterCall = new AtomicBoolean();
+        AtomicReference<Integer> result = new AtomicReference<>();
+
+        assertTrue(zone.submit(() -> {
+            firstStarted.countDown();
+            try {
+                if (!releaseFirst.await(5, TimeUnit.SECONDS)) {
+                    throw new AssertionError("first action was not released");
+                }
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                throw new AssertionError(exception);
+            }
+        }));
+        assertTrue(firstStarted.await(5, TimeUnit.SECONDS));
+
+        Thread caller = Thread.ofVirtual().start(() -> {
+            Thread.currentThread().interrupt();
+            result.set(zone.call(() -> 42));
+            interruptedAfterCall.set(Thread.currentThread().isInterrupted());
+            callFinished.countDown();
+        });
+
+        assertFalse(callFinished.await(100, TimeUnit.MILLISECONDS));
+        releaseFirst.countDown();
+        assertTrue(callFinished.await(5, TimeUnit.SECONDS));
+        caller.join();
+
+        assertEquals(42, result.get());
+        assertTrue(interruptedAfterCall.get());
+    }
+
+    @Test
+    void stoppedRuntimeRejectsSynchronousCall() {
+        Zone zone = new Zone(1, 0, 10, List.of());
+        zone.stopRuntime();
+
+        assertThrows(RejectedExecutionException.class, () -> zone.call(() -> 42));
     }
 
     @Test

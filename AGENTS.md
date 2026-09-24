@@ -46,48 +46,175 @@ The sibling legacy project:
 ../rongthanchibi
 ```
 
-is an approved **readability/gameplay-flow reference**, not an authoritative
-runtime architecture.
+is the approved **readability, naming, and gameplay-flow reference**, not an
+authoritative runtime architecture.
 
-For work on an existing gameplay feature such as:
+This gate applies to **all existing gameplay/server feature domains**, not only
+Monster or Player. Examples include, but are not limited to:
 
 ```text
-Monster
 Player
-Npc
+Monster
 Boss
+Npc
 Item
+ItemMap
 Skill
-Map/Zone
+Effect
+Map / Zone
+Waypoint / Point
+Quest
+Shop
+Dungeon
+Giftcode
+Upgrade
+Event
+Clan
+Pet
+resource/catalog gameplay features
+other existing game-domain features
 ```
 
-the coding model **MUST inspect the corresponding legacy implementation when
-available before planning the change**.
+Before planning or coding an existing feature, the coding model **MUST inspect
+the corresponding legacy implementation when available**.
+
+If `../rongthanchibi` is available, skipping this inspection is a rule
+violation. If the sibling project is unavailable or no equivalent feature can
+be found, report that explicitly before coding. Do not invent legacy names or
+claim the gate passed without inspection.
+
+The goal is not only to learn what the feature does. The coding model MUST
+actively study how the legacy source keeps the feature easy to read:
+
+```text
+feature center
+class names
+method names
+gameplay vocabulary
+normal call/update flow
+field-vs-behavior balance
+base Entity/state choices
+Manager usage
+package/file organization
+number of file jumps needed for the normal flow
+```
 
 Before coding, report briefly:
 
 ```text
 Legacy reference inspected:
-- ...
+- exact files/classes
+
+Legacy vocabulary/flow inspected:
+- exact useful names and flow, for example run / update / addNpc / addPoint / ...
 
 Adopt:
-- ...
+- simple naming/readability strengths worth carrying forward
 
 Reject:
-- ...
+- obsolete choices that conflict with current architecture
 ```
 
-Use the legacy source to study:
+### Legacy naming rule
+
+When the legacy source already has a short, clear gameplay name and the new code
+means the same thing, **prefer the same simple vocabulary**.
+
+Examples of the preferred style:
 
 ```text
-feature center
-base Entity/state choices
-method vocabulary
-update/lifecycle flow
-field-vs-behavior balance
-Manager usage
-package/file organization
+run
+update
+init
+load
+add
+remove
+find
+get
+move
+moveTo
+attack
+updateAttack
+findTarget
+injure
+die
+respawn
+addNpc
+removeNpc
+addPoint
+addItem
+addEffect
+removeEffect
+join
+leave
 ```
+
+These examples are a naming style, not a requirement to mechanically reuse a
+wrong name.
+
+Do not replace a clear game action with a longer technical phrase merely to
+sound architectural.
+
+Prefer:
+
+```text
+addNpc
+addPoint
+update
+attack
+move
+```
+
+over names such as:
+
+```text
+registerNpcRuntimeEntity
+resolveWaypointRegistration
+processRuntimeExecutionCycle
+executeAttackTransition
+processMovementOperation
+```
+
+unless the longer name describes genuinely different semantics.
+
+If the new code changes a clear legacy name for the same feature concept, the
+coding model MUST explain before coding:
+
+```text
+Legacy name:
+New name:
+Why the legacy name is no longer accurate:
+```
+
+Class context should remove redundant words. If the class already says `Zone`,
+`Monster`, `Npc`, `Quest`, or `Shop`, method names should normally describe the
+game action instead of repeating architecture terminology.
+
+Technical words such as:
+
+```text
+Runtime
+Execution
+Context
+Coordinator
+Processor
+Transition
+Resolution
+Operation
+Orchestrator
+Facade
+Command
+Result
+Snapshot
+Handler
+```
+
+are not banned, but in gameplay code they require a real technical meaning or
+boundary. Do not use them as decorative naming.
+
+For a new feature with no useful legacy equivalent, use the **same naming
+style**: short, direct game vocabulary and a top-to-bottom flow that can be read
+without architecture knowledge.
 
 Do NOT copy obsolete legacy choices such as:
 
@@ -212,6 +339,8 @@ Before gameplay implementation/refactor, identify:
 ```text
 feature center
 main runtime object
+legacy files/classes for the same feature when available
+legacy vocabulary and normal flow
 static Template/Data if any
 shared Entity/base state if genuinely justified
 Manager/collection/lifecycle owner if any
@@ -224,8 +353,10 @@ Prefer:
 
 ```text
 direct game vocabulary
+short context-aware method names
+names consistent with the legacy feature vocabulary when semantics match
 cohesive gameplay entities
-obvious update/lifecycle flow
+obvious run/update/lifecycle flow
 few meaningful abstractions
 few file jumps
 large cohesive files when appropriate
@@ -239,11 +370,29 @@ automatic Optional usage
 automatic record/result/snapshot creation
 Factory+Manager+Registry+Scheduler symmetry
 technical names replacing game actions
+long names that repeat context already provided by the class
 abstractions created only to reduce line count
 ```
 
-A refactor is suspect when it makes the normal gameplay flow require more files
-without creating a real ownership/subsystem/technical boundary.
+A normal gameplay flow should be understandable mostly from class/method names,
+without needing to understand the architecture first.
+
+A refactor is suspect when it makes the same gameplay flow require:
+
+```text
+more terminology
+longer technical names
+more wrapper/result types
+more file jumps
+```
+
+without creating a real correctness, ownership, subsystem, or technical
+boundary.
+
+When the touched feature exists in `../rongthanchibi`, compare the final naming
+and normal flow with the legacy version. If the new code expresses the same
+gameplay idea with more terminology but no additional semantic value, simplify
+it before finishing.
 
 ---
 
@@ -268,13 +417,20 @@ For gameplay work, reviewer must be able to answer:
 ```text
 Which file do I open first?
 What is the main runtime object?
-What does update/lifecycle do?
+Which legacy files/classes and vocabulary were inspected?
+Do the method/class names read like simple game actions?
+Which touched names differ from the legacy equivalent, and why?
+What does run/update/lifecycle do?
 Where does state change?
 Who owns collection/lifecycle?
 Where is persistence?
 Where is packet encoding?
 How many files are needed to understand the normal flow?
 ```
+
+A change can be functionally correct and still fail this gate if the touched
+gameplay code became harder to name, read, or follow without a correctness
+reason.
 
 ---
 

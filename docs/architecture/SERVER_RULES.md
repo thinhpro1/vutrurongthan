@@ -148,18 +148,42 @@ DB            → persistence/
 Static data   → resource/
 ```
 
+The same principle applies to every other gameplay domain, including for example:
+
+```text
+Npc
+Boss
+Item / ItemMap
+Skill
+Effect
+Quest
+Shop
+Dungeon
+Giftcode
+Upgrade
+Event
+Clan
+Pet
+Waypoint / Point
+```
+
 Every meaningful gameplay feature must have an obvious feature center.
 
 Prefer:
 
 ```text
 direct game vocabulary
+short context-aware class/method names
+legacy vocabulary when the meaning is still correct
 cohesive gameplay entities
-obvious lifecycle/update flow
+obvious run/update/lifecycle flow
 few meaningful abstractions
 few unnecessary file jumps
 large cohesive files when appropriate
 ```
+
+A normal gameplay flow should be understandable mostly from the class and method
+names without requiring the reader to understand the architecture first.
 
 Do not split by line count alone.
 
@@ -183,7 +207,7 @@ Every top-level type must justify the navigation cost it introduces.
 
 ---
 
-# 6. Legacy source readability-reference gate
+# 6. Legacy source naming/readability-reference gate
 
 The sibling legacy project:
 
@@ -191,36 +215,250 @@ The sibling legacy project:
 ../rongthanchibi
 ```
 
-is an approved reference for gameplay readability.
+is the approved reference for **gameplay naming, vocabulary, readability, and
+normal gameplay flow**.
 
-Before planning or changing an existing gameplay feature, inspect the equivalent
-legacy implementation when one exists.
+It is not the authority for the new runtime architecture.
+
+## Scope
+
+This gate applies to **all existing gameplay/server feature domains**, not only
+Player and Monster.
+
+Examples include, but are not limited to:
+
+```text
+Player
+Monster
+Boss
+Npc
+Item
+ItemMap
+Skill
+Effect
+Map / Zone
+Waypoint / Point
+Quest
+Shop
+Dungeon
+Giftcode
+Upgrade
+Event
+Clan
+Pet
+resource/catalog gameplay features
+other existing game-domain features
+```
+
+Before planning or changing an existing feature, inspect the equivalent legacy
+implementation when one exists.
+
+If `../rongthanchibi` is available, skipping this inspection is a rule
+violation.
+
+If the sibling project is unavailable or no equivalent feature can be found:
+
+```text
+report the missing/unavailable reference explicitly
+report the files/names/terms searched when applicable
+do not invent legacy names
+do not claim the legacy gate passed
+```
+
+Do not inspect the legacy source only to understand behavior. Study how it makes
+the feature easy to read.
 
 Study:
 
 ```text
 feature center
-inheritance/base-state choices
+class names
+method names
+gameplay vocabulary
+normal call flow
+run/update/lifecycle flow
 field vs behavior balance
-method vocabulary
-update/lifecycle flow
+inheritance/base-state choices
 Manager usage
 package/file organization
-how much gameplay remains locally readable
+how many files are needed to understand the normal flow
 ```
 
-Before coding, report briefly:
+## Mandatory pre-coding report
+
+Before coding, report:
 
 ```text
 Legacy reference inspected:
 - exact relevant files/classes
 
+Legacy vocabulary/flow inspected:
+- exact useful names and normal flow
+- for example: run / update / addNpc / addPoint / attack / move / ...
+
 Adopt:
-- readability strengths worth carrying forward
+- simple naming/readability strengths worth carrying forward
 
 Reject:
 - legacy choices that conflict with current architecture
 ```
+
+A generic statement such as:
+
+```text
+"legacy source inspected"
+```
+
+without exact files/classes and useful vocabulary/flow does not satisfy this
+gate.
+
+## Naming rule
+
+When the legacy source already has a short, clear gameplay name and the new code
+means the same thing, prefer the same simple vocabulary.
+
+Examples of the preferred style:
+
+```text
+run
+update
+init
+load
+save
+add
+remove
+find
+get
+move
+moveTo
+attack
+updateAttack
+findTarget
+injure
+die
+respawn
+addNpc
+removeNpc
+addPoint
+addItem
+removeItem
+addEffect
+removeEffect
+join
+leave
+```
+
+These examples express a naming style. Do not mechanically reuse a name if the
+new semantics are genuinely different.
+
+Do not replace a clear game action with a longer technical phrase merely to
+sound more architectural.
+
+Prefer:
+
+```text
+addNpc
+addPoint
+update
+attack
+move
+```
+
+over:
+
+```text
+registerNpcRuntimeEntity
+resolveWaypointRegistration
+processRuntimeExecutionCycle
+executeAttackTransition
+processMovementOperation
+```
+
+when both versions mean the same thing.
+
+The class already provides context. Avoid repeating that context in every
+method name.
+
+For example, inside a `Zone`, `Monster`, `Npc`, `Quest`, or `Shop`, prefer the
+shortest name that remains clear in that class.
+
+If new code changes a clear legacy name for the same feature concept, the
+coding model MUST explain before coding:
+
+```text
+Legacy name:
+New name:
+Why the legacy name is no longer accurate:
+```
+
+No explanation is required when there is no useful legacy equivalent or the
+semantics are genuinely new, but the new name must still follow the same direct
+game-vocabulary style.
+
+## Technical-name restraint
+
+Words such as:
+
+```text
+Runtime
+Execution
+Context
+Coordinator
+Processor
+Transition
+Resolution
+Operation
+Orchestrator
+Facade
+Command
+Result
+Snapshot
+Handler
+```
+
+are not banned.
+
+They are acceptable at a real technical boundary, such as protocol/network
+handling, persistence, or a genuine execution abstraction.
+
+In gameplay code, do not add these words merely to make a name sound formal.
+
+If a simple game verb expresses the same meaning, use the game verb.
+
+## Flow rule
+
+Prefer code whose normal flow reads top-to-bottom like gameplay:
+
+```text
+run
+→ update
+→ move
+→ attack
+```
+
+or:
+
+```text
+update
+→ findTarget
+→ updateMove
+→ updateAttack
+```
+
+rather than a chain of architecture terminology that must be decoded before the
+gameplay can be understood.
+
+For a new feature with no useful legacy equivalent, follow the same style:
+
+```text
+short names
+direct game vocabulary
+obvious feature center
+few file jumps
+top-to-bottom flow
+```
+
+## What must NOT be copied
 
 The legacy source is NOT authoritative for:
 
@@ -256,6 +494,9 @@ Session reader/writer virtual threads = blocking network infrastructure
 ```
 
 The important distinction is ownership.
+
+The target architecture may differ from legacy while the **gameplay naming and
+reading style should remain comparably simple whenever semantics allow it**.
 
 ---
 
@@ -982,33 +1223,47 @@ Before adding/refactoring gameplay/runtime code, answer:
 ```text
 1. What is the feature center?
 2. Which file should a developer open first?
-3. What does the legacy counterpart look like?
-4. What readability strengths should be adopted?
-5. What obsolete legacy choices must be rejected?
-6. What state truly belongs to the entity?
-7. Is shared Entity/base state genuinely shared?
-8. Who owns collection/lifecycle?
-9. Is Manager really an authority?
-10. Is Service really a cross-owner use case?
-11. Am I keeping Factory/Registry/Scheduler only to shorten another file?
-12. How many files are needed to understand normal gameplay?
-13. Can a larger cohesive file remove unnecessary jumps?
-14. Am I using Optional because it helps, or from habit?
-15. Am I creating a record/result/snapshot because a real boundary needs it?
-16. Does the method list read like game actions?
-17. Does the method name describe what it actually does?
-18. Am I duplicating Template/static data into runtime state?
-19. Are persistence/network/resource boundaries still intact?
-20. Are protocol and concurrency invariants preserved?
-21. Which execution context owns each runtime mutation?
-22. Did Session/network/persistence gain direct mutation access to Zone state?
-23. Did any blocking I/O enter Zone gameplay execution?
-24. Is Snapshot/Optional/Result/temp allocation in a hot path justified?
-25. Did the touched slice retain obsolete architecture only because it existed before?
+3. Which exact legacy files/classes were inspected?
+4. What exact legacy vocabulary and normal flow are useful here?
+5. Which legacy names can be reused because the semantics are still the same?
+6. If a clear legacy name is being changed, why is it no longer accurate?
+7. What readability strengths should be adopted?
+8. What obsolete legacy choices must be rejected?
+9. What state truly belongs to the entity?
+10. Is shared Entity/base state genuinely shared?
+11. Who owns collection/lifecycle?
+12. Is Manager really an authority?
+13. Is Service really a cross-owner use case?
+14. Am I keeping Factory/Registry/Scheduler only to shorten another file?
+15. How many files are needed to understand normal gameplay?
+16. Can a larger cohesive file remove unnecessary jumps?
+17. Am I using Optional because it helps, or from habit?
+18. Am I creating a record/result/snapshot because a real boundary needs it?
+19. Does the class/method list read like simple game actions?
+20. Are names short because class context already supplies the missing meaning?
+21. Did I replace a simple game verb with technical architecture vocabulary?
+22. Does each method name describe what it actually does?
+23. Am I duplicating Template/static data into runtime state?
+24. Are persistence/network/resource boundaries still intact?
+25. Are protocol and concurrency invariants preserved?
+26. Which execution context owns each runtime mutation?
+27. Did Session/network/persistence gain direct mutation access to Zone state?
+28. Did any blocking I/O enter Zone gameplay execution?
+29. Is Snapshot/Optional/Result/temp allocation in a hot path justified?
+30. Did the touched slice retain obsolete architecture only because it existed before?
 ```
 
-If the change makes normal gameplay require more file jumps without creating a
-real boundary, reconsider the design.
+If the change makes the same gameplay idea require:
+
+```text
+more terminology
+longer technical names
+more wrapper/result types
+more file jumps
+```
+
+without a real correctness, ownership, subsystem, or technical boundary,
+reconsider the design.
 
 ---
 
@@ -1018,7 +1273,10 @@ Before implementation:
 
 ```text
 Current feature center:
-Legacy files inspected:
+Legacy files/classes inspected:
+Legacy vocabulary/flow inspected:
+Legacy names reused:
+Legacy names changed + reason:
 Adopt from legacy:
 Reject from legacy:
 Target owner/flow:
@@ -1027,11 +1285,25 @@ Behavior/contracts preserved:
 Focused tests:
 ```
 
+For a feature with no useful legacy equivalent, write:
+
+```text
+Legacy equivalent:
+- none found / not applicable
+
+Naming approach:
+- follows the same short/direct game-vocabulary style
+```
+
+Do not omit the legacy vocabulary section merely because architecture differs.
+
 After implementation:
 
 ```text
 Final feature center:
 Normal gameplay flow:
+Key class/method names:
+Names simplified during implementation/review:
 Files removed/merged/nested/renamed:
 Focused tests run:
 Full Maven gate:
@@ -1048,11 +1320,15 @@ A reviewer must be able to answer quickly:
 ```text
 Where do I start reading this feature?
 What is the main runtime object?
+Which legacy files/classes and vocabulary were inspected?
+Do the touched class/method names read like simple game actions?
+Which touched names differ from the legacy equivalent, and why?
+Can I understand the normal flow without decoding architecture terminology?
 Who owns each runtime mutation?
 What is static definition data?
 What common state comes from a real base entity, if any?
 Who owns collection/lifecycle?
-What happens during update?
+What happens during run/update?
 Where does target selection happen?
 Where does state change?
 Where does combat orchestration happen?
@@ -1069,9 +1345,14 @@ Desired result:
 easy to find
 easy to read top-to-bottom
 easy to follow as game logic
+short/direct names where semantics allow
 few unnecessary jumps
 technical boundaries remain safe
 ```
+
+A change can be functionally correct and still fail review if the touched
+gameplay code becomes harder to name, read, or follow without a correctness
+reason.
 
 When architecture purity and gameplay readability conflict without a correctness
 reason:

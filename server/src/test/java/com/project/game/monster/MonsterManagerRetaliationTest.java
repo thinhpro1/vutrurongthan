@@ -30,8 +30,8 @@ class MonsterManagerRetaliationTest {
         GameplayServices maps = mapsWithMonsters(clock, new Random(12345L));
         Session attacker = session(player(1, 1, 0), maps);
         Session observer = session(player(2, 1, 0), maps);
-        maps.mapService().finishLoad(attacker);
-        maps.mapService().finishLoad(observer);
+        maps.mapManager().finishLoad(attacker);
+        maps.mapManager().finishLoad(observer);
         drain(attacker);
         drain(observer);
 
@@ -55,7 +55,7 @@ class MonsterManagerRetaliationTest {
         MutableClock clock = new MutableClock(1_000_000L);
         GameplayServices maps = mapsWithMonsters(clock, new Random(0));
         Session target = session(player(1, 1, 0).withHp(10), maps);
-        maps.mapService().finishLoad(target);
+        maps.mapManager().finishLoad(target);
         drain(target);
 
         assertTrue(maps.combatService().attackMonster(target, 101, 10L));
@@ -73,7 +73,7 @@ class MonsterManagerRetaliationTest {
         GameplayServices maps = mapsWithMonsters(clock, new Random(0));
         PlayerProfile lowHp = player(1, 1, 0).withHp(5);
         Session target = session(lowHp, maps);
-        maps.mapService().finishLoad(target);
+        maps.mapManager().finishLoad(target);
         drain(target);
 
         assertTrue(maps.combatService().attackMonster(target, 101, 10L));
@@ -90,7 +90,7 @@ class MonsterManagerRetaliationTest {
         MutableClock clock = new MutableClock(1_000_000L);
         GameplayServices maps = mapsWithMonsters(clock, new Random(0));
         Session target = session(player(1, 1, 0).withHp(10), maps);
-        maps.mapService().finishLoad(target);
+        maps.mapManager().finishLoad(target);
         drain(target);
 
         for (int monsterId = 101; monsterId <= 106; monsterId++) {
@@ -117,8 +117,8 @@ class MonsterManagerRetaliationTest {
         GameplayServices maps = mapsWithMonsters(clock, new Random(0));
         Session victim = session(player(1, 1, 0).withHp(10), maps);
         Session observer = session(player(2, 1, 0), maps);
-        maps.mapService().finishLoad(victim);
-        maps.mapService().finishLoad(observer);
+        maps.mapManager().finishLoad(victim);
+        maps.mapManager().finishLoad(observer);
         drain(victim);
         drain(observer);
 
@@ -154,8 +154,8 @@ class MonsterManagerRetaliationTest {
         GameplayServices maps = mapsWithMonsters(clock, new Random(12345L));
         Session attacker = session(player(1, 1, 0), maps);
         Session otherZone = session(player(2, 1, 1), maps);
-        maps.mapService().finishLoad(attacker);
-        maps.mapService().finishLoad(otherZone);
+        maps.mapManager().finishLoad(attacker);
+        maps.mapManager().finishLoad(otherZone);
         drain(attacker);
         drain(otherZone);
 
@@ -175,7 +175,7 @@ class MonsterManagerRetaliationTest {
         MutableClock clock = new MutableClock(1_000_000L);
         GameplayServices maps = mapsWithMonsters(clock, new Random(12345L));
         Session attacker = session(player(1, 1, 0), maps);
-        maps.mapService().finishLoad(attacker);
+        maps.mapManager().finishLoad(attacker);
         drain(attacker);
         assertTrue(maps.combatService().attackMonster(attacker, 101, 10));
         drain(attacker);
@@ -203,7 +203,7 @@ class MonsterManagerRetaliationTest {
         GameplayServices maps = mapsWithMonsters(clock, new Random(12345L));
         Session attacker = session(player(1, 1, 0), maps);
         attacker.bindPlayer(attacker.player().withHp(20));
-        maps.mapService().finishLoad(attacker);
+        maps.mapManager().finishLoad(attacker);
         drain(attacker);
 
         assertTrue(maps.combatService().attackMonster(attacker, 101, 10));
@@ -235,9 +235,9 @@ class MonsterManagerRetaliationTest {
         assertEquals(List.of(), withoutMonsterMoves(drain(attacker)));
         assertEquals(0L, attacker.player().hp());
 
-        maps.mapService().leave(attacker);
+        maps.mapManager().leave(attacker);
         Session survivor = session(player(2, 1, 0), maps);
-        maps.mapService().finishLoad(survivor);
+        maps.mapManager().finishLoad(survivor);
         drain(survivor);
 
         assertTrue(maps.combatService().attackMonster(survivor, 101, 500));

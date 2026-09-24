@@ -234,21 +234,8 @@ public final class Zone {
         return maxPlayer;
     }
 
-    public synchronized boolean add(Session session) {
-        return addAndSnapshot(session).status() == JoinStatus.ADDED;
-    }
-
-    public synchronized boolean remove(Session session) {
-        Objects.requireNonNull(session, "session");
-        PlayerProfile player = requirePlayer(session);
-        return members.remove(player.id(), session);
-    }
-
-    /**
-     * Returns the members present before an added session joined. Admission, capacity, and the
-     * snapshot share this Zone monitor so a join cannot miss another concurrent join.
-     */
-    synchronized JoinResult addAndSnapshot(Session session) {
+    /** Attempts to admit a session and returns the members that were present before it joined. */
+    public synchronized JoinResult addPlayer(Session session) {
         Objects.requireNonNull(session, "session");
         PlayerProfile player = requirePlayer(session);
         Session existingSession = members.get(player.id());
@@ -266,7 +253,13 @@ public final class Zone {
         return new JoinResult(JoinStatus.ADDED, existing);
     }
 
-    synchronized boolean canAccept(Session session) {
+    public synchronized boolean removePlayer(Session session) {
+        Objects.requireNonNull(session, "session");
+        PlayerProfile player = requirePlayer(session);
+        return members.remove(player.id(), session);
+    }
+
+    public synchronized boolean canAddPlayer(Session session) {
         Objects.requireNonNull(session, "session");
         PlayerProfile player = requirePlayer(session);
         Session existing = members.get(player.id());
@@ -279,14 +272,14 @@ public final class Zone {
         return members.size() < maxPlayer;
     }
 
-    public synchronized boolean contains(Session session) {
+    public synchronized boolean hasPlayer(Session session) {
         if (session == null || session.player() == null) {
             return false;
         }
         return members.get(session.player().id()) == session;
     }
 
-    public synchronized boolean containsPlayer(int playerId) {
+    public synchronized boolean hasPlayer(int playerId) {
         return members.containsKey(playerId);
     }
 
@@ -294,8 +287,32 @@ public final class Zone {
         return members.size();
     }
 
-    public synchronized List<Session> snapshot() {
+    public synchronized List<Session> players() {
         return List.copyOf(members.values());
+    }
+
+    /** Updates one local player and returns the observer snapshot for the packet boundary. */
+    public synchronized Move movePlayer(
+            Session session,
+            int expectedMapId,
+            int expectedZoneId,
+            int x,
+            int y) {
+        PlayerProfile current = session == null ? null : session.player();
+        if (current == null || current.hp() <= 0L
+                || current.mapId() != expectedMapId
+                || current.zoneId() != expectedZoneId) {
+            return Move.rejected();
+        }
+
+        boolean currentMember = hasPlayer(session);
+        if (session.state() == SessionState.CLOSED && !currentMember) {
+            return Move.rejected();
+        }
+
+        PlayerProfile moved = current.withPosition(x, y);
+        session.bindPlayer(moved);
+        return new Move(moved, currentMember ? players() : List.of());
     }
 
     public synchronized List<MonsterSnapshot> monsterSnapshots() {
@@ -530,6 +547,21 @@ public final class Zone {
         JoinResult {
             Objects.requireNonNull(status, "status");
             existing = List.copyOf(Objects.requireNonNull(existing, "existing"));
+        }
+    }
+
+    /** Result of a local movement mutation plus the members that should observe it. */
+    public record Move(PlayerProfile player, List<Session> observers) {
+        public Move {
+            observers = List.copyOf(Objects.requireNonNull(observers, "observers"));
+        }
+
+        private static Move rejected() {
+            return new Move(null, List.of());
+        }
+
+        public boolean moved() {
+            return player != null;
         }
     }
 }

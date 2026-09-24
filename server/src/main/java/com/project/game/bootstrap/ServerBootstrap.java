@@ -2,8 +2,7 @@ package com.project.game.bootstrap;
 
 import com.project.game.account.AuthService;
 import com.project.game.combat.CombatService;
-import com.project.game.map.MapService;
-import com.project.game.map.ZoneRegistry;
+import com.project.game.map.MapManager;
 import com.project.game.monster.MonsterFactory;
 import com.project.game.monster.MonsterManager;
 import com.project.game.network.ClientConfig;
@@ -114,10 +113,9 @@ public final class ServerBootstrap {
             MonsterFactory monsterFactory = new MonsterFactory(resources);
             PlayerPacketWriter playerPackets = new PlayerPacketWriter();
             MonsterPacketWriter monsterPackets = new MonsterPacketWriter();
-            ZoneRegistry zones = new ZoneRegistry(mapCatalog, monsterFactory);
-            MapService maps = new MapService(zones, playerPackets);
-            CombatService combat = new CombatService(zones, playerPackets, monsterPackets);
-            MonsterManager monsterManager = new MonsterManager(zones, monsterPackets, playerPackets);
+            MapManager maps = new MapManager(mapCatalog, monsterFactory, playerPackets);
+            CombatService combat = new CombatService(maps, playerPackets, monsterPackets);
+            MonsterManager monsterManager = new MonsterManager(maps, monsterPackets, playerPackets);
 
             JdbcAccountRepository accountRepository =
                     new JdbcAccountRepository(databaseManager.dataSource());

@@ -49,11 +49,11 @@ class ZoneTest {
         Session session = session(TestPlayerProfiles.initial(1L, 7, "alpha1", 0));
 
         assertEquals(0, zone.size());
-        assertTrue(zone.add(session));
+        assertEquals(Zone.JoinStatus.ADDED, zone.addPlayer(session).status());
         assertEquals(1, zone.size());
-        assertTrue(zone.containsPlayer(7));
-        assertTrue(zone.remove(session));
-        assertFalse(zone.containsPlayer(7));
+        assertTrue(zone.hasPlayer(7));
+        assertTrue(zone.removePlayer(session));
+        assertFalse(zone.hasPlayer(7));
         assertEquals(0, zone.size());
     }
 
@@ -62,8 +62,8 @@ class ZoneTest {
         Zone zone = new Zone(0, 0, Integer.MAX_VALUE, List.of());
         Session session = session(TestPlayerProfiles.initial(1L, 7, "alpha1", 0));
 
-        assertTrue(zone.add(session));
-        assertFalse(zone.add(session));
+        assertEquals(Zone.JoinStatus.ADDED, zone.addPlayer(session).status());
+        assertEquals(Zone.JoinStatus.ALREADY_PRESENT, zone.addPlayer(session).status());
         assertEquals(1, zone.size());
     }
 
@@ -73,9 +73,9 @@ class ZoneTest {
         Session first = session(TestPlayerProfiles.initial(1L, 7, "alpha1", 0));
         Session second = session(TestPlayerProfiles.initial(2L, 7, "alpha2", 0));
 
-        assertTrue(zone.add(first));
-        assertFalse(zone.add(second));
-        assertEquals(List.of(first), zone.snapshot());
+        assertEquals(Zone.JoinStatus.ADDED, zone.addPlayer(first).status());
+        assertEquals(Zone.JoinStatus.PLAYER_ID_CONFLICT, zone.addPlayer(second).status());
+        assertEquals(List.of(first), zone.players());
     }
 
     @Test
@@ -84,29 +84,29 @@ class ZoneTest {
         Session first = session(TestPlayerProfiles.initial(1L, 7, "alpha1", 0));
         Session second = session(TestPlayerProfiles.initial(2L, 7, "alpha2", 0));
 
-        assertEquals(Zone.JoinStatus.ADDED, zone.addAndSnapshot(first).status());
-        assertEquals(Zone.JoinStatus.PLAYER_ID_CONFLICT, zone.addAndSnapshot(second).status());
+        assertEquals(Zone.JoinStatus.ADDED, zone.addPlayer(first).status());
+        assertEquals(Zone.JoinStatus.PLAYER_ID_CONFLICT, zone.addPlayer(second).status());
         assertEquals(1, zone.size());
-        assertEquals(List.of(first), zone.snapshot());
-        assertTrue(zone.contains(first));
-        assertFalse(zone.contains(second));
-        assertTrue(zone.canAccept(first));
-        assertFalse(zone.canAccept(second));
+        assertEquals(List.of(first), zone.players());
+        assertTrue(zone.hasPlayer(first));
+        assertFalse(zone.hasPlayer(second));
+        assertTrue(zone.canAddPlayer(first));
+        assertFalse(zone.canAddPlayer(second));
     }
 
     @Test
     void snapshotIsImmutable() {
         Zone zone = new Zone(0, 0, Integer.MAX_VALUE, List.of());
-        zone.add(session(TestPlayerProfiles.initial(1L, 7, "alpha1", 0)));
+        zone.addPlayer(session(TestPlayerProfiles.initial(1L, 7, "alpha1", 0)));
 
-        List<Session> snapshot = zone.snapshot();
+        List<Session> snapshot = zone.players();
         assertThrows(UnsupportedOperationException.class, snapshot::clear);
     }
 
     @Test
     void requiresBoundPlayer() {
         Zone zone = new Zone(0, 0, Integer.MAX_VALUE, List.of());
-        assertThrows(IllegalStateException.class, () -> zone.add(session(null)));
+        assertThrows(IllegalStateException.class, () -> zone.addPlayer(session(null)));
     }
 
     @Test
@@ -121,14 +121,14 @@ class ZoneTest {
         Zone zone = new Zone(0, 0, Integer.MAX_VALUE, List.of());
         Session first = session(TestPlayerProfiles.initial(1L, 1, "alpha1", 0));
         Session second = session(TestPlayerProfiles.initial(2L, 2, "beta22", 0));
-        zone.add(first);
+        zone.addPlayer(first);
 
-        Zone.JoinResult result = zone.addAndSnapshot(second);
+        Zone.JoinResult result = zone.addPlayer(second);
 
         assertEquals(Zone.JoinStatus.ADDED, result.status());
         assertEquals(List.of(first), result.existing());
         assertEquals(2, zone.size());
-        assertTrue(zone.snapshot().containsAll(List.of(first, second)));
+        assertTrue(zone.players().containsAll(List.of(first, second)));
     }
 
     @Test
@@ -137,9 +137,9 @@ class ZoneTest {
         Session first = session(TestPlayerProfiles.initial(1L, 1, "alpha1", 0));
         Session second = session(TestPlayerProfiles.initial(2L, 2, "beta22", 0));
 
-        assertEquals(Zone.JoinStatus.ADDED, zone.addAndSnapshot(first).status());
-        assertEquals(Zone.JoinStatus.ALREADY_PRESENT, zone.addAndSnapshot(first).status());
-        assertEquals(Zone.JoinStatus.FULL, zone.addAndSnapshot(second).status());
+        assertEquals(Zone.JoinStatus.ADDED, zone.addPlayer(first).status());
+        assertEquals(Zone.JoinStatus.ALREADY_PRESENT, zone.addPlayer(first).status());
+        assertEquals(Zone.JoinStatus.FULL, zone.addPlayer(second).status());
         assertEquals(1, zone.size());
         assertEquals(1, zone.maxPlayer());
     }
@@ -752,7 +752,7 @@ class ZoneTest {
             AtomicReference<Throwable> failure) {
         try {
             start.await();
-            if (zone.add(session)) {
+            if (zone.addPlayer(session).status() == Zone.JoinStatus.ADDED) {
                 admitted.incrementAndGet();
             }
         } catch (Throwable exception) {

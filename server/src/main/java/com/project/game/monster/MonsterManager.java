@@ -1,7 +1,7 @@
 package com.project.game.monster;
 
 import com.project.game.map.Zone;
-import com.project.game.map.ZoneRegistry;
+import com.project.game.map.MapManager;
 import com.project.game.network.Session;
 import com.project.game.network.SessionState;
 import com.project.game.network.message.Message;
@@ -16,24 +16,24 @@ import java.util.random.RandomGenerator;
 
 /** Coordinates authoritative monster snapshots, lifecycle ticks, and broadcasts. */
 public final class MonsterManager {
-    private final ZoneRegistry zones;
+    private final MapManager maps;
     private final MonsterPacketWriter monsterPackets;
     private final PlayerPacketWriter playerPackets;
     private final Clock clock;
     private final RandomGenerator random;
 
-    public MonsterManager(ZoneRegistry zones,
+    public MonsterManager(MapManager maps,
                           MonsterPacketWriter monsterPackets,
                           PlayerPacketWriter packets) {
-        this(zones, monsterPackets, packets, Clock.systemUTC(), RandomGenerator.getDefault());
+        this(maps, monsterPackets, packets, Clock.systemUTC(), RandomGenerator.getDefault());
     }
 
-    public MonsterManager(ZoneRegistry zones,
+    public MonsterManager(MapManager maps,
                           MonsterPacketWriter monsterPackets,
                           PlayerPacketWriter packets,
                           Clock clock,
                           RandomGenerator random) {
-        this.zones = Objects.requireNonNull(zones, "zones");
+        this.maps = Objects.requireNonNull(maps, "maps");
         this.monsterPackets = Objects.requireNonNull(monsterPackets, "monsterPackets");
         this.playerPackets = Objects.requireNonNull(packets, "packets");
         this.clock = Objects.requireNonNull(clock, "clock");
@@ -42,12 +42,12 @@ public final class MonsterManager {
 
     public void update() {
         long nowMillis = clock.millis();
-        for (Zone zone : zones.snapshot()) {
+        for (Zone zone : maps.zones()) {
             synchronized (zone) {
                 List<Monster.Move> moved = zone.moveMonsters();
                 List<Monster.Respawn> respawned = zone.respawnDueMonsters(nowMillis);
                 List<MonsterAttack> attacks = zone.attackDueMonsters(nowMillis, random);
-                List<Session> members = zone.snapshot();
+                List<Session> members = zone.players();
                 for (Monster.Move result : moved) {
                     Message packet = monsterPackets.move(result);
                     for (Session member : members) {
@@ -100,6 +100,6 @@ public final class MonsterManager {
     }
 
     public List<MonsterSnapshot> monsterSnapshots(int mapId, int zoneId) {
-        return zones.getOrCreate(mapId, zoneId).monsterSnapshots();
+        return maps.getZone(mapId, zoneId).monsterSnapshots();
     }
 }

@@ -96,11 +96,11 @@ class ZoneMonsterCombatTest {
         Session first = session(TestPlayerProfiles.initial(1L, 7, "alpha1", 1));
         Session equivalent = session(TestPlayerProfiles.initial(2L, 7, "alpha2", 1));
 
-        zone.add(first);
+        zone.addPlayer(first);
 
-        assertTrue(zone.contains(first));
-        assertFalse(zone.contains(equivalent));
-        assertFalse(zone.contains(null));
+        assertTrue(zone.hasPlayer(first));
+        assertFalse(zone.hasPlayer(equivalent));
+        assertFalse(zone.hasPlayer(null));
     }
 
     @Test
@@ -124,7 +124,7 @@ class ZoneMonsterCombatTest {
     void oneMemberDeathRespawnsOnlyAfterNineSecondDeadline() {
         Zone zone = map1Zone();
         Session player = session(TestPlayerProfiles.initial(1L, 1, "alpha1", 1));
-        zone.add(player);
+        zone.addPlayer(player);
 
         zone.damageMonster(101, 1, 500, NOW).orElseThrow();
 
@@ -143,11 +143,11 @@ class ZoneMonsterCombatTest {
         Session first = session(TestPlayerProfiles.initial(1L, 1, "alpha1", 1));
         Session second = session(TestPlayerProfiles.initial(2L, 2, "beta22", 1));
 
-        zone.add(first);
-        zone.add(second);
+        zone.addPlayer(first);
+        zone.addPlayer(second);
 
         zone.damageMonster(101, 1, 500, NOW).orElseThrow();
-        zone.remove(second);
+        zone.removePlayer(second);
 
         assertTrue(zone.respawnDueMonsters(NOW + 8_000).isEmpty());
         assertEquals(List.of(new Monster.Respawn(101, 0, 300L)),
@@ -158,12 +158,12 @@ class ZoneMonsterCombatTest {
     void joinsAfterDeathDoNotShortenExistingRespawnDeadline() {
         Zone zone = map1Zone();
         Session first = session(TestPlayerProfiles.initial(1L, 1, "alpha1", 1));
-        zone.add(first);
+        zone.addPlayer(first);
 
         zone.damageMonster(101, 1, 500, NOW).orElseThrow();
 
         for (int id = 2; id <= 6; id++) {
-            zone.add(session(TestPlayerProfiles.initial(
+            zone.addPlayer(session(TestPlayerProfiles.initial(
                     (long) id, id, "player" + id, 1)));
         }
 
@@ -177,7 +177,7 @@ class ZoneMonsterCombatTest {
     void returnsMultipleDueRespawnsOnceInRuntimeOrder() {
         Zone zone = map1Zone();
         Session first = session(TestPlayerProfiles.initial(1L, 1, "alpha1", 1));
-        zone.add(first);
+        zone.addPlayer(first);
 
         zone.damageMonster(101, 1, 500, NOW).orElseThrow();
         zone.damageMonster(102, 1, 500, NOW).orElseThrow();
@@ -193,7 +193,7 @@ class ZoneMonsterCombatTest {
     void noHostilityProducesNoAttack() {
         Zone zone = map1Zone();
         Session player = playerAt(7, 975, 936);
-        zone.add(player);
+        zone.addPlayer(player);
 
         assertTrue(zone.attackDueMonsters(NOW, new Random(12345L)).isEmpty());
         assertEquals(100L, player.player().hp());
@@ -203,7 +203,7 @@ class ZoneMonsterCombatTest {
     void successfulHitEnablesOneNonLethalRetaliationAndUpdatesAuthoritativeHp() {
         Zone zone = map1Zone();
         Session player = playerAt(7, 975, 936);
-        zone.add(player);
+        zone.addPlayer(player);
 
         zone.damageMonster(101, 7, 10, NOW).orElseThrow();
 
@@ -224,7 +224,7 @@ class ZoneMonsterCombatTest {
         Zone allowed = map1Zone();
         Session twenty = playerAt(20, 975, 936);
         twenty.bindPlayer(twenty.player().withHp(20));
-        allowed.add(twenty);
+        allowed.addPlayer(twenty);
         allowed.damageMonster(101, 20, 10, NOW).orElseThrow();
         assertEquals(10L, allowed.attackDueMonsters(NOW + 1, new Random(1L))
                 .getFirst().hpAfter());
@@ -232,7 +232,7 @@ class ZoneMonsterCombatTest {
         Zone lethal = map1Zone();
         Session ten = playerAt(10, 975, 936);
         ten.bindPlayer(ten.player().withHp(10));
-        lethal.add(ten);
+        lethal.addPlayer(ten);
         lethal.damageMonster(101, 10, 10, NOW).orElseThrow();
         assertEquals(List.of(new MonsterAttack(101, 10, 10L, 0L, true)),
                 lethal.attackDueMonsters(NOW + 1, new Random(1L)));
@@ -243,16 +243,16 @@ class ZoneMonsterCombatTest {
     void closedOrRemovedEnemyIsNotTargeted() {
         Zone closed = map1Zone();
         Session closedPlayer = playerAt(7, 975, 936);
-        closed.add(closedPlayer);
+        closed.addPlayer(closedPlayer);
         closed.damageMonster(101, 7, 10, NOW).orElseThrow();
         closedPlayer.transition(SessionState.CONNECTED, SessionState.CLOSED);
         assertTrue(closed.attackDueMonsters(NOW + 1, new Random(1L)).isEmpty());
 
         Zone removed = map1Zone();
         Session removedPlayer = playerAt(8, 975, 936);
-        removed.add(removedPlayer);
+        removed.addPlayer(removedPlayer);
         removed.damageMonster(101, 8, 10, NOW).orElseThrow();
-        removed.remove(removedPlayer);
+        removed.removePlayer(removedPlayer);
         assertTrue(removed.attackDueMonsters(NOW + 1, new Random(1L)).isEmpty());
     }
 
@@ -260,7 +260,7 @@ class ZoneMonsterCombatTest {
     void failedTargetAttemptConsumesCooldown() {
         Zone zone = map1Zone();
         Session player = playerAt(7, 975 + 901, 936);
-        zone.add(player);
+        zone.addPlayer(player);
         zone.damageMonster(101, 7, 10, NOW).orElseThrow();
 
         assertTrue(zone.attackDueMonsters(NOW + 1, new Random(1L)).isEmpty());
@@ -275,8 +275,8 @@ class ZoneMonsterCombatTest {
         Zone zone = map1Zone();
         Session first = playerAt(7, 975, 936);
         Session second = playerAt(8, 975, 936);
-        zone.add(first);
-        zone.add(second);
+        zone.addPlayer(first);
+        zone.addPlayer(second);
         zone.damageMonster(101, 7, 10, NOW).orElseThrow();
         zone.damageMonster(101, 8, 10, NOW + 1).orElseThrow();
 
@@ -291,7 +291,7 @@ class ZoneMonsterCombatTest {
     void deadMonsterCannotAttackAndRespawnClearsHostility() {
         Zone zone = map1Zone();
         Session player = playerAt(7, 975, 936);
-        zone.add(player);
+        zone.addPlayer(player);
         zone.damageMonster(101, 7, 300, NOW).orElseThrow();
         assertTrue(zone.attackDueMonsters(NOW + 1, new Random(1L)).isEmpty());
 
@@ -302,7 +302,7 @@ class ZoneMonsterCombatTest {
     private static PlayerProfile attackAtX(int x) {
         Zone zone = map1Zone();
         Session player = playerAt(7, x, 936);
-        zone.add(player);
+        zone.addPlayer(player);
         zone.damageMonster(101, 7, 10, NOW).orElseThrow();
         List<MonsterAttack> attacks = zone.attackDueMonsters(NOW + 1, new Random(1L));
         return player.player();

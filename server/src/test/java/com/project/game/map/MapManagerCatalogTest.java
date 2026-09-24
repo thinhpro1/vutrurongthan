@@ -1,6 +1,7 @@
 package com.project.game.map;
 
 import com.project.game.monster.MonsterFactory;
+import com.project.game.network.packet.PlayerPacketWriter;
 import com.project.game.resource.GameResources;
 import com.project.game.testsupport.MapTestSupport;
 import org.junit.jupiter.api.Test;
@@ -16,48 +17,48 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-class ZoneRegistryTest {
+class MapManagerCatalogTest {
     @Test
     void onlineStartupCreatesExactlyMinimumZonesAndOfflineCreatesNone() {
-        ZoneRegistry registry = registry();
+        MapManager registry = registry();
 
-        assertNotNull(registry.find(1, 0));
-        assertNotNull(registry.find(1, 1));
-        assertNull(registry.find(1, 2));
-        assertNull(registry.find(1, 3));
-        assertNull(registry.find(0, 0));
-        assertEquals(2, registry.snapshot().size());
+        assertNotNull(registry.findZone(1, 0));
+        assertNotNull(registry.findZone(1, 1));
+        assertNull(registry.findZone(1, 2));
+        assertNull(registry.findZone(1, 3));
+        assertNull(registry.findZone(0, 0));
+        assertEquals(2, registry.zones().size());
     }
 
     @Test
     void validOnlineZonesAreCreatedLazilyWithinExclusiveMaximum() {
-        ZoneRegistry registry = registry();
+        MapManager registry = registry();
 
-        Zone zone2 = registry.getOrCreate(1, 2);
-        Zone zone3 = registry.getOrCreate(1, 3);
+        Zone zone2 = registry.getZone(1, 2);
+        Zone zone3 = registry.getZone(1, 3);
 
-        assertSame(zone2, registry.getOrCreate(1, 2));
-        assertSame(zone3, registry.find(1, 3));
-        assertEquals(4, registry.snapshot().size());
-        assertThrows(IllegalArgumentException.class, () -> registry.getOrCreate(1, 4));
-        assertThrows(IllegalArgumentException.class, () -> registry.getOrCreate(1, -1));
+        assertSame(zone2, registry.getZone(1, 2));
+        assertSame(zone3, registry.findZone(1, 3));
+        assertEquals(4, registry.zones().size());
+        assertThrows(IllegalArgumentException.class, () -> registry.getZone(1, 4));
+        assertThrows(IllegalArgumentException.class, () -> registry.getZone(1, -1));
     }
 
     @Test
     void unknownAndOfflineMapsCannotCreateNormalZones() {
-        ZoneRegistry registry = registry();
+        MapManager registry = registry();
 
-        assertThrows(IllegalArgumentException.class, () -> registry.getOrCreate(99, 0));
-        assertThrows(IllegalArgumentException.class, () -> registry.getOrCreate(0, 0));
-        assertNull(registry.find(0, 0));
+        assertThrows(IllegalArgumentException.class, () -> registry.getZone(99, 0));
+        assertThrows(IllegalArgumentException.class, () -> registry.getZone(0, 0));
+        assertNull(registry.findZone(0, 0));
     }
 
     @Test
     void eachZoneGetsIndependentMonsterRuntimeState() {
-        ZoneRegistry registry = registry();
+        MapManager registry = registry();
 
-        Zone first = registry.getOrCreate(1, 0);
-        Zone second = registry.getOrCreate(1, 1);
+        Zone first = registry.getZone(1, 0);
+        Zone second = registry.getZone(1, 1);
         assertNotSame(first, second);
         assertEquals(300L, second.monsterSnapshots().getFirst().hp());
 
@@ -70,17 +71,17 @@ class ZoneRegistryTest {
     @Test
     void catalogIsDefensivelyCopiedAndSnapshotContainsOnlyRegisteredZones() {
         Map<Integer, MapTemplate> source = new HashMap<>(maps());
-        ZoneRegistry registry = new ZoneRegistry(source, monsterFactory());
+        MapManager registry = new MapManager(source, monsterFactory(), new PlayerPacketWriter());
         source.clear();
 
-        assertEquals(2, registry.snapshot().size());
-        assertNotNull(registry.find(1, 0));
-        assertNull(registry.find(1, 2));
-        assertEquals(2, registry.find(1, 0).maxPlayer());
+        assertEquals(2, registry.zones().size());
+        assertNotNull(registry.findZone(1, 0));
+        assertNull(registry.findZone(1, 2));
+        assertEquals(2, registry.findZone(1, 0).maxPlayer());
     }
 
-    private static ZoneRegistry registry() {
-        return new ZoneRegistry(maps(), monsterFactory());
+    private static MapManager registry() {
+        return new MapManager(maps(), monsterFactory(), new PlayerPacketWriter());
     }
 
     private static Map<Integer, MapTemplate> maps() {

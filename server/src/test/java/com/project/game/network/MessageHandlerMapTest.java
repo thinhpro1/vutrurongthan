@@ -342,8 +342,8 @@ class MessageHandlerMapTest {
         assertEquals(SessionState.IN_GAME, first.state());
         assertEquals(SessionState.CLOSED, conflicting.state());
         assertEquals(1, gameplay.memberCount(0, 0));
-        assertTrue(gameplay.findZone(0, 0).contains(first));
-        assertFalse(gameplay.findZone(0, 0).contains(conflicting));
+        assertTrue(gameplay.findZone(0, 0).hasPlayer(first));
+        assertFalse(gameplay.findZone(0, 0).hasPlayer(conflicting));
         assertEquals(0, first.queuedMessages());
     }
 

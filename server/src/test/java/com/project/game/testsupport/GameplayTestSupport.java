@@ -43,7 +43,7 @@ public static void joinAtBarrier(CyclicBarrier start, GameplayServices maps,
                                       Session session, AtomicReference<Throwable> failure) {
         try {
             start.await();
-            maps.mapService().finishLoad(session);
+            maps.mapManager().finishLoad(session);
         } catch (Throwable exception) {
             failure.compareAndSet(null, exception);
         }
@@ -102,7 +102,7 @@ public static void joinAtBarrier(CyclicBarrier start, GameplayServices maps,
 
     public static int zoneRegistrySize(GameplayServices maps) {
         try {
-            return maps.zones().snapshot().size();
+            return maps.mapManager().zones().size();
         } catch (RuntimeException exception) {
             throw new AssertionError("unable to inspect zone registry", exception);
         }
@@ -262,7 +262,7 @@ public static void joinAtBarrier(CyclicBarrier start, GameplayServices maps,
 
     @SuppressWarnings("unchecked")
     public static Zone zoneFor(GameplayServices maps, int mapId, int zoneId) {
-        Zone zone = maps.zones().find(mapId, zoneId);
+        Zone zone = maps.findZone(mapId, zoneId);
         if (zone == null) {
             throw new AssertionError("zone not found: " + mapId + "/" + zoneId);
         }
@@ -272,7 +272,7 @@ public static void joinAtBarrier(CyclicBarrier start, GameplayServices maps,
     @SuppressWarnings("unchecked")
     public static List<Monster> runtimeMonsters(GameplayServices maps, int mapId, int zoneId) {
         try {
-            Zone zone = maps.zones().find(mapId, zoneId);
+            Zone zone = maps.findZone(mapId, zoneId);
             if (zone == null) throw new AssertionError("zone not found: " + mapId + "/" + zoneId);
             Field monstersField = Zone.class.getDeclaredField("monsters");
             monstersField.setAccessible(true);

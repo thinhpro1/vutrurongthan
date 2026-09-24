@@ -86,7 +86,7 @@ final class MessageHandlerTestSupport {
     }
 
     static Zone zoneFor(GameplayServices maps, int mapId, int zoneId) throws Exception {
-        Zone zone = maps.zones().find(mapId, zoneId);
+        Zone zone = maps.findZone(mapId, zoneId);
         if (zone == null) {
             throw new AssertionError("zone not found map=" + mapId + " zone=" + zoneId);
         }

@@ -154,8 +154,8 @@ class SessionTest {
                 services, players.create(101L, "alpha1", 0).player(), "user01");
         Session observer = managedSession(
                 services, players.create(202L, "beta22", 0).player(), "user02");
-        gameplay.mapService().finishLoad(mover);
-        gameplay.mapService().finishLoad(observer);
+        gameplay.mapManager().finishLoad(mover);
+        gameplay.mapManager().finishLoad(observer);
         GameplayTestSupport.drain(mover);
         GameplayTestSupport.drain(observer);
 
@@ -165,7 +165,7 @@ class SessionTest {
 
         AtomicBoolean moved = new AtomicBoolean();
         Thread movement = Thread.ofVirtual().start(() ->
-                moved.set(gameplay.mapService().movePlayer(mover, 1260, 640)));
+                moved.set(gameplay.mapManager().movePlayer(mover, 1260, 640)));
 
         assertTrue(repository.updateEntered.await(5, TimeUnit.SECONDS));
         assertEquals(1260, mover.player().x());
@@ -197,7 +197,7 @@ class SessionTest {
         SessionServices services = TestServices.serverServices(auth, resources, gameplay, players);
         Session session = managedSession(
                 services, players.create(101L, "alpha1", 0).player(), "user01");
-        assertTrue(gameplay.mapService().finishLoad(session));
+        assertTrue(gameplay.mapManager().finishLoad(session));
         GameplayTestSupport.drain(session);
         var zone = gameplay.findZone(0, 0);
 
@@ -223,12 +223,12 @@ class SessionTest {
 
         Thread close = Thread.ofVirtual().start(session::close);
         waitForCloseStarted(session);
-        assertEquals(1, gameplay.mapService().memberCount(0, 0));
+        assertEquals(1, gameplay.mapManager().memberCount(0, 0));
         assertFalse(repository.updateEntered.await(100, TimeUnit.MILLISECONDS));
 
         releasePrior.countDown();
         assertTrue(repository.updateEntered.await(5, TimeUnit.SECONDS));
-        assertEquals(0, gameplay.mapService().memberCount(0, 0));
+        assertEquals(0, gameplay.mapManager().memberCount(0, 0));
         repository.allowUpdate.countDown();
         close.join(2_000);
 
@@ -251,7 +251,7 @@ class SessionTest {
                 services, players.create(101L, "alpha1", 0).player(), "user01");
         Session joining = managedSession(
                 services, players.create(202L, "beta22", 0).player(), "user02");
-        assertTrue(gameplay.mapService().finishLoad(observer));
+        assertTrue(gameplay.mapManager().finishLoad(observer));
         GameplayTestSupport.drain(observer);
 
         ArrayBlockingQueue<Message> fullQueue = new ArrayBlockingQueue<>(1);
@@ -260,21 +260,21 @@ class SessionTest {
 
         AtomicBoolean joined = new AtomicBoolean();
         Thread finishLoad = Thread.ofVirtual().start(() ->
-                joined.set(gameplay.mapService().finishLoad(joining)));
+                joined.set(gameplay.mapManager().finishLoad(joining)));
 
         assertTrue(repository.updateEntered.await(5, TimeUnit.SECONDS));
         assertTrue(finishLoad.isAlive());
         CountDownLatch nextZoneAction = new CountDownLatch(1);
         assertTrue(gameplay.findZone(0, 0).submit(nextZoneAction::countDown));
         assertTrue(nextZoneAction.await(5, TimeUnit.SECONDS));
-        assertEquals(1, gameplay.mapService().memberCount(0, 0));
+        assertEquals(1, gameplay.mapManager().memberCount(0, 0));
 
         repository.allowUpdate.countDown();
         finishLoad.join(1_000);
         assertFalse(finishLoad.isAlive());
         assertTrue(joined.get());
         assertEquals(SessionState.CLOSED, observer.state());
-        assertEquals(1, gameplay.mapService().memberCount(0, 0));
+        assertEquals(1, gameplay.mapManager().memberCount(0, 0));
 
         joining.close();
     }
@@ -325,8 +325,8 @@ class SessionTest {
         PlayerProfile observerProfile = players.create(202L, "beta22", 0).player();
         Session mover = managedSession(services, moverProfile, "user01");
         Session observer = managedSession(services, observerProfile, "user02");
-        gameplay.mapService().finishLoad(mover);
-        gameplay.mapService().finishLoad(observer);
+        gameplay.mapManager().finishLoad(mover);
+        gameplay.mapManager().finishLoad(observer);
         GameplayTestSupport.drain(mover);
         GameplayTestSupport.drain(observer);
 
@@ -335,7 +335,7 @@ class SessionTest {
         GameplayTestSupport.replaceSendQueue(observer, observerQueue);
         AtomicBoolean moved = new AtomicBoolean();
         Thread movement = Thread.ofVirtual().start(() ->
-                moved.set(gameplay.mapService().movePlayer(mover, 1260, 640)));
+                moved.set(gameplay.mapManager().movePlayer(mover, 1260, 640)));
         assertTrue(observerQueue.offerEntered.await(5, java.util.concurrent.TimeUnit.SECONDS));
 
         Thread close = Thread.ofVirtual().start(mover::close);
@@ -382,8 +382,8 @@ class SessionTest {
                 .withLocation(1, 0, 1250, 648);
         Session target = managedSession(services, targetProfile, "user01");
         Session observer = managedSession(services, observerProfile, "user02");
-        gameplay.mapService().finishLoad(target);
-        gameplay.mapService().finishLoad(observer);
+        gameplay.mapManager().finishLoad(target);
+        gameplay.mapManager().finishLoad(observer);
         GameplayTestSupport.drain(target);
         GameplayTestSupport.drain(observer);
         assertTrue(gameplay.combatService().attackMonster(target, 101, 10L));

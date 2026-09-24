@@ -29,20 +29,20 @@ import com.project.game.testsupport.GameplayTestSupport.BlockingOfferQueue;
 import com.project.game.testsupport.GameplayTestSupport.BlockingRandom;
 import static org.junit.jupiter.api.Assertions.*;
 
-class MapServiceTest {
+class MapManagerTest {
     @Test
     void finishLoadExchangesPresenceOnlyWithExistingSameZoneMembers() throws Exception {
         GameplayServices maps = mapsWithoutMonsters();
         Session first = session(player(1, 0, 0));
         Session second = session(player(2, 0, 0));
 
-        maps.mapService().finishLoad(first);
+        maps.mapManager().finishLoad(first);
         assertEquals(List.of(), drain(first));
 
-        maps.mapService().finishLoad(second);
+        maps.mapManager().finishLoad(second);
         assertEquals(List.of(MessageName.ADD_PLAYER), commands(drain(second)));
         assertEquals(List.of(MessageName.ADD_PLAYER), commands(drain(first)));
-        assertEquals(2, maps.mapService().memberCount(0, 0));
+        assertEquals(2, maps.mapManager().memberCount(0, 0));
     }
 
     @Test
@@ -51,13 +51,13 @@ class MapServiceTest {
         Session first = session(player(1, 0, 0));
         Session second = session(player(2, 0, 1));
 
-        maps.mapService().finishLoad(first);
-        maps.mapService().finishLoad(second);
+        maps.mapManager().finishLoad(first);
+        maps.mapManager().finishLoad(second);
 
         assertEquals(List.of(), drain(first));
         assertEquals(List.of(), drain(second));
-        assertEquals(1, maps.mapService().memberCount(0, 0));
-        assertEquals(1, maps.mapService().memberCount(0, 1));
+        assertEquals(1, maps.mapManager().memberCount(0, 0));
+        assertEquals(1, maps.mapManager().memberCount(0, 1));
     }
 
     @Test
@@ -65,12 +65,12 @@ class MapServiceTest {
         GameplayServices maps = mapsWithoutMonsters();
         Session first = session(player(1, 0, 0));
         Session second = session(player(2, 0, 0));
-        maps.mapService().finishLoad(first);
-        maps.mapService().finishLoad(second);
+        maps.mapManager().finishLoad(first);
+        maps.mapManager().finishLoad(second);
         drain(first);
         drain(second);
 
-        assertTrue(maps.mapService().movePlayer(second, 1260, 640));
+        assertTrue(maps.mapManager().movePlayer(second, 1260, 640));
         assertEquals(1260, second.player().x());
         assertEquals(640, second.player().y());
 
@@ -90,7 +90,7 @@ class MapServiceTest {
         BlockingRandom random = new BlockingRandom();
         GameplayServices maps = mapsWithMonsters(clock, random);
         Session player = session(player(1, 1, 0), maps);
-        maps.mapService().finishLoad(player);
+        maps.mapManager().finishLoad(player);
         drain(player);
 
         assertTrue(maps.combatService().attackMonster(player, 101, 10));
@@ -130,7 +130,7 @@ class MapServiceTest {
         BlockingRandom random = new BlockingRandom();
         GameplayServices maps = mapsWithMonsters(clock, random);
         Session player = session(player(1, 1, 0), maps);
-        maps.mapService().finishLoad(player);
+        maps.mapManager().finishLoad(player);
         drain(player);
 
         assertTrue(maps.combatService().attackMonster(player, 101, 10));
@@ -173,8 +173,8 @@ class MapServiceTest {
         GameplayServices maps = mapsWithoutMonsters();
         Session mover = session(player(1, 0, 0), maps);
         Session observer = session(player(2, 0, 0), maps);
-        maps.mapService().finishLoad(mover);
-        maps.mapService().finishLoad(observer);
+        maps.mapManager().finishLoad(mover);
+        maps.mapManager().finishLoad(observer);
         drain(mover);
         drain(observer);
         Zone zone = maps.findZone(0, 0);
@@ -233,27 +233,27 @@ class MapServiceTest {
         CountDownLatch joinFinished = new CountDownLatch(1);
         Thread join = Thread.ofVirtual().start(() -> {
             try {
-                joined.set(maps.mapService().finishLoad(joining));
+                joined.set(maps.mapManager().finishLoad(joining));
             } finally {
                 joinFinished.countDown();
             }
         });
 
         assertFalse(joinFinished.await(100, TimeUnit.MILLISECONDS));
-        assertEquals(0, maps.mapService().memberCount(0, 0));
+        assertEquals(0, maps.mapManager().memberCount(0, 0));
         releasePrior.countDown();
         assertTrue(joinFinished.await(5, TimeUnit.SECONDS));
         join.join();
 
         assertTrue(joined.get());
-        assertEquals(1, maps.mapService().memberCount(0, 0));
+        assertEquals(1, maps.mapManager().memberCount(0, 0));
     }
 
     @Test
     void leaveWaitsBehindPriorZoneAction() throws Exception {
         GameplayServices maps = mapsWithoutMonsters();
         Session leaving = session(player(1, 0, 0), maps);
-        assertTrue(maps.mapService().finishLoad(leaving));
+        assertTrue(maps.mapManager().finishLoad(leaving));
         drain(leaving);
         Zone zone = maps.findZone(0, 0);
         CountDownLatch priorStarted = new CountDownLatch(1);
@@ -267,20 +267,20 @@ class MapServiceTest {
         CountDownLatch leaveFinished = new CountDownLatch(1);
         Thread leave = Thread.ofVirtual().start(() -> {
             try {
-                maps.mapService().leave(leaving);
+                maps.mapManager().leave(leaving);
             } finally {
                 leaveFinished.countDown();
             }
         });
 
         assertFalse(leaveFinished.await(100, TimeUnit.MILLISECONDS));
-        assertTrue(zone.contains(leaving));
+        assertTrue(zone.hasPlayer(leaving));
         releasePrior.countDown();
         assertTrue(leaveFinished.await(5, TimeUnit.SECONDS));
         leave.join();
 
-        assertFalse(zone.contains(leaving));
-        assertEquals(0, maps.mapService().memberCount(0, 0));
+        assertFalse(zone.hasPlayer(leaving));
+        assertEquals(0, maps.mapManager().memberCount(0, 0));
     }
 
     @Test
@@ -288,20 +288,20 @@ class MapServiceTest {
         GameplayServices maps = mapsWithoutMonsters();
         Session first = session(player(1, 0, 0));
         Session second = session(player(2, 0, 0));
-        maps.mapService().finishLoad(first);
-        maps.mapService().finishLoad(second);
+        maps.mapManager().finishLoad(first);
+        maps.mapManager().finishLoad(second);
         drain(first);
         drain(second);
 
-        maps.mapService().leave(second);
+        maps.mapManager().leave(second);
         List<Message> removed = drain(first);
         assertEquals(List.of(MessageName.REMOVE_PLAYER), commands(removed));
         var reader = removed.get(0).reader();
         assertEquals(2, reader.readInt());
         assertEquals(0, reader.remaining());
-        assertEquals(1, maps.mapService().memberCount(0, 0));
+        assertEquals(1, maps.mapManager().memberCount(0, 0));
 
-        maps.mapService().leave(second);
+        maps.mapManager().leave(second);
         assertEquals(List.of(), drain(first));
     }
 
@@ -310,10 +310,10 @@ class MapServiceTest {
         GameplayServices maps = mapsWithoutMonsters();
         Session first = session(player(1, 0, 0));
 
-        maps.mapService().finishLoad(first);
-        maps.mapService().finishLoad(first);
+        maps.mapManager().finishLoad(first);
+        maps.mapManager().finishLoad(first);
 
-        assertEquals(1, maps.mapService().memberCount(0, 0));
+        assertEquals(1, maps.mapManager().memberCount(0, 0));
         assertEquals(List.of(), drain(first));
     }
 
@@ -323,14 +323,14 @@ class MapServiceTest {
         Session first = session(player(7, 0, 0));
         Session conflicting = session(player(7, 0, 0));
 
-        assertTrue(maps.mapService().finishLoad(first));
+        assertTrue(maps.mapManager().finishLoad(first));
         drain(first);
 
-        assertFalse(maps.mapService().finishLoad(conflicting));
-        assertEquals(1, maps.mapService().memberCount(0, 0));
+        assertFalse(maps.mapManager().finishLoad(conflicting));
+        assertEquals(1, maps.mapManager().memberCount(0, 0));
         Zone zone = zoneFor(maps, 0, 0);
-        assertTrue(zone.contains(first));
-        assertFalse(zone.contains(conflicting));
+        assertTrue(zone.hasPlayer(first));
+        assertFalse(zone.hasPlayer(conflicting));
         assertEquals(List.of(), drain(first));
         assertEquals(List.of(), drain(conflicting));
     }
@@ -340,13 +340,13 @@ class MapServiceTest {
         GameplayServices maps = mapsWithoutMonsters();
         Session first = session(player(1, 0, 0));
         Session second = session(player(2, 0, 0));
-        maps.mapService().finishLoad(first);
-        maps.mapService().finishLoad(second);
+        maps.mapManager().finishLoad(first);
+        maps.mapManager().finishLoad(second);
         drain(first);
         drain(second);
         second.close();
 
-        assertTrue(maps.mapService().movePlayer(first, 1260, 640));
+        assertTrue(maps.mapManager().movePlayer(first, 1260, 640));
         assertEquals(List.of(), drain(first));
     }
 
@@ -367,7 +367,7 @@ class MapServiceTest {
         if (failure.get() != null) {
             throw new AssertionError("concurrent join failed", failure.get());
         }
-        assertEquals(2, maps.mapService().memberCount(0, 0));
+        assertEquals(2, maps.mapManager().memberCount(0, 0));
         List<Message> firstMessages = drain(first);
         List<Message> secondMessages = drain(second);
         assertEquals(List.of(MessageName.ADD_PLAYER), commands(firstMessages));
@@ -402,7 +402,7 @@ class MapServiceTest {
         }
         assertEquals(1, successes.get());
         assertEquals(1, failures.get());
-        assertEquals(1, maps.mapService().memberCount(0, 0));
+        assertEquals(1, maps.mapManager().memberCount(0, 0));
     }
 
     @Test
@@ -411,13 +411,13 @@ class MapServiceTest {
         Session first = session(player(1, 0, 0));
         Session second = session(player(2, 0, 0));
 
-        maps.mapService().finishLoad(first);
-        maps.mapService().leave(first);
-        assertEquals(0, maps.mapService().memberCount(0, 0));
+        maps.mapManager().finishLoad(first);
+        maps.mapManager().leave(first);
+        assertEquals(0, maps.mapManager().memberCount(0, 0));
 
-        maps.mapService().finishLoad(second);
-        assertEquals(1, maps.mapService().memberCount(0, 0));
-        maps.mapService().finishLoad(first);
+        maps.mapManager().finishLoad(second);
+        assertEquals(1, maps.mapManager().memberCount(0, 0));
+        maps.mapManager().finishLoad(first);
 
         List<Message> firstMessages = drain(first);
         List<Message> secondMessages = drain(second);
@@ -427,7 +427,7 @@ class MapServiceTest {
         var secondReader = secondMessages.get(0).reader();
         assertEquals(2, firstReader.readInt());
         assertEquals(1, secondReader.readInt());
-        assertEquals(2, maps.mapService().memberCount(0, 0));
+        assertEquals(2, maps.mapManager().memberCount(0, 0));
     }
 
     @Test
@@ -435,12 +435,12 @@ class MapServiceTest {
         GameplayServices maps = mapsWithoutMonsters();
         Session leaving = session(player(1, 0, 0), maps);
         Session joining = session(player(2, 0, 0), maps);
-        maps.mapService().finishLoad(leaving);
+        maps.mapManager().finishLoad(leaving);
         drain(leaving);
 
         BlockingOfferQueue joiningQueue = new BlockingOfferQueue();
         replaceSendQueue(joining, joiningQueue);
-        Thread join = Thread.ofVirtual().start(() -> maps.mapService().finishLoad(joining));
+        Thread join = Thread.ofVirtual().start(() -> maps.mapManager().finishLoad(joining));
         assertTrue(joiningQueue.offerEntered.await(5, TimeUnit.SECONDS));
 
         CountDownLatch disconnectFinished = new CountDownLatch(1);
@@ -474,7 +474,7 @@ class MapServiceTest {
         AtomicBoolean joined = new AtomicBoolean();
         Thread finishLoad = Thread.ofVirtual().start(() -> {
             finishStarted.countDown();
-            joined.set(maps.mapService().finishLoad(joining));
+            joined.set(maps.mapManager().finishLoad(joining));
         });
         assertTrue(finishStarted.await(5, TimeUnit.SECONDS));
 
@@ -493,19 +493,19 @@ class MapServiceTest {
         assertFalse(finishLoad.isAlive());
         assertFalse(close.isAlive());
         assertFalse(joined.get());
-        assertEquals(0, maps.mapService().memberCount(0, 0));
+        assertEquals(0, maps.mapManager().memberCount(0, 0));
     }
 
     @Test
     void deadPlayerCannotMove() throws Exception {
         GameplayServices maps = mapsWithoutMonsters();
         Session dead = session(player(1, 0, 0).withHp(0), maps);
-        maps.mapService().finishLoad(dead);
+        maps.mapManager().finishLoad(dead);
         drain(dead);
 
         int xBefore = dead.player().x();
         int yBefore = dead.player().y();
-        assertFalse(maps.mapService().movePlayer(dead, xBefore + 100, yBefore + 100));
+        assertFalse(maps.mapManager().movePlayer(dead, xBefore + 100, yBefore + 100));
         assertEquals(xBefore, dead.player().x());
         assertEquals(yBefore, dead.player().y());
         assertEquals(List.of(), drain(dead));
@@ -515,14 +515,14 @@ class MapServiceTest {
     void closedNonMemberCannotMoveOrMutatePlayer() throws Exception {
         GameplayServices maps = mapsWithoutMonsters();
         Session closed = session(player(1, 0, 0), maps);
-        maps.mapService().finishLoad(closed);
+        maps.mapManager().finishLoad(closed);
         drain(closed);
         closed.close();
 
         PlayerProfile before = closed.player();
-        assertFalse(maps.mapService().movePlayer(closed, before.x() + 100, before.y() + 100));
+        assertFalse(maps.mapManager().movePlayer(closed, before.x() + 100, before.y() + 100));
         assertEquals(before, closed.player());
-        assertEquals(0, maps.mapService().memberCount(0, 0));
+        assertEquals(0, maps.mapManager().memberCount(0, 0));
     }
 
     @Test
@@ -530,15 +530,15 @@ class MapServiceTest {
         GameplayServices maps = mapsWithoutMonsters();
         Session dead = session(player(1, 0, 0).withHp(0), maps);
         Session observer = session(player(2, 0, 0), maps);
-        maps.mapService().finishLoad(dead);
-        maps.mapService().finishLoad(observer);
+        maps.mapManager().finishLoad(dead);
+        maps.mapManager().finishLoad(observer);
         drain(dead);
         drain(observer);
 
         PlayerProfile before = dead.player();
-        assertTrue(maps.mapService().changeMap(dead, 0, 0, 1, 0, 975, 648).isEmpty());
+        assertTrue(maps.mapManager().changeMap(dead, 0, 0, 1, 0, 975, 648).isEmpty());
         assertEquals(before, dead.player());
-        assertEquals(2, maps.mapService().memberCount(0, 0));
+        assertEquals(2, maps.mapManager().memberCount(0, 0));
         assertEquals(List.of(), drain(observer));
     }
 
@@ -547,12 +547,12 @@ class MapServiceTest {
         GameplayServices maps = mapsWithMonsters();
         Session dead = session(player(1, 1, 0).withHp(0), maps);
         Session observer = session(player(2, 1, 0), maps);
-        maps.mapService().finishLoad(dead);
-        maps.mapService().finishLoad(observer);
+        maps.mapManager().finishLoad(dead);
+        maps.mapManager().finishLoad(observer);
         drain(dead);
         drain(observer);
 
-        PlayerProfile revived = maps.mapService().returnTownFromDeath(dead).orElseThrow();
+        PlayerProfile revived = maps.mapManager().returnTownFromDeath(dead).orElseThrow();
 
         assertEquals(0, revived.mapId());
         assertEquals(0, revived.zoneId());
@@ -561,8 +561,8 @@ class MapServiceTest {
         assertEquals(revived.currentStats().maxHp(), revived.hp());
         assertEquals(revived.currentStats().maxMp(), revived.mp());
         assertEquals(revived, dead.player());
-        assertEquals(1, maps.mapService().memberCount(1, 0));
-        assertEquals(0, maps.mapService().memberCount(0, 0));
+        assertEquals(1, maps.mapManager().memberCount(1, 0));
+        assertEquals(0, maps.mapManager().memberCount(0, 0));
 
         List<Message> observerMessages = drain(observer);
         assertEquals(List.of(MessageName.REMOVE_PLAYER), commands(observerMessages));
@@ -577,7 +577,7 @@ class MapServiceTest {
         Session alive = session(player(1, 0, 0), maps);
         PlayerProfile original = alive.player();
 
-        assertTrue(maps.mapService().returnTownFromDeath(alive).isEmpty());
+        assertTrue(maps.mapManager().returnTownFromDeath(alive).isEmpty());
         assertEquals(original, alive.player());
     }
 
@@ -586,9 +586,9 @@ class MapServiceTest {
         GameplayServices maps = mapsWithoutMonsters();
         Session dead = session(player(1, 1, 0).withHp(0), maps);
 
-        assertTrue(maps.mapService().returnTownFromDeath(dead).isPresent());
+        assertTrue(maps.mapManager().returnTownFromDeath(dead).isPresent());
         PlayerProfile once = dead.player();
-        assertTrue(maps.mapService().returnTownFromDeath(dead).isEmpty());
+        assertTrue(maps.mapManager().returnTownFromDeath(dead).isEmpty());
         assertEquals(once, dead.player());
     }
 
@@ -598,21 +598,21 @@ class MapServiceTest {
         Session dead = session(player(1, 1, 0).withHp(0), maps);
         Session observer = session(player(2, 1, 0), maps);
         Session joining = session(player(3, 1, 0), maps);
-        maps.mapService().finishLoad(dead);
-        maps.mapService().finishLoad(observer);
+        maps.mapManager().finishLoad(dead);
+        maps.mapManager().finishLoad(observer);
         drain(dead);
         drain(observer);
 
         BlockingOfferQueue observerQueue = new BlockingOfferQueue();
         replaceSendQueue(observer, observerQueue);
-        Thread revive = Thread.ofVirtual().start(() -> maps.mapService().returnTownFromDeath(dead));
+        Thread revive = Thread.ofVirtual().start(() -> maps.mapManager().returnTownFromDeath(dead));
         assertTrue(observerQueue.offerEntered.await(5, TimeUnit.SECONDS));
 
         CountDownLatch joinFinished = new CountDownLatch(1);
         AtomicBoolean joined = new AtomicBoolean();
         Thread join = Thread.ofVirtual().start(() -> {
             try {
-                joined.set(maps.mapService().finishLoad(joining));
+                joined.set(maps.mapManager().finishLoad(joining));
             } finally {
                 joinFinished.countDown();
             }
@@ -625,8 +625,8 @@ class MapServiceTest {
         join.join();
 
         assertTrue(joined.get());
-        assertEquals(2, maps.mapService().memberCount(1, 0));
-        assertEquals(0, maps.mapService().memberCount(0, 0));
+        assertEquals(2, maps.mapManager().memberCount(1, 0));
+        assertEquals(0, maps.mapManager().memberCount(0, 0));
         assertEquals(List.of(MessageName.REMOVE_PLAYER, MessageName.ADD_PLAYER),
                 commands(drain(observer)));
         assertEquals(List.of(MessageName.ADD_PLAYER), commands(drain(joining)));
@@ -638,11 +638,11 @@ class MapServiceTest {
         Session first = session(player(1, 0, 0), maps);
         Session second = session(player(2, 0, 0), maps);
 
-        assertTrue(maps.mapService().finishLoad(first));
+        assertTrue(maps.mapManager().finishLoad(first));
         drain(first);
 
-        assertFalse(maps.mapService().finishLoad(second));
-        assertEquals(1, maps.mapService().memberCount(0, 0));
+        assertFalse(maps.mapManager().finishLoad(second));
+        assertEquals(1, maps.mapManager().memberCount(0, 0));
         assertEquals(0, second.queuedMessages());
     }
 
@@ -651,18 +651,18 @@ class MapServiceTest {
         GameplayServices maps = policyMaps("ONLINE", "ONLINE", 2, 1);
         Session source = session(player(1, 0, 0), maps);
         Session blocker = session(player(2, 1, 0), maps);
-        maps.mapService().finishLoad(source);
-        maps.mapService().finishLoad(blocker);
+        maps.mapManager().finishLoad(source);
+        maps.mapManager().finishLoad(blocker);
         drain(source);
         drain(blocker);
         PlayerProfile before = source.player();
 
-        assertTrue(maps.mapService().changeMap(
+        assertTrue(maps.mapManager().changeMap(
                 source, 0, 0, 1, 0, 975, 648).isEmpty());
 
         assertEquals(before, source.player());
-        assertEquals(1, maps.mapService().memberCount(0, 0));
-        assertEquals(1, maps.mapService().memberCount(1, 0));
+        assertEquals(1, maps.mapManager().memberCount(0, 0));
+        assertEquals(1, maps.mapManager().memberCount(1, 0));
         assertEquals(List.of(), drain(source));
     }
 
@@ -670,15 +670,15 @@ class MapServiceTest {
     void changeMapRejectsOfflineAndOutOfRangeDestinations() throws Exception {
         GameplayServices maps = policyMaps("ONLINE", "OFFLINE", 1, 1);
         Session source = session(player(1, 0, 0), maps);
-        maps.mapService().finishLoad(source);
+        maps.mapManager().finishLoad(source);
         PlayerProfile before = source.player();
 
-        assertTrue(maps.mapService().changeMap(
+        assertTrue(maps.mapManager().changeMap(
                 source, 0, 0, 1, 0, 975, 648).isEmpty());
-        assertTrue(maps.mapService().changeMap(
+        assertTrue(maps.mapManager().changeMap(
                 source, 0, 0, 0, 2, 975, 648).isEmpty());
         assertEquals(before, source.player());
-        assertEquals(1, maps.mapService().memberCount(0, 0));
+        assertEquals(1, maps.mapManager().memberCount(0, 0));
     }
 
     @Test
@@ -686,15 +686,15 @@ class MapServiceTest {
         GameplayServices maps = policyMaps("ONLINE", "ONLINE", 1, 1);
         Session dead = session(player(1, 1, 0).withHp(0), maps);
         Session blocker = session(player(2, 0, 0), maps);
-        maps.mapService().finishLoad(dead);
-        maps.mapService().finishLoad(blocker);
+        maps.mapManager().finishLoad(dead);
+        maps.mapManager().finishLoad(blocker);
         PlayerProfile before = dead.player();
 
-        assertTrue(maps.mapService().returnTownFromDeath(dead).isEmpty());
+        assertTrue(maps.mapManager().returnTownFromDeath(dead).isEmpty());
 
         assertEquals(before, dead.player());
-        assertEquals(1, maps.mapService().memberCount(1, 0));
-        assertEquals(1, maps.mapService().memberCount(0, 0));
+        assertEquals(1, maps.mapManager().memberCount(1, 0));
+        assertEquals(1, maps.mapManager().memberCount(0, 0));
     }
 
     private static GameplayServices policyMaps(
@@ -724,7 +724,7 @@ class MapServiceTest {
             AtomicReference<Throwable> failure) {
         try {
             start.await();
-            if (maps.mapService().finishLoad(session)) {
+            if (maps.mapManager().finishLoad(session)) {
                 successes.incrementAndGet();
             } else {
                 failures.incrementAndGet();
@@ -744,7 +744,7 @@ class MapServiceTest {
             CountDownLatch finished) {
         started.countDown();
         try {
-            moved.set(maps.mapService().movePlayer(session, x, y));
+            moved.set(maps.mapManager().movePlayer(session, x, y));
         } finally {
             finished.countDown();
         }

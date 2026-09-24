@@ -14,7 +14,7 @@ import java.util.Optional;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-/** Account-scoped durable player service; realtime state remains in Session/MapService. */
+/** Account-scoped durable player service; realtime state remains in Session/MapManager. */
 public final class PlayerService {
     private static final Logger LOGGER = Logger.getLogger(PlayerService.class.getName());
     private static final String SYSTEM_BUSY = "Hệ thống đang bận, vui lòng thử lại";

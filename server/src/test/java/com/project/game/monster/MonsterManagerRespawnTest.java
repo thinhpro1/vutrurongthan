@@ -40,7 +40,7 @@ class MonsterManagerRespawnTest {
         GameplayServices maps = mapsWithMonsters(clock);
         Session attacker = session(player(1, 1, 0), maps);
 
-        maps.mapService().finishLoad(attacker);
+        maps.mapManager().finishLoad(attacker);
         drain(attacker);
         assertTrue(maps.combatService().attackMonster(attacker, 101, 500));
         assertEquals(List.of(MessageName.MONSTER_START_DIE, MessageName.PLAYER_INFO),
@@ -72,8 +72,8 @@ class MonsterManagerRespawnTest {
         Session attacker = session(player(1, 1, 0), maps);
         Session peer = session(player(2, 1, 0), maps);
 
-        maps.mapService().finishLoad(attacker);
-        maps.mapService().finishLoad(peer);
+        maps.mapManager().finishLoad(attacker);
+        maps.mapManager().finishLoad(peer);
         drain(attacker);
         drain(peer);
         assertTrue(maps.combatService().attackMonster(attacker, 101, 500));
@@ -100,8 +100,8 @@ class MonsterManagerRespawnTest {
         Session attacker = session(player(1, 1, 0), maps);
         Session other = session(player(2, 1, 1), maps);
 
-        maps.mapService().finishLoad(attacker);
-        maps.mapService().finishLoad(other);
+        maps.mapManager().finishLoad(attacker);
+        maps.mapManager().finishLoad(other);
         drain(attacker);
         drain(other);
         assertTrue(maps.combatService().attackMonster(attacker, 101, 500));
@@ -122,8 +122,8 @@ class MonsterManagerRespawnTest {
         Session attacker = session(player(1, 1, 0), maps);
         Session peer = session(player(2, 1, 0), maps);
 
-        maps.mapService().finishLoad(attacker);
-        maps.mapService().finishLoad(peer);
+        maps.mapManager().finishLoad(attacker);
+        maps.mapManager().finishLoad(peer);
         drain(attacker);
         drain(peer);
         assertTrue(maps.combatService().attackMonster(attacker, 101, 500));
@@ -145,20 +145,20 @@ class MonsterManagerRespawnTest {
         GameplayServices maps = mapsWithMonsters(clock);
         Session attacker = session(player(1, 1, 0), maps);
 
-        maps.mapService().finishLoad(attacker);
+        maps.mapManager().finishLoad(attacker);
         drain(attacker);
         assertTrue(maps.combatService().attackMonster(attacker, 101, 500));
         drain(attacker);
-        maps.mapService().leave(attacker);
+        maps.mapManager().leave(attacker);
 
-        assertEquals(0, maps.mapService().memberCount(1, 0));
+        assertEquals(0, maps.mapManager().memberCount(1, 0));
         assertEquals(1, maps.monsterManager().monsterSnapshots(1, 0).getFirst().status());
         clock.advanceMillis(9_001L);
         maps.monsterManager().update();
         MonsterSnapshot respawned = maps.monsterManager().monsterSnapshots(1, 0).getFirst();
         assertEquals(300L, respawned.hp());
         assertEquals(0, respawned.status());
-        assertEquals(0, maps.mapService().memberCount(1, 0));
+        assertEquals(0, maps.mapManager().memberCount(1, 0));
     }
 
     @Test
@@ -167,7 +167,7 @@ class MonsterManagerRespawnTest {
         GameplayServices maps = mapsWithMonsters(clock);
         Session attacker = session(player(1, 1, 0), maps);
 
-        maps.mapService().finishLoad(attacker);
+        maps.mapManager().finishLoad(attacker);
         drain(attacker);
         maps.combatService().attackMonster(attacker, 101, 500);
         drain(attacker);

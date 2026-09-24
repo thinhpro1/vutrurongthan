@@ -1,6 +1,6 @@
 package com.project.game.network.handler;
 
-import com.project.game.map.MapService;
+import com.project.game.map.MapManager;
 import com.project.game.monster.MonsterManager;
 import com.project.game.monster.MonsterSnapshot;
 import com.project.game.network.Session;
@@ -20,17 +20,17 @@ import java.util.Optional;
 /** Handles map presence, movement, transitions, death return, and MAP_INFO packets. */
 final class MapHandler {
     private final Session session;
-    private final MapService mapService;
+    private final MapManager mapManager;
     private final MonsterManager monsterManager;
     private final PlayerService playerService;
     private final GameResources resources;
     private final PlayerPacketWriter playerPackets = new PlayerPacketWriter();
     private final MapPacketWriter mapPackets = new MapPacketWriter();
 
-    MapHandler(Session session, MapService mapService, MonsterManager monsterManager,
+    MapHandler(Session session, MapManager mapManager, MonsterManager monsterManager,
                PlayerService playerService, GameResources resources) {
         this.session = session;
-        this.mapService = mapService;
+        this.mapManager = mapManager;
         this.monsterManager = monsterManager;
         this.playerService = playerService;
         this.resources = resources;
@@ -40,7 +40,7 @@ final class MapHandler {
         if (message.payload().length != 0) {
             throw new IOException("trailing FINISH_LOAD_MAP payload bytes");
         }
-        if (!mapService.finishLoad(session)) {
+        if (!mapManager.finishLoad(session)) {
             throw new IOException("cannot join map zone");
         }
     }
@@ -49,7 +49,7 @@ final class MapHandler {
         if (message.payload().length != 0) {
             throw new IOException("trailing RETURN_TOWN_FROM_DIE payload bytes");
         }
-        Optional<PlayerProfile> revived = mapService.returnTownFromDeath(session);
+        Optional<PlayerProfile> revived = mapManager.returnTownFromDeath(session);
         if (revived.isEmpty()) {
             return;
         }
@@ -93,7 +93,7 @@ final class MapHandler {
             return;
         }
 
-        Optional<PlayerProfile> changed = mapService.changeMap(
+        Optional<PlayerProfile> changed = mapManager.changeMap(
                 session,
                 player.mapId(),
                 player.zoneId(),
@@ -122,7 +122,7 @@ final class MapHandler {
             throw new IOException("trailing PLAYER_MOVE payload bytes");
         }
 
-        mapService.movePlayer(session, x, y);
+        mapManager.movePlayer(session, x, y);
     }
 
     void sendMapInfo(PlayerProfile player) throws IOException {
@@ -138,7 +138,7 @@ final class MapHandler {
             waypointTargetNames.add(target.name());
         }
         List<MonsterSnapshot> monsters;
-        if (!mapService.ensureZone(map.id(), player.zoneId())) {
+        if (!mapManager.ensureZone(map.id(), player.zoneId())) {
             throw new IOException("invalid map zone: " + map.id() + "/" + player.zoneId());
         }
         try {

@@ -4,8 +4,7 @@ import com.project.game.account.AuthService;
 import com.project.game.player.PlayerService;
 import com.project.game.resource.GameResources;
 import com.project.game.network.SessionServices;
-import com.project.game.map.MapService;
-import com.project.game.map.ZoneRegistry;
+import com.project.game.map.MapManager;
 import com.project.game.combat.CombatService;
 import com.project.game.monster.MonsterFactory;
 import com.project.game.monster.MonsterManager;
@@ -36,17 +35,16 @@ public final class TestServices {
     public static SessionServices serverServices(AuthService auth, GameResources resources) {
         PlayerPacketWriter playerPackets = new PlayerPacketWriter();
         MonsterPacketWriter monsterPackets = new MonsterPacketWriter();
-        ZoneRegistry zones = new ZoneRegistry(MapTestSupport.canonicalMaps(), new MonsterFactory(resources));
-        MapService maps = new MapService(zones, playerPackets);
-        CombatService combat = new CombatService(zones, playerPackets, monsterPackets);
-        MonsterManager monsterManager = new MonsterManager(zones, monsterPackets, playerPackets);
+        MapManager maps = new MapManager(MapTestSupport.canonicalMaps(), new MonsterFactory(resources), playerPackets);
+        CombatService combat = new CombatService(maps, playerPackets, monsterPackets);
+        MonsterManager monsterManager = new MonsterManager(maps, monsterPackets, playerPackets);
         return new SessionServices(auth, resources, maps, combat, monsterManager,
                 new PlayerService(playerRepository(auth)));
     }
 
     public static SessionServices serverServices(AuthService auth, GameResources resources,
                                                 GameplayServices gameplay) {
-        return new SessionServices(auth, resources, gameplay.mapService(),
+        return new SessionServices(auth, resources, gameplay.mapManager(),
                 gameplay.combatService(), gameplay.monsterManager(),
                 new PlayerService(playerRepository(auth)));
     }
@@ -54,7 +52,7 @@ public final class TestServices {
     public static SessionServices serverServices(AuthService auth, GameResources resources,
                                                 GameplayServices gameplay,
                                                 PlayerService players) {
-        return new SessionServices(auth, resources, gameplay.mapService(),
+        return new SessionServices(auth, resources, gameplay.mapManager(),
                 gameplay.combatService(), gameplay.monsterManager(), players);
     }
 

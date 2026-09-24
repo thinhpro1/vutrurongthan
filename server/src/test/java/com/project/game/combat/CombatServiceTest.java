@@ -31,15 +31,15 @@ import static org.junit.jupiter.api.Assertions.*;
 class CombatServiceTest {
     @Test
     void targetingAndAttackingDoNotCreateAbsentZones() {
-        ZoneRegistry zones = new ZoneRegistry(
+        MapManager zones = new MapManager(
                 com.project.game.testsupport.MapTestSupport.canonicalMaps(),
-                new MonsterFactory(GameResources.unavailable()));
+                new MonsterFactory(GameResources.unavailable()), new PlayerPacketWriter());
         CombatService combat = new CombatService(
                 zones, new PlayerPacketWriter(), new MonsterPacketWriter());
 
         assertFalse(combat.canTargetMonster(null, 101));
         assertFalse(combat.attackMonster(null, 101, 1L));
-        assertNull(zones.find(1, 3));
+        assertNull(zones.findZone(1, 3));
     }
 
     @Test
@@ -59,7 +59,7 @@ class CombatServiceTest {
         assertEquals(300L, maps.monsterManager().monsterSnapshots(1, 0).getFirst().hp());
         Session session = session(player(1, 1, 0), maps);
 
-        assertEquals(0, maps.mapService().memberCount(1, 0));
+        assertEquals(0, maps.mapManager().memberCount(1, 0));
         assertFalse(maps.combatService().canTargetMonster(session, 101));
         assertFalse(maps.combatService().attackMonster(session, 101, 10));
         assertEquals(300L, maps.monsterManager().monsterSnapshots(1, 0).getFirst().hp());
@@ -69,7 +69,7 @@ class CombatServiceTest {
     void deadPlayerCannotTargetOrAttackMonster() throws Exception {
         GameplayServices maps = mapsWithMonsters();
         Session dead = session(player(1, 1, 0).withHp(0), maps);
-        maps.mapService().finishLoad(dead);
+        maps.mapManager().finishLoad(dead);
         drain(dead);
 
         assertFalse(maps.combatService().canTargetMonster(dead, 101));
@@ -82,7 +82,7 @@ class CombatServiceTest {
     void postFinishAttackSendsAuthoritativeInjureToAttacker() throws Exception {
         GameplayServices maps = mapsWithMonsters();
         Session attacker = session(player(1, 1, 0), maps);
-        maps.mapService().finishLoad(attacker);
+        maps.mapManager().finishLoad(attacker);
         drain(attacker);
 
         assertTrue(maps.combatService().canTargetMonster(attacker, 101));
@@ -101,7 +101,7 @@ class CombatServiceTest {
     void nonKillingHitDoesNotAwardPotential() throws Exception {
         GameplayServices maps = mapsWithMonsters();
         Session attacker = session(player(1, 1, 0), maps);
-        maps.mapService().finishLoad(attacker);
+        maps.mapManager().finishLoad(attacker);
         drain(attacker);
 
         long powerBefore = attacker.player().power();
@@ -118,7 +118,7 @@ class CombatServiceTest {
     void killingHitAwardsConfiguredPotentialOnlyToKiller() throws Exception {
         GameplayServices maps = mapsWithMonsters();
         Session attacker = session(player(1, 1, 0), maps);
-        maps.mapService().finishLoad(attacker);
+        maps.mapManager().finishLoad(attacker);
         drain(attacker);
 
         long powerBefore = attacker.player().power();
@@ -148,7 +148,7 @@ class CombatServiceTest {
                 .withPotential(Long.MAX_VALUE - 5L);
         Session attacker = session(nearMax, maps);
 
-        maps.mapService().finishLoad(attacker);
+        maps.mapManager().finishLoad(attacker);
         drain(attacker);
 
         assertTrue(maps.combatService().attackMonster(attacker, 101, 500L));
@@ -172,8 +172,8 @@ class CombatServiceTest {
         GameplayServices maps = mapsWithMonsters();
         Session killer = session(player(1, 1, 0), maps);
         Session observer = session(player(2, 1, 0), maps);
-        maps.mapService().finishLoad(killer);
-        maps.mapService().finishLoad(observer);
+        maps.mapManager().finishLoad(killer);
+        maps.mapManager().finishLoad(observer);
         drain(killer);
         drain(observer);
 
@@ -194,7 +194,7 @@ class CombatServiceTest {
     void deadMonsterCannotAwardDuplicatePotential() throws Exception {
         GameplayServices maps = mapsWithMonsters();
         Session attacker = session(player(1, 1, 0), maps);
-        maps.mapService().finishLoad(attacker);
+        maps.mapManager().finishLoad(attacker);
         drain(attacker);
 
         assertTrue(maps.combatService().attackMonster(attacker, 101, 500L));
@@ -212,7 +212,7 @@ class CombatServiceTest {
         MutableClock clock = new MutableClock(1_000_000L);
         GameplayServices maps = mapsWithMonsters(clock);
         Session attacker = session(player(1, 1, 0), maps);
-        maps.mapService().finishLoad(attacker);
+        maps.mapManager().finishLoad(attacker);
         drain(attacker);
 
         long before = attacker.player().potential();
@@ -237,18 +237,18 @@ class CombatServiceTest {
     void movementAndMapChangePreserveRewardedPotential() throws Exception {
         GameplayServices maps = mapsWithMonsters();
         Session attacker = session(player(1, 1, 0), maps);
-        maps.mapService().finishLoad(attacker);
+        maps.mapManager().finishLoad(attacker);
         drain(attacker);
 
         assertTrue(maps.combatService().attackMonster(attacker, 101, 500L));
         drain(attacker);
         long rewarded = attacker.player().potential();
 
-        assertTrue(maps.mapService().movePlayer(attacker, 1260, 640));
+        assertTrue(maps.mapManager().movePlayer(attacker, 1260, 640));
         assertEquals(rewarded, attacker.player().potential());
 
         PlayerProfile moved = attacker.player();
-        var changed = maps.mapService().changeMap(
+        var changed = maps.mapManager().changeMap(
                 attacker,
                 moved.mapId(),
                 moved.zoneId(),
@@ -267,8 +267,8 @@ class CombatServiceTest {
         GameplayServices maps = mapsWithMonsters();
         Session attacker = session(player(1, 1, 0), maps);
         Session peer = session(player(2, 1, 0), maps);
-        maps.mapService().finishLoad(attacker);
-        maps.mapService().finishLoad(peer);
+        maps.mapManager().finishLoad(attacker);
+        maps.mapManager().finishLoad(peer);
         drain(attacker);
         drain(peer);
 
@@ -285,8 +285,8 @@ class CombatServiceTest {
         GameplayServices maps = mapsWithMonsters();
         Session attacker = session(player(1, 1, 0), maps);
         Session otherZone = session(player(2, 1, 1), maps);
-        maps.mapService().finishLoad(attacker);
-        maps.mapService().finishLoad(otherZone);
+        maps.mapManager().finishLoad(attacker);
+        maps.mapManager().finishLoad(otherZone);
         drain(attacker);
         drain(otherZone);
 
@@ -301,8 +301,8 @@ class CombatServiceTest {
         GameplayServices maps = mapsWithMonsters();
         Session first = session(player(1, 1, 0), maps);
         Session second = session(player(2, 1, 0), maps);
-        maps.mapService().finishLoad(first);
-        maps.mapService().finishLoad(second);
+        maps.mapManager().finishLoad(first);
+        maps.mapManager().finishLoad(second);
         drain(first);
         drain(second);
         for (int i = 0; i < 29; i++) {

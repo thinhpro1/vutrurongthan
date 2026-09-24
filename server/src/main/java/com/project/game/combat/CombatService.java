@@ -3,7 +3,7 @@ package com.project.game.combat;
 import com.project.game.monster.Monster;
 
 import com.project.game.map.Zone;
-import com.project.game.map.ZoneRegistry;
+import com.project.game.map.MapManager;
 import com.project.game.network.Session;
 import com.project.game.network.SessionState;
 import com.project.game.network.message.Message;
@@ -16,22 +16,22 @@ import java.util.Objects;
 
 /** Coordinates player-to-monster targeting, damage, broadcasts, and rewards. */
 public final class CombatService {
-    private final ZoneRegistry zones;
+    private final MapManager maps;
     private final PlayerPacketWriter packets;
     private final MonsterPacketWriter monsterPackets;
     private final Clock clock;
 
-    public CombatService(ZoneRegistry zones,
+    public CombatService(MapManager maps,
                          PlayerPacketWriter packets,
                          MonsterPacketWriter monsterPackets) {
-        this(zones, packets, monsterPackets, Clock.systemUTC());
+        this(maps, packets, monsterPackets, Clock.systemUTC());
     }
 
-    public CombatService(ZoneRegistry zones,
+    public CombatService(MapManager maps,
                          PlayerPacketWriter packets,
                          MonsterPacketWriter monsterPackets,
                          Clock clock) {
-        this.zones = Objects.requireNonNull(zones, "zones");
+        this.maps = Objects.requireNonNull(maps, "maps");
         this.packets = Objects.requireNonNull(packets, "packets");
         this.monsterPackets = Objects.requireNonNull(monsterPackets, "monsterPackets");
         this.clock = Objects.requireNonNull(clock, "clock");
@@ -47,7 +47,7 @@ public final class CombatService {
             return false;
         }
 
-        Zone zone = zones.find(player.mapId(), player.zoneId());
+        Zone zone = maps.findZone(player.mapId(), player.zoneId());
         if (zone == null) {
             return false;
         }
@@ -56,7 +56,7 @@ public final class CombatService {
             PlayerProfile current = session.player();
             return current != null
                     && current.hp() > 0L
-                    && zone.contains(session)
+                    && zone.hasPlayer(session)
                     && zone.hasLiveMonster(monsterId);
         }
     }
@@ -73,14 +73,14 @@ public final class CombatService {
             return false;
         }
 
-        Zone zone = zones.find(player.mapId(), player.zoneId());
+        Zone zone = maps.findZone(player.mapId(), player.zoneId());
         if (zone == null) {
             return false;
         }
 
         synchronized (zone) {
             PlayerProfile current = session.player();
-            if (current == null || current.hp() <= 0L || !zone.contains(session)) {
+            if (current == null || current.hp() <= 0L || !zone.hasPlayer(session)) {
                 return false;
             }
 
@@ -94,7 +94,7 @@ public final class CombatService {
             PlayerProfile rewarded = null;
             if (combat.killed() && combat.potentialReward() > 0L) {
                 PlayerProfile rewardCurrent = session.player();
-                if (rewardCurrent == null || !zone.contains(session)) {
+                if (rewardCurrent == null || !zone.hasPlayer(session)) {
                     throw new IllegalStateException(
                             "killer left authoritative zone during serialized attack");
                 }
@@ -108,7 +108,7 @@ public final class CombatService {
                     ? monsterPackets.startDie(combat)
                     : monsterPackets.injure(combat);
 
-            for (Session member : zone.snapshot()) {
+            for (Session member : zone.players()) {
                 if (member.state() != SessionState.CLOSED) {
                     member.send(packet);
                 }

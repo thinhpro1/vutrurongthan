@@ -26,25 +26,26 @@ class MonsterManagerSnapshotTest {
 
     @Test
     void snapshotsUseOnlyPolicyValidZonesAndLifecycleVisitsRegisteredZones() {
-        ZoneRegistry zones = new ZoneRegistry(
+        MapManager zones = new MapManager(
                 com.project.game.testsupport.MapTestSupport.canonicalMaps(),
                 new MonsterFactory(
                 GameResources.fromFrameRoot(Path.of("resources", "json"),
                         com.project.game.testsupport.MapTestSupport.canonicalMaps(), 2,
-                        com.project.game.testsupport.MonsterTestSupport.canonicalRepository())));
+                        com.project.game.testsupport.MonsterTestSupport.canonicalRepository())),
+                new PlayerPacketWriter());
         MonsterManager monsters = new MonsterManager(
                 zones, new MonsterPacketWriter(), new PlayerPacketWriter());
 
-        assertEquals(2, zones.snapshot().size());
+        assertEquals(2, zones.zones().size());
         monsters.update();
-        assertEquals(2, zones.snapshot().size());
+        assertEquals(2, zones.zones().size());
 
         assertNotNull(monsters.monsterSnapshots(0, 0));
-        assertEquals(2, zones.snapshot().size());
+        assertEquals(2, zones.zones().size());
         assertNotNull(monsters.monsterSnapshots(0, 1));
-        assertEquals(3, zones.snapshot().size());
+        assertEquals(3, zones.zones().size());
         monsters.update();
-        assertEquals(3, zones.snapshot().size());
+        assertEquals(3, zones.zones().size());
         assertThrows(IllegalArgumentException.class, () -> monsters.monsterSnapshots(99, 0));
     }
 
@@ -58,14 +59,14 @@ class MonsterManagerSnapshotTest {
         assertEquals(
                 List.of(101, 102, 103, 104, 105, 106),
                 monsters.stream().map(MonsterSnapshot::id).toList());
-        assertEquals(0, maps.mapService().memberCount(1, 0));
+        assertEquals(0, maps.mapManager().memberCount(1, 0));
     }
 
     @Test
     void mapZeroZoneStartsWithoutMonsters() {
         GameplayServices maps = mapsWithMonsters();
         assertTrue(maps.monsterManager().monsterSnapshots(0, 0).isEmpty());
-        assertEquals(0, maps.mapService().memberCount(0, 0));
+        assertEquals(0, maps.mapManager().memberCount(0, 0));
     }
 
     @Test
@@ -74,10 +75,10 @@ class MonsterManagerSnapshotTest {
         List<MonsterSnapshot> before = maps.monsterManager().monsterSnapshots(1, 0);
         Session joining = session(player(1, 1, 0), maps);
 
-        assertEquals(0, maps.mapService().memberCount(1, 0));
-        maps.mapService().finishLoad(joining);
+        assertEquals(0, maps.mapManager().memberCount(1, 0));
+        maps.mapManager().finishLoad(joining);
 
-        assertEquals(1, maps.mapService().memberCount(1, 0));
+        assertEquals(1, maps.mapManager().memberCount(1, 0));
         assertEquals(before, maps.monsterManager().monsterSnapshots(1, 0));
     }
 
@@ -130,6 +131,6 @@ class MonsterManagerSnapshotTest {
 
         assertEquals(first.get(), second.get());
         assertEquals(6, first.get().size());
-        assertEquals(0, maps.mapService().memberCount(1, 0));
+        assertEquals(0, maps.mapManager().memberCount(1, 0));
     }
 }

@@ -6,7 +6,7 @@ import com.project.game.network.handler.MessageHandler;
 import com.project.game.network.message.Message;
 import com.project.game.network.transport.ClientTransport;
 import com.project.game.player.PlayerProfile;
-import com.project.game.map.MapService;
+import com.project.game.map.MapManager;
 import com.project.game.network.SessionServices;
 import com.project.game.player.PlayerService;
 
@@ -35,7 +35,7 @@ public final class Session implements AutoCloseable {
     private final BlockingQueue<Message> sendQueue;
     private final AtomicReference<SessionState> state = new AtomicReference<>(SessionState.CONNECTED);
     private final AtomicBoolean closed = new AtomicBoolean();
-    private final MapService mapService;
+    private final MapManager mapManager;
     private final PlayerService playerService;
     private final Object writeLock = new Object();
     private final MessageHandler handler;
@@ -63,7 +63,7 @@ public final class Session implements AutoCloseable {
         this.handshakeKey = handshakeKey.clone();
         this.cipher = new LegacyCipher(handshakeKey);
         this.sendQueue = new ArrayBlockingQueue<>(queueSize);
-        this.mapService = Objects.requireNonNull(services, "services").maps();
+        this.mapManager = Objects.requireNonNull(services, "services").maps();
         this.playerService = services.players();
         this.handler = new MessageHandler(this, services, networkConfig);
     }
@@ -209,7 +209,7 @@ public final class Session implements AutoCloseable {
             writerThread.interrupt();
         }
         try {
-            mapService.leave(this);
+            mapManager.leave(this);
         } catch (RuntimeException exception) {
             LOGGER.log(Level.WARNING, "Map cleanup failed for session id=" + id, exception);
         }

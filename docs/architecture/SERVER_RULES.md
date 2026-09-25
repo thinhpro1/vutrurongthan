@@ -1,547 +1,371 @@
-# SERVER RULES
+# SERVER RULES V2.1
 
-> **Status:** Sole authoritative architecture, coding, readability, and safety contract for `server/**`
+> **Status:** Sole authoritative architecture, coding, readability, ownership, concurrency, persistence, and safety contract for `server/**`
 >
-> **Applies to:** server implementation, refactor, review, testing, shared Unity/server contracts, persistence, protocol, concurrency, gameplay structure, naming, and readability.
+> **Applies to:** planning, implementation, refactor, review, testing, protocol, persistence, gameplay, concurrency, naming, package/file structure, and Java style.
 >
-> **Reference source:** sibling legacy project `../rongthanchibi` may be used as a readability/gameplay-flow reference only.
+> **Reference source:** sibling legacy project `../rongthanchibi` / legacy `rongthan` source is the main readability and gameplay-flow reference.
+>
+> **Primary goal:** preserve correctness while keeping gameplay code simple enough that a beginner Java developer can follow the normal flow without first learning architecture jargon.
 
 ---
 
-# 1. Core goal
+# 1. Non-negotiable rules
 
-The server must be:
-
-```text
-easy to find
-easy to read
-easy to modify
-hard to accidentally break
-```
-
-This is a realtime game server.
-
-Gameplay code should read like game logic, not like framework machinery.
-
-Prefer:
+These rules override style preferences and must be checked on every gameplay task.
 
 ```text
-direct game vocabulary
-feature-first packages
-obvious feature centers
-cohesive gameplay files
-few meaningful abstractions
-few unnecessary file jumps
-top-to-bottom execution flow
+1. Feature.java owns the main feature behavior.
+2. Manager does not become the default place for gameplay logic.
+3. Service means message / packet / send / broadcast unless explicitly approved otherwise.
+4. Zone owns execution timing and mutation ordering.
+5. Entity owns the behavior that naturally describes that entity.
+6. Repository owns persistence.
+7. Handler owns protocol parsing/dispatch, not gameplay.
+8. Packet writer owns binary serialization.
+9. One mutable gameplay concept must have one authoritative owner.
+10. Do not add abstraction for hypothetical future needs.
+11. Prefer simple imperative Java over clever Java when both are correct.
+12. Avoid unnecessary file jumps.
+13. Inspect the equivalent legacy feature before changing an existing gameplay feature.
+14. Do not block Zone execution on JDBC, socket I/O, HTTP, filesystem I/O, or external waits.
+15. Do not nest cross-Zone owner waits.
+16. Do not change protocol bytes, DB schema, persistence ordering, or gameplay behavior unless explicitly approved.
+17. Do not silently turn temporary coordination code into permanent feature ownership.
+18. If ownership is unclear, stop planning implementation and resolve ownership first.
 ```
-
-Do not optimize for:
-
-```text
-maximum number of interfaces
-maximum immutability ceremony
-maximum Design Patterns
-perfectly symmetrical folders
-one top-level file per tiny type
-small line counts
-architecture diagrams that are cleaner than the code
-```
-
-Correctness boundaries still win over style.
 
 ---
 
-# 2. Authority and priority
+# 2. Authority order
 
 When sources disagree, use this order:
 
 ```text
-1. Current production runtime / database / protocol / concurrency invariants
-2. This file: docs/architecture/SERVER_RULES.md
-3. Newly approved feature/refactor design created after this rule
-4. server/README.md for operational instructions
+1. Locked correctness invariants
+   - protocol compatibility
+   - database schema/data safety
+   - Zone single-writer ownership
+   - persistence ordering
+   - Session/account ordering
+   - approved concurrency invariants
+
+2. docs/architecture/SERVER_RULES.md
+
+3. Newly approved task/fix plan created after this rule
+
+4. server/README.md for operational commands
+
 5. Older plans/specifications
-6. ../rongthanchibi legacy source
+
+6. Legacy source
 ```
 
-The approved target architecture does not authorize an early or repo-wide
-cutover. Until a dedicated migration phase replaces an existing contract, the
-current production contract remains authoritative.
+Important:
+
+```text
+Current code structure is NOT automatically authoritative.
+```
+
+Existing production structure may be temporary or wrong.
+
+A coding model must not justify bad ownership by saying:
+
+```text
+"the current code already does it this way"
+```
+
+Only locked correctness behavior has priority over this rule.
 
 ---
 
-# 3. Mandatory coding-model gate
+# 3. Mandatory pre-coding gate
 
-Before planning, reviewing, testing, or changing `server/**`, the coding model MUST:
+Before planning or changing `server/**`, the coding model MUST:
 
 ```text
 1. Read this file.
 2. Inspect the current implementation.
-3. Identify the feature owner and feature center.
-4. Identify protocol impact.
-5. Identify persistence impact.
-6. Identify concurrency impact.
-7. Identify behavior that must remain unchanged.
-8. Identify focused tests required.
+3. Identify the feature center.
+4. Identify the Manager responsibility.
+5. Identify the Service responsibility.
+6. Identify protocol impact.
+7. Identify persistence impact.
+8. Identify concurrency/execution owner.
+9. Identify authoritative mutable state.
+10. Inspect the equivalent legacy implementation when available.
+11. State behavior that must remain unchanged.
+12. State focused tests required.
 ```
 
-For gameplay feature work, also follow the legacy-reference gate below.
-
-If this file is missing or unreadable:
+If this file cannot be read:
 
 ```text
 STOP before changing server code.
 ```
 
-Do not claim runtime success from static review alone.
+If ownership is still unclear after inspection:
+
+```text
+STOP before implementation.
+Resolve ownership first.
+```
 
 ---
 
-# 4. Current technology contract
+# 4. Default feature shape
 
-Current server stack:
-
-```text
-Language             Java 21
-Build                 Maven
-JSON                  Gson
-Connection pool       HikariCP
-Database access       Plain JDBC
-Database              MySQL-compatible
-Tests                 JUnit Jupiter
-Networking            ServerSocket / Socket
-TLS                   Java SSL/TLS
-Protocol              Legacy binary protocol compatible with Unity client
-```
-
-Do not introduce major frameworks without an approved design solving a demonstrated problem:
+The default gameplay feature shape is:
 
 ```text
-Spring / Spring Boot
-JPA / Hibernate
-Netty
-Redis
-Kafka
-Microservices
-DI framework
-Event-bus framework
-ORM framework
-Flyway / Liquibase
+Feature.java
+    runtime state
+    main gameplay behavior
+    update/run logic
+    normal feature actions
+
+FeatureTemplate.java
+    static definition/configuration
+
+FeatureManager.java
+    init/load
+    catalog
+    create/find
+    global collection when genuinely needed
+    open/close lifecycle of many instances
+
+FeatureService.java
+    packet/message/send/broadcast only when needed
+
+Repository
+    persistence only
 ```
 
-Plain/direct Java is preferred.
+Not every feature needs every file.
 
----
+Do not create files just to make folders symmetrical.
 
-# 5. Feature-first organization and gameplay readability
-
-A developer should be able to guess where code lives:
+Good:
 
 ```text
-Player        → player/
-Monster       → monster/
-Map / Zone    → map/
-Combat        → combat/
-Login         → account/
-Protocol      → network/
-DB            → persistence/
-Static data   → resource/
+Monster.java
+MonsterTemplate.java
+MonsterManager.java
 ```
 
-The same principle applies to every other gameplay domain, including for example:
-
-```text
-Npc
-Boss
-Item / ItemMap
-Skill
-Effect
-Quest
-Shop
-Dungeon
-Giftcode
-Upgrade
-Event
-Clan
-Pet
-Waypoint / Point
-```
-
-Every meaningful gameplay feature must have an obvious feature center.
-
-Prefer:
-
-```text
-direct game vocabulary
-short context-aware class/method names
-legacy vocabulary when the meaning is still correct
-cohesive gameplay entities
-obvious run/update/lifecycle flow
-few meaningful abstractions
-few unnecessary file jumps
-large cohesive files when appropriate
-```
-
-A normal gameplay flow should be understandable mostly from the class and method
-names without requiring the reader to understand the architecture first.
-
-Do not split by line count alone.
-
-Do not create:
+Avoid automatically adding:
 
 ```text
 Factory
-Manager
-Service
 Registry
-Scheduler
-Snapshot
+Coordinator
+Processor
+Context
 Result
-Dto
+Runtime
+Facade
 Mapper
+Snapshot
+Scheduler
+Operation
 ```
 
-just to make the architecture look complete.
-
-Every top-level type must justify the navigation cost it introduces.
+unless each type solves a demonstrated problem.
 
 ---
 
-# 6. Legacy source naming/readability-reference gate
+# 5. Feature center rule
 
-The sibling legacy project:
+Every gameplay feature must have one obvious first file to open.
+
+Examples:
 
 ```text
-../rongthanchibi
+Player behavior       → Player.java
+Monster behavior      → Monster.java
+Npc behavior          → Npc.java
+Item behavior         → Item.java
+Shop behavior         → Shop.java
+Map structure         → Map.java
+Zone runtime/world    → Zone.java
 ```
 
-is the approved reference for **gameplay naming, vocabulary, readability, and
-normal gameplay flow**.
+A reviewer should be able to understand the normal flow with few file jumps.
 
-It is not the authority for the new runtime architecture.
+If understanding one gameplay action requires:
 
-## Scope
+```text
+Manager
+→ Service
+→ Coordinator
+→ Result
+→ Context
+→ Feature
+```
 
-This gate applies to **all existing gameplay/server feature domains**, not only
-Player and Monster.
+the design is probably too fragmented.
 
-Examples include, but are not limited to:
+Line count alone is NOT a reason to split a cohesive feature.
+
+A large cohesive file is acceptable if it is easier to read than many tiny files.
+
+---
+
+# 6. Manager rule
+
+A `Manager` is NOT the default home for gameplay behavior.
+
+A Manager may own:
+
+```text
+init
+load
+catalog
+global collection
+create
+find
+register/remove
+open/close
+lifecycle of many instances
+```
+
+Good examples:
+
+```text
+MonsterManager.init()
+MonsterManager.findTemplate()
+
+NpcManager.init()
+
+ItemManager.createItem()
+ItemManager.findTemplate()
+
+MapManager.init()
+MapManager.findMap()
+MapManager.close()
+```
+
+Strong review warnings:
+
+```text
+MapManager.movePlayer()
+MonsterManager.attack()
+MonsterManager.moveMonster()
+NpcManager.chat()
+ItemManager.upgradeItem()
+PlayerManager.injure()
+```
+
+If logic naturally describes what one runtime object does, prefer the runtime object.
+
+```text
+Player.move()
+Monster.attack()
+Npc.chat()
+Item.upgrade()
+```
+
+---
+
+# 7. Service rule
+
+In this project:
+
+```text
+Service = message / packet / send / broadcast
+```
+
+Examples:
+
+```text
+AreaService.addPlayer(...)
+AreaService.removePlayer(...)
+AreaService.move(...)
+```
+
+Do NOT use `Service` as a generic business layer.
+
+Avoid:
+
+```text
+PlayerService.move()
+MapService.changeMap()
+MonsterService.attack()
+UpgradeService.processUpgrade()
+```
+
+Cross-owner coordination does NOT automatically justify creating a `Service`.
+
+If a cross-owner operation is truly needed:
+
+```text
+design its owner explicitly in the approved task plan
+```
+
+Do not invent a `Service` merely because no obvious owner exists yet.
+
+---
+
+# 8. Repository, Handler, Packet boundaries
+
+Repository owns persistence.
+
+```text
+load
+insert
+update
+delete
+query
+```
+
+Gameplay objects must not know JDBC/SQL details.
+
+Preferred:
 
 ```text
 Player
-Monster
-Boss
-Npc
-Item
-ItemMap
-Skill
-Effect
-Map / Zone
-Waypoint / Point
-Quest
-Shop
-Dungeon
-Giftcode
-Upgrade
-Event
-Clan
-Pet
-resource/catalog gameplay features
-other existing game-domain features
+→ PlayerSaveData
+→ PlayerRepository
+→ JDBC
 ```
 
-Before planning or changing an existing feature, inspect the equivalent legacy
-implementation when one exists.
-
-If `../rongthanchibi` is available, skipping this inspection is a rule
-violation.
-
-If the sibling project is unavailable or no equivalent feature can be found:
+Handler owns protocol boundary:
 
 ```text
-report the missing/unavailable reference explicitly
-report the files/names/terms searched when applicable
-do not invent legacy names
-do not claim the legacy gate passed
+read packet fields
+validate packet shape
+call gameplay entry point
+send response
 ```
 
-Do not inspect the legacy source only to understand behavior. Study how it makes
-the feature easy to read.
+Handler must not contain gameplay decisions.
 
-Study:
+Packet writers own binary encoding.
+
+Gameplay decides:
 
 ```text
-feature center
-class names
-method names
-gameplay vocabulary
-normal call flow
-run/update/lifecycle flow
-field vs behavior balance
-inheritance/base-state choices
-Manager usage
-package/file organization
-how many files are needed to understand the normal flow
+what happened
 ```
 
-## Mandatory pre-coding report
-
-Before coding, report:
+Packet writer decides:
 
 ```text
-Legacy reference inspected:
-- exact relevant files/classes
-
-Legacy vocabulary/flow inspected:
-- exact useful names and normal flow
-- for example: run / update / addNpc / addPoint / attack / move / ...
-
-Adopt:
-- simple naming/readability strengths worth carrying forward
-
-Reject:
-- legacy choices that conflict with current architecture
+how it is serialized
 ```
-
-A generic statement such as:
-
-```text
-"legacy source inspected"
-```
-
-without exact files/classes and useful vocabulary/flow does not satisfy this
-gate.
-
-## Naming rule
-
-When the legacy source already has a short, clear gameplay name and the new code
-means the same thing, prefer the same simple vocabulary.
-
-Examples of the preferred style:
-
-```text
-run
-update
-init
-load
-save
-add
-remove
-find
-get
-move
-moveTo
-attack
-updateAttack
-findTarget
-injure
-die
-respawn
-addNpc
-removeNpc
-addPoint
-addItem
-removeItem
-addEffect
-removeEffect
-join
-leave
-```
-
-These examples express a naming style. Do not mechanically reuse a name if the
-new semantics are genuinely different.
-
-Do not replace a clear game action with a longer technical phrase merely to
-sound more architectural.
-
-Prefer:
-
-```text
-addNpc
-addPoint
-update
-attack
-move
-```
-
-over:
-
-```text
-registerNpcRuntimeEntity
-resolveWaypointRegistration
-processRuntimeExecutionCycle
-executeAttackTransition
-processMovementOperation
-```
-
-when both versions mean the same thing.
-
-The class already provides context. Avoid repeating that context in every
-method name.
-
-For example, inside a `Zone`, `Monster`, `Npc`, `Quest`, or `Shop`, prefer the
-shortest name that remains clear in that class.
-
-If new code changes a clear legacy name for the same feature concept, the
-coding model MUST explain before coding:
-
-```text
-Legacy name:
-New name:
-Why the legacy name is no longer accurate:
-```
-
-No explanation is required when there is no useful legacy equivalent or the
-semantics are genuinely new, but the new name must still follow the same direct
-game-vocabulary style.
-
-## Technical-name restraint
-
-Words such as:
-
-```text
-Runtime
-Execution
-Context
-Coordinator
-Processor
-Transition
-Resolution
-Operation
-Orchestrator
-Facade
-Command
-Result
-Snapshot
-Handler
-```
-
-are not banned.
-
-They are acceptable at a real technical boundary, such as protocol/network
-handling, persistence, or a genuine execution abstraction.
-
-In gameplay code, do not add these words merely to make a name sound formal.
-
-If a simple game verb expresses the same meaning, use the game verb.
-
-## Flow rule
-
-Prefer code whose normal flow reads top-to-bottom like gameplay:
-
-```text
-run
-→ update
-→ move
-→ attack
-```
-
-or:
-
-```text
-update
-→ findTarget
-→ updateMove
-→ updateAttack
-```
-
-rather than a chain of architecture terminology that must be decoded before the
-gameplay can be understood.
-
-For a new feature with no useful legacy equivalent, follow the same style:
-
-```text
-short names
-direct game vocabulary
-obvious feature center
-few file jumps
-top-to-bottom flow
-```
-
-## What must NOT be copied
-
-The legacy source is NOT authoritative for:
-
-```text
-Spring/JPA architecture
-global mutable singletons
-direct DB access from gameplay
-packet construction inside gameplay entities
-giant switch/controller ownership
-platform-thread-per-Zone as a scalability default
-network/session threads mutating gameplay entities directly
-cross-thread runtime mutation hidden behind locks
-always-running idle Zone loops
-unsafe concurrency
-obsolete gameplay data
-obsolete protocol behavior
-old persistence behavior
-```
-
-The approved target may deliberately use virtual threads.
-
-Do not confuse:
-
-```text
-legacy thread-per-object implementation
-```
-
-with:
-
-```text
-1 ACTIVE Zone = 1 virtual thread = 1 writer
-Session reader/writer virtual threads = blocking network infrastructure
-```
-
-The important distinction is ownership.
-
-The target architecture may differ from legacy while the **gameplay naming and
-reading style should remain comparably simple whenever semantics allow it**.
 
 ---
 
-# 7. Runtime Entity/base-class rule
+# 9. Data / Template / Runtime distinction
 
-A runtime base class such as:
-
-```text
-Entity
-CombatEntity
-```
-
-is allowed only when multiple real runtime entities genuinely share the state
-or behavior.
-
-Potential shared state:
-
-```text
-runtime id
-position
-HP / max HP
-alive/dead state
-common combat state
-common zone/world association
-common effects/timers
-```
-
-Do not introduce inheritance merely to shorten subclasses.
-
-Feature-specific state stays with the feature.
-
-Do not make gameplay runtime classes extend persistence/JDBC row types.
-
----
-
-# 8. Data / Template / runtime distinction
-
-Keep distinct:
+Keep separate:
 
 ```text
 Persistence row
-→ raw durable DB representation
+→ durable DB representation
 
 Template
-→ canonical static game definition
+→ canonical static definition
 
 Runtime object
 → live mutable gameplay state
@@ -550,115 +374,566 @@ Runtime object
 Example:
 
 ```text
-DB row / JSON
-→ repository / loader
+DB/resource data
 → MonsterTemplate
 → Monster
 ```
 
-Do not make gameplay code understand SQL row details.
+Do not make gameplay understand SQL rows.
+
+Do not duplicate Template data into runtime state without a reason.
 
 ---
 
-# 9. Optional / record / Snapshot / Result rule
+# 10. Newbie-readable Java style
 
-`Optional`, `record`, Snapshot, Result and Event types are allowed when they
-clarify a real boundary or have independent semantic value.
-
-They are NOT defaults for ordinary realtime control flow.
-
-Avoid turning hot gameplay into:
+Default style:
 
 ```text
-entity
-→ Optional<ResultRecord>
-→ SnapshotRecord
-→ EventRecord
-→ PacketWriter
+simple
+imperative
+explicit
+top-to-bottom
+easy to debug
 ```
 
-without a real boundary requiring those types.
+Prefer:
 
-Local result/state types should normally be nested under their owner if they are
-needed at all.
+```java
+Player player = session.player();
+
+if (player == null) {
+    return false;
+}
+
+if (player.isDead()) {
+    return false;
+}
+
+player.move(x, y);
+return true;
+```
+
+Avoid dense validation + mutation:
+
+```java
+if (player == null || player.isDead() || !player.move(x, y)) {
+    return false;
+}
+```
+
+Do not hide important side effects inside compound boolean expressions.
+
+Preferred rule:
+
+```text
+validation first
+mutation second
+output/broadcast last
+```
 
 ---
 
-# 10. Manager / Service / Factory rule
+# 11. Java syntax restraint
 
-Use `Manager` only when it genuinely owns meaningful authority such as:
+## Prefer early return
+
+```java
+if (player == null) {
+    return;
+}
+
+if (player.isDead()) {
+    return;
+}
+```
+
+Avoid deep nesting when early return is clearer.
+
+## Prefer explicit types
+
+Preferred:
+
+```java
+List<Session> rejected = area.removePlayer(...);
+Player player = session.player();
+Zone zone = map.findZone(zoneId);
+```
+
+Avoid `var` in normal gameplay code.
+
+## Prefer normal loops
+
+Preferred:
+
+```java
+for (Player player : players) {
+    if (player.isDead()) {
+        continue;
+    }
+
+    ...
+}
+```
+
+Use Stream only when it is clearly shorter and equally readable.
+
+## Limit Optional
+
+Do not use `Optional` as normal gameplay control flow.
+
+Preferred:
+
+```java
+Monster monster = zone.findMonster(id);
+
+if (monster == null) {
+    return;
+}
+```
+
+## Limit lambdas
+
+Lambda is acceptable at a real execution boundary:
+
+```java
+zone.call(() -> {
+    player.move(x, y);
+    return null;
+});
+```
+
+Do not turn normal gameplay into functional chains for style.
+
+---
+
+# 12. Record / Result / Snapshot rule
+
+These types are allowed when they represent a real boundary.
+
+Valid reasons include:
 
 ```text
-collection
-catalog
-registration
-create/init
+persistence boundary
+packet boundary
+cross-thread boundary
+cross-Zone boundary
+stable handoff
+```
+
+Examples:
+
+```text
+PlayerSaveData
+MapTemplate
+stable cross-Zone intent/handoff data
+```
+
+Do not create wrappers only because a method returns multiple values.
+
+Avoid unnecessary:
+
+```text
+MoveResult
+AttackResult
+DamageResult
+RuntimeContext
+OperationResult
+```
+
+For every new Result/record/Snapshot, the coding model must answer:
+
+```text
+What real boundary requires this type?
+Why is direct control flow less clear or less safe?
+```
+
+If there is no concrete answer, do not create the type.
+
+---
+
+# 13. Naming rule
+
+Use direct gameplay vocabulary.
+
+Prefer:
+
+```text
+init
+load
+save
+create
 find
-feature lifecycle/update
+add
+remove
+enter
+leave
+move
+moveTo
+attack
+updateAttack
+findTarget
+injure
+die
+respawn
+revive
+upgrade
+chat
+open
+close
 ```
 
-Use `Service` for a real cross-owner/use-case operation.
-
-## 10.1 Service naming convention
-
-Trong dự án này, `Service`/`AreaService` theo vocabulary gameplay legacy và
-dành cho việc gửi message, dispatch packet hoặc broadcast trong một khu vực.
-
-Không đặt tên các thành phần sau là `*Service` chỉ vì chúng thực hiện thao tác:
+Avoid unnecessary technical naming:
 
 ```text
-persistence wrapper
-gameplay coordinator
-repository
-runtime owner
+executePlayerMovement
+processRuntimeTransition
+resolveGameplayOperation
+performAttackResolution
+coordinateMapMovement
 ```
 
-`Manager` chỉ dùng khi type thực sự sở hữu collection, catalog, init, find hoặc
-lifecycle có ý nghĩa. `Map` là runtime domain object khi nó sở hữu các `Zone`
-và hành vi chỉ thuộc về map; `MapTemplate` vẫn là dữ liệu template/config tĩnh.
+The class already provides context.
 
-Không tạo một `Service` rỗng chỉ để giữ đối xứng tên trong kiến trúc.
+Inside `Player`:
 
-A Factory is justified only when object creation has meaningful composition or
-policy.
+```text
+move()
+```
 
-Do not keep/create Factory+Manager+Registry+Scheduler symmetry without real
-responsibilities.
+not:
+
+```text
+movePlayer()
+```
+
+Inside `Monster`:
+
+```text
+attack()
+```
+
+not:
+
+```text
+executeMonsterAttack()
+```
 
 ---
 
-# 11. Packet boundary
+# 14. find / get / create naming contract
 
-Gameplay decides:
-
-> what happened?
-
-Packet writers decide:
-
-> how is that serialized to the Unity protocol?
-
-Packet encoding belongs under:
+Use names consistently.
 
 ```text
-network/packet/
+findX()
+= search only
+= does not create
+= may return null
+
+getX()
+= return an expected existing object
+= does not silently create
+= may throw if missing when that contract is clear
+
+createX()
+= create a new object
+
+getOrCreateX()
+= may return existing or create new
 ```
 
-Do not put binary encoding into Player/Monster/Boss/Npc merely because a legacy
-source did so.
+Do NOT hide creation behind an ordinary `getX()` name.
+
+Example:
+
+```text
+Map.findZone(zoneId)
+Map.getZone(zoneId)          // only if Zone must already exist
+Map.getOrCreateZone(zoneId)  // if creation is allowed
+```
+
+Names must expose side effects.
 
 ---
 
-# 12. Approved Zone runtime ownership target
+# 15. Legacy-reference gate
 
-Concurrency correctness wins over class-tree aesthetics.
+The legacy source is the approved reference for:
 
-## Current production contract
+```text
+feature center
+class responsibilities
+Manager usage
+Service usage
+gameplay vocabulary
+normal call flow
+method naming
+file count
+top-to-bottom readability
+```
 
-Until a dedicated migration phase replaces it, current synchronization remains
-authoritative. Existing `synchronized(zone)` behavior must not be removed
-opportunistically.
+Before changing an existing feature, report:
 
-## Approved target
+```text
+Legacy feature center:
+- exact file/class
+
+Legacy Manager responsibilities:
+- exact responsibilities
+
+Legacy runtime-object responsibilities:
+- exact responsibilities
+
+Legacy Service responsibilities:
+- exact responsibilities
+
+Legacy normal flow:
+- concise call flow
+
+Adopt:
+- readability/naming/ownership strengths
+
+Reject:
+- unsafe or obsolete choices
+```
+
+Example:
+
+```text
+Legacy feature center:
+Monster.java
+
+Legacy MonsterManager:
+init/load templates only
+
+Legacy Monster:
+update
+findTarget
+attack
+injure
+die
+respawn
+
+Legacy Zone:
+calls monster.update()
+
+Legacy Service:
+broadcast/send monster packets
+```
+
+The statement:
+
+```text
+"legacy inspected"
+```
+
+is not enough.
+
+---
+
+# 16. What must NOT be copied from legacy
+
+Do NOT copy:
+
+```text
+global singleton architecture
+direct JDBC inside gameplay
+packet construction inside runtime entities
+network Message parsing inside entities
+platform-thread-per-Zone as a default
+arbitrary multi-thread mutation
+large lock-per-entity concurrency model
+unsafe global mutable state
+obsolete protocol/data behavior
+```
+
+Use legacy for readability and responsibility shape, not obsolete technical architecture.
+
+---
+
+# 17. Mutable state authority rule
+
+Every mutable gameplay concept must have one authoritative owner.
+
+Examples of concepts:
+
+```text
+current Zone membership
+Player position
+Player HP
+Monster HP
+Monster target
+Zone capacity
+effect lifetime
+```
+
+Duplicate representations are allowed only when their role is explicit:
+
+```text
+authority
+cache
+durable checkpoint
+network binding
+derived value
+```
+
+Two mutable fields must not silently both act as authority.
+
+When reviewing a duplicate state, explicitly answer:
+
+```text
+Which field/object is authoritative?
+Which copy is derived or cached?
+When is it synchronized?
+Who may mutate it?
+```
+
+If these answers are unclear, ownership is not finished.
+
+---
+
+# 18. Player / Session / Zone boundary
+
+`Player` is the gameplay runtime object.
+
+`Session` is network/session state.
+
+`Zone` is realtime execution/world ownership.
+
+Player owns behavior such as:
+
+```text
+move
+injure
+revive
+addPotential
+change its own location fields
+future inventory/skill/task behavior
+```
+
+Session may:
+
+```text
+hold connection state
+bind Player
+send messages
+track connection lifecycle
+hold necessary online binding metadata
+```
+
+Zone owns:
+
+```text
+runtime execution
+membership
+admission/capacity
+mutation ordering
+live world collections
+```
+
+Important:
+
+```text
+Zone decides WHEN Player mutation runs.
+Player decides WHAT Player mutation does.
+```
+
+Do not make Session the general gameplay model.
+
+Do not spread new `Session → player()` dependencies through gameplay without review.
+
+Do not change the current `Session / Player / Zone` membership representation casually.
+
+Specifically, a coding model MUST NOT independently:
+
+```text
+change Zone members from Session to Player
+create ZoneMember / PlayerContext / OnlinePlayer wrappers
+move Zone authority into Session
+duplicate another currentZone authority
+```
+
+Such changes require a dedicated approved design task.
+
+---
+
+# 19. Map / MapManager contract
+
+Ownership tree:
+
+```text
+MapManager
+→ Map
+→ Zone
+```
+
+`Map` owns:
+
+```text
+MapTemplate
+Zones
+findZone
+get/getOrCreate Zone according to naming contract
+zones
+findWaypoint
+map-specific rules
+```
+
+`MapManager` primarily owns:
+
+```text
+Map init/create
+Map registry
+find Map
+open/close Map lifecycle
+global Map collection
+```
+
+Do not duplicate Map-owned Zone APIs in MapManager without a demonstrated global need.
+
+Default:
+
+```java
+Map map = mapManager.findMap(mapId);
+
+if (map == null) {
+    return;
+}
+
+Zone zone = map.findZone(zoneId);
+```
+
+Strong review warnings:
+
+```text
+MapManager.movePlayer()
+MapManager.injurePlayer()
+MapManager.attackMonster()
+```
+
+Cross-Map/cross-Zone transition is a special technical boundary.
+
+Its final owner MUST be explicitly approved by the task plan.
+
+A coding model must not independently decide:
+
+```text
+"put it in MapManager"
+"put it in Player"
+"create MapService"
+"create TransitionCoordinator"
+```
+
+because the operation crosses owners.
+
+---
+
+# 20. Zone contract
+
+Zone is the realtime execution owner.
+
+Target:
 
 ```text
 1 ACTIVE Zone
@@ -666,95 +941,131 @@ opportunistically.
 = 1 writer
 ```
 
-Zone owns mutation authority for live state belonging to that Zone, including
-when present:
+Zone owns:
 
 ```text
-Player
-Monster
-Boss
-Npc
-ItemMap
-active gameplay effects
-other live Zone world state
+runtime writer
+membership
+enter/leave
+capacity/admission
+entity collections
+mutation ordering
+Zone lifecycle
 ```
 
-Only Zone execution may mutate Zone-owned runtime entities.
+Zone should call entity behavior:
 
-External execution contexts such as:
+```java
+player.update();
+monster.update();
+```
+
+Zone should not absorb the behavior of the entity.
+
+Bad long-term direction:
 
 ```text
-Session/network virtual threads
-persistence/JDBC execution
-web/admin/payment input
-other Zones
+Zone.findMonsterTarget()
+Zone.calculateMonsterAttack()
+Zone.moveMonster()
+Zone.respawnMonster()
 ```
 
-must communicate through an explicit Zone input or handoff boundary.
-
-Do not solve normal gameplay concurrency by allowing arbitrary threads to mutate
-the same entity and then wrapping every entity in locks.
-
-Zone ownership does not mean all gameplay logic belongs in `Zone`.
-
-Prefer:
+Preferred:
 
 ```text
-Zone
-→ membership, world authority, execution, mutation ordering
-
-Entity
-→ state transitions and gameplay behavior that naturally belong to it
-
-Manager / cross-owner Service
-→ surrounding lookup/use-case orchestration only when truly needed
+Monster.findTarget()
+Monster.attack()
+Monster.move()
+Monster.respawn()
 ```
 
-Do not let `Zone` become the hidden implementation file for Monster AI.
-
-Cross-Zone operations must avoid circular waits between Zone owners.
+Zone provides execution and world context.
 
 ---
 
-# 13. Blocking I/O boundary
+# 21. Feature ownership examples
 
-Blocking APIs are intentionally allowed where they keep implementation simple
-and remain outside realtime Zone execution.
+## Monster
 
-Allowed examples:
+Feature center:
 
 ```text
-Session reader VT → Socket.read
-Session writer VT → Socket.write
-login/load before Player enters Zone → JDBC
-persistence worker/VT → JDBC
+Monster.java
 ```
 
-Forbidden inside Zone gameplay execution:
+Monster should own:
 
 ```text
-socket read/write
+update
+findTarget
+move/patrol/chase
+attack
+injure
+death
+respawn
+aggro/enemy behavior
+```
+
+MonsterManager should mainly own:
+
+```text
+template/catalog init
+create/find when meaningful
+global lifecycle only if genuinely needed
+```
+
+## Npc
+
+Npc owns NPC behavior.
+
+NpcManager mainly owns template/catalog/init/create/find.
+
+## Item
+
+Item owns item behavior.
+
+ItemManager mainly owns template/catalog/init/create/find.
+
+Do not move normal feature actions into Manager for convenience.
+
+---
+
+# 22. Concurrency / blocking / lifecycle invariants
+
+Cross-Zone operations must avoid circular waits.
+
+Never:
+
+```text
+sourceZone.call(...)
+    → destinationZone.call(...)
+```
+
+while holding source ownership.
+
+Required shape:
+
+```text
+capture source intent
+→ leave source execution
+→ destination admission/reservation
+→ source revalidation/commit
+→ handoff
+```
+
+Do not block Zone gameplay execution on:
+
+```text
 JDBC
 HTTP
 filesystem I/O
-waiting on an external Future
-indefinitely blocking queue submission
-other external blocking operations
+socket read/write
+external Future waits
+unbounded blocking queue submission
 ```
 
-A slow client or slow DB must not stall movement, combat, AI, Effect/DoT, or
-other Zone gameplay.
-
-Queues/admission between boundaries must be bounded or explicitly backpressured.
-
-Virtual threads reduce blocking-thread cost; they do not remove DB connection,
-memory, bandwidth, or backpressure limits.
-
----
-
-# 14. Zone lifecycle and freeze semantics
-
-Target lifecycle:
+Zone lifecycle target:
 
 ```text
 ACTIVE
@@ -762,36 +1073,9 @@ FROZEN
 STOPPED
 ```
 
-`ACTIVE`:
+FROZEN preserves runtime state.
 
-```text
-Zone runtime exists
-Zone owner virtual thread executes realtime gameplay
-```
-
-`FROZEN`:
-
-```text
-Zone runtime still exists in memory
-runtime entity state is not destroyed
-realtime ticking is suspended/parked
-```
-
-Example:
-
-```text
-Monster HP = 120 / 200
-Zone becomes FROZEN
-Zone later wakes
-Monster HP remains 120 / 200
-```
-
-unless a specific mechanic explicitly defines elapsed-time reconciliation.
-
-`STOPPED` is for actual shutdown/unload, not normal empty-Zone idling.
-
-Time-based mechanics that must advance while frozen should prefer absolute
-deadlines where suitable:
+Time-based mechanics should prefer absolute deadlines where suitable:
 
 ```text
 respawnAt
@@ -800,582 +1084,205 @@ cooldownUntil
 itemExpireAt
 ```
 
-On wake, reconcile against current time.
-
-Mechanics such as:
-
-```text
-regen
-DoT while nobody is present
-world/event boss lifecycle
-```
-
-must define explicit frozen-Zone semantics.
-
-A Zone with an event/boss/realtime responsibility that must continue advancing
-is not eligible to freeze merely because player count reached zero.
-
 ---
 
-# 15. Hot realtime path discipline
+# 23. Persistence / hot-path invariants
 
-Hot-path candidates include:
+Runtime authority:
+
+```text
+Zone + live runtime objects
+```
+
+Durable checkpoint:
+
+```text
+MySQL
+```
+
+Preferred persistence flow:
+
+```text
+runtime mutation
+→ stable SaveData capture
+→ Repository outside Zone
+→ DB
+```
+
+Final disconnect ordering:
+
+```text
+process prior Zone work
+→ detach realtime mutation
+→ capture stable save state
+→ DB save outside Zone
+→ release account reservation
+```
+
+Hot paths include:
 
 ```text
 Zone tick
 Monster AI
 target search
 movement
-damage/combat
-Effect/DoT update
-crowded broadcast preparation
+combat
+Effect/DoT
+crowded broadcast
 ```
 
-Prefer direct mutable runtime state and straightforward loops.
-
-Do not allocate or transform through:
+Prefer:
 
 ```text
-Snapshot
-Optional
-Stream
-temporary List
-DTO
-Result wrapper
-Mapper
+direct runtime state
+simple loops
+few allocations
+few wrappers
 ```
 
-inside hot paths merely for symmetry or style.
+Do not use Snapshot/Optional/Stream/DTO/Result in hot paths without a concrete reason.
 
-These types remain valid when they provide a real boundary or independent
-semantic value.
+---
+
+# 24. Testing rule
+
+Tests must validate production design, not distort it.
+
+Do not add public production APIs only for tests.
+
+Concurrency tests should be deterministic.
+
+Avoid:
+
+```text
+Thread.sleep(...)
+```
+
+for synchronization.
+
+Prefer:
+
+```text
+CountDownLatch
+explicit barriers
+deterministic state coordination
+```
+
+Tests should prefer observable behavior over internal counters.
 
 Example:
 
 ```text
-bad default:
-monster.snapshot() → distance/AI check
-
-preferred:
-Monster runtime → direct distance/AI check
+prove destination capacity can be reused
 ```
 
-First remove unnecessary abstraction/allocation; then benchmark.
+is stronger than only asserting:
+
+```text
+reservedCount == 0
+```
+
+Package-private access may be used when a focused test genuinely needs it, but production API must not be expanded casually.
 
 ---
 
-# 16. Persistence boundary and durability model
+# 25. Touched-slice and final review gate
 
-Gameplay must not directly depend on JDBC implementation details.
+When a task owns a feature slice, that slice must leave the task compliant with this rule.
 
-SQL stays under persistence ownership.
-
-Runtime model must not implement:
+For every touched top-level type, review:
 
 ```text
-save()
-load()
-deleteFromDatabase()
+Is this still the correct feature center?
+Is Manager doing gameplay?
+Is Service doing business logic?
+Is Zone doing entity behavior?
+Is Handler doing gameplay?
+Is a Result/record/wrapper truly required?
+Is there duplicate mutable authority?
+Did a convenience API hide ownership?
+Did a method hide side effects?
+Did we increase file jumps without a correctness reason?
 ```
 
-Current/target mental model:
-
-```text
-Zone / online gameplay runtime
-→ current realtime authority
-
-MySQL
-→ durable checkpoint
-```
-
-Normal realtime gameplay should mutate RAM and coalesce persistence work rather
-than write DB for every move/hit/effect/EXP mutation.
-
-Preferred direction:
-
-```text
-runtime mutation
-→ mark dirty / advance revision
-→ capture stable save state when required
-→ bounded persistence submission
-→ blocking JDBC outside Zone
-→ DB
-```
-
-A Snapshot/SaveData type is justified only when a real boundary needs a stable
-copy. It is not mandatory for every mutable entity.
-
-Persistence execution must never race by reading a mutable online Player while
-Zone execution is changing that same object.
-
-Durability-critical external operations such as:
-
-```text
-payment/web rewards
-premium economy transactions
-market/cross-server operations
-```
-
-may use their own durable transaction path and then hand the committed result
-into the Zone.
-
----
-
-# 17. Player runtime and persistence contract
-
-Mutable `Player` is the authoritative runtime Player model.
-
-`Player` owns Player state transitions and behavior, including:
-
-```text
-move
-injure
-addPotential
-changeMap
-revive
-future Player behavior
-```
-
-While a Player is joined, the owning `Zone` controls when and where those
-mutations run and provides their ordering. `Session`, network handlers, and
-repositories must not directly mutate a joined Player.
-
-Persistence reads a stable `PlayerSaveData` captured at a valid ownership
-boundary. Final disconnect ordering is:
-
-```text
-process prior Zone work
-→ detach from realtime mutation
-→ capture stable save state
-→ JDBC outside Zone
-→ release account reservation
-```
-
-A separate immutable Player snapshot is not automatically required after the
-Player has been detached and can no longer mutate.
-
-Review Player separately before introducing shared Entity inheritance.
-
----
-
-# 18. Session / account / disconnect invariants
-
-Sensitive areas:
-
-```text
-Session.close
-same-account admission
-account reservation
-Zone mutation
-combat/lifecycle ordering
-disconnect final checkpoint
-```
-
-Preserve current disconnect ordering until an approved migration phase replaces
-it.
-
-Correctness requirement:
-
-```text
-final save observes the latest authoritative gameplay state
-same-account admission is not released too early
-```
-
-Current disconnect contract is:
-
-```text
-Zone processes prior queued gameplay
-→ detach Player from realtime mutation
-→ hand off final stable state
-→ final checkpoint attempt
-→ release same-account reservation
-```
-
-Do not:
-
-```text
-release reservation before checkpoint attempt
-make final save fire-and-forget when account ordering requires completion
-hold inappropriate Session/Zone locks across JDBC
-let DB/persistence threads mutate Player runtime directly
-```
-
----
-
-# 19. Monster ownership direction
-
-Zone owns Monster collection/execution/world context.
-
-Monster should own behavior that naturally describes Monster:
-
-```text
-target/aggro
-move
-attack
-injure
-death
-respawn state
-Monster AI
-```
-
-Preserve existing lifecycle ordering during migration unless a separate
-behavior change is explicitly approved.
-
----
-
-# 20. Effect runtime direction
-
-Effect is runtime gameplay state owned by the affected entity.
-
-Possible owners:
-
-```text
-Player
-Monster
-Boss
-```
-
-Sources may include:
-
-```text
-Skill
-item
-Boss mechanic
-other gameplay system
-```
-
-Examples:
-
-```text
-stun
-bind
-petrify
-poison
-burn
-blind
-buff
-debuff
-```
-
-Server owns gameplay truth.
-
-Client packets own visual/icon/time representation.
-
-Do not create one scheduler/thread per Effect.
-
----
-
-# 21. Network backpressure
-
-Session outbound buffering must be bounded.
-
-A slow client must not:
-
-```text
-grow memory without bound
-block Zone
-```
-
-Possible future optimization for stale/non-critical state such as movement is
-coalescing, but only after measurement.
-
----
-
-# 22. Tick model
-
-Avoid systematic drift from:
-
-```text
-update()
-sleep(period)
-```
-
-Prefer monotonic deadlines:
-
-```text
-nextTick += period
-update()
-park until nextTick
-```
-
-with explicit late-tick/catch-up policy.
-
-Exact tick periods remain a benchmark/design decision.
-
----
-
-# 23. Touched-slice compliance
-
-When an architecture/refactor phase takes ownership of a feature slice, the
-production code in that slice must leave the phase compliant with this rule.
-
-Do not knowingly preserve obsolete intermediate architecture merely because it
-existed before the phase.
-
-For each touched top-level production type, re-evaluate whether it still has a
-real responsibility.
-
-Remove, merge, nest, rename, or move ownership when an old:
-
-```text
-Manager
-Service
-Factory
-Registry
-Scheduler
-Snapshot
-Result
-DTO
-wrapper
-```
-
-no longer has independent value after migration.
-
-This requirement is scoped to the touched feature slice. It does not authorize
-unrelated repo-wide cleanup.
-
----
-
-# 24. Tests must not distort production design
-
-Do not keep/add production API, wrapper types, managers, factories, or public
-methods only because tests find them convenient.
-
-Tests should validate production architecture, not force fragmentation.
-
----
-
-# 25. Behavior-preservation rule
-
-Unless explicitly approved, preserve:
-
-```text
-Unity packet bytes/order/width
-Session state/order
-current Zone synchronization until its dedicated migration phase
-monster movement timing
-monster attack timing
-monster respawn timing
-combat formulas
-player persistence/checkpoint behavior
-database schema/data
-TLS/network behavior
-```
-
-The approved target architecture does not authorize an early cutover.
-
-Behavior changes require separate explicit scope and regression tests.
-
----
-
-# 26. Runtime migration discipline
-
-Required order:
-
-```text
-pin current behavior with focused regression tests
-→ establish Zone execution/lifecycle infrastructure
-→ migrate one mutation slice at a time into Zone ownership
-→ remove old synchronization only after that slice is owned by Zone
-→ clean the touched slice to current readability rules
-→ run focused tests
-→ run full Maven gate
-```
-
-Do not combine without explicit approval:
-
-```text
-Monster AI redesign
-+ Effect implementation
-+ persistence rewrite
-```
-
-into one large change.
-
-Until a slice is explicitly migrated:
-
-```text
-current production synchronization
-current Player/Zone ownership contract
-current packet behavior
-current persistence ordering
-current gameplay timing/order
-```
-
-remain authoritative.
-
----
-
-# 27. Required tests and gates
-
-Normal full server gate:
-
-```powershell
-cd server
-.\mvnw.cmd test
-```
-
-Additionally:
-
-```text
-persistence/schema change
-→ focused persistence/migration tests
-→ real MySQL gate
-
-protocol change
-→ focused/golden packet tests
-→ compatibility checks
-
-Session/Zone/concurrency change
-→ focused ordering/race regression tests
-
-TLS/network transport change
-→ relevant runtime/TLS gates
-```
-
-Report truthfully what was and was not executed.
-
----
-
-# 28. Coding-model mandatory questions
-
-Before adding/refactoring gameplay/runtime code, answer:
-
-```text
-1. What is the feature center?
-2. Which file should a developer open first?
-3. Which exact legacy files/classes were inspected?
-4. What exact legacy vocabulary and normal flow are useful here?
-5. Which legacy names can be reused because the semantics are still the same?
-6. If a clear legacy name is being changed, why is it no longer accurate?
-7. What readability strengths should be adopted?
-8. What obsolete legacy choices must be rejected?
-9. What state truly belongs to the entity?
-10. Is shared Entity/base state genuinely shared?
-11. Who owns collection/lifecycle?
-12. Is Manager really an authority?
-13. Is Service really a cross-owner use case?
-14. Am I keeping Factory/Registry/Scheduler only to shorten another file?
-15. How many files are needed to understand normal gameplay?
-16. Can a larger cohesive file remove unnecessary jumps?
-17. Am I using Optional because it helps, or from habit?
-18. Am I creating a record/result/snapshot because a real boundary needs it?
-19. Does the class/method list read like simple game actions?
-20. Are names short because class context already supplies the missing meaning?
-21. Did I replace a simple game verb with technical architecture vocabulary?
-22. Does each method name describe what it actually does?
-23. Am I duplicating Template/static data into runtime state?
-24. Are persistence/network/resource boundaries still intact?
-25. Are protocol and concurrency invariants preserved?
-26. Which execution context owns each runtime mutation?
-27. Did Session/network/persistence gain direct mutation access to Zone state?
-28. Did any blocking I/O enter Zone gameplay execution?
-29. Is Snapshot/Optional/Result/temp allocation in a hot path justified?
-30. Did the touched slice retain obsolete architecture only because it existed before?
-```
-
-If the change makes the same gameplay idea require:
-
-```text
-more terminology
-longer technical names
-more wrapper/result types
-more file jumps
-```
-
-without a real correctness, ownership, subsystem, or technical boundary,
-reconsider the design.
-
----
-
-# 29. Coding-model implementation report
-
-Before implementation:
+Before implementation, report:
 
 ```text
 Current feature center:
+
+Legacy feature center:
 Legacy files/classes inspected:
-Legacy vocabulary/flow inspected:
-Legacy names reused:
-Legacy names changed + reason:
-Adopt from legacy:
-Reject from legacy:
-Target owner/flow:
+
+Legacy Manager responsibilities:
+Legacy runtime-object responsibilities:
+Legacy Service responsibilities:
+Legacy normal flow:
+
+Authoritative mutable state:
+
+Adopt:
+Reject:
+
+Target feature center:
+Target Manager responsibilities:
+Target Service responsibilities:
+Target execution owner:
+
 Files expected to change:
 Behavior/contracts preserved:
 Focused tests:
 ```
 
-For a feature with no useful legacy equivalent, write:
-
-```text
-Legacy equivalent:
-- none found / not applicable
-
-Naming approach:
-- follows the same short/direct game-vocabulary style
-```
-
-Do not omit the legacy vocabulary section merely because architecture differs.
-
-After implementation:
+After implementation, report:
 
 ```text
 Final feature center:
 Normal gameplay flow:
-Key class/method names:
-Names simplified during implementation/review:
-Files removed/merged/nested/renamed:
+Manager responsibilities:
+Service responsibilities:
+Authoritative mutable state:
+Files changed:
+Files removed/merged/renamed:
+Names simplified:
 Focused tests run:
 Full Maven gate:
 Manual/DB/Unity/TLS gates not run:
 Known remaining debt:
 ```
 
----
-
-# 30. Final acceptance test
-
-A reviewer must be able to answer quickly:
+Final reviewer must be able to answer quickly:
 
 ```text
 Where do I start reading this feature?
-What is the main runtime object?
-Which legacy files/classes and vocabulary were inspected?
-Do the touched class/method names read like simple game actions?
-Which touched names differ from the legacy equivalent, and why?
-Can I understand the normal flow without decoding architecture terminology?
-Who owns each runtime mutation?
-What is static definition data?
-What common state comes from a real base entity, if any?
-Who owns collection/lifecycle?
-What happens during run/update?
-Where does target selection happen?
-Where does state change?
-Where does combat orchestration happen?
-Where does persistence happen?
+What object contains the main gameplay logic?
+What does the Manager actually manage?
+What does Service actually send?
+Who owns execution?
+Who owns mutable state?
+Who owns persistence?
 Where is packet encoding?
-Did any blocking I/O enter Zone execution?
-How many files did I need to open for the normal flow?
-Which test proves the important behavior?
+How many files must I open for the normal flow?
+Can a beginner follow the method top-to-bottom?
 ```
 
 Desired result:
 
 ```text
 easy to find
-easy to read top-to-bottom
-easy to follow as game logic
-short/direct names where semantics allow
-few unnecessary jumps
-technical boundaries remain safe
+easy to read
+easy to debug
+few file jumps
+simple Java
+direct game vocabulary
+correct ownership
+safe concurrency
+safe persistence
 ```
 
-A change can be functionally correct and still fail review if the touched
-gameplay code becomes harder to name, read, or follow without a correctness
-reason.
-
-When architecture purity and gameplay readability conflict without a correctness
-reason:
+When architecture purity and readability conflict without a correctness reason:
 
 > **Prefer the implementation that reads more directly as game logic.**
+
+When a clever Java construct and a simple Java construct are equally correct:
+
+> **Prefer the simpler one.**

@@ -1024,10 +1024,11 @@ class MapManagerTest {
 
     @Test
     void sourceRevalidationFailureRollsBackDestinationReservation() throws Exception {
-        GameplayServices maps = policyMaps("ONLINE", "ONLINE", 1, 1);
+        GameplayServices maps = policyMaps("ONLINE", "ONLINE", 2, 1);
         Session source = session(at(player(1, 0, 0), 4464, 936), maps);
         assertTrue(maps.mapManager().finishLoad(source));
         drain(source);
+        Zone sourceZone = maps.findZone(0, 0);
         Zone destination = maps.findZone(1, 0);
         CountDownLatch destinationStarted = new CountDownLatch(1);
         CountDownLatch releaseDestination = new CountDownLatch(1);
@@ -1038,18 +1039,91 @@ class MapManagerTest {
         assertTrue(destinationStarted.await(5, TimeUnit.SECONDS));
 
         AtomicReference<MapManager.MapChange> change = new AtomicReference<>();
-        assertTrue(maps.findZone(0, 0).submit(() ->
-                change.set(maps.mapManager().changeMap(source))));
-        Thread.sleep(50);
-        Thread disconnect = Thread.ofVirtual().start(source::close);
-        releaseDestination.countDown();
-        disconnect.join(5_000);
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+        Thread transition = Thread.ofVirtual().start(() -> {
+            try {
+                change.set(maps.mapManager().changeMap(source));
+            } catch (Throwable exception) {
+                failure.compareAndSet(null, exception);
+            }
+        });
+        try {
+            awaitWaiting(transition);
+            sourceZone.call(() -> {
+                source.player().move(1250, 648);
+                return null;
+            });
+            releaseDestination.countDown();
+            transition.join(5_000);
+        } finally {
+            releaseDestination.countDown();
+            transition.join(5_000);
+        }
 
-        assertFalse(disconnect.isAlive());
+        assertFalse(transition.isAlive());
+        if (failure.get() != null) {
+            throw new AssertionError("source revalidation failed", failure.get());
+        }
         assertNull(change.get());
-        assertEquals(0, destination.reservedCount());
+        assertTrue(sourceZone.hasPlayer(source));
+        assertSame(sourceZone, source.zone());
         assertEquals(0, source.player().mapId());
-        assertEquals(SessionState.CLOSED, source.state());
+        assertEquals(0, source.player().zoneId());
+        assertEquals(1250, source.player().x());
+        assertEquals(648, source.player().y());
+        assertEquals(0, destination.reservedCount());
+
+        Session next = session(at(player(2, 0, 0), 4464, 936), maps);
+        assertTrue(maps.mapManager().finishLoad(next));
+        assertNotNull(maps.mapManager().changeMap(next));
+        assertTrue(maps.mapManager().finishLoad(next));
+        assertEquals(1, maps.mapManager().memberCount(1, 0));
+    }
+
+    @Test
+    void postCommitChangeFailureKeepsDestinationReservation() throws Exception {
+        GameplayServices maps = policyMaps("ONLINE", "ONLINE", 2, 1);
+        Session source = session(at(player(1, 0, 0), 4464, 936), maps);
+        Session observer = session(player(2, 0, 0), maps);
+        assertTrue(maps.mapManager().finishLoad(source));
+        assertTrue(maps.mapManager().finishLoad(observer));
+        drain(source);
+        drain(observer);
+        replaceSendQueue(observer, new ThrowingOfferQueue());
+
+        assertThrows(IllegalStateException.class, () -> maps.mapManager().changeMap(source));
+
+        Zone destination = maps.findZone(1, 0);
+        assertNull(source.zone());
+        assertEquals(1, source.player().mapId());
+        assertEquals(0, source.player().zoneId());
+        assertEquals(1, destination.reservedCount());
+        assertTrue(maps.mapManager().finishLoad(source));
+        assertEquals(1, maps.mapManager().memberCount(1, 0));
+    }
+
+    @Test
+    void postCommitDeathReturnFailureKeepsTownReservation() throws Exception {
+        GameplayServices maps = policyMaps("ONLINE", "ONLINE", 2, 2);
+        Session dead = session(hp(player(1, 1, 0), 0), maps);
+        Session observer = session(player(2, 1, 0), maps);
+        assertTrue(maps.mapManager().finishLoad(dead));
+        assertTrue(maps.mapManager().finishLoad(observer));
+        drain(dead);
+        drain(observer);
+        replaceSendQueue(observer, new ThrowingOfferQueue());
+
+        assertThrows(IllegalStateException.class,
+                () -> maps.mapManager().returnTownFromDeath(dead));
+
+        Zone town = maps.findZone(0, 0);
+        assertNull(dead.zone());
+        assertEquals(0, dead.player().mapId());
+        assertEquals(0, dead.player().zoneId());
+        assertFalse(dead.player().isDead());
+        assertEquals(1, town.reservedCount());
+        assertTrue(maps.mapManager().finishLoad(dead));
+        assertEquals(1, maps.mapManager().memberCount(0, 0));
     }
 
     private static GameplayServices policyMaps(
@@ -1127,6 +1201,24 @@ class MapManagerTest {
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             throw new AssertionError(exception);
+        }
+    }
+
+    private static void awaitWaiting(Thread thread) {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        while (thread.getState() != Thread.State.WAITING
+                && thread.getState() != Thread.State.TERMINATED
+                && System.nanoTime() < deadline) {
+            Thread.onSpinWait();
+        }
+        assertEquals(Thread.State.WAITING, thread.getState(),
+                "changeMap did not reach cross-Zone coordination");
+    }
+
+    private static final class ThrowingOfferQueue extends LinkedBlockingQueue<Message> {
+        @Override
+        public boolean offer(Message message) {
+            throw new IllegalStateException("injected packet enqueue failure");
         }
     }
 

@@ -981,7 +981,7 @@ final save observes the latest authoritative gameplay state
 same-account admission is not released too early
 ```
 
-Future mutable-Player direction may be:
+Current disconnect contract is:
 
 ```text
 Zone processes prior queued gameplay

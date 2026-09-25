@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.TreeMap;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -233,6 +234,7 @@ public final class MapManager {
             return null;
         }
 
+        AtomicBoolean committed = new AtomicBoolean();
         try {
             Transition result = sourceZone.call(() -> {
                 synchronized (sourceZone) {
@@ -259,6 +261,7 @@ public final class MapManager {
                     player.revive(DEATH_RETURN_MAP_ID, DEATH_RETURN_ZONE_ID,
                             DEATH_RETURN_X, DEATH_RETURN_Y);
                     session.clearZone(sourceZone);
+                    committed.set(true);
                     var rejected = area.removePlayer(
                             session, player.id(), sourceZone.members());
                     return new Transition(
@@ -266,18 +269,18 @@ public final class MapManager {
                             rejected);
                 }
             });
-            if (result.change() == null && reserved) {
+            if (result.change() == null && reserved && !committed.get()) {
                 cancel(townZone, session);
             }
             closeRejected(result.rejectedObservers());
             return result.change();
         } catch (RejectedExecutionException exception) {
-            if (reserved) {
+            if (reserved && !committed.get()) {
                 cancel(townZone, session);
             }
             return null;
         } catch (RuntimeException exception) {
-            if (reserved) {
+            if (reserved && !committed.get()) {
                 cancel(townZone, session);
             }
             throw exception;
@@ -335,6 +338,7 @@ public final class MapManager {
             return null;
         }
 
+        AtomicBoolean committed = new AtomicBoolean();
         try {
             Transition result = sourceZone.call(() -> {
                 synchronized (sourceZone) {
@@ -366,6 +370,7 @@ public final class MapManager {
                     player.changeMap(intent.waypoint().goMap(), 0,
                             intent.waypoint().goX(), intent.waypoint().goY());
                     session.clearZone(sourceZone);
+                    committed.set(true);
                     var rejected = area.removePlayer(
                             session, player.id(), sourceZone.members());
                     return new Transition(
@@ -373,18 +378,18 @@ public final class MapManager {
                             rejected);
                 }
             });
-            if (result.change() == null && reserved) {
+            if (result.change() == null && reserved && !committed.get()) {
                 cancel(destinationZone, session);
             }
             closeRejected(result.rejectedObservers());
             return result.change();
         } catch (RejectedExecutionException exception) {
-            if (reserved) {
+            if (reserved && !committed.get()) {
                 cancel(destinationZone, session);
             }
             return null;
         } catch (RuntimeException exception) {
-            if (reserved) {
+            if (reserved && !committed.get()) {
                 cancel(destinationZone, session);
             }
             throw exception;

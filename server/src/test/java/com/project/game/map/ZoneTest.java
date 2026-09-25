@@ -145,6 +145,39 @@ class ZoneTest {
     }
 
     @Test
+    void reservedSlotCannotBeStolenBeforeFinishLoad() {
+        Zone zone = new Zone(0, 0, 1, List.of());
+        Session first = session(TestPlayers.initial(1L, 1, "alpha1", 0));
+        Session second = session(TestPlayers.initial(2L, 2, "beta22", 0));
+
+        assertEquals(Zone.ReserveStatus.RESERVED, zone.reservePlayer(first));
+        assertEquals(1, zone.reservedCount());
+        assertEquals(Zone.ReserveStatus.FULL, zone.reservePlayer(second));
+        assertEquals(0, zone.size());
+
+        assertEquals(Zone.JoinStatus.ADDED, zone.addPlayer(first).status());
+        assertEquals(0, zone.reservedCount());
+        assertEquals(1, zone.size());
+        assertEquals(Zone.JoinStatus.ALREADY_PRESENT, zone.addPlayer(first).status());
+    }
+
+    @Test
+    void reservationIsIdempotentAndCancelOnlyRemovesItsSession() {
+        Zone zone = new Zone(0, 0, 2, List.of());
+        Session first = session(TestPlayers.initial(1L, 1, "alpha1", 0));
+        Session second = session(TestPlayers.initial(2L, 2, "beta22", 0));
+
+        assertEquals(Zone.ReserveStatus.RESERVED, zone.reservePlayer(first));
+        assertEquals(Zone.ReserveStatus.ALREADY_RESERVED, zone.reservePlayer(first));
+        assertFalse(zone.cancelReservation(second));
+        assertTrue(zone.hasReservation(first));
+        assertTrue(zone.cancelReservation(first));
+        assertFalse(zone.cancelReservation(first));
+        assertFalse(zone.hasReservation(first));
+        assertEquals(0, zone.reservedCount());
+    }
+
+    @Test
     void concurrentAdmissionNeverExceedsMaxPlayer() throws Exception {
         Zone zone = new Zone(0, 0, 1, List.of());
         Session first = session(TestPlayers.initial(1L, 1, "alpha1", 0));

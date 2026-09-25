@@ -32,6 +32,7 @@ public final class Zone {
     private final int zoneId;
     private final int maxPlayer;
     private final ConcurrentHashMap<Integer, Session> members = new ConcurrentHashMap<>();
+    private final LinkedHashMap<Integer, Session> reservedPlayers = new LinkedHashMap<>();
     private final LinkedHashMap<Integer, Monster> monsters = new LinkedHashMap<>();
     private final ArrayBlockingQueue<Runnable> runtimeInputs;
     private final Object runtimeLock = new Object();
@@ -245,12 +246,63 @@ public final class Zone {
         if (existingSession != null) {
             return new JoinResult(JoinStatus.PLAYER_ID_CONFLICT, List.of());
         }
-        if (members.size() >= maxPlayer) {
+        Session reservedSession = reservedPlayers.get(player.id());
+        if (reservedSession != null && reservedSession != session) {
+            return new JoinResult(JoinStatus.PLAYER_ID_CONFLICT, List.of());
+        }
+        if (reservedSession == session) {
+            reservedPlayers.remove(player.id(), session);
+        } else if (members.size() + reservedPlayers.size() >= maxPlayer) {
             return new JoinResult(JoinStatus.FULL, List.of());
         }
         List<Session> existing = List.copyOf(members.values());
         members.put(player.id(), session);
         return new JoinResult(JoinStatus.ADDED, existing);
+    }
+
+    /** Giữ một slot cho Session trước khi Player rời Zone nguồn. */
+    synchronized ReserveStatus reservePlayer(Session session) {
+        Objects.requireNonNull(session, "session");
+        Player player = requirePlayer(session);
+        Session existingMember = members.get(player.id());
+        if (existingMember == session) {
+            return ReserveStatus.ALREADY_PRESENT;
+        }
+        if (existingMember != null) {
+            return ReserveStatus.PLAYER_ID_CONFLICT;
+        }
+
+        Session existingReservation = reservedPlayers.get(player.id());
+        if (existingReservation == session) {
+            return ReserveStatus.ALREADY_RESERVED;
+        }
+        if (existingReservation != null) {
+            return ReserveStatus.PLAYER_ID_CONFLICT;
+        }
+        if (members.size() + reservedPlayers.size() >= maxPlayer) {
+            return ReserveStatus.FULL;
+        }
+
+        reservedPlayers.put(player.id(), session);
+        return ReserveStatus.RESERVED;
+    }
+
+    synchronized boolean cancelReservation(Session session) {
+        if (session == null || session.player() == null) {
+            return false;
+        }
+        return reservedPlayers.remove(session.player().id(), session);
+    }
+
+    synchronized boolean hasReservation(Session session) {
+        if (session == null || session.player() == null) {
+            return false;
+        }
+        return reservedPlayers.get(session.player().id()) == session;
+    }
+
+    synchronized int reservedCount() {
+        return reservedPlayers.size();
     }
 
     synchronized boolean removePlayer(Session session) {
@@ -275,7 +327,11 @@ public final class Zone {
         if (existing != null) {
             return false;
         }
-        return members.size() < maxPlayer;
+        Session reserved = reservedPlayers.get(player.id());
+        if (reserved != null) {
+            return reserved == session;
+        }
+        return members.size() + reservedPlayers.size() < maxPlayer;
     }
 
     public synchronized boolean hasPlayer(Session session) {
@@ -518,6 +574,14 @@ public final class Zone {
     /** Kết quả của một lần thử gia nhập nguyên tử. */
     enum JoinStatus {
         ADDED,
+        ALREADY_PRESENT,
+        FULL,
+        PLAYER_ID_CONFLICT
+    }
+
+    enum ReserveStatus {
+        RESERVED,
+        ALREADY_RESERVED,
         ALREADY_PRESENT,
         FULL,
         PLAYER_ID_CONFLICT

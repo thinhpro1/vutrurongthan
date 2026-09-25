@@ -120,6 +120,7 @@ class PlayerTest {
         player.injure(50);
         player.addPotential(20);
 
+        assertEquals(0, saved.mapId());
         assertEquals(1250, saved.x());
         assertEquals(648, saved.y());
         assertEquals(200, saved.hp());

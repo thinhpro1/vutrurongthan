@@ -2,7 +2,10 @@ package com.project.game.player;
 
 import java.util.Objects;
 
-/** Bản sao bất biến của dữ liệu Player tại ranh giới checkpoint. */
+/**
+ * Immutable Player data at the checkpoint boundary.
+ * mapId and x/y are persisted; zoneId is runtime-only and is intentionally absent.
+ */
 public record PlayerSaveData(
         int id,
         long accountId,

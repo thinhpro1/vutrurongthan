@@ -27,6 +27,24 @@ Central rule:
 
 > **Zone is the realtime mutation authority for Zone-owned runtime state.**
 
+## Player contract
+
+`Player.java` is the Player feature center.
+
+Zone decides **when** a joined Player mutation runs. Player decides **what**
+the Player state transition does.
+
+Player location state has this contract:
+
+```text
+mapId/x/y participate in durable location persistence.
+zoneId is runtime-only and is not stored in PlayerSaveData.
+Player location fields do not by themselves prove realtime Zone membership.
+```
+
+Session/Zone membership authority is intentionally not redesigned in R1; it is
+audited in R5.
+
 ## Main decisions
 
 ```text

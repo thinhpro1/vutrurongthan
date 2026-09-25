@@ -4,7 +4,7 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.regex.Pattern;
 
-/** Runtime Player mutable; Zone quyết định thời điểm gọi các chuyển trạng thái này. */
+/** Mutable Player runtime state and Player-local behavior. Zone decides when it runs. */
 public final class Player {
     private static final Pattern NAME = Pattern.compile("^[a-z0-9]{5,10}$");
 
@@ -25,6 +25,8 @@ public final class Player {
     private long coinLock;
     private int diamond;
     private int ruby;
+    // mapId and x/y are Player location state and are included in persistence.
+    // zoneId is the runtime Zone index; Zone/Session membership is separate.
     private int mapId;
     private int zoneId;
     private int x;
@@ -49,12 +51,14 @@ public final class Player {
         CurrentStats current = new CurrentStats(
                 base.hp(), base.mp(), base.damage(), base.armor(), base.critical(),
                 base.dodge(), base.constitution(), base.speed());
-        Appearance appearance = switch (gender) {
-            case 0 -> new Appearance(5, 6, -1, -1, -1, -1, 0);
-            case 1 -> new Appearance(3, 7, -1, -1, -1, -1, 0);
-            case 2 -> new Appearance(4, 8, -1, -1, -1, -1, 0);
-            default -> throw new IllegalStateException("gender was validated");
-        };
+        Appearance appearance;
+        if (gender == 0) {
+            appearance = new Appearance(5, 6, -1, -1, -1, -1, 0);
+        } else if (gender == 1) {
+            appearance = new Appearance(3, 7, -1, -1, -1, -1, 0);
+        } else {
+            appearance = new Appearance(4, 8, -1, -1, -1, -1, 0);
+        }
         return new Player(
                 id, accountId, normalized, gender, 1L, 1L, 1, 0L,
                 base, current, current.maxHp(), current.maxMp(), appearance,
@@ -180,12 +184,15 @@ public final class Player {
         if (amount < 0L) {
             throw new IllegalArgumentException("amount must be non-negative");
         }
-        potential = potential > Long.MAX_VALUE - amount
-                ? Long.MAX_VALUE
-                : potential + amount;
+        if (potential > Long.MAX_VALUE - amount) {
+            potential = Long.MAX_VALUE;
+        } else {
+            potential += amount;
+        }
         return potential;
     }
 
+    /** Changes Player location fields only; Zone/Session membership is separate. */
     public void changeMap(int mapId, int zoneId, int x, int y) {
         this.mapId = mapId;
         this.zoneId = zoneId;
@@ -193,6 +200,7 @@ public final class Player {
         this.y = y;
     }
 
+    /** Restores vitals and changes Player location fields without world orchestration. */
     public void revive(int mapId, int zoneId, int x, int y) {
         hp = currentStats.maxHp();
         mp = currentStats.maxMp();

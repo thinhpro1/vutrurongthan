@@ -921,35 +921,38 @@ into the Zone.
 
 ---
 
-# 17. PlayerProfile current frozen contract
+# 17. Player runtime and persistence contract
 
-Current `PlayerProfile` immutability participates in concurrency/checkpoint
-safety.
+Mutable `Player` is the authoritative runtime Player model.
 
-Do not replace it with a mutable Player as part of unrelated cleanup.
-
-The approved long-term direction may use a mutable Player runtime, but only
-after Zone single-writer ownership is established in a dedicated migration
-phase.
-
-Changing Player runtime requires a dedicated design covering:
+`Player` owns Player state transitions and behavior, including:
 
 ```text
-runtime authority
-Zone mutation ownership
-checkpoint/save-data handoff while Player remains online
-disconnect ordering
-same-account relogin races
-save consistency
-persistence mapping
-packet behavior
+move
+injure
+addPotential
+changeMap
+revive
+future Player behavior
 ```
 
-A separate immutable Player snapshot is not automatically required for final
-disconnect if Player has already been detached and can no longer mutate.
+While a Player is joined, the owning `Zone` controls when and where those
+mutations run and provides their ordering. `Session`, network handlers, and
+repositories must not directly mutate a joined Player.
 
-Until the dedicated phase lands, current `PlayerProfile` behavior remains
-authoritative.
+Persistence reads a stable `PlayerSaveData` captured at a valid ownership
+boundary. Final disconnect ordering is:
+
+```text
+process prior Zone work
+→ detach from realtime mutation
+→ capture stable save state
+→ JDBC outside Zone
+→ release account reservation
+```
+
+A separate immutable Player snapshot is not automatically required after the
+Player has been detached and can no longer mutate.
 
 Review Player separately before introducing shared Entity inheritance.
 
@@ -1182,9 +1185,7 @@ pin current behavior with focused regression tests
 Do not combine without explicit approval:
 
 ```text
-Zone concurrency cutover
-+ mutable Player redesign
-+ Monster AI redesign
+Monster AI redesign
 + Effect implementation
 + persistence rewrite
 ```
@@ -1195,7 +1196,7 @@ Until a slice is explicitly migrated:
 
 ```text
 current production synchronization
-current PlayerProfile contract
+current Player/Zone ownership contract
 current packet behavior
 current persistence ordering
 current gameplay timing/order

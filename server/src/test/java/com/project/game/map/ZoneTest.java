@@ -14,6 +14,9 @@ import com.project.game.network.SessionManager;
 import com.project.game.network.codec.LegacyPacketCodec;
 import com.project.game.network.transport.ClientTransport;
 import com.project.game.player.Player;
+import com.project.game.player.PlayerSaveData;
+import com.project.game.network.packet.PlayerPacketWriter;
+import com.project.game.service.AreaService;
 import com.project.game.network.SessionServices;
 import org.junit.jupiter.api.Test;
 
@@ -38,14 +41,37 @@ import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ZoneTest {
     @Test
+    void zoneOwnsPlayerEnterMoveAndLeaveFlow() {
+        Zone zone = zone(1, 0, Integer.MAX_VALUE, List.of());
+        Session session = session(TestPlayers.initial(1L, 7, "alpha1", 1));
+
+        assertTrue(zone.enter(session));
+        assertSame(zone, session.zone());
+        assertTrue(zone.hasPlayer(session));
+
+        assertTrue(zone.move(session, 1260, 640));
+        assertEquals(1260, session.player().x());
+        assertEquals(640, session.player().y());
+
+        PlayerSaveData saved = zone.leave(session);
+        assertNotNull(saved);
+        assertEquals(1260, saved.x());
+        assertEquals(640, saved.y());
+        assertFalse(zone.hasPlayer(session));
+        assertNull(session.zone());
+    }
+
+    @Test
     void startsEmptyAndTracksBoundPlayer() {
-        Zone zone = new Zone(0, 0, Integer.MAX_VALUE, List.of());
+        Zone zone = zone(0, 0, Integer.MAX_VALUE, List.of());
         Session session = session(TestPlayers.initial(1L, 7, "alpha1", 0));
 
         assertEquals(0, zone.size());
@@ -59,7 +85,7 @@ class ZoneTest {
 
     @Test
     void duplicateSameSessionIsIdempotent() {
-        Zone zone = new Zone(0, 0, Integer.MAX_VALUE, List.of());
+        Zone zone = zone(0, 0, Integer.MAX_VALUE, List.of());
         Session session = session(TestPlayers.initial(1L, 7, "alpha1", 0));
 
         assertEquals(Zone.JoinStatus.ADDED, zone.addPlayer(session).status());
@@ -69,7 +95,7 @@ class ZoneTest {
 
     @Test
     void differentSessionCannotReplaceSamePlayerId() {
-        Zone zone = new Zone(0, 0, Integer.MAX_VALUE, List.of());
+        Zone zone = zone(0, 0, Integer.MAX_VALUE, List.of());
         Session first = session(TestPlayers.initial(1L, 7, "alpha1", 0));
         Session second = session(TestPlayers.initial(2L, 7, "alpha2", 0));
 
@@ -80,7 +106,7 @@ class ZoneTest {
 
     @Test
     void differentSessionWithSamePlayerIdIsAnIdentityConflict() {
-        Zone zone = new Zone(0, 0, 2, List.of());
+        Zone zone = zone(0, 0, 2, List.of());
         Session first = session(TestPlayers.initial(1L, 7, "alpha1", 0));
         Session second = session(TestPlayers.initial(2L, 7, "alpha2", 0));
 
@@ -96,7 +122,7 @@ class ZoneTest {
 
     @Test
     void snapshotIsImmutable() {
-        Zone zone = new Zone(0, 0, Integer.MAX_VALUE, List.of());
+        Zone zone = zone(0, 0, Integer.MAX_VALUE, List.of());
         zone.addPlayer(session(TestPlayers.initial(1L, 7, "alpha1", 0)));
 
         List<Session> snapshot = zone.members();
@@ -105,7 +131,7 @@ class ZoneTest {
 
     @Test
     void requiresBoundPlayer() {
-        Zone zone = new Zone(0, 0, Integer.MAX_VALUE, List.of());
+        Zone zone = zone(0, 0, Integer.MAX_VALUE, List.of());
         assertThrows(IllegalStateException.class, () -> zone.addPlayer(session(null)));
     }
 
@@ -118,7 +144,7 @@ class ZoneTest {
 
     @Test
     void atomicallyReturnsExistingMembersWhileAddingNewMember() {
-        Zone zone = new Zone(0, 0, Integer.MAX_VALUE, List.of());
+        Zone zone = zone(0, 0, Integer.MAX_VALUE, List.of());
         Session first = session(TestPlayers.initial(1L, 1, "alpha1", 0));
         Session second = session(TestPlayers.initial(2L, 2, "beta22", 0));
         zone.addPlayer(first);
@@ -133,7 +159,7 @@ class ZoneTest {
 
     @Test
     void maxPlayerDistinguishesDuplicateFromFull() {
-        Zone zone = new Zone(0, 0, 1, List.of());
+        Zone zone = zone(0, 0, 1, List.of());
         Session first = session(TestPlayers.initial(1L, 1, "alpha1", 0));
         Session second = session(TestPlayers.initial(2L, 2, "beta22", 0));
 
@@ -146,7 +172,7 @@ class ZoneTest {
 
     @Test
     void reservedSlotCannotBeStolenBeforeFinishLoad() {
-        Zone zone = new Zone(0, 0, 1, List.of());
+        Zone zone = zone(0, 0, 1, List.of());
         Session first = session(TestPlayers.initial(1L, 1, "alpha1", 0));
         Session second = session(TestPlayers.initial(2L, 2, "beta22", 0));
 
@@ -163,7 +189,7 @@ class ZoneTest {
 
     @Test
     void reservationIsIdempotentAndCancelOnlyRemovesItsSession() {
-        Zone zone = new Zone(0, 0, 2, List.of());
+        Zone zone = zone(0, 0, 2, List.of());
         Session first = session(TestPlayers.initial(1L, 1, "alpha1", 0));
         Session second = session(TestPlayers.initial(2L, 2, "beta22", 0));
 
@@ -179,7 +205,7 @@ class ZoneTest {
 
     @Test
     void concurrentAdmissionNeverExceedsMaxPlayer() throws Exception {
-        Zone zone = new Zone(0, 0, 1, List.of());
+        Zone zone = zone(0, 0, 1, List.of());
         Session first = session(TestPlayers.initial(1L, 1, "alpha1", 0));
         Session second = session(TestPlayers.initial(2L, 2, "beta22", 0));
         CyclicBarrier start = new CyclicBarrier(3);
@@ -205,7 +231,7 @@ class ZoneTest {
 
     @Test
     void runtimeStartsFrozenWithoutCreatingAnActiveWorker() {
-        Zone zone = new Zone(1, 0, 10, List.of());
+        Zone zone = zone(1, 0, 10, List.of());
 
         assertEquals(Zone.RuntimeState.FROZEN, zone.runtimeState());
     }
@@ -225,17 +251,17 @@ class ZoneTest {
 
     @Test
     void runtimeRejectsNullActionsAndInvalidInputCapacity() {
-        Zone zone = new Zone(1, 0, 10, List.of());
+        Zone zone = zone(1, 0, 10, List.of());
 
         assertThrows(NullPointerException.class, () -> zone.submit(null));
         assertThrows(
                 IllegalArgumentException.class,
-                () -> new Zone(1, 0, 10, List.of(), 0));
+                () -> zone(1, 0, 10, List.of(), 0));
     }
 
     @Test
     void queuedActionsRunInFifoOrderOnOneVirtualWriter() throws Exception {
-        Zone zone = new Zone(1, 0, 10, List.of());
+        Zone zone = zone(1, 0, 10, List.of());
         List<Integer> order = Collections.synchronizedList(new ArrayList<>());
         AtomicReference<Thread> writer = new AtomicReference<>();
         AtomicBoolean allVirtual = new AtomicBoolean(true);
@@ -290,7 +316,7 @@ class ZoneTest {
 
     @Test
     void simultaneousSubmissionsShareOneVirtualWriter() throws Exception {
-        Zone zone = new Zone(1, 0, 10, List.of());
+        Zone zone = zone(1, 0, 10, List.of());
         CountDownLatch firstStarted = new CountDownLatch(1);
         CountDownLatch releaseFirst = new CountDownLatch(1);
         CountDownLatch submitted = new CountDownLatch(2);
@@ -333,7 +359,7 @@ class ZoneTest {
 
     @Test
     void runtimeReturnsToFrozenAfterQueueDrains() throws Exception {
-        Zone zone = new Zone(1, 0, 10, List.of());
+        Zone zone = zone(1, 0, 10, List.of());
         CountDownLatch completed = new CountDownLatch(1);
 
         assertTrue(zone.submit(completed::countDown));
@@ -343,7 +369,7 @@ class ZoneTest {
 
     @Test
     void synchronousCallWaitsForQueuedActionAndReturnsResult() throws Exception {
-        Zone zone = new Zone(1, 0, 10, List.of());
+        Zone zone = zone(1, 0, 10, List.of());
         CountDownLatch firstStarted = new CountDownLatch(1);
         CountDownLatch releaseFirst = new CountDownLatch(1);
         CountDownLatch callFinished = new CountDownLatch(1);
@@ -386,7 +412,7 @@ class ZoneTest {
 
     @Test
     void synchronousCallExecutesInlineOnZoneWorker() throws Exception {
-        Zone zone = new Zone(1, 0, 10, List.of());
+        Zone zone = zone(1, 0, 10, List.of());
         CountDownLatch finished = new CountDownLatch(1);
         AtomicReference<Integer> result = new AtomicReference<>();
 
@@ -402,7 +428,7 @@ class ZoneTest {
 
     @Test
     void acceptedCallRestoresCallerInterruptAfterCompletion() throws Exception {
-        Zone zone = new Zone(1, 0, 10, List.of());
+        Zone zone = zone(1, 0, 10, List.of());
         CountDownLatch firstStarted = new CountDownLatch(1);
         CountDownLatch releaseFirst = new CountDownLatch(1);
         CountDownLatch callFinished = new CountDownLatch(1);
@@ -440,7 +466,7 @@ class ZoneTest {
 
     @Test
     void requiredCallWaitsForTemporaryQueueFull() throws Exception {
-        Zone zone = new Zone(1, 0, 10, List.of(), 1);
+        Zone zone = zone(1, 0, 10, List.of(), 1);
         CountDownLatch firstStarted = new CountDownLatch(1);
         CountDownLatch releaseFirst = new CountDownLatch(1);
         CountDownLatch secondRan = new CountDownLatch(1);
@@ -478,7 +504,7 @@ class ZoneTest {
 
     @Test
     void requiredCallCompletesAfterInterruptAndRestoresInterruptStatus() throws Exception {
-        Zone zone = new Zone(1, 0, 10, List.of(), 1);
+        Zone zone = zone(1, 0, 10, List.of(), 1);
         CountDownLatch firstStarted = new CountDownLatch(1);
         CountDownLatch releaseFirst = new CountDownLatch(1);
         CountDownLatch callFinished = new CountDownLatch(1);
@@ -519,7 +545,7 @@ class ZoneTest {
 
     @Test
     void requiredCallWaitingForCapacityWakesWhenRuntimeStops() throws Exception {
-        Zone zone = new Zone(1, 0, 10, List.of(), 1);
+        Zone zone = zone(1, 0, 10, List.of(), 1);
         CountDownLatch firstStarted = new CountDownLatch(1);
         CountDownLatch releaseFirst = new CountDownLatch(1);
         CountDownLatch callFinished = new CountDownLatch(1);
@@ -555,7 +581,7 @@ class ZoneTest {
 
     @Test
     void tryCallRejectsOverloadWithoutRunningLater() throws Exception {
-        Zone zone = new Zone(1, 0, 10, List.of(), 1);
+        Zone zone = zone(1, 0, 10, List.of(), 1);
         CountDownLatch firstStarted = new CountDownLatch(1);
         CountDownLatch releaseFirst = new CountDownLatch(1);
         CountDownLatch secondRan = new CountDownLatch(1);
@@ -582,7 +608,7 @@ class ZoneTest {
 
     @Test
     void stoppedRuntimeRejectsSynchronousCall() {
-        Zone zone = new Zone(1, 0, 10, List.of());
+        Zone zone = zone(1, 0, 10, List.of());
         zone.stopRuntime();
 
         assertThrows(RejectedExecutionException.class, () -> zone.call(() -> 42));
@@ -590,7 +616,7 @@ class ZoneTest {
 
     @Test
     void stoppedRuntimeRejectsAcceptedCallInsteadOfLeavingCallerWaiting() throws Exception {
-        Zone zone = new Zone(1, 0, 10, List.of());
+        Zone zone = zone(1, 0, 10, List.of());
         CountDownLatch firstStarted = new CountDownLatch(1);
         CountDownLatch releaseFirst = new CountDownLatch(1);
         CountDownLatch callFinished = new CountDownLatch(1);
@@ -632,7 +658,7 @@ class ZoneTest {
     @Test
     void freezeWakeKeepsExistingMonsterRuntimeState() throws Exception {
         Monster monster = monsterForTest();
-        Zone zone = new Zone(1, 0, 10, List.of(monster));
+        Zone zone = zone(1, 0, 10, List.of(monster));
         CountDownLatch damaged = new CountDownLatch(1);
         CountDownLatch woke = new CountDownLatch(1);
 
@@ -652,7 +678,7 @@ class ZoneTest {
 
     @Test
     void boundedRuntimeQueueRejectsOverflowWithoutBlocking() throws Exception {
-        Zone zone = new Zone(1, 0, 10, List.of(), 1);
+        Zone zone = zone(1, 0, 10, List.of(), 1);
         CountDownLatch firstStarted = new CountDownLatch(1);
         CountDownLatch releaseFirst = new CountDownLatch(1);
         CountDownLatch secondRan = new CountDownLatch(1);
@@ -685,7 +711,7 @@ class ZoneTest {
 
     @Test
     void runtimeTaskFailureDoesNotStrandLifecycle() throws Exception {
-        Zone zone = new Zone(1, 0, 10, List.of());
+        Zone zone = zone(1, 0, 10, List.of());
         CountDownLatch continued = new CountDownLatch(1);
 
         assertTrue(zone.submit(() -> {
@@ -699,7 +725,7 @@ class ZoneTest {
 
     @Test
     void stoppedRuntimeRejectsNewActionsAndDiscardsPendingActions() throws Exception {
-        Zone zone = new Zone(1, 0, 10, List.of());
+        Zone zone = zone(1, 0, 10, List.of());
         CountDownLatch firstStarted = new CountDownLatch(1);
         CountDownLatch releaseFirst = new CountDownLatch(1);
         AtomicBoolean pendingRan = new AtomicBoolean();
@@ -738,6 +764,23 @@ class ZoneTest {
             Thread.currentThread().interrupt();
             throw new AssertionError(exception);
         }
+    }
+
+    private static Zone zone(int mapId, int zoneId, int maxPlayer, List<Monster> monsters) {
+        return new Zone(mapId, zoneId, maxPlayer, monsters, area());
+    }
+
+    private static Zone zone(
+            int mapId,
+            int zoneId,
+            int maxPlayer,
+            List<Monster> monsters,
+            int inputCapacity) {
+        return new Zone(mapId, zoneId, maxPlayer, monsters, inputCapacity, area());
+    }
+
+    private static AreaService area() {
+        return new AreaService(new PlayerPacketWriter());
     }
 
     private static void submitFromBarrier(

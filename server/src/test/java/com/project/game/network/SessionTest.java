@@ -171,7 +171,7 @@ class SessionTest {
 
         AtomicBoolean moved = new AtomicBoolean();
         Thread movement = Thread.ofVirtual().start(() ->
-                moved.set(gameplay.mapManager().movePlayer(mover, 1260, 640)));
+                moved.set(gameplay.movePlayer(mover, 1260, 640)));
 
         assertTrue(repository.updateEntered.await(5, TimeUnit.SECONDS));
         assertEquals(1260, mover.player().x());
@@ -342,7 +342,7 @@ class SessionTest {
         GameplayTestSupport.replaceSendQueue(observer, observerQueue);
         AtomicBoolean moved = new AtomicBoolean();
         Thread movement = Thread.ofVirtual().start(() ->
-                moved.set(gameplay.mapManager().movePlayer(mover, 1260, 640)));
+                moved.set(gameplay.movePlayer(mover, 1260, 640)));
         assertTrue(observerQueue.offerEntered.await(5, java.util.concurrent.TimeUnit.SECONDS));
 
         Thread close = Thread.ofVirtual().start(mover::close);

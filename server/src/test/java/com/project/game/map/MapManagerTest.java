@@ -84,7 +84,7 @@ class MapManagerTest {
         drain(first);
         drain(second);
 
-        assertTrue(maps.mapManager().movePlayer(second, 1260, 640));
+        assertTrue(maps.movePlayer(second, 1260, 640));
         assertEquals(1260, second.player().x());
         assertEquals(640, second.player().y());
 
@@ -245,7 +245,7 @@ class MapManagerTest {
         replaceSendQueue(observer, observerQueue);
         AtomicBoolean moved = new AtomicBoolean();
         Thread movement = Thread.ofVirtual().start(() ->
-                moved.set(maps.mapManager().movePlayer(mover, 4464, 936)));
+                moved.set(maps.movePlayer(mover, 4464, 936)));
         assertTrue(observerQueue.offerEntered.await(5, TimeUnit.SECONDS));
 
         AtomicBoolean changed = new AtomicBoolean();
@@ -461,7 +461,7 @@ class MapManagerTest {
         second.close();
         drain(first);
 
-        assertTrue(maps.mapManager().movePlayer(first, 1260, 640));
+        assertTrue(maps.movePlayer(first, 1260, 640));
         assertEquals(List.of(), drain(first));
     }
 
@@ -620,7 +620,7 @@ class MapManagerTest {
 
         int xBefore = dead.player().x();
         int yBefore = dead.player().y();
-        assertFalse(maps.mapManager().movePlayer(dead, xBefore + 100, yBefore + 100));
+        assertFalse(maps.movePlayer(dead, xBefore + 100, yBefore + 100));
         assertEquals(xBefore, dead.player().x());
         assertEquals(yBefore, dead.player().y());
         assertEquals(List.of(), drain(dead));
@@ -635,7 +635,7 @@ class MapManagerTest {
         closed.close();
 
         Player before = closed.player();
-        assertFalse(maps.mapManager().movePlayer(closed, before.x() + 100, before.y() + 100));
+        assertFalse(maps.movePlayer(closed, before.x() + 100, before.y() + 100));
         assertEquals(before, closed.player());
         assertEquals(0, maps.memberCount(0, 0));
     }
@@ -783,7 +783,7 @@ class MapManagerTest {
         assertEquals(List.of(), drain(observer));
 
         PlayerSaveData stable = change.player();
-        assertTrue(maps.mapManager().movePlayer(dead, 1260, 640));
+        assertTrue(maps.movePlayer(dead, 1260, 640));
         assertEquals(1260, dead.player().x());
         assertEquals(stable.x(), change.player().x());
         assertEquals(stable.y(), change.player().y());
@@ -1209,7 +1209,7 @@ class MapManagerTest {
             CountDownLatch finished) {
         started.countDown();
         try {
-            moved.set(maps.mapManager().movePlayer(session, x, y));
+            moved.set(maps.movePlayer(session, x, y));
         } finally {
             finished.countDown();
         }

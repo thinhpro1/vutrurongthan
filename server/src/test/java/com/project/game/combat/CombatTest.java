@@ -249,10 +249,10 @@ class CombatTest {
         drain(attacker);
         long rewarded = attacker.player().potential();
 
-        assertTrue(maps.mapManager().movePlayer(attacker, 1260, 640));
+        assertTrue(maps.movePlayer(attacker, 1260, 640));
         assertEquals(rewarded, attacker.player().potential());
 
-        assertTrue(maps.mapManager().movePlayer(attacker, 0, 1008));
+        assertTrue(maps.movePlayer(attacker, 0, 1008));
         assertNotNull(maps.mapManager().changeMap(attacker));
 
         assertEquals(rewarded, attacker.player().potential());

@@ -12,9 +12,11 @@ import com.project.game.network.Session;
 import com.project.game.network.SessionManager;
 import com.project.game.network.SessionState;
 import com.project.game.network.codec.LegacyPacketCodec;
+import com.project.game.network.packet.PlayerPacketWriter;
 import com.project.game.network.transport.ClientTransport;
 import com.project.game.player.Player;
 import com.project.game.resource.GameResources;
+import com.project.game.service.AreaService;
 import com.project.game.network.SessionServices;
 import org.junit.jupiter.api.Test;
 
@@ -83,7 +85,7 @@ class ZoneMonsterCombatTest {
 
         assertThrows(
                 IllegalArgumentException.class,
-                () -> new Zone(
+                () -> zone(
                         1,
                         0,
                         Integer.MAX_VALUE,
@@ -92,7 +94,7 @@ class ZoneMonsterCombatTest {
 
     @Test
     void containsRequiresExactSessionIdentity() {
-        Zone zone = new Zone(1, 0, Integer.MAX_VALUE, List.of());
+        Zone zone = zone(1, 0, Integer.MAX_VALUE, List.of());
         Session first = session(TestPlayers.initial(1L, 7, "alpha1", 1));
         Session equivalent = session(TestPlayers.initial(2L, 7, "alpha2", 1));
 
@@ -324,12 +326,25 @@ class ZoneMonsterCombatTest {
         return session(player);
     }
 
+    private static Zone zone(
+            int mapId,
+            int zoneId,
+            int maxPlayer,
+            List<Monster> monsters) {
+        return new Zone(
+                mapId,
+                zoneId,
+                maxPlayer,
+                monsters,
+                new AreaService(new PlayerPacketWriter()));
+    }
+
     private static Zone map1Zone() {
         MonsterFactory factory = new MonsterFactory(
                 GameResources.fromFrameRoot(Path.of("resources", "json"),
                         com.project.game.testsupport.MapTestSupport.canonicalMaps(), 2,
                         com.project.game.testsupport.MonsterTestSupport.canonicalRepository()));
-        return new Zone(1, 0, Integer.MAX_VALUE, factory.createForMap(1));
+        return zone(1, 0, Integer.MAX_VALUE, factory.createForMap(1));
     }
 
     private static Session session(Player player) {

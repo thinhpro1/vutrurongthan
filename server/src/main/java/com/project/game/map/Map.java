@@ -1,6 +1,7 @@
 package com.project.game.map;
 
 import com.project.game.monster.MonsterFactory;
+import com.project.game.service.AreaService;
 
 import java.util.Comparator;
 import java.util.List;
@@ -11,11 +12,13 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class Map {
     private final MapTemplate template;
     private final MonsterFactory monsterFactory;
+    private final AreaService area;
     private final ConcurrentHashMap<Integer, Zone> zones = new ConcurrentHashMap<>();
 
-    public Map(MapTemplate template, MonsterFactory monsterFactory) {
+    public Map(MapTemplate template, MonsterFactory monsterFactory, AreaService area) {
         this.template = Objects.requireNonNull(template, "template");
         this.monsterFactory = Objects.requireNonNull(monsterFactory, "monsterFactory");
+        this.area = Objects.requireNonNull(area, "area");
         if (!"ONLINE".equals(template.type())) {
             throw new IllegalArgumentException("runtime map must be ONLINE: " + template.id());
         }
@@ -53,6 +56,6 @@ public final class Map {
     }
 
     private Zone newZone(int zoneId) {
-        return new Zone(id(), zoneId, template.maxPlayer(), monsterFactory.createForMap(id()));
+        return new Zone(id(), zoneId, template.maxPlayer(), monsterFactory.createForMap(id()), area);
     }
 }

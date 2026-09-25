@@ -153,7 +153,7 @@ class MonsterManagerMovementTest {
         assertEquals(979, monster.snapshot().x());
         assertTrue(monster.hasEnemy(player.player().id()));
 
-        assertTrue(maps.mapManager().movePlayer(player, 1975, 936));
+        assertTrue(maps.movePlayer(player, 1975, 936));
         drain(player);
         Monster.Move resumed = zone.moveMonsters().stream()
                 .filter(result -> result.monsterId() == 101)
@@ -208,7 +208,7 @@ class MonsterManagerMovementTest {
         assertEquals(1075, chase.x());
         assertEquals(1, chase.dir());
 
-        assertTrue(maps.mapManager().movePlayer(player, 2176, 936));
+        assertTrue(maps.movePlayer(player, 2176, 936));
         drain(player);
 
         Monster.Move returning = zone.moveMonsters().stream()

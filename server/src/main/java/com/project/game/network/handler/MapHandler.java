@@ -1,11 +1,13 @@
 package com.project.game.network.handler;
 
 import com.project.game.map.MapManager;
+import com.project.game.map.Zone;
 import com.project.game.monster.MonsterManager;
 import com.project.game.monster.MonsterSnapshot;
 import com.project.game.network.Session;
 import com.project.game.network.SessionState;
 import com.project.game.network.message.Message;
+import com.project.game.network.message.MessageReader;
 import com.project.game.network.packet.MapPacketWriter;
 import com.project.game.network.packet.PlayerPacketWriter;
 import com.project.game.persistence.player.PlayerRepository;
@@ -91,14 +93,17 @@ final class MapHandler {
             throw new IOException("PLAYER_MOVE without bound player");
         }
 
-        var reader = message.reader();
+        MessageReader reader = message.reader();
         int x = reader.readShort();
         int y = reader.readShort();
         if (reader.remaining() != 0) {
             throw new IOException("trailing PLAYER_MOVE payload bytes");
         }
 
-        mapManager.movePlayer(session, x, y);
+        Zone zone = session.zone();
+        if (zone != null) {
+            zone.move(session, x, y);
+        }
     }
 
     void sendMapInfo(Player player) throws IOException {

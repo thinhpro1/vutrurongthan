@@ -6,6 +6,8 @@ import com.project.game.monster.Monster;
 import com.project.game.network.Session;
 import com.project.game.network.SessionState;
 import com.project.game.player.Player;
+import com.project.game.player.PlayerSaveData;
+import com.project.game.service.AreaService;
 
 import java.util.LinkedHashMap;
 import java.util.Comparator;
@@ -31,6 +33,7 @@ public final class Zone {
     private final int mapId;
     private final int zoneId;
     private final int maxPlayer;
+    private final AreaService area;
     private final ConcurrentHashMap<Integer, Session> members = new ConcurrentHashMap<>();
     private final LinkedHashMap<Integer, Session> reservedPlayers = new LinkedHashMap<>();
     private final LinkedHashMap<Integer, Monster> monsters = new LinkedHashMap<>();
@@ -39,8 +42,13 @@ public final class Zone {
     private RuntimeState runtimeState = RuntimeState.FROZEN;
     private Thread runtimeWorker;
 
-    public Zone(int mapId, int zoneId, int maxPlayer, List<Monster> monsters) {
-        this(mapId, zoneId, maxPlayer, monsters, DEFAULT_RUNTIME_INPUT_CAPACITY);
+    public Zone(
+            int mapId,
+            int zoneId,
+            int maxPlayer,
+            List<Monster> monsters,
+            AreaService area) {
+        this(mapId, zoneId, maxPlayer, monsters, DEFAULT_RUNTIME_INPUT_CAPACITY, area);
     }
 
     Zone(
@@ -48,7 +56,8 @@ public final class Zone {
             int zoneId,
             int maxPlayer,
             List<Monster> monsters,
-            int inputCapacity) {
+            int inputCapacity,
+            AreaService area) {
         if (maxPlayer <= 0) {
             throw new IllegalArgumentException("maxPlayer must be positive");
         }
@@ -58,6 +67,7 @@ public final class Zone {
         this.mapId = mapId;
         this.zoneId = zoneId;
         this.maxPlayer = maxPlayer;
+        this.area = Objects.requireNonNull(area, "area");
         this.runtimeInputs = new ArrayBlockingQueue<>(inputCapacity);
         Objects.requireNonNull(monsters, "monsters");
         for (Monster monster : monsters) {
@@ -233,6 +243,97 @@ public final class Zone {
 
     public int maxPlayer() {
         return maxPlayer;
+    }
+
+    /** Gia nhập Zone, gắn Session và trao đổi hiện diện với các thành viên hiện có. */
+    public boolean enter(Session session) {
+        if (session == null || session.state() == SessionState.CLOSED || session.player() == null) {
+            return false;
+        }
+
+        try {
+            EnterDelivery result = tryCall(() -> {
+                synchronized (this) {
+                    if (session.state() == SessionState.CLOSED || session.player() == null) {
+                        return new EnterDelivery(false, List.of());
+                    }
+                    if (session.zone() != null) {
+                        return new EnterDelivery(session.zone() == this && hasPlayer(session), List.of());
+                    }
+
+                    JoinResult admission = addPlayer(session);
+                    if (admission.status() == JoinStatus.FULL
+                            || admission.status() == JoinStatus.PLAYER_ID_CONFLICT) {
+                        return new EnterDelivery(false, List.of());
+                    }
+                    session.bindZone(this);
+                    if (admission.status() == JoinStatus.ALREADY_PRESENT) {
+                        return new EnterDelivery(true, List.of());
+                    }
+
+                    return new EnterDelivery(
+                            true, area.addPlayer(session, session.player(), admission.existing()));
+                }
+            });
+            closeRejected(result.rejectedObservers());
+            return result.accepted();
+        } catch (RejectedExecutionException exception) {
+            return false;
+        }
+    }
+
+    /** Di chuyển Player trong Zone owner rồi phát thông báo ra khu vực. */
+    public boolean move(Session session, int x, int y) {
+        if (session == null || session.state() == SessionState.CLOSED) {
+            return false;
+        }
+
+        try {
+            MoveDelivery result = tryCall(() -> {
+                synchronized (this) {
+                    Player player = session.player();
+                    if (player == null || player.isDead() || !hasPlayer(session)) {
+                        return new MoveDelivery(false, List.of());
+                    }
+                    if (!player.move(x, y)) {
+                        return new MoveDelivery(false, List.of());
+                    }
+                    return new MoveDelivery(true, area.move(session, player, members()));
+                }
+            });
+            closeRejected(result.rejectedObservers());
+            return result.moved();
+        } catch (RejectedExecutionException exception) {
+            return false;
+        }
+    }
+
+    /** Tách Session khỏi Zone và chụp trạng thái Player ổn định trong Zone owner. */
+    public PlayerSaveData leave(Session session) {
+        if (session == null || session.player() == null) {
+            return null;
+        }
+
+        LeaveDelivery result = call(() -> {
+            synchronized (this) {
+                Player player = session.player();
+                if (player == null) {
+                    return new LeaveDelivery(null, List.of());
+                }
+                if (!hasPlayer(session)) {
+                    session.clearZone(this);
+                    return new LeaveDelivery(PlayerSaveData.capture(player), List.of());
+                }
+                if (!removePlayer(session)) {
+                    return new LeaveDelivery(null, List.of());
+                }
+                List<Session> rejected = area.removePlayer(session, player.id(), members());
+                session.clearZone(this);
+                return new LeaveDelivery(PlayerSaveData.capture(player), rejected);
+            }
+        });
+        closeRejected(result.rejectedObservers());
+        return result.saveData();
     }
 
     /** Thử cho Session vào Zone và trả về các thành viên đã có trước khi gia nhập. */
@@ -509,6 +610,30 @@ public final class Zone {
             throw new IllegalStateException("zone membership requires a bound player");
         }
         return player;
+    }
+
+    private static void closeRejected(List<Session> rejectedObservers) {
+        for (Session rejectedObserver : rejectedObservers) {
+            rejectedObserver.close();
+        }
+    }
+
+    private record EnterDelivery(boolean accepted, List<Session> rejectedObservers) {
+        private EnterDelivery {
+            rejectedObservers = List.copyOf(rejectedObservers);
+        }
+    }
+
+    private record MoveDelivery(boolean moved, List<Session> rejectedObservers) {
+        private MoveDelivery {
+            rejectedObservers = List.copyOf(rejectedObservers);
+        }
+    }
+
+    private record LeaveDelivery(PlayerSaveData saveData, List<Session> rejectedObservers) {
+        private LeaveDelivery {
+            rejectedObservers = List.copyOf(rejectedObservers);
+        }
     }
 
     private static final class Call<T> implements Runnable {

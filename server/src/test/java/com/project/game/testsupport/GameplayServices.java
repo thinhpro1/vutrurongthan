@@ -112,7 +112,10 @@ public final class GameplayServices {
     public boolean changeMap(Session session) {
         return maps.changeMap(session) != null;
     }
-    public boolean movePlayer(Session session, int x, int y) { return maps.movePlayer(session, x, y); }
+    public boolean movePlayer(Session session, int x, int y) {
+        Zone zone = session == null ? null : session.zone();
+        return zone != null && zone.move(session, x, y);
+    }
     public int memberCount(int mapId, int zoneId) {
         com.project.game.map.Map map = maps.findMap(mapId);
         if (map == null) {

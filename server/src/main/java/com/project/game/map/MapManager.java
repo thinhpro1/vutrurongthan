@@ -44,7 +44,7 @@ public final class MapManager {
                 throw new IllegalArgumentException("map catalog key does not match map id");
             }
             if ("ONLINE".equals(template.type())) {
-                runtimeMaps.put(mapId, new Map(template, monsterFactory));
+                runtimeMaps.put(mapId, new Map(template, monsterFactory, area));
             }
         });
         this.maps = java.util.Collections.unmodifiableMap(runtimeMaps);
@@ -95,35 +95,7 @@ public final class MapManager {
             return false;
         }
 
-        try {
-            Join result = zone.tryCall(() -> {
-                synchronized (zone) {
-                    if (session.state() == SessionState.CLOSED || session.player() == null) {
-                        return new Join(false, List.of());
-                    }
-                    if (session.zone() != null) {
-                        return new Join(session.zone() == zone && zone.hasPlayer(session), List.of());
-                    }
-
-                    Zone.JoinResult admission = zone.addPlayer(session);
-                    if (admission.status() == Zone.JoinStatus.FULL
-                            || admission.status() == Zone.JoinStatus.PLAYER_ID_CONFLICT) {
-                        return new Join(false, List.of());
-                    }
-                    session.bindZone(zone);
-                    if (admission.status() == Zone.JoinStatus.ALREADY_PRESENT) {
-                        return new Join(true, List.of());
-                    }
-
-                    return new Join(true,
-                            area.addPlayer(session, session.player(), admission.existing()));
-                }
-            });
-            closeRejected(result.rejectedObservers());
-            return result.accepted();
-        } catch (RejectedExecutionException exception) {
-            return false;
-        }
+        return zone.enter(session);
     }
 
     /** Tách Session và trả về bản PlayerSaveData được chụp trong Zone owner. */
@@ -150,59 +122,11 @@ public final class MapManager {
         }
 
         try {
-            LeaveResult result = zone.call(() -> {
-                synchronized (zone) {
-                    Player player = session.player();
-                    if (player == null) {
-                        return new LeaveResult(null, List.of());
-                    }
-                    if (!zone.hasPlayer(session)) {
-                        session.clearZone(zone);
-                        return new LeaveResult(PlayerSaveData.capture(player), List.of());
-                    }
-                    if (!zone.removePlayer(session)) {
-                        return new LeaveResult(null, List.of());
-                    }
-                    var rejected = area.removePlayer(session, player.id(), zone.members());
-                    session.clearZone(zone);
-                    return new LeaveResult(PlayerSaveData.capture(player), rejected);
-                }
-            });
-            closeRejected(result.rejectedObservers());
-            return result.saveData();
+            return zone.leave(session);
         } catch (RejectedExecutionException exception) {
             LOGGER.log(Level.WARNING,
                     "Không thể detach Player vì Zone đã dừng: session=" + session.id(), exception);
             return null;
-        }
-    }
-
-    /** Di chuyển Player trong Zone owner rồi phát thông báo ra khu vực. */
-    public boolean movePlayer(Session session, int x, int y) {
-        if (session == null || session.state() == SessionState.CLOSED) {
-            return false;
-        }
-        Zone zone = session.zone();
-        if (zone == null) {
-            return false;
-        }
-
-        try {
-            MoveDelivery result = zone.tryCall(() -> {
-                synchronized (zone) {
-                    Player player = session.player();
-                    if (player == null || player.isDead() || !zone.hasPlayer(session)
-                            || !player.move(x, y)) {
-                        return new MoveDelivery(false, List.of());
-                    }
-                    return new MoveDelivery(true,
-                            area.move(session, player, zone.members()));
-                }
-            });
-            closeRejected(result.rejectedObservers());
-            return result.moved();
-        } catch (RejectedExecutionException exception) {
-            return false;
         }
     }
 
@@ -434,24 +358,6 @@ public final class MapManager {
 
     private record TransitionIntent(
             Player player, int mapId, int zoneId, int x, int y, Waypoint waypoint) {
-    }
-
-    private record Join(boolean accepted, List<Session> rejectedObservers) {
-        private Join {
-            rejectedObservers = List.copyOf(rejectedObservers);
-        }
-    }
-
-    private record LeaveResult(PlayerSaveData saveData, List<Session> rejectedObservers) {
-        private LeaveResult {
-            rejectedObservers = List.copyOf(rejectedObservers);
-        }
-    }
-
-    private record MoveDelivery(boolean moved, List<Session> rejectedObservers) {
-        private MoveDelivery {
-            rejectedObservers = List.copyOf(rejectedObservers);
-        }
     }
 
     private record Transition(MapChange change, List<Session> rejectedObservers) {

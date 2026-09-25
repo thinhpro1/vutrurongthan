@@ -109,13 +109,43 @@ mutable Player runtime
 final disconnect stable save handoff
 ```
 
-The approved ownership/readability migration for the joined Player flow remains
-the R3B task below; current correctness behavior must not be read as R3B
-completion.
+The approved ownership/readability migration for the joined Player flow is now
+implemented in the R3B slice below. Current correctness behavior remains
+unchanged.
 
 Map admission keeps active members and pending destination reservations under the
 destination Zone owner. A cross-Zone transition reserves the destination before
 detaching the source and consumes the reservation at `FINISH_LOAD_MAP`.
+
+## Joined Player flow after R3B
+
+The ordinary same-Zone Player flow is owned by `Zone`; `MapManager` remains a
+public Map router and the temporary bridge for cross-Map transitions:
+
+```text
+public finish load:
+MapHandler → MapManager → Map.findZone → Zone.enter
+```
+
+```text
+same-Zone movement:
+MapHandler → Session.zone → Zone.move → Player.move → AreaService
+```
+
+```text
+normal joined disconnect:
+Session.close → MapManager bridge → Zone.leave → PlayerSaveData
+→ Repository outside Zone
+```
+
+`Zone.enter` owns admission, membership binding, and the existing-player
+presence delivery. `Zone.move` owns the ordered Player mutation and area
+delivery. `Zone.leave` owns membership removal, detachment, and stable save
+capture; rejected observer cleanup happens after the Zone writer returns.
+
+`MapManager` still owns the temporary cross-Map `changeMap` and
+`returnTownFromDeath` transition algorithms until R4. R5 Session/Player/Zone
+authority audit and R6 final readability sweep remain open.
 
 ## Freeze semantics
 

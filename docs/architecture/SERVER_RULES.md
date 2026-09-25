@@ -874,10 +874,21 @@ MapManager
 MapTemplate
 Zones
 findZone
-get/getOrCreate Zone according to naming contract
 zones
 findWaypoint
 map-specific rules
+```
+
+Public/world Map contract:
+
+```text
+MapManager owns the public Map registry.
+Map owns the Zones inside each public Map.
+Public Map construction creates exactly minZone Zones.
+Normal gameplay uses Map.findZone(zoneId) for existing Zones.
+An absent public Zone is rejected.
+Normal Player/Monster/client paths must not create a public Zone.
+maxZone does not authorize public lazy Zone creation.
 ```
 
 `MapManager` primarily owns:
@@ -889,6 +900,11 @@ find Map
 open/close Map lifecycle
 global Map collection
 ```
+
+A future Dungeon run may own private runtime Maps created from shared
+MapTemplate/static data. Those private Maps are not automatically part of the
+public `MapManager` registry. Dungeon runtime creation requires its own
+approved feature design.
 
 Do not duplicate Map-owned Zone APIs in MapManager without a demonstrated global need.
 

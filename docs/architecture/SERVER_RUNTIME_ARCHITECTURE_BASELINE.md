@@ -59,6 +59,29 @@ registered public Zone and rejects an absent Zone. `MapManager.zones()` remains
 temporarily available for the existing Monster update traversal and is tracked
 as P2 cleanup rather than a new public lifecycle API.
 
+## Public world and future Dungeon runs
+
+```text
+PUBLIC WORLD
+
+MapManager
+→ public runtime Map
+→ minZone public Zones
+```
+
+```text
+FUTURE DUNGEON RUN
+
+Dungeon run
+→ multiple private runtime Maps
+→ each Map owns its runtime Zone(s)
+```
+
+Zone is not the whole dungeon; a dungeon may span multiple Maps. Different
+dungeon runs share MapTemplate/static resources, but never share runtime
+Map/Zone/Monster state. The legacy Barrack / Manor / Expansion structure is a
+conceptual readability reference only, not a target runtime architecture.
+
 ## Main decisions
 
 ```text
@@ -77,15 +100,18 @@ NO network/persistence thread directly mutating Zone entities
 NO worker pool/NIO/reactive DB before benchmark evidence
 ```
 
-## P1 completion
+## Current P1 correctness baseline
 
-The following P1 work is complete:
+The current runtime already preserves these correctness behaviors:
 
 ```text
-mutable Player runtime = completed
-Zone-owned joined Player mutation = completed
-final disconnect stable save handoff = completed
+mutable Player runtime
+final disconnect stable save handoff
 ```
+
+The approved ownership/readability migration for the joined Player flow remains
+the R3B task below; current correctness behavior must not be read as R3B
+completion.
 
 Map admission keeps active members and pending destination reservations under the
 destination Zone owner. A cross-Zone transition reserves the destination before
@@ -151,19 +177,19 @@ mutating while persistence runs.
 
 ## Migration order
 
+Exact completion/lock state is determined by the commit-review workflow.
+
 ```text
-R0  lock rules/runtime contract
-R1  pin current behavior with tests
-R2  introduce Zone execution/lifecycle core
-R3A close public Map/Zone lifecycle and admission                ✅ completed
-R3B move membership/movement mutation into Zone ownership        ⏭ deferred
-R4  move Monster lifecycle into Zone execution
-R5  redesign Player as mutable runtime                           ✅ completed
-R6  implement dirty checkpoint/final-save persistence model
-R7  refactor Monster v2/readability/hot path
-R8  extract real Entity/CombatEntity + implement Effect runtime
-R9  finalize freeze/time semantics
-R10 load test and optimize from evidence
+R0  Rules / runtime contract                         LOCKED
+R1  Player contract/readability                      LOCKED
+R2  Map → Zone ownership                             LOCKED
+R3A Public Map / Zone lifecycle
+R3B Zone-local Player move / enter / leave
+R4  Cross-Map transition
+R5  Session / Player / Zone authority audit
+R6  Final P1 readability sweep
+→ P1 LOCK
+→ P2 Monster Complete
 ```
 
 Each phase must also clean the touched feature slice to current

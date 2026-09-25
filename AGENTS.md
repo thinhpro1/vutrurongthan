@@ -36,6 +36,26 @@ before planning, reviewing, testing, or changing code:
    protocol, persistence, or concurrency invariants, report the conflict before
    changing production code.
 
+For tasks touching server runtime ownership, Map/Zone/Player/Monster
+migration, or the active refactor roadmap, the coding model MUST also read:
+
+```text
+docs/architecture/SERVER_RUNTIME_ARCHITECTURE_BASELINE.md
+```
+
+Authority is separated as follows:
+
+```text
+SERVER_RULES.md
+= architecture/rule authority
+
+SERVER_RUNTIME_ARCHITECTURE_BASELINE.md
+= approved migration direction / active roadmap
+```
+
+If they conflict, `SERVER_RULES.md` wins and implementation must STOP/report
+the conflict.
+
 ---
 
 ## Legacy gameplay reference gate

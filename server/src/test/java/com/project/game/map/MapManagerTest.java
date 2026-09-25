@@ -63,12 +63,15 @@ class MapManagerTest {
     @Test
     void finishLoadRejectsAbsentPublicZoneWithoutGrowingRuntimeState() throws Exception {
         GameplayServices maps = publicZoneRequestMaps();
-        Session invalid = session(player(1, 1, 5), maps);
 
-        assertFalse(maps.mapManager().finishLoad(invalid));
-        assertNull(invalid.zone());
-        assertEquals(2, zoneRegistrySize(maps));
-        assertNull(maps.findZone(1, 5));
+        for (int zoneId : List.of(1, 2, 5, 9)) {
+            Session invalid = session(player(zoneId, 1, zoneId), maps);
+
+            assertFalse(maps.mapManager().finishLoad(invalid));
+            assertNull(invalid.zone());
+            assertNull(maps.findZone(1, zoneId));
+            assertEquals(2, zoneRegistrySize(maps));
+        }
     }
 
     @Test

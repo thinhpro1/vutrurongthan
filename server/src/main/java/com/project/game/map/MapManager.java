@@ -140,6 +140,19 @@ public final class MapManager {
         }
         Zone zone = session.zone();
         if (zone == null) {
+            Zone pendingZone = resolveZone(session.player().mapId(), session.player().zoneId());
+            if (pendingZone != null) {
+                try {
+                    pendingZone.call(() -> {
+                        pendingZone.cancelReservation(session);
+                        return null;
+                    });
+                } catch (RejectedExecutionException exception) {
+                    LOGGER.log(Level.FINE,
+                            "Không thể hủy reservation vì Zone đã dừng: session=" + session.id(),
+                            exception);
+                }
+            }
             return PlayerSaveData.capture(session.player());
         }
 
@@ -210,7 +223,13 @@ public final class MapManager {
         if (sourceZone == null || townZone == null) {
             return null;
         }
-        if (sourceZone != townZone && !canJoin(townZone, session)) {
+        Player sourcePlayer = session.player();
+        if (sourcePlayer == null) {
+            return null;
+        }
+
+        boolean reserved = sourceZone != townZone && reserve(townZone, session);
+        if (sourceZone != townZone && !reserved) {
             return null;
         }
 
@@ -218,7 +237,12 @@ public final class MapManager {
             Transition result = sourceZone.call(() -> {
                 synchronized (sourceZone) {
                     Player player = session.player();
-                    if (player == null || !player.isDead() || !sourceZone.hasPlayer(session)) {
+                    if (session.state() == SessionState.CLOSED
+                            || player == null
+                            || player != sourcePlayer
+                            || !player.isDead()
+                            || session.zone() != sourceZone
+                            || !sourceZone.hasPlayer(session)) {
                         return new Transition(null, List.of());
                     }
                     if (sourceZone == townZone) {
@@ -242,10 +266,21 @@ public final class MapManager {
                             rejected);
                 }
             });
+            if (result.change() == null && reserved) {
+                cancel(townZone, session);
+            }
             closeRejected(result.rejectedObservers());
             return result.change();
         } catch (RejectedExecutionException exception) {
+            if (reserved) {
+                cancel(townZone, session);
+            }
             return null;
+        } catch (RuntimeException exception) {
+            if (reserved) {
+                cancel(townZone, session);
+            }
+            throw exception;
         }
     }
 
@@ -268,7 +303,11 @@ public final class MapManager {
             intent = sourceZone.call(() -> {
                 synchronized (sourceZone) {
                     Player player = session.player();
-                    if (player == null || player.isDead() || !sourceZone.hasPlayer(session)) {
+                    if (session.state() == SessionState.CLOSED
+                            || player == null
+                            || player.isDead()
+                            || session.zone() != sourceZone
+                            || !sourceZone.hasPlayer(session)) {
                         return null;
                     }
                     Waypoint waypoint = sourceMap.findWaypoint(player.x(), player.y());
@@ -276,7 +315,7 @@ public final class MapManager {
                         return null;
                     }
                     return new TransitionIntent(
-                            player.mapId(), player.zoneId(), player.x(), player.y(), waypoint);
+                            player, player.mapId(), player.zoneId(), player.x(), player.y(), waypoint);
                 }
             });
         } catch (RejectedExecutionException exception) {
@@ -287,7 +326,12 @@ public final class MapManager {
         }
 
         Zone destinationZone = resolveZone(intent.waypoint().goMap(), 0);
-        if (destinationZone == null || !canJoin(destinationZone, session)) {
+        if (destinationZone == null) {
+            return null;
+        }
+
+        boolean reserved = sourceZone != destinationZone && reserve(destinationZone, session);
+        if (sourceZone != destinationZone && !reserved) {
             return null;
         }
 
@@ -296,7 +340,12 @@ public final class MapManager {
                 synchronized (sourceZone) {
                     Player player = session.player();
                     Waypoint currentWaypoint = sourceMap.findWaypoint(intent.x(), intent.y());
-                    if (player == null || player.isDead() || !sourceZone.hasPlayer(session)
+                    if (session.state() == SessionState.CLOSED
+                            || player == null
+                            || player != intent.player()
+                            || player.isDead()
+                            || session.zone() != sourceZone
+                            || !sourceZone.hasPlayer(session)
                             || player.mapId() != intent.mapId()
                             || player.zoneId() != intent.zoneId()
                             || player.x() != intent.x() || player.y() != intent.y()
@@ -324,10 +373,21 @@ public final class MapManager {
                             rejected);
                 }
             });
+            if (result.change() == null && reserved) {
+                cancel(destinationZone, session);
+            }
             closeRejected(result.rejectedObservers());
             return result.change();
         } catch (RejectedExecutionException exception) {
+            if (reserved) {
+                cancel(destinationZone, session);
+            }
             return null;
+        } catch (RuntimeException exception) {
+            if (reserved) {
+                cancel(destinationZone, session);
+            }
+            throw exception;
         }
     }
 
@@ -349,8 +409,25 @@ public final class MapManager {
         }
     }
 
-    private static boolean canJoin(Zone zone, Session session) {
-        return zone.canAddPlayer(session);
+    private static boolean reserve(Zone zone, Session session) {
+        try {
+            Zone.ReserveStatus status = zone.call(() -> zone.reservePlayer(session));
+            return status == Zone.ReserveStatus.RESERVED
+                    || status == Zone.ReserveStatus.ALREADY_RESERVED;
+        } catch (RejectedExecutionException exception) {
+            return false;
+        }
+    }
+
+    private static void cancel(Zone zone, Session session) {
+        try {
+            zone.call(() -> {
+                zone.cancelReservation(session);
+                return null;
+            });
+        } catch (RejectedExecutionException ignored) {
+            // A stopped destination cannot have an active runtime admission.
+        }
     }
 
     private static void closeRejected(List<Session> rejectedObservers) {
@@ -368,7 +445,8 @@ public final class MapManager {
         }
     }
 
-    private record TransitionIntent(int mapId, int zoneId, int x, int y, Waypoint waypoint) {
+    private record TransitionIntent(
+            Player player, int mapId, int zoneId, int x, int y, Waypoint waypoint) {
     }
 
     private record Join(boolean accepted, List<Session> rejectedObservers) {

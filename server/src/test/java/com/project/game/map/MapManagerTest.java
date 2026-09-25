@@ -894,6 +894,164 @@ class MapManagerTest {
         assertEquals(1, maps.mapManager().memberCount(0, 0));
     }
 
+    @Test
+    void deathReturnReservesTownBeforeDetachingSource() throws Exception {
+        GameplayServices maps = policyMaps("ONLINE", "ONLINE", 2, 1);
+        Session firstDead = session(hp(player(1, 1, 0), 0), maps);
+        Session secondDead = session(hp(player(2, 1, 1), 0), maps);
+        Session townPlayer = session(player(3, 0, 0), maps);
+        assertTrue(maps.mapManager().finishLoad(firstDead));
+        assertTrue(maps.mapManager().finishLoad(secondDead));
+        assertTrue(maps.mapManager().finishLoad(townPlayer));
+        drain(firstDead);
+        drain(secondDead);
+        drain(townPlayer);
+
+        assertNotNull(maps.mapManager().returnTownFromDeath(firstDead));
+        assertNull(firstDead.zone());
+        assertEquals(1, maps.findZone(0, 0).reservedCount());
+        assertEquals(1, maps.mapManager().memberCount(0, 0));
+
+        assertNull(maps.mapManager().returnTownFromDeath(secondDead));
+        assertSame(maps.findZone(1, 1), secondDead.zone());
+        assertTrue(secondDead.player().isDead());
+        assertEquals(1, maps.findZone(0, 0).reservedCount());
+    }
+
+    @Test
+    void changeMapReservesDestinationBeforeDetachingSource() throws Exception {
+        GameplayServices maps = policyMaps("ONLINE", "ONLINE", 1, 1);
+        Session source = session(at(player(1, 0, 0), 4464, 936), maps);
+        Session blocked = session(at(player(2, 0, 1), 4464, 936), maps);
+
+        assertTrue(maps.mapManager().finishLoad(source));
+        assertTrue(maps.mapManager().finishLoad(blocked));
+        drain(source);
+        drain(blocked);
+
+        MapManager.MapChange change = maps.mapManager().changeMap(source);
+
+        assertNotNull(change);
+        assertNull(source.zone());
+        assertEquals(1, maps.findZone(1, 0).reservedCount());
+        assertEquals(0, maps.mapManager().memberCount(1, 0));
+        assertNull(maps.mapManager().changeMap(blocked));
+        assertSame(maps.findZone(0, 1), blocked.zone());
+        assertEquals(0, blocked.player().mapId());
+        assertEquals(1, blocked.player().zoneId());
+        assertEquals(1, maps.findZone(1, 0).reservedCount());
+    }
+
+    @Test
+    void finishLoadConsumesDestinationReservationOnce() throws Exception {
+        GameplayServices maps = policyMaps("ONLINE", "ONLINE", 1, 2);
+        Session observer = session(player(1, 1, 0), maps);
+        Session moving = session(at(player(2, 0, 0), 4464, 936), maps);
+
+        assertTrue(maps.mapManager().finishLoad(observer));
+        drain(observer);
+        assertTrue(maps.mapManager().finishLoad(moving));
+        drain(moving);
+
+        assertNotNull(maps.mapManager().changeMap(moving));
+        assertEquals(1, maps.findZone(1, 0).reservedCount());
+        assertTrue(maps.mapManager().finishLoad(moving));
+        assertEquals(0, maps.findZone(1, 0).reservedCount());
+        assertEquals(2, maps.mapManager().memberCount(1, 0));
+        assertEquals(List.of(MessageName.ADD_PLAYER), commands(drain(observer)));
+        assertEquals(List.of(MessageName.ADD_PLAYER), commands(drain(moving)));
+
+        assertTrue(maps.mapManager().finishLoad(moving));
+        assertEquals(List.of(), drain(observer));
+        assertEquals(List.of(), drain(moving));
+    }
+
+    @Test
+    void competingSourceZonesAllowOnlyOneDestinationReservation() throws Exception {
+        GameplayServices maps = policyMaps("ONLINE", "ONLINE", 1, 1);
+        Session first = session(at(player(1, 0, 0), 4464, 936), maps);
+        Session second = session(at(player(2, 0, 1), 4464, 936), maps);
+        assertTrue(maps.mapManager().finishLoad(first));
+        assertTrue(maps.mapManager().finishLoad(second));
+        drain(first);
+        drain(second);
+
+        CyclicBarrier start = new CyclicBarrier(3);
+        AtomicReference<MapManager.MapChange> firstChange = new AtomicReference<>();
+        AtomicReference<MapManager.MapChange> secondChange = new AtomicReference<>();
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+        Thread firstThread = Thread.ofVirtual().start(() -> changeAtBarrier(
+                start, maps, first, firstChange, failure));
+        Thread secondThread = Thread.ofVirtual().start(() -> changeAtBarrier(
+                start, maps, second, secondChange, failure));
+        start.await();
+        firstThread.join(5_000);
+        secondThread.join(5_000);
+
+        if (failure.get() != null) {
+            throw new AssertionError("concurrent map change failed", failure.get());
+        }
+        assertFalse(firstThread.isAlive());
+        assertFalse(secondThread.isAlive());
+        assertEquals(1, (firstChange.get() == null ? 0 : 1)
+                + (secondChange.get() == null ? 0 : 1));
+        Session loser = firstChange.get() == null ? first : second;
+        assertEquals(0, loser.player().mapId());
+        assertEquals(loser == first ? 0 : 1, loser.player().zoneId());
+        assertTrue(loser.zone().hasPlayer(loser));
+        assertEquals(0, maps.mapManager().memberCount(1, 0));
+        assertEquals(1, maps.findZone(1, 0).reservedCount());
+    }
+
+    @Test
+    void disconnectBeforeFinishLoadReleasesDestinationReservation() throws Exception {
+        GameplayServices maps = policyMaps("ONLINE", "ONLINE", 1, 1);
+        Session disconnected = session(at(player(1, 0, 0), 4464, 936), maps);
+        assertTrue(maps.mapManager().finishLoad(disconnected));
+        drain(disconnected);
+        assertNotNull(maps.mapManager().changeMap(disconnected));
+        Zone destination = maps.findZone(1, 0);
+        assertEquals(1, destination.reservedCount());
+
+        disconnected.close();
+
+        assertEquals(SessionState.CLOSED, disconnected.state());
+        assertEquals(0, destination.reservedCount());
+        assertEquals(0, destination.size());
+        PlayerSaveData saved = maps.mapManager().leave(disconnected);
+        assertEquals(1, saved.mapId());
+    }
+
+    @Test
+    void sourceRevalidationFailureRollsBackDestinationReservation() throws Exception {
+        GameplayServices maps = policyMaps("ONLINE", "ONLINE", 1, 1);
+        Session source = session(at(player(1, 0, 0), 4464, 936), maps);
+        assertTrue(maps.mapManager().finishLoad(source));
+        drain(source);
+        Zone destination = maps.findZone(1, 0);
+        CountDownLatch destinationStarted = new CountDownLatch(1);
+        CountDownLatch releaseDestination = new CountDownLatch(1);
+        assertTrue(destination.submit(() -> {
+            destinationStarted.countDown();
+            awaitRelease(releaseDestination);
+        }));
+        assertTrue(destinationStarted.await(5, TimeUnit.SECONDS));
+
+        AtomicReference<MapManager.MapChange> change = new AtomicReference<>();
+        assertTrue(maps.findZone(0, 0).submit(() ->
+                change.set(maps.mapManager().changeMap(source))));
+        Thread.sleep(50);
+        Thread disconnect = Thread.ofVirtual().start(source::close);
+        releaseDestination.countDown();
+        disconnect.join(5_000);
+
+        assertFalse(disconnect.isAlive());
+        assertNull(change.get());
+        assertEquals(0, destination.reservedCount());
+        assertEquals(0, source.player().mapId());
+        assertEquals(SessionState.CLOSED, source.state());
+    }
+
     private static GameplayServices policyMaps(
             String map0Type, String map1Type, int map0MaxPlayer, int map1MaxPlayer) {
         java.util.Map<Integer, MapTemplate> canonical = MapTestSupport.canonicalMaps();
@@ -926,6 +1084,20 @@ class MapManagerTest {
             } else {
                 failures.incrementAndGet();
             }
+        } catch (Throwable exception) {
+            failure.compareAndSet(null, exception);
+        }
+    }
+
+    private static void changeAtBarrier(
+            CyclicBarrier start,
+            GameplayServices maps,
+            Session session,
+            AtomicReference<MapManager.MapChange> change,
+            AtomicReference<Throwable> failure) {
+        try {
+            start.await();
+            change.set(maps.mapManager().changeMap(session));
         } catch (Throwable exception) {
             failure.compareAndSet(null, exception);
         }

@@ -264,7 +264,10 @@ class ZoneMonsterCombatTest {
         zone.damageMonster(101, 7, 10, NOW).orElseThrow();
 
         assertTrue(zone.attackDueMonsters(NOW + 1, new Random(1L)).isEmpty());
-        player.player().changeMap(1, 0, 975, 936);
+        zone.call(() -> {
+            player.player().move(975, 936);
+            return null;
+        });
         assertTrue(zone.attackDueMonsters(NOW + 1_601, new Random(1L)).isEmpty());
         assertEquals(90L, zone.attackDueMonsters(NOW + 1_602, new Random(1L))
                 .getFirst().hpAfter());

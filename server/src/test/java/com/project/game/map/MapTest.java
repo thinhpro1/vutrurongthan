@@ -28,16 +28,15 @@ class MapTest {
     }
 
     @Test
-    void getOrCreateZoneLazilyCreatesOnlyWithinTheMapBounds() {
+    void constructorCreatesExactlyMinimumZonesAndFindsOnlyExistingZones() {
         MapTemplate template = policy(MapTestSupport.canonicalMaps().get(1), 1, 4, 2);
         Map map = new Map(template, monsterFactory());
 
-        Zone created = map.getOrCreateZone(3);
-
-        assertSame(created, map.findZone(3));
-        assertEquals(List.of(0, 3), map.zones().stream().map(Zone::zoneId).toList());
-        assertThrows(IllegalArgumentException.class, () -> map.getOrCreateZone(-1));
-        assertThrows(IllegalArgumentException.class, () -> map.getOrCreateZone(4));
+        assertEquals(List.of(0), map.zones().stream().map(Zone::zoneId).toList());
+        assertSame(map.zones().getFirst(), map.findZone(0));
+        assertNull(map.findZone(1));
+        assertNull(map.findZone(3));
+        assertEquals(1, map.zones().size());
     }
 
     @Test

@@ -111,7 +111,10 @@ public final class MonsterManager {
 
     public List<MonsterSnapshot> monsterSnapshots(int mapId, int zoneId) {
         Map map = maps.getMap(mapId);
-        Zone zone = map.getOrCreateZone(zoneId);
+        Zone zone = map.findZone(zoneId);
+        if (zone == null) {
+            throw new IllegalArgumentException("unknown public map zone " + mapId + "/" + zoneId);
+        }
         return zone.monsterSnapshots();
     }
 

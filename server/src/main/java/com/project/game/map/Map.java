@@ -20,7 +20,7 @@ public final class Map {
             throw new IllegalArgumentException("runtime map must be ONLINE: " + template.id());
         }
         for (int zoneId = 0; zoneId < template.minZone(); zoneId++) {
-            zones.put(zoneId, createZone(zoneId));
+            zones.put(zoneId, newZone(zoneId));
         }
     }
 
@@ -35,12 +35,6 @@ public final class Map {
     /** Tìm Zone đang tồn tại mà không tạo runtime mới. */
     public Zone findZone(int zoneId) {
         return zones.get(zoneId);
-    }
-
-    /** Tìm hoặc tạo Zone hợp lệ trong giới hạn của Map. */
-    public Zone getOrCreateZone(int zoneId) {
-        validateZoneId(zoneId);
-        return zones.computeIfAbsent(zoneId, this::createZone);
     }
 
     /** Trả về các Zone hiện có theo thứ tự id ổn định. */
@@ -58,15 +52,7 @@ public final class Map {
                 .orElse(null);
     }
 
-    private void validateZoneId(int zoneId) {
-        if (zoneId < 0 || zoneId >= template.maxZone()) {
-            throw new IllegalArgumentException(
-                    "zone " + zoneId + " is outside map " + id() + " bound 0.."
-                            + (template.maxZone() - 1));
-        }
-    }
-
-    private Zone createZone(int zoneId) {
+    private Zone newZone(int zoneId) {
         return new Zone(id(), zoneId, template.maxPlayer(), monsterFactory.createForMap(id()));
     }
 }

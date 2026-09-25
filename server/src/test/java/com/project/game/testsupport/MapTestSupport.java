@@ -5,6 +5,7 @@ import com.project.game.persistence.map.MapRepository;
 import com.project.game.resource.loader.MapCatalogLoader;
 
 import java.nio.file.Path;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -17,6 +18,15 @@ public final class MapTestSupport {
 
     public static Map<Integer, MapTemplate> canonicalMaps() {
         return MapCatalogLoader.load(new Repository(), MAP_ROOT);
+    }
+
+    public static Map<Integer, MapTemplate> publicGameplayMaps() {
+        Map<Integer, MapTemplate> canonical = canonicalMaps();
+        Map<Integer, MapTemplate> maps = new HashMap<>();
+        canonical.forEach((id, map) -> maps.put(id, new MapTemplate(
+                map.id(), map.name(), map.type(), map.planet(), 2, map.maxZone(),
+                map.maxPlayer(), map.dataId(), map.data(), map.waypoints())));
+        return maps;
     }
 
     private static final class Repository implements MapRepository {

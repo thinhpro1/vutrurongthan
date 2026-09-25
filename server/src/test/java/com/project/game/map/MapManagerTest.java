@@ -47,7 +47,7 @@ class MapManagerTest {
 
     @Test
     void differentZonesDoNotExchangePresence() throws Exception {
-        GameplayServices maps = mapsWithoutMonsters();
+        GameplayServices maps = policyMaps("ONLINE", "ONLINE", 10, 10);
         Session first = session(player(1, 0, 0));
         Session second = session(player(2, 0, 1));
 
@@ -58,6 +58,17 @@ class MapManagerTest {
         assertEquals(List.of(), drain(second));
         assertEquals(1, maps.memberCount(0, 0));
         assertEquals(1, maps.memberCount(0, 1));
+    }
+
+    @Test
+    void finishLoadRejectsAbsentPublicZoneWithoutGrowingRuntimeState() throws Exception {
+        GameplayServices maps = publicZoneRequestMaps();
+        Session invalid = session(player(1, 1, 5), maps);
+
+        assertFalse(maps.mapManager().finishLoad(invalid));
+        assertNull(invalid.zone());
+        assertEquals(2, zoneRegistrySize(maps));
+        assertNull(maps.findZone(1, 5));
     }
 
     @Test
@@ -1130,9 +1141,17 @@ class MapManagerTest {
             String map0Type, String map1Type, int map0MaxPlayer, int map1MaxPlayer) {
         java.util.Map<Integer, MapTemplate> canonical = MapTestSupport.canonicalMaps();
         MapTemplate map0 = withPolicy(
-                canonical.get(0), map0Type, 1, 2, map0MaxPlayer);
+                canonical.get(0), map0Type, 2, 2, map0MaxPlayer);
         MapTemplate map1 = withPolicy(
-                canonical.get(1), map1Type, 1, 2, map1MaxPlayer);
+                canonical.get(1), map1Type, 2, 2, map1MaxPlayer);
+        return new GameplayServices(
+                java.util.Map.of(map0.id(), map0, map1.id(), map1), GameResources.unavailable());
+    }
+
+    private static GameplayServices publicZoneRequestMaps() {
+        java.util.Map<Integer, MapTemplate> canonical = MapTestSupport.canonicalMaps();
+        MapTemplate map0 = withPolicy(canonical.get(0), "ONLINE", 1, 10, 1);
+        MapTemplate map1 = withPolicy(canonical.get(1), "ONLINE", 1, 10, 1);
         return new GameplayServices(
                 java.util.Map.of(map0.id(), map0, map1.id(), map1), GameResources.unavailable());
     }

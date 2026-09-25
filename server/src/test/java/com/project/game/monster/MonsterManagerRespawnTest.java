@@ -29,9 +29,9 @@ class MonsterManagerRespawnTest {
         MutableClock clock = new MutableClock(1_000_000L);
         GameplayServices maps = mapsWithMonsters(clock);
 
-        assertEquals(2, zoneRegistrySize(maps));
+        assertEquals(4, zoneRegistrySize(maps));
         maps.monsterManager().update();
-        assertEquals(2, zoneRegistrySize(maps));
+        assertEquals(4, zoneRegistrySize(maps));
     }
 
     @Test

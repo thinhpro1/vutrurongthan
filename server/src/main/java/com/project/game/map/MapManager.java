@@ -393,11 +393,7 @@ public final class MapManager {
         if (map == null) {
             return null;
         }
-        try {
-            return map.getOrCreateZone(zoneId);
-        } catch (IllegalArgumentException exception) {
-            return null;
-        }
+        return map.findZone(zoneId);
     }
 
     private static boolean reserve(Zone zone, Session session) {

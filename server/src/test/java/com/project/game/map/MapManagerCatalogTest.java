@@ -33,18 +33,15 @@ class MapManagerCatalogTest {
     }
 
     @Test
-    void validOnlineZonesAreCreatedLazilyWithinExclusiveMaximum() {
-        MapManager registry = registry();
+    void maxZoneDoesNotExpandThePublicZoneSet() {
+        MapManager registry = new MapManager(singlePublicZoneMap(), monsterFactory(), new PlayerPacketWriter());
 
         com.project.game.map.Map runtimeMap = registry.getMap(1);
-        Zone zone2 = runtimeMap.getOrCreateZone(2);
-        Zone zone3 = runtimeMap.getOrCreateZone(3);
 
-        assertSame(zone2, runtimeMap.getOrCreateZone(2));
-        assertSame(zone3, runtimeMap.findZone(3));
-        assertEquals(4, registry.zones().size());
-        assertThrows(IllegalArgumentException.class, () -> runtimeMap.getOrCreateZone(4));
-        assertThrows(IllegalArgumentException.class, () -> runtimeMap.getOrCreateZone(-1));
+        assertNotNull(runtimeMap.findZone(0));
+        assertNull(runtimeMap.findZone(1));
+        assertNull(runtimeMap.findZone(3));
+        assertEquals(1, registry.zones().size());
     }
 
     @Test
@@ -61,8 +58,8 @@ class MapManagerCatalogTest {
         MapManager registry = registry();
 
         com.project.game.map.Map runtimeMap = registry.getMap(1);
-        Zone first = runtimeMap.getOrCreateZone(0);
-        Zone second = runtimeMap.getOrCreateZone(1);
+        Zone first = runtimeMap.findZone(0);
+        Zone second = runtimeMap.findZone(1);
         assertNotSame(first, second);
         assertEquals(300L, second.monsterSnapshots().getFirst().hp());
 
@@ -94,6 +91,12 @@ class MapManagerCatalogTest {
         MapTemplate online = withPolicy(canonical.get(1), "ONLINE", 2, 4, 2);
         MapTemplate offline = withPolicy(canonical.get(0), "OFFLINE", 2, 4, 2);
         return java.util.Map.of(online.id(), online, offline.id(), offline);
+    }
+
+    private static java.util.Map<Integer, MapTemplate> singlePublicZoneMap() {
+        java.util.Map<Integer, MapTemplate> canonical = MapTestSupport.canonicalMaps();
+        MapTemplate online = withPolicy(canonical.get(1), "ONLINE", 1, 4, 2);
+        return java.util.Map.of(online.id(), online);
     }
 
     private static java.util.Map<Integer, MapTemplate> canonicalMaps() {

@@ -45,6 +45,20 @@ Player location fields do not by themselves prove realtime Zone membership.
 Session/Zone membership authority is intentionally not redesigned in R1; it is
 audited in R5.
 
+## Public Map / Zone lifecycle
+
+`MapManager` owns the public Map registry and `Map` owns the Zones inside each
+public Map. A public Map eagerly creates exactly `minZone` Zones at
+construction time. `Map.findZone(zoneId)` is lookup-only; a normal public
+request never creates a missing Zone, even when `zoneId` is below the template
+`maxZone` bound. `maxZone` remains catalog/template metadata and does not
+authorize runtime Zone expansion.
+
+Monster snapshot access follows the same contract: it finds an already
+registered public Zone and rejects an absent Zone. `MapManager.zones()` remains
+temporarily available for the existing Monster update traversal and is tracked
+as P2 cleanup rather than a new public lifecycle API.
+
 ## Main decisions
 
 ```text
@@ -141,9 +155,10 @@ mutating while persistence runs.
 R0  lock rules/runtime contract
 R1  pin current behavior with tests
 R2  introduce Zone execution/lifecycle core
-R3  move membership/movement mutation into Zone ownership
+R3A close public Map/Zone lifecycle and admission                ✅ completed
+R3B move membership/movement mutation into Zone ownership        ⏭ deferred
 R4  move Monster lifecycle into Zone execution
-R5  redesign Player as mutable runtime                         ✅ completed
+R5  redesign Player as mutable runtime                           ✅ completed
 R6  implement dirty checkpoint/final-save persistence model
 R7  refactor Monster v2/readability/hot path
 R8  extract real Entity/CombatEntity + implement Effect runtime

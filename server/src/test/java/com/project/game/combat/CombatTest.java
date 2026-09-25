@@ -47,10 +47,10 @@ class CombatTest {
         GameplayServices maps = mapsWithMonsters();
         Session session = session(player(1, 1, 0), maps);
 
-        assertEquals(2, zoneRegistrySize(maps));
+        assertEquals(4, zoneRegistrySize(maps));
         assertFalse(maps.combat().canTargetMonster(session, 101));
         assertFalse(maps.combat().attackMonster(session, 101));
-        assertEquals(2, zoneRegistrySize(maps));
+        assertEquals(4, zoneRegistrySize(maps));
     }
 
     @Test

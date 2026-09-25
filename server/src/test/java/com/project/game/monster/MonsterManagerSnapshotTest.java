@@ -25,7 +25,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class MonsterManagerSnapshotTest {
 
     @Test
-    void snapshotsUseOnlyPolicyValidZonesAndLifecycleVisitsRegisteredZones() {
+    void snapshotsUseOnlyRegisteredZonesAndLifecycleVisitsRegisteredZones() {
         MapManager zones = new MapManager(
                 com.project.game.testsupport.MapTestSupport.canonicalMaps(),
                 new MonsterFactory(
@@ -42,10 +42,10 @@ class MonsterManagerSnapshotTest {
 
         assertNotNull(monsters.monsterSnapshots(0, 0));
         assertEquals(2, zones.zones().size());
-        assertNotNull(monsters.monsterSnapshots(0, 1));
-        assertEquals(3, zones.zones().size());
+        assertThrows(IllegalArgumentException.class, () -> monsters.monsterSnapshots(0, 1));
+        assertEquals(2, zones.zones().size());
         monsters.update();
-        assertEquals(3, zones.zones().size());
+        assertEquals(2, zones.zones().size());
         assertThrows(IllegalArgumentException.class, () -> monsters.monsterSnapshots(99, 0));
     }
 

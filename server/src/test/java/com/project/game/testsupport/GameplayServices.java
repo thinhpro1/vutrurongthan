@@ -113,7 +113,14 @@ public final class GameplayServices {
         return maps.changeMap(session) != null;
     }
     public boolean movePlayer(Session session, int x, int y) { return maps.movePlayer(session, x, y); }
-    public int memberCount(int mapId, int zoneId) { return maps.memberCount(mapId, zoneId); }
+    public int memberCount(int mapId, int zoneId) {
+        com.project.game.map.Map map = maps.findMap(mapId);
+        if (map == null) {
+            return 0;
+        }
+        Zone zone = map.findZone(zoneId);
+        return zone == null ? 0 : zone.size();
+    }
     public boolean canTargetMonster(Session session, int monsterId) {
         return combat.canTargetMonster(session, monsterId);
     }
@@ -124,5 +131,8 @@ public final class GameplayServices {
     public List<MonsterSnapshot> monsterSnapshots(int mapId, int zoneId) {
         return monsterManager.monsterSnapshots(mapId, zoneId);
     }
-    public Zone findZone(int mapId, int zoneId) { return maps.findZone(mapId, zoneId); }
+    public Zone findZone(int mapId, int zoneId) {
+        com.project.game.map.Map map = maps.findMap(mapId);
+        return map == null ? null : map.findZone(zoneId);
+    }
 }

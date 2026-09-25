@@ -38,7 +38,7 @@ public final class Map {
     }
 
     /** Tìm hoặc tạo Zone hợp lệ trong giới hạn của Map. */
-    public Zone getZone(int zoneId) {
+    public Zone getOrCreateZone(int zoneId) {
         validateZoneId(zoneId);
         return zones.computeIfAbsent(zoneId, this::createZone);
     }

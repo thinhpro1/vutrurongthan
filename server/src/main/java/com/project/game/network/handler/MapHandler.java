@@ -126,9 +126,6 @@ final class MapHandler {
             waypointTargetNames.add(target.name());
         }
         List<MonsterSnapshot> monsters;
-        if (!mapManager.ensureZone(map.id(), zoneId)) {
-            throw new IOException("invalid map zone: " + map.id() + "/" + zoneId);
-        }
         try {
             monsters = monsterManager.monsterSnapshots(map.id(), zoneId);
         } catch (IllegalArgumentException exception) {

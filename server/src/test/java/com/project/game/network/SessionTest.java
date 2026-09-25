@@ -229,12 +229,12 @@ class SessionTest {
 
         Thread close = Thread.ofVirtual().start(session::close);
         waitForCloseStarted(session);
-        assertEquals(1, gameplay.mapManager().memberCount(0, 0));
+        assertEquals(1, gameplay.memberCount(0, 0));
         assertFalse(repository.updateEntered.await(100, TimeUnit.MILLISECONDS));
 
         releasePrior.countDown();
         assertTrue(repository.updateEntered.await(5, TimeUnit.SECONDS));
-        assertEquals(0, gameplay.mapManager().memberCount(0, 0));
+        assertEquals(0, gameplay.memberCount(0, 0));
         repository.allowUpdate.countDown();
         close.join(2_000);
 
@@ -273,14 +273,14 @@ class SessionTest {
         CountDownLatch nextZoneAction = new CountDownLatch(1);
         assertTrue(gameplay.findZone(0, 0).submit(nextZoneAction::countDown));
         assertTrue(nextZoneAction.await(5, TimeUnit.SECONDS));
-        assertEquals(1, gameplay.mapManager().memberCount(0, 0));
+        assertEquals(1, gameplay.memberCount(0, 0));
 
         repository.allowUpdate.countDown();
         finishLoad.join(1_000);
         assertFalse(finishLoad.isAlive());
         assertTrue(joined.get());
         assertEquals(SessionState.CLOSED, observer.state());
-        assertEquals(1, gameplay.mapManager().memberCount(0, 0));
+        assertEquals(1, gameplay.memberCount(0, 0));
 
         joining.close();
     }

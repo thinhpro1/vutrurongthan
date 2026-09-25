@@ -39,7 +39,7 @@ class CombatTest {
 
         assertFalse(combat.canTargetMonster(null, 101));
         assertFalse(combat.attackMonster(null, 101));
-        assertNull(zones.findZone(1, 3));
+        assertNull(zones.findMap(1).findZone(3));
     }
 
     @Test
@@ -59,7 +59,7 @@ class CombatTest {
         assertEquals(300L, maps.monsterManager().monsterSnapshots(1, 0).getFirst().hp());
         Session session = session(player(1, 1, 0), maps);
 
-        assertEquals(0, maps.mapManager().memberCount(1, 0));
+        assertEquals(0, maps.memberCount(1, 0));
         assertFalse(maps.combat().canTargetMonster(session, 101));
         assertFalse(maps.combat().attackMonster(session, 101));
         assertEquals(300L, maps.monsterManager().monsterSnapshots(1, 0).getFirst().hp());

@@ -148,14 +148,14 @@ class MonsterManagerRespawnTest {
         killMonster(maps.combat(), attacker);
         maps.mapManager().leave(attacker);
 
-        assertEquals(0, maps.mapManager().memberCount(1, 0));
+        assertEquals(0, maps.memberCount(1, 0));
         assertEquals(1, maps.monsterManager().monsterSnapshots(1, 0).getFirst().status());
         clock.advanceMillis(9_001L);
         maps.monsterManager().update();
         MonsterSnapshot respawned = maps.monsterManager().monsterSnapshots(1, 0).getFirst();
         assertEquals(300L, respawned.hp());
         assertEquals(0, respawned.status());
-        assertEquals(0, maps.mapManager().memberCount(1, 0));
+        assertEquals(0, maps.memberCount(1, 0));
     }
 
     @Test

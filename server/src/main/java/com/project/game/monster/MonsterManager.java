@@ -1,7 +1,8 @@
 package com.project.game.monster;
 
-import com.project.game.map.Zone;
+import com.project.game.map.Map;
 import com.project.game.map.MapManager;
+import com.project.game.map.Zone;
 import com.project.game.network.Session;
 import com.project.game.network.SessionState;
 import com.project.game.network.message.Message;
@@ -109,7 +110,9 @@ public final class MonsterManager {
     }
 
     public List<MonsterSnapshot> monsterSnapshots(int mapId, int zoneId) {
-        return maps.getZone(mapId, zoneId).monsterSnapshots();
+        Map map = maps.getMap(mapId);
+        Zone zone = map.getOrCreateZone(zoneId);
+        return zone.monsterSnapshots();
     }
 
     private record LifecycleDelivery(List<Session> rejected) {

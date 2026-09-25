@@ -64,18 +64,10 @@ public final class MapManager {
         return map;
     }
 
-    /** Tìm Zone hiện có qua cây sở hữu Map → Zone. */
-    public Zone findZone(int mapId, int zoneId) {
-        Map map = findMap(mapId);
-        return map == null ? null : map.findZone(zoneId);
-    }
-
-    /** Lấy hoặc tạo Zone hợp lệ qua runtime Map tương ứng. */
-    public Zone getZone(int mapId, int zoneId) {
-        return getMap(mapId).getZone(zoneId);
-    }
-
-    /** Trả về toàn bộ Zone hiện có theo thứ tự Map rồi Zone. */
+    /**
+     * Trả về toàn bộ Zone hiện có theo thứ tự Map rồi Zone.
+     * Tạm thời giữ cho MonsterManager.update(); sẽ xem xét lại ở P2.
+     */
     public List<Zone> zones() {
         return maps.values().stream()
                 .sorted(Comparator.comparingInt(Map::id))
@@ -396,19 +388,13 @@ public final class MapManager {
         }
     }
 
-    public int memberCount(int mapId, int zoneId) {
-        Zone zone = findZone(mapId, zoneId);
-        return zone == null ? 0 : zone.size();
-    }
-
-    /** Đảm bảo Zone tồn tại để handler đọc snapshot quái và gửi MAP_INFO. */
-    public boolean ensureZone(int mapId, int zoneId) {
-        return resolveZone(mapId, zoneId) != null;
-    }
-
     private Zone resolveZone(int mapId, int zoneId) {
+        Map map = findMap(mapId);
+        if (map == null) {
+            return null;
+        }
         try {
-            return getZone(mapId, zoneId);
+            return map.getOrCreateZone(zoneId);
         } catch (IllegalArgumentException exception) {
             return null;
         }

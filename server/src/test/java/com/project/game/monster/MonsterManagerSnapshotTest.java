@@ -59,14 +59,14 @@ class MonsterManagerSnapshotTest {
         assertEquals(
                 List.of(101, 102, 103, 104, 105, 106),
                 monsters.stream().map(MonsterSnapshot::id).toList());
-        assertEquals(0, maps.mapManager().memberCount(1, 0));
+        assertEquals(0, maps.memberCount(1, 0));
     }
 
     @Test
     void mapZeroZoneStartsWithoutMonsters() {
         GameplayServices maps = mapsWithMonsters();
         assertTrue(maps.monsterManager().monsterSnapshots(0, 0).isEmpty());
-        assertEquals(0, maps.mapManager().memberCount(0, 0));
+        assertEquals(0, maps.memberCount(0, 0));
     }
 
     @Test
@@ -75,10 +75,10 @@ class MonsterManagerSnapshotTest {
         List<MonsterSnapshot> before = maps.monsterManager().monsterSnapshots(1, 0);
         Session joining = session(player(1, 1, 0), maps);
 
-        assertEquals(0, maps.mapManager().memberCount(1, 0));
+        assertEquals(0, maps.memberCount(1, 0));
         maps.mapManager().finishLoad(joining);
 
-        assertEquals(1, maps.mapManager().memberCount(1, 0));
+        assertEquals(1, maps.memberCount(1, 0));
         assertEquals(before, maps.monsterManager().monsterSnapshots(1, 0));
     }
 
@@ -131,6 +131,6 @@ class MonsterManagerSnapshotTest {
 
         assertEquals(first.get(), second.get());
         assertEquals(6, first.get().size());
-        assertEquals(0, maps.mapManager().memberCount(1, 0));
+        assertEquals(0, maps.memberCount(1, 0));
     }
 }

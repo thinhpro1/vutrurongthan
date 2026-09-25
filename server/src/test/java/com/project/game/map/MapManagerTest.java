@@ -42,7 +42,7 @@ class MapManagerTest {
         maps.mapManager().finishLoad(second);
         assertEquals(List.of(MessageName.ADD_PLAYER), commands(drain(second)));
         assertEquals(List.of(MessageName.ADD_PLAYER), commands(drain(first)));
-        assertEquals(2, maps.mapManager().memberCount(0, 0));
+        assertEquals(2, maps.memberCount(0, 0));
     }
 
     @Test
@@ -56,8 +56,8 @@ class MapManagerTest {
 
         assertEquals(List.of(), drain(first));
         assertEquals(List.of(), drain(second));
-        assertEquals(1, maps.mapManager().memberCount(0, 0));
-        assertEquals(1, maps.mapManager().memberCount(0, 1));
+        assertEquals(1, maps.memberCount(0, 0));
+        assertEquals(1, maps.memberCount(0, 1));
     }
 
     @Test
@@ -258,8 +258,8 @@ class MapManagerTest {
         assertFalse(changeMap.isAlive());
         assertTrue(moved.get());
         assertTrue(changed.get());
-        assertEquals(1, maps.mapManager().memberCount(0, 0));
-        assertEquals(0, maps.mapManager().memberCount(1, 0));
+        assertEquals(1, maps.memberCount(0, 0));
+        assertEquals(0, maps.memberCount(1, 0));
         assertEquals(1, mover.player().mapId());
         assertEquals(List.of(MessageName.PLAYER_MOVE, MessageName.REMOVE_PLAYER),
                 commands(drain(observer)));
@@ -289,13 +289,13 @@ class MapManagerTest {
         });
 
         assertFalse(joinFinished.await(100, TimeUnit.MILLISECONDS));
-        assertEquals(0, maps.mapManager().memberCount(0, 0));
+        assertEquals(0, maps.memberCount(0, 0));
         releasePrior.countDown();
         assertTrue(joinFinished.await(5, TimeUnit.SECONDS));
         join.join();
 
         assertTrue(joined.get());
-        assertEquals(1, maps.mapManager().memberCount(0, 0));
+        assertEquals(1, maps.memberCount(0, 0));
     }
 
     @Test
@@ -341,8 +341,8 @@ class MapManagerTest {
         assertFalse(changeMap.isAlive());
         assertTrue(joined.get());
         assertTrue(changed.get());
-        assertEquals(1, maps.mapManager().memberCount(0, 0));
-        assertEquals(0, maps.mapManager().memberCount(1, 0));
+        assertEquals(1, maps.memberCount(0, 0));
+        assertEquals(0, maps.memberCount(1, 0));
         assertEquals(1, source.player().mapId());
         assertEquals(List.of(MessageName.ADD_PLAYER), commands(drain(source)));
         assertEquals(List.of(MessageName.ADD_PLAYER, MessageName.REMOVE_PLAYER),
@@ -380,7 +380,7 @@ class MapManagerTest {
         leave.join();
 
         assertFalse(zone.hasPlayer(leaving));
-        assertEquals(0, maps.mapManager().memberCount(0, 0));
+        assertEquals(0, maps.memberCount(0, 0));
     }
 
     @Test
@@ -399,7 +399,7 @@ class MapManagerTest {
         var reader = removed.get(0).reader();
         assertEquals(2, reader.readInt());
         assertEquals(0, reader.remaining());
-        assertEquals(1, maps.mapManager().memberCount(0, 0));
+        assertEquals(1, maps.memberCount(0, 0));
 
         maps.mapManager().leave(second);
         assertEquals(List.of(), drain(first));
@@ -413,7 +413,7 @@ class MapManagerTest {
         maps.mapManager().finishLoad(first);
         maps.mapManager().finishLoad(first);
 
-        assertEquals(1, maps.mapManager().memberCount(0, 0));
+        assertEquals(1, maps.memberCount(0, 0));
         assertEquals(List.of(), drain(first));
     }
 
@@ -427,7 +427,7 @@ class MapManagerTest {
         drain(first);
 
         assertFalse(maps.mapManager().finishLoad(conflicting));
-        assertEquals(1, maps.mapManager().memberCount(0, 0));
+        assertEquals(1, maps.memberCount(0, 0));
         Zone zone = zoneFor(maps, 0, 0);
         assertTrue(zone.hasPlayer(first));
         assertFalse(zone.hasPlayer(conflicting));
@@ -468,7 +468,7 @@ class MapManagerTest {
         if (failure.get() != null) {
             throw new AssertionError("concurrent join failed", failure.get());
         }
-        assertEquals(2, maps.mapManager().memberCount(0, 0));
+        assertEquals(2, maps.memberCount(0, 0));
         List<Message> firstMessages = drain(first);
         List<Message> secondMessages = drain(second);
         assertEquals(List.of(MessageName.ADD_PLAYER), commands(firstMessages));
@@ -503,7 +503,7 @@ class MapManagerTest {
         }
         assertEquals(1, successes.get());
         assertEquals(1, failures.get());
-        assertEquals(1, maps.mapManager().memberCount(0, 0));
+        assertEquals(1, maps.memberCount(0, 0));
     }
 
     @Test
@@ -514,10 +514,10 @@ class MapManagerTest {
 
         maps.mapManager().finishLoad(first);
         maps.mapManager().leave(first);
-        assertEquals(0, maps.mapManager().memberCount(0, 0));
+        assertEquals(0, maps.memberCount(0, 0));
 
         maps.mapManager().finishLoad(second);
-        assertEquals(1, maps.mapManager().memberCount(0, 0));
+        assertEquals(1, maps.memberCount(0, 0));
         maps.mapManager().finishLoad(first);
 
         List<Message> firstMessages = drain(first);
@@ -528,7 +528,7 @@ class MapManagerTest {
         var secondReader = secondMessages.get(0).reader();
         assertEquals(2, firstReader.readInt());
         assertEquals(1, secondReader.readInt());
-        assertEquals(2, maps.mapManager().memberCount(0, 0));
+        assertEquals(2, maps.memberCount(0, 0));
     }
 
     @Test
@@ -594,7 +594,7 @@ class MapManagerTest {
         assertFalse(finishLoad.isAlive());
         assertFalse(close.isAlive());
         assertFalse(joined.get());
-        assertEquals(0, maps.mapManager().memberCount(0, 0));
+        assertEquals(0, maps.memberCount(0, 0));
     }
 
     @Test
@@ -623,7 +623,7 @@ class MapManagerTest {
         Player before = closed.player();
         assertFalse(maps.mapManager().movePlayer(closed, before.x() + 100, before.y() + 100));
         assertEquals(before, closed.player());
-        assertEquals(0, maps.mapManager().memberCount(0, 0));
+        assertEquals(0, maps.memberCount(0, 0));
     }
 
     @Test
@@ -639,7 +639,7 @@ class MapManagerTest {
         Player before = dead.player();
         assertNull(maps.mapManager().changeMap(dead));
         assertEquals(before, dead.player());
-        assertEquals(2, maps.mapManager().memberCount(0, 0));
+        assertEquals(2, maps.memberCount(0, 0));
         assertEquals(List.of(), drain(observer));
     }
 
@@ -733,8 +733,8 @@ class MapManagerTest {
         assertEquals(revived.currentStats().maxHp(), revived.hp());
         assertEquals(revived.currentStats().maxMp(), revived.mp());
         assertSame(revived, dead.player());
-        assertEquals(1, maps.mapManager().memberCount(1, 0));
-        assertEquals(0, maps.mapManager().memberCount(0, 0));
+        assertEquals(1, maps.memberCount(1, 0));
+        assertEquals(0, maps.memberCount(0, 0));
 
         List<Message> observerMessages = drain(observer);
         assertEquals(List.of(MessageName.REMOVE_PLAYER), commands(observerMessages));
@@ -765,7 +765,7 @@ class MapManagerTest {
 
         MapManager.MapChange change = maps.mapManager().returnTownFromDeath(dead);
         assertNotNull(change);
-        assertEquals(2, maps.mapManager().memberCount(0, 0));
+        assertEquals(2, maps.memberCount(0, 0));
         assertEquals(List.of(), drain(observer));
 
         PlayerSaveData stable = change.player();
@@ -821,8 +821,8 @@ class MapManagerTest {
         join.join();
 
         assertTrue(joined.get());
-        assertEquals(2, maps.mapManager().memberCount(1, 0));
-        assertEquals(0, maps.mapManager().memberCount(0, 0));
+        assertEquals(2, maps.memberCount(1, 0));
+        assertEquals(0, maps.memberCount(0, 0));
         assertEquals(List.of(MessageName.REMOVE_PLAYER, MessageName.ADD_PLAYER),
                 commands(drain(observer)));
         assertEquals(List.of(MessageName.ADD_PLAYER), commands(drain(joining)));
@@ -838,7 +838,7 @@ class MapManagerTest {
         drain(first);
 
         assertFalse(maps.mapManager().finishLoad(second));
-        assertEquals(1, maps.mapManager().memberCount(0, 0));
+        assertEquals(1, maps.memberCount(0, 0));
         assertEquals(0, second.queuedMessages());
     }
 
@@ -858,8 +858,8 @@ class MapManagerTest {
         assertNull(maps.mapManager().changeMap(source));
 
         assertEquals(before, source.player());
-        assertEquals(1, maps.mapManager().memberCount(0, 0));
-        assertEquals(1, maps.mapManager().memberCount(1, 0));
+        assertEquals(1, maps.memberCount(0, 0));
+        assertEquals(1, maps.memberCount(1, 0));
         assertEquals(List.of(), drain(source));
     }
 
@@ -875,7 +875,7 @@ class MapManagerTest {
         assertNull(maps.mapManager().changeMap(source));
         assertNull(maps.mapManager().changeMap(source));
         assertEquals(before, source.player());
-        assertEquals(1, maps.mapManager().memberCount(0, 0));
+        assertEquals(1, maps.memberCount(0, 0));
     }
 
     @Test
@@ -890,8 +890,8 @@ class MapManagerTest {
         assertNull(maps.mapManager().returnTownFromDeath(dead));
 
         assertEquals(before, dead.player());
-        assertEquals(1, maps.mapManager().memberCount(1, 0));
-        assertEquals(1, maps.mapManager().memberCount(0, 0));
+        assertEquals(1, maps.memberCount(1, 0));
+        assertEquals(1, maps.memberCount(0, 0));
     }
 
     @Test
@@ -910,7 +910,7 @@ class MapManagerTest {
         assertNotNull(maps.mapManager().returnTownFromDeath(firstDead));
         assertNull(firstDead.zone());
         assertEquals(1, maps.findZone(0, 0).reservedCount());
-        assertEquals(1, maps.mapManager().memberCount(0, 0));
+        assertEquals(1, maps.memberCount(0, 0));
 
         assertNull(maps.mapManager().returnTownFromDeath(secondDead));
         assertSame(maps.findZone(1, 1), secondDead.zone());
@@ -934,7 +934,7 @@ class MapManagerTest {
         assertNotNull(change);
         assertNull(source.zone());
         assertEquals(1, maps.findZone(1, 0).reservedCount());
-        assertEquals(0, maps.mapManager().memberCount(1, 0));
+        assertEquals(0, maps.memberCount(1, 0));
         assertNull(maps.mapManager().changeMap(blocked));
         assertSame(maps.findZone(0, 1), blocked.zone());
         assertEquals(0, blocked.player().mapId());
@@ -957,7 +957,7 @@ class MapManagerTest {
         assertEquals(1, maps.findZone(1, 0).reservedCount());
         assertTrue(maps.mapManager().finishLoad(moving));
         assertEquals(0, maps.findZone(1, 0).reservedCount());
-        assertEquals(2, maps.mapManager().memberCount(1, 0));
+        assertEquals(2, maps.memberCount(1, 0));
         assertEquals(List.of(MessageName.ADD_PLAYER), commands(drain(observer)));
         assertEquals(List.of(MessageName.ADD_PLAYER), commands(drain(moving)));
 
@@ -999,7 +999,7 @@ class MapManagerTest {
         assertEquals(0, loser.player().mapId());
         assertEquals(loser == first ? 0 : 1, loser.player().zoneId());
         assertTrue(loser.zone().hasPlayer(loser));
-        assertEquals(0, maps.mapManager().memberCount(1, 0));
+        assertEquals(0, maps.memberCount(1, 0));
         assertEquals(1, maps.findZone(1, 0).reservedCount());
     }
 
@@ -1077,7 +1077,7 @@ class MapManagerTest {
         assertTrue(maps.mapManager().finishLoad(next));
         assertNotNull(maps.mapManager().changeMap(next));
         assertTrue(maps.mapManager().finishLoad(next));
-        assertEquals(1, maps.mapManager().memberCount(1, 0));
+        assertEquals(1, maps.memberCount(1, 0));
     }
 
     @Test
@@ -1099,7 +1099,7 @@ class MapManagerTest {
         assertEquals(0, source.player().zoneId());
         assertEquals(1, destination.reservedCount());
         assertTrue(maps.mapManager().finishLoad(source));
-        assertEquals(1, maps.mapManager().memberCount(1, 0));
+        assertEquals(1, maps.memberCount(1, 0));
     }
 
     @Test
@@ -1123,7 +1123,7 @@ class MapManagerTest {
         assertFalse(dead.player().isDead());
         assertEquals(1, town.reservedCount());
         assertTrue(maps.mapManager().finishLoad(dead));
-        assertEquals(1, maps.mapManager().memberCount(0, 0));
+        assertEquals(1, maps.memberCount(0, 0));
     }
 
     private static GameplayServices policyMaps(

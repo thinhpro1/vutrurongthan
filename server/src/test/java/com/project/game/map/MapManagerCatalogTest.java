@@ -24,12 +24,11 @@ class MapManagerCatalogTest {
         com.project.game.map.Map runtimeMap = registry.findMap(1);
 
         assertNotNull(runtimeMap);
-        assertSame(runtimeMap.findZone(0), registry.findZone(1, 0));
-        assertNotNull(registry.findZone(1, 0));
-        assertNotNull(registry.findZone(1, 1));
-        assertNull(registry.findZone(1, 2));
-        assertNull(registry.findZone(1, 3));
-        assertNull(registry.findZone(0, 0));
+        assertNotNull(runtimeMap.findZone(0));
+        assertNotNull(runtimeMap.findZone(1));
+        assertNull(runtimeMap.findZone(2));
+        assertNull(runtimeMap.findZone(3));
+        assertNull(registry.findMap(0));
         assertEquals(2, registry.zones().size());
     }
 
@@ -37,31 +36,33 @@ class MapManagerCatalogTest {
     void validOnlineZonesAreCreatedLazilyWithinExclusiveMaximum() {
         MapManager registry = registry();
 
-        Zone zone2 = registry.getZone(1, 2);
-        Zone zone3 = registry.getZone(1, 3);
+        com.project.game.map.Map runtimeMap = registry.getMap(1);
+        Zone zone2 = runtimeMap.getOrCreateZone(2);
+        Zone zone3 = runtimeMap.getOrCreateZone(3);
 
-        assertSame(zone2, registry.getZone(1, 2));
-        assertSame(zone3, registry.findZone(1, 3));
+        assertSame(zone2, runtimeMap.getOrCreateZone(2));
+        assertSame(zone3, runtimeMap.findZone(3));
         assertEquals(4, registry.zones().size());
-        assertThrows(IllegalArgumentException.class, () -> registry.getZone(1, 4));
-        assertThrows(IllegalArgumentException.class, () -> registry.getZone(1, -1));
+        assertThrows(IllegalArgumentException.class, () -> runtimeMap.getOrCreateZone(4));
+        assertThrows(IllegalArgumentException.class, () -> runtimeMap.getOrCreateZone(-1));
     }
 
     @Test
     void unknownAndOfflineMapsCannotCreateNormalZones() {
         MapManager registry = registry();
 
-        assertThrows(IllegalArgumentException.class, () -> registry.getZone(99, 0));
-        assertThrows(IllegalArgumentException.class, () -> registry.getZone(0, 0));
-        assertNull(registry.findZone(0, 0));
+        assertThrows(IllegalArgumentException.class, () -> registry.getMap(99));
+        assertThrows(IllegalArgumentException.class, () -> registry.getMap(0));
+        assertNull(registry.findMap(0));
     }
 
     @Test
     void eachZoneGetsIndependentMonsterRuntimeState() {
         MapManager registry = registry();
 
-        Zone first = registry.getZone(1, 0);
-        Zone second = registry.getZone(1, 1);
+        com.project.game.map.Map runtimeMap = registry.getMap(1);
+        Zone first = runtimeMap.getOrCreateZone(0);
+        Zone second = runtimeMap.getOrCreateZone(1);
         assertNotSame(first, second);
         assertEquals(300L, second.monsterSnapshots().getFirst().hp());
 
@@ -78,9 +79,10 @@ class MapManagerCatalogTest {
         source.clear();
 
         assertEquals(2, registry.zones().size());
-        assertNotNull(registry.findZone(1, 0));
-        assertNull(registry.findZone(1, 2));
-        assertEquals(2, registry.findZone(1, 0).maxPlayer());
+        com.project.game.map.Map runtimeMap = registry.findMap(1);
+        assertNotNull(runtimeMap.findZone(0));
+        assertNull(runtimeMap.findZone(2));
+        assertEquals(2, runtimeMap.findZone(0).maxPlayer());
     }
 
     private static MapManager registry() {

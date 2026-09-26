@@ -89,7 +89,11 @@ resolves `MapManager.getMap(mapId)`, then `Map.findZone(zoneId)`, then reads
 Zone. Monster AI, combat, and Zone mutation use live runtime state directly;
 they do not route through a snapshot or `MonsterManager`.
 
-Monster lifecycle follows the public-world traversal:
+Monster lifecycle has two explicit views: the current implementation before N2
+Monster normalization, and the target contract after that readability/runtime
+slice.
+
+CURRENT IMPLEMENTATION (before N2 Monster normalization):
 
 ```text
 MonsterLifecycleScheduler
@@ -97,16 +101,29 @@ MonsterLifecycleScheduler
 → MapManager.maps
 → Map.zones
 → Zone.updateMonsters(now, random)
-→ Zone writer: all movement, all due respawns, all attacks
+→ Zone writer: current movement, due-respawn, and attack work
 → AreaService packets
 ```
 
-`Monster` owns its mutable combat, movement, cooldown, enemy, and respawn
-decisions. `Zone` owns the collection, exact current-member candidates,
-cross-Monster death cleanup, lifecycle phase ordering, and the sole writer.
-`AreaService` serializes neither gameplay decisions nor ownership; it only
-sends same-Zone packets through packet writers. Rejected sends close only after
-the Zone writer returns.
+This is a description of the current production path, not a locked correctness
+invariant or the final Monster feature shape. The Scheduler/
+`MonsterManager` traversal remains until the N2 plan replaces it.
+
+TARGET CONTRACT AFTER N2:
+
+```text
+Zone writer
+→ each current Monster: Monster.update(...)
+→ AreaService packets
+```
+
+`Zone` remains the sole writer and owns the current Monster collection,
+membership candidates, cross-Monster death cleanup, and execution ordering.
+`Monster` owns its mutable combat, movement, cooldown, enemy, respawn, and
+update decisions. The exact `Monster.update(...)` world-context/API shape is
+reserved for N2. `AreaService` serializes neither gameplay decisions nor
+ownership; it only sends same-Zone packets through packet writers. Rejected
+sends close only after the Zone writer returns.
 
 ## Public world and future Dungeon runs
 
@@ -215,9 +232,10 @@ MapHandler
 
 Future Dungeon runs do not route private Maps through `MapManager`; their
 runtime owner resolves private destination Maps and uses the Zone admission
-primitives directly. R6 final P1 readability sweep is locked; P2 Monster
-Complete is code-reviewed/locked according to the project workflow state; P3
-Player Core Complete is the current migration phase.
+primitives directly. R6 final P1 readability sweep is locked. P1 Architecture
+Normalization, P2 Monster correctness, and P3 Player Core correctness are
+locked correctness baselines; readability normalization remains a separate
+ordered track below.
 
 ## Freeze semantics
 
@@ -281,6 +299,8 @@ mutating while persistence runs.
 
 Exact completion/lock state is determined by the commit-review workflow.
 
+Correctness baselines:
+
 ```text
 R0  Rules / runtime contract                         LOCKED
 R1  Player contract/readability                      LOCKED
@@ -290,10 +310,22 @@ R3B Zone-local Player move / enter / leave           LOCKED
 R4  Public-world Cross-Map transition                LOCKED
 R5  Session / Player / Zone authority audit          LOCKED
 R6  Final P1 readability sweep                       LOCKED
-P1  Architecture Normalization                       LOCKED
-P2  Monster Complete                                 CODE-REVIEWED / LOCKED
-P3  Player Core Complete                             CURRENT
+P1  Architecture Normalization correctness baseline  LOCKED
+P2  Monster correctness baseline                     LOCKED
+P3  Player Core correctness baseline                 LOCKED
 ```
+
+Readability normalization order:
+
+```text
+N1.1 Zone                                           NEXT
+N1.2 Map / MapManager                               AFTER N1.1
+N2   Monster                                        AFTER Map
+N3   Player                                         AFTER Monster
+```
+
+Correctness baselines being locked does not mean readability normalization is
+complete.
 
 Each phase must also clean the touched feature slice to current
 `SERVER_RULES.md`. Do not postpone code-quality cleanup into a vague future
@@ -310,5 +342,5 @@ periodic dirty checkpoint
 coalescing/batching
 persistence infrastructure optimization
 exact Entity/CombatEntity shared state
-exact Monster update phase API
+exact Monster.update(...) world-context/API shape
 ```

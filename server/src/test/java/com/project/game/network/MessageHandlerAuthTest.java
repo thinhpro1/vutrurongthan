@@ -179,6 +179,87 @@ class MessageHandlerAuthTest {
     }
 
     @Test
+    void playerCreateCommitContendsWithSessionCloseAtomically() throws Exception {
+        AccountAuth auth = TestServices.auth();
+        TestPlayerRepository delegate = new TestPlayerRepository();
+        BlockingPlayerRepository players = new BlockingPlayerRepository(delegate);
+        GameResources resources = GameResources.fromRoots(null, java.nio.file.Path.of("resources", "json"));
+        SessionServices services = TestServices.serverServices(auth, resources,
+                new GameplayServices(MapTestSupport.canonicalMaps(), GameResources.unavailable()), players);
+        SessionManager manager = new SessionManager();
+        Session session = newSession(auth, services, 1024, manager, "198.51.100.1");
+        session.bindAccount(1L, "user01");
+        session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
+        session.transition(SessionState.HANDSHAKE_DONE, SessionState.AUTHENTICATED);
+
+        AtomicReference<Throwable> createFailure = new AtomicReference<>();
+        AtomicReference<Player> playerAtClose = new AtomicReference<>();
+        CountDownLatch closeStarted = new CountDownLatch(1);
+        CountDownLatch closeAcquired = new CountDownLatch(1);
+        CountDownLatch closeFinished = new CountDownLatch(1);
+        Thread create = null;
+        Thread bootstrapWatcher = null;
+        Thread close = null;
+        Thread closeWatcher = null;
+        try {
+            synchronized (session) {
+                Message createMessage = new Message(MessageName.CREATE_PLAYER,
+                        new MessageWriter().writeUtf("alpha1").writeByte(0).toByteArray());
+                create = Thread.ofVirtual().start(() -> {
+                    try {
+                        newHandler(session, services, ClientConfig.defaults()).onMessage(createMessage);
+                    } catch (Throwable failure) {
+                        createFailure.set(failure);
+                    }
+                });
+                assertTrue(players.createEntered.await(1, TimeUnit.SECONDS));
+                CountDownLatch bootstrapBlocked = new CountDownLatch(1);
+                bootstrapWatcher = watchForPlayerBootstrapBlock(create, bootstrapBlocked);
+
+                players.allowCreate.countDown();
+                assertTrue(players.createReturned.await(1, TimeUnit.SECONDS));
+                assertTrue(bootstrapBlocked.await(1, TimeUnit.SECONDS),
+                        "bootstrap did not contend on the Session monitor");
+                assertNull(session.player());
+
+                close = Thread.ofVirtual().start(() -> {
+                    closeStarted.countDown();
+                    synchronized (session) {
+                        playerAtClose.set(session.player());
+                        closeAcquired.countDown();
+                        session.close();
+                    }
+                    closeFinished.countDown();
+                });
+                CountDownLatch closeBlocked = new CountDownLatch(1);
+                closeWatcher = watchForBlocked(close, closeBlocked);
+                assertTrue(closeStarted.await(1, TimeUnit.SECONDS));
+                assertTrue(closeBlocked.await(1, TimeUnit.SECONDS));
+            }
+        } finally {
+            players.allowCreate.countDown();
+        }
+
+        create.join(1_000);
+        close.join(1_000);
+        bootstrapWatcher.join(1_000);
+        closeWatcher.join(1_000);
+        assertTrue(closeAcquired.await(1, TimeUnit.SECONDS));
+        assertTrue(closeFinished.await(1, TimeUnit.SECONDS));
+        assertFalse(create.isAlive());
+        assertFalse(close.isAlive());
+        assertNull(createFailure.get());
+        assertEquals(SessionState.CLOSED, session.state());
+
+        Player observedByClose = playerAtClose.get();
+        if (observedByClose == null) {
+            assertNull(session.player());
+        } else {
+            assertSame(observedByClose, session.player());
+        }
+    }
+
+    @Test
     void closedSessionIsNotBoundAfterBlockedPlayerCreate() throws Exception {
         AccountAuth auth = TestServices.auth();
         assertTrue(auth.register("user01", "secret1", "192.0.2.10").success());
@@ -425,12 +506,48 @@ class MessageHandlerAuthTest {
         return auth;
     }
 
+    private static Thread watchForPlayerBootstrapBlock(Thread target, CountDownLatch blocked) {
+        return Thread.ofPlatform().start(() -> {
+            while (target.isAlive()) {
+                if (target.getState() == Thread.State.BLOCKED && hasPlayerBootstrapFrame(target)) {
+                    blocked.countDown();
+                    return;
+                }
+                Thread.onSpinWait();
+            }
+        });
+    }
+
+    private static Thread watchForBlocked(Thread target, CountDownLatch blocked) {
+        return Thread.ofPlatform().start(() -> {
+            while (target.isAlive()) {
+                if (target.getState() == Thread.State.BLOCKED) {
+                    blocked.countDown();
+                    return;
+                }
+                Thread.onSpinWait();
+            }
+        });
+    }
+
+    private static boolean hasPlayerBootstrapFrame(Thread target) {
+        for (StackTraceElement frame : target.getStackTrace()) {
+            if (frame.getClassName().equals("com.project.game.network.handler.PlayerHandler")
+                    && (frame.getMethodName().equals("openPlayerForAuthenticatedAccount")
+                    || frame.getMethodName().equals("handleCreatePlayer"))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private static final class BlockingPlayerRepository implements PlayerRepository {
         private final TestPlayerRepository delegate;
         private final CountDownLatch findEntered = new CountDownLatch(1);
         private final CountDownLatch allowFind = new CountDownLatch(1);
         private final CountDownLatch createEntered = new CountDownLatch(1);
         private final CountDownLatch allowCreate = new CountDownLatch(1);
+        private final CountDownLatch createReturned = new CountDownLatch(1);
 
         private BlockingPlayerRepository(TestPlayerRepository delegate) {
             this.delegate = delegate;
@@ -447,7 +564,11 @@ class MessageHandlerAuthTest {
         public PlayerRecord create(PlayerRecord initialWithoutId) {
             createEntered.countDown();
             await(allowCreate, "create");
-            return delegate.create(initialWithoutId);
+            try {
+                return delegate.create(initialWithoutId);
+            } finally {
+                createReturned.countDown();
+            }
         }
 
         @Override

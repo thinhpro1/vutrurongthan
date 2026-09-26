@@ -71,12 +71,14 @@ final class PlayerHandler {
             }
             return;
         }
-        if (session.state() != SessionState.AUTHENTICATED) {
-            return;
-        }
-        session.bindPlayer(created);
-        if (!session.transition(SessionState.AUTHENTICATED, SessionState.IN_GAME)) {
-            return;
+        synchronized (session) {
+            if (session.state() != SessionState.AUTHENTICATED) {
+                return;
+            }
+            session.bindPlayer(created);
+            if (!session.transition(SessionState.AUTHENTICATED, SessionState.IN_GAME)) {
+                return;
+            }
         }
         enterGame(created);
     }
@@ -102,16 +104,21 @@ final class PlayerHandler {
             }
             return false;
         }
-        if (session.state() != SessionState.AUTHENTICATED) {
-            return false;
-        }
         if (player == null) {
+            if (session.state() != SessionState.AUTHENTICATED) {
+                return false;
+            }
             session.send(new Message(MessageName.START_CREATE_PLAYER_SCREEN));
             return true;
         }
-        session.bindPlayer(player);
-        if (!session.transition(SessionState.AUTHENTICATED, SessionState.IN_GAME)) {
-            return false;
+        synchronized (session) {
+            if (session.state() != SessionState.AUTHENTICATED) {
+                return false;
+            }
+            session.bindPlayer(player);
+            if (!session.transition(SessionState.AUTHENTICATED, SessionState.IN_GAME)) {
+                return false;
+            }
         }
         enterGame(player);
         return true;

@@ -95,6 +95,35 @@ class ZoneTest {
     }
 
     @Test
+    void highLevelReservationUsesZoneWriterAndPreservesSemantics() {
+        Zone zone = zone(0, 0, 2, List.of());
+        Session session = session(TestPlayers.initial(1L, 1, "alpha1", 0));
+
+        assertEquals(Zone.ReserveStatus.RESERVED, zone.reserve(session));
+        assertEquals(1, zone.reservedCount());
+        assertEquals(Zone.ReserveStatus.ALREADY_RESERVED, zone.reserve(session));
+
+        assertTrue(zone.cancel(session));
+        assertFalse(zone.hasReservation(session));
+        assertEquals(0, zone.reservedCount());
+    }
+
+    @Test
+    void highLevelReservationRejectsZoneWriterReentry() {
+        Zone zone = zone(0, 0, 2, List.of());
+        Session session = session(TestPlayers.initial(1L, 1, "alpha1", 0));
+
+        zone.call(() -> {
+            assertThrows(IllegalStateException.class, () -> zone.reserve(session));
+            assertThrows(IllegalStateException.class, () -> zone.cancel(session));
+            return null;
+        });
+
+        assertEquals(0, zone.reservedCount());
+        assertFalse(zone.hasReservation(session));
+    }
+
+    @Test
     void startsEmptyAndTracksBoundPlayer() {
         Zone zone = zone(0, 0, Integer.MAX_VALUE, List.of());
         Session session = session(TestPlayers.initial(1L, 7, "alpha1", 0));

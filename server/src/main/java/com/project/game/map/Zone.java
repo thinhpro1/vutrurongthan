@@ -339,6 +339,18 @@ public final class Zone {
         return result.saveData();
     }
 
+    /** Giữ một slot cho Session trước khi route owner tách Player khỏi Zone nguồn. */
+    ReserveStatus reserve(Session session) {
+        requireOutsideRuntimeWorker("reserve");
+        return call(() -> reservePlayer(session));
+    }
+
+    /** Hủy slot đang giữ cho Session sau khi route owner không thể commit. */
+    boolean cancel(Session session) {
+        requireOutsideRuntimeWorker("cancel");
+        return call(() -> cancelReservation(session));
+    }
+
     /** Thử cho Session vào Zone và trả về các thành viên đã có trước khi gia nhập. */
     synchronized JoinResult addPlayer(Session session) {
         Objects.requireNonNull(session, "session");
@@ -615,7 +627,7 @@ public final class Zone {
         return player;
     }
 
-    private void requireOutsideRuntimeWorker(String action) {
+    void requireOutsideRuntimeWorker(String action) {
         synchronized (runtimeLock) {
             if (runtimeWorker == Thread.currentThread()) {
                 throw new IllegalStateException(

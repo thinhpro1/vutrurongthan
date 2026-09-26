@@ -688,8 +688,8 @@ class MapManagerTest {
         returnTown.join();
 
         assertNotNull(change.get());
-        assertEquals(0, change.get().player().mapId());
-        assertTrue(change.get().player().hp() > 0);
+        assertEquals(0, change.get().saveData().mapId());
+        assertTrue(change.get().saveData().hp() > 0);
     }
 
     @Test
@@ -723,7 +723,7 @@ class MapManagerTest {
         changeMap.join();
 
         assertNotNull(change.get());
-        assertEquals(1, change.get().player().mapId());
+        assertEquals(1, change.get().saveData().mapId());
         assertEquals(0, change.get().zoneId());
     }
 
@@ -782,11 +782,11 @@ class MapManagerTest {
         assertEquals(2, maps.memberCount(0, 0));
         assertEquals(List.of(), drain(observer));
 
-        PlayerSaveData stable = change.player();
+        PlayerSaveData stable = change.saveData();
         assertTrue(maps.movePlayer(dead, 1260, 640));
         assertEquals(1260, dead.player().x());
-        assertEquals(stable.x(), change.player().x());
-        assertEquals(stable.y(), change.player().y());
+        assertEquals(stable.x(), change.saveData().x());
+        assertEquals(stable.y(), change.saveData().y());
         assertEquals(List.of(MessageName.PLAYER_MOVE), commands(drain(observer)));
     }
 
@@ -1138,6 +1138,51 @@ class MapManagerTest {
         assertEquals(1, town.reservedCount());
         assertTrue(maps.mapManager().finishLoad(dead));
         assertEquals(1, maps.memberCount(0, 0));
+    }
+
+    @Test
+    void changeMapRejectsZoneWriterReentryBeforeReservationOrMutation() throws Exception {
+        GameplayServices maps = policyMaps("ONLINE", "ONLINE", 2, 2);
+        Session source = session(at(player(1, 0, 0), 4464, 936), maps);
+        assertTrue(maps.mapManager().finishLoad(source));
+        drain(source);
+
+        Zone sourceZone = maps.findZone(0, 0);
+        Zone destination = maps.findZone(1, 0);
+        PlayerSaveData before = PlayerSaveData.capture(source.player());
+
+        assertThrows(IllegalStateException.class, () -> sourceZone.call(() -> {
+            maps.mapManager().changeMap(source);
+            return null;
+        }));
+
+        assertTrue(sourceZone.hasPlayer(source));
+        assertSame(sourceZone, source.zone());
+        assertEquals(before, PlayerSaveData.capture(source.player()));
+        assertEquals(0, destination.reservedCount());
+    }
+
+    @Test
+    void returnTownFromDeathRejectsZoneWriterReentryBeforeReservationOrMutation() throws Exception {
+        GameplayServices maps = policyMaps("ONLINE", "ONLINE", 2, 2);
+        Session dead = session(hp(player(1, 1, 0), 0), maps);
+        assertTrue(maps.mapManager().finishLoad(dead));
+        drain(dead);
+
+        Zone sourceZone = maps.findZone(1, 0);
+        Zone town = maps.findZone(0, 0);
+        PlayerSaveData before = PlayerSaveData.capture(dead.player());
+
+        assertThrows(IllegalStateException.class, () -> sourceZone.call(() -> {
+            maps.mapManager().returnTownFromDeath(dead);
+            return null;
+        }));
+
+        assertTrue(dead.player().isDead());
+        assertTrue(sourceZone.hasPlayer(dead));
+        assertSame(sourceZone, dead.zone());
+        assertEquals(before, PlayerSaveData.capture(dead.player()));
+        assertEquals(0, town.reservedCount());
     }
 
     private static GameplayServices policyMaps(

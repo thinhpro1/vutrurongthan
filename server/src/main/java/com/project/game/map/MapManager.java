@@ -17,7 +17,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-/** Quản lý các runtime Map và điều phối chuyển Player giữa các Map. */
+/** Quản lý registry Map public và điều phối chuyển Player giữa các Map public. */
 public final class MapManager {
     private static final Logger LOGGER = Logger.getLogger(MapManager.class.getName());
     private static final int DEATH_RETURN_MAP_ID = 0;
@@ -108,10 +108,7 @@ public final class MapManager {
             Zone pendingZone = resolveZone(session.player().mapId(), session.player().zoneId());
             if (pendingZone != null) {
                 try {
-                    pendingZone.call(() -> {
-                        pendingZone.cancelReservation(session);
-                        return null;
-                    });
+                    pendingZone.cancel(session);
                 } catch (RejectedExecutionException exception) {
                     LOGGER.log(Level.FINE,
                             "Không thể hủy reservation vì Zone đã dừng: session=" + session.id(),
@@ -136,8 +133,12 @@ public final class MapManager {
             return null;
         }
         Zone sourceZone = session.zone();
+        if (sourceZone == null) {
+            return null;
+        }
+        sourceZone.requireOutsideRuntimeWorker("returnTownFromDeath");
         Zone townZone = resolveZone(DEATH_RETURN_MAP_ID, DEATH_RETURN_ZONE_ID);
-        if (sourceZone == null || townZone == null) {
+        if (townZone == null) {
             return null;
         }
         Player sourcePlayer = session.player();
@@ -145,9 +146,19 @@ public final class MapManager {
             return null;
         }
 
-        boolean reserved = sourceZone != townZone && reserve(townZone, session);
-        if (sourceZone != townZone && !reserved) {
-            return null;
+        boolean reserved = false;
+        if (sourceZone != townZone) {
+            Zone.ReserveStatus status;
+            try {
+                status = townZone.reserve(session);
+            } catch (RejectedExecutionException exception) {
+                return null;
+            }
+            reserved = status == Zone.ReserveStatus.RESERVED
+                    || status == Zone.ReserveStatus.ALREADY_RESERVED;
+            if (!reserved) {
+                return null;
+            }
         }
 
         AtomicBoolean committed = new AtomicBoolean();
@@ -186,18 +197,30 @@ public final class MapManager {
                 }
             });
             if (result.change() == null && reserved && !committed.get()) {
-                cancel(townZone, session);
+                try {
+                    townZone.cancel(session);
+                } catch (RejectedExecutionException ignored) {
+                    // A stopped destination cannot have an active runtime admission.
+                }
             }
             closeRejected(result.rejectedObservers());
             return result.change();
         } catch (RejectedExecutionException exception) {
             if (reserved && !committed.get()) {
-                cancel(townZone, session);
+                try {
+                    townZone.cancel(session);
+                } catch (RejectedExecutionException ignored) {
+                    // A stopped destination cannot have an active runtime admission.
+                }
             }
             return null;
         } catch (RuntimeException exception) {
             if (reserved && !committed.get()) {
-                cancel(townZone, session);
+                try {
+                    townZone.cancel(session);
+                } catch (RejectedExecutionException ignored) {
+                    // A stopped destination cannot have an active runtime admission.
+                }
             }
             throw exception;
         }
@@ -212,6 +235,7 @@ public final class MapManager {
         if (sourceZone == null) {
             return null;
         }
+        sourceZone.requireOutsideRuntimeWorker("changeMap");
         Map sourceMap = findMap(sourceZone.mapId());
         if (sourceMap == null) {
             return null;
@@ -249,9 +273,19 @@ public final class MapManager {
             return null;
         }
 
-        boolean reserved = sourceZone != destinationZone && reserve(destinationZone, session);
-        if (sourceZone != destinationZone && !reserved) {
-            return null;
+        boolean reserved = false;
+        if (sourceZone != destinationZone) {
+            Zone.ReserveStatus status;
+            try {
+                status = destinationZone.reserve(session);
+            } catch (RejectedExecutionException exception) {
+                return null;
+            }
+            reserved = status == Zone.ReserveStatus.RESERVED
+                    || status == Zone.ReserveStatus.ALREADY_RESERVED;
+            if (!reserved) {
+                return null;
+            }
         }
 
         AtomicBoolean committed = new AtomicBoolean();
@@ -295,18 +329,30 @@ public final class MapManager {
                 }
             });
             if (result.change() == null && reserved && !committed.get()) {
-                cancel(destinationZone, session);
+                try {
+                    destinationZone.cancel(session);
+                } catch (RejectedExecutionException ignored) {
+                    // A stopped destination cannot have an active runtime admission.
+                }
             }
             closeRejected(result.rejectedObservers());
             return result.change();
         } catch (RejectedExecutionException exception) {
             if (reserved && !committed.get()) {
-                cancel(destinationZone, session);
+                try {
+                    destinationZone.cancel(session);
+                } catch (RejectedExecutionException ignored) {
+                    // A stopped destination cannot have an active runtime admission.
+                }
             }
             return null;
         } catch (RuntimeException exception) {
             if (reserved && !committed.get()) {
-                cancel(destinationZone, session);
+                try {
+                    destinationZone.cancel(session);
+                } catch (RejectedExecutionException ignored) {
+                    // A stopped destination cannot have an active runtime admission.
+                }
             }
             throw exception;
         }
@@ -320,36 +366,15 @@ public final class MapManager {
         return map.findZone(zoneId);
     }
 
-    private static boolean reserve(Zone zone, Session session) {
-        try {
-            Zone.ReserveStatus status = zone.call(() -> zone.reservePlayer(session));
-            return status == Zone.ReserveStatus.RESERVED
-                    || status == Zone.ReserveStatus.ALREADY_RESERVED;
-        } catch (RejectedExecutionException exception) {
-            return false;
-        }
-    }
-
-    private static void cancel(Zone zone, Session session) {
-        try {
-            zone.call(() -> {
-                zone.cancelReservation(session);
-                return null;
-            });
-        } catch (RejectedExecutionException ignored) {
-            // A stopped destination cannot have an active runtime admission.
-        }
-    }
-
     private static void closeRejected(List<Session> rejectedObservers) {
         for (Session rejectedObserver : rejectedObservers) {
             rejectedObserver.close();
         }
     }
 
-    public record MapChange(PlayerSaveData player, int zoneId) {
+    public record MapChange(PlayerSaveData saveData, int zoneId) {
         public MapChange {
-            Objects.requireNonNull(player, "player");
+            Objects.requireNonNull(saveData, "saveData");
             if (zoneId < 0) {
                 throw new IllegalArgumentException("zoneId must be non-negative");
             }

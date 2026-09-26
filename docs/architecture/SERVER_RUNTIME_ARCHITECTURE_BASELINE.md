@@ -120,7 +120,7 @@ detaching the source and consumes the reservation at `FINISH_LOAD_MAP`.
 ## Joined Player flow after R3B
 
 The ordinary same-Zone Player flow is owned by `Zone`; `MapManager` remains a
-public Map router and the temporary bridge for cross-Map transitions:
+public Map router and the public-world route owner for cross-Map transitions:
 
 ```text
 public finish load:
@@ -143,9 +143,25 @@ presence delivery. `Zone.move` owns the ordered Player mutation and area
 delivery. `Zone.leave` owns membership removal, detachment, and stable save
 capture; rejected observer cleanup happens after the Zone writer returns.
 
-`MapManager` still owns the temporary cross-Map `changeMap` and
-`returnTownFromDeath` transition algorithms until R4. R5 Session/Player/Zone
-authority audit and R6 final readability sweep remain open.
+`MapManager` is the public-world cross-Map route owner. Public change-map and
+death-return coordination runs as:
+
+```text
+MapHandler
+→ MapManager public route
+→ source Zone capture
+→ destination Zone reservation
+→ source Zone commit
+→ PlayerSaveData
+→ Repository outside Zone
+→ FINISH_LOAD_MAP
+→ Zone.enter consumes reservation
+```
+
+Future Dungeon runs do not route private Maps through `MapManager`; their
+runtime owner resolves private destination Maps and uses the Zone admission
+primitives directly. R5 Session/Player/Zone authority audit and R6 final
+readability sweep remain open.
 
 ## Freeze semantics
 

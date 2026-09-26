@@ -60,10 +60,10 @@ final class MapHandler {
             return;
         }
 
-        save(change.player());
-        sendMapInfo(change.player(), change.zoneId());
+        save(change.saveData());
+        sendMapInfo(change.saveData(), change.zoneId());
         if (session.state() != SessionState.CLOSED) {
-            PlayerSaveData player = change.player();
+            PlayerSaveData player = change.saveData();
             session.send(playerPackets.wakeUpFromDie(
                     player.id(), player.x(), player.y(), player.hp(), player.mp()));
         }
@@ -83,8 +83,8 @@ final class MapHandler {
         if (change == null) {
             return;
         }
-        save(change.player());
-        sendMapInfo(change.player(), change.zoneId());
+        save(change.saveData());
+        sendMapInfo(change.saveData(), change.zoneId());
     }
 
     void handlePlayerMove(Message message) throws IOException {

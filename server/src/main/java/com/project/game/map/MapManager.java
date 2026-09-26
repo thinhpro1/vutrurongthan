@@ -136,7 +136,7 @@ public final class MapManager {
         if (sourceZone == null) {
             return null;
         }
-        sourceZone.requireOutsideRuntimeWorker("returnTownFromDeath");
+        Zone.requireOutsideRuntimeWorker("returnTownFromDeath");
         Zone townZone = resolveZone(DEATH_RETURN_MAP_ID, DEATH_RETURN_ZONE_ID);
         if (townZone == null) {
             return null;
@@ -235,7 +235,7 @@ public final class MapManager {
         if (sourceZone == null) {
             return null;
         }
-        sourceZone.requireOutsideRuntimeWorker("changeMap");
+        Zone.requireOutsideRuntimeWorker("changeMap");
         Map sourceMap = findMap(sourceZone.mapId());
         if (sourceMap == null) {
             return null;

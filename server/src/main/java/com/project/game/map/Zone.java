@@ -30,6 +30,7 @@ public final class Zone {
     private static final int MONSTER_CHASE_LEASH = 1200;
     private static final int DEFAULT_RUNTIME_INPUT_CAPACITY = 1024;
     private static final Logger LOGGER = Logger.getLogger(Zone.class.getName());
+    private static final ThreadLocal<Zone> CURRENT_RUNTIME = new ThreadLocal<>();
     private final int mapId;
     private final int zoneId;
     private final int maxPlayer;
@@ -194,42 +195,47 @@ public final class Zone {
     }
 
     private void runRuntime() {
+        CURRENT_RUNTIME.set(this);
         try {
-            while (true) {
-                Runnable action;
-                synchronized (runtimeLock) {
-                    if (runtimeState == RuntimeState.STOPPED) {
-                        runtimeInputs.clear();
-                        return;
+            try {
+                while (true) {
+                    Runnable action;
+                    synchronized (runtimeLock) {
+                        if (runtimeState == RuntimeState.STOPPED) {
+                            runtimeInputs.clear();
+                            return;
+                        }
+                        action = runtimeInputs.poll();
+                        if (action == null) {
+                            return;
+                        }
+                        runtimeLock.notifyAll();
                     }
-                    action = runtimeInputs.poll();
-                    if (action == null) {
-                        return;
+                    try {
+                        action.run();
+                    } catch (RuntimeException exception) {
+                        LOGGER.log(
+                                Level.WARNING,
+                                "Zone runtime action failed for map " + mapId + " zone " + zoneId,
+                                exception);
                     }
-                    runtimeLock.notifyAll();
                 }
-                try {
-                    action.run();
-                } catch (RuntimeException exception) {
-                    LOGGER.log(
-                            Level.WARNING,
-                            "Zone runtime action failed for map " + mapId + " zone " + zoneId,
-                            exception);
+            } finally {
+                synchronized (runtimeLock) {
+                    if (runtimeWorker == Thread.currentThread()) {
+                        runtimeWorker = null;
+                        if (runtimeState == RuntimeState.STOPPED) {
+                            runtimeInputs.clear();
+                        } else if (runtimeInputs.isEmpty()) {
+                            runtimeState = RuntimeState.FROZEN;
+                        } else {
+                            startRuntimeWorkerLocked();
+                        }
+                    }
                 }
             }
         } finally {
-            synchronized (runtimeLock) {
-                if (runtimeWorker == Thread.currentThread()) {
-                    runtimeWorker = null;
-                    if (runtimeState == RuntimeState.STOPPED) {
-                        runtimeInputs.clear();
-                    } else if (runtimeInputs.isEmpty()) {
-                        runtimeState = RuntimeState.FROZEN;
-                    } else {
-                        startRuntimeWorkerLocked();
-                    }
-                }
-            }
+            CURRENT_RUNTIME.remove();
         }
     }
 
@@ -627,12 +633,10 @@ public final class Zone {
         return player;
     }
 
-    void requireOutsideRuntimeWorker(String action) {
-        synchronized (runtimeLock) {
-            if (runtimeWorker == Thread.currentThread()) {
-                throw new IllegalStateException(
-                        action + " must be called outside the Zone runtime writer");
-            }
+    static void requireOutsideRuntimeWorker(String action) {
+        if (CURRENT_RUNTIME.get() != null) {
+            throw new IllegalStateException(
+                    action + " must be called outside the Zone runtime writer");
         }
     }
 

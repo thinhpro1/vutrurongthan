@@ -124,6 +124,35 @@ class ZoneTest {
     }
 
     @Test
+    void highLevelPlayerAndReservationFlowRejectsAnyZoneWriter() {
+        Zone writerZone = zone(0, 0, Integer.MAX_VALUE, List.of());
+        Zone targetZone = zone(0, 1, Integer.MAX_VALUE, List.of());
+        Session joined = session(TestPlayers.initial(1L, 1, "alpha1", 0));
+        Session other = session(TestPlayers.initial(2L, 2, "beta22", 0));
+
+        assertTrue(targetZone.enter(joined));
+        int originalX = joined.player().x();
+        int originalY = joined.player().y();
+
+        writerZone.call(() -> {
+            assertThrows(IllegalStateException.class, () -> targetZone.enter(other));
+            assertThrows(IllegalStateException.class, () -> targetZone.move(joined, 1260, 640));
+            assertThrows(IllegalStateException.class, () -> targetZone.leave(joined));
+            assertThrows(IllegalStateException.class, () -> targetZone.reserve(other));
+            assertThrows(IllegalStateException.class, () -> targetZone.cancel(other));
+            return null;
+        });
+
+        assertSame(targetZone, joined.zone());
+        assertTrue(targetZone.hasPlayer(joined));
+        assertEquals(originalX, joined.player().x());
+        assertEquals(originalY, joined.player().y());
+        assertFalse(targetZone.hasReservation(other));
+        assertEquals(0, targetZone.reservedCount());
+        assertNull(other.zone());
+    }
+
+    @Test
     void startsEmptyAndTracksBoundPlayer() {
         Zone zone = zone(0, 0, Integer.MAX_VALUE, List.of());
         Session session = session(TestPlayers.initial(1L, 7, "alpha1", 0));

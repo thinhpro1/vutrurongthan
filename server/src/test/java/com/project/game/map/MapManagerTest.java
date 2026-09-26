@@ -1185,6 +1185,54 @@ class MapManagerTest {
         assertEquals(0, town.reservedCount());
     }
 
+    @Test
+    void changeMapRejectsForeignZoneWriterBeforeReservationOrMutation() throws Exception {
+        GameplayServices maps = policyMaps("ONLINE", "ONLINE", 2, 2);
+        Session source = session(at(player(1, 0, 0), 4464, 936), maps);
+        assertTrue(maps.mapManager().finishLoad(source));
+        drain(source);
+
+        Zone sourceZone = maps.findZone(0, 0);
+        Zone destination = maps.findZone(1, 0);
+        Zone unrelated = maps.findZone(0, 1);
+        PlayerSaveData before = PlayerSaveData.capture(source.player());
+
+        assertThrows(IllegalStateException.class, () -> unrelated.call(() -> {
+            maps.mapManager().changeMap(source);
+            return null;
+        }));
+
+        assertTrue(sourceZone.hasPlayer(source));
+        assertSame(sourceZone, source.zone());
+        assertEquals(before, PlayerSaveData.capture(source.player()));
+        assertEquals(0, destination.reservedCount());
+    }
+
+    @Test
+    void returnTownFromDeathRejectsForeignZoneWriterBeforeReservationOrMutation()
+            throws Exception {
+        GameplayServices maps = policyMaps("ONLINE", "ONLINE", 2, 2);
+        Session dead = session(hp(player(1, 1, 0), 0), maps);
+        assertTrue(maps.mapManager().finishLoad(dead));
+        drain(dead);
+
+        Zone sourceZone = maps.findZone(1, 0);
+        Zone town = maps.findZone(0, 0);
+        Zone unrelated = maps.findZone(0, 1);
+        PlayerSaveData before = PlayerSaveData.capture(dead.player());
+
+        assertThrows(IllegalStateException.class, () -> unrelated.call(() -> {
+            maps.mapManager().returnTownFromDeath(dead);
+            return null;
+        }));
+
+        assertTrue(dead.player().isDead());
+        assertTrue(sourceZone.hasPlayer(dead));
+        assertSame(sourceZone, dead.zone());
+        assertEquals(before, PlayerSaveData.capture(dead.player()));
+        assertEquals(0, town.reservedCount());
+    }
+
     private static GameplayServices policyMaps(
             String map0Type, String map1Type, int map0MaxPlayer, int map1MaxPlayer) {
         java.util.Map<Integer, MapTemplate> canonical = MapTestSupport.canonicalMaps();

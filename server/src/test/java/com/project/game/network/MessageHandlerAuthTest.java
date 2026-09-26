@@ -3,10 +3,13 @@ package com.project.game.network;
 import com.project.game.testsupport.TestServices;
 import com.project.game.testsupport.TestAccountRepository;
 import com.project.game.testsupport.TestPlayerRepository;
+import com.project.game.testsupport.GameplayServices;
+import com.project.game.testsupport.MapTestSupport;
 import com.project.game.persistence.account.AccountRecord;
 import com.project.game.persistence.account.AccountRepository;
 import com.project.game.persistence.account.AccountRepositoryException;
 import com.project.game.persistence.player.PlayerRecord;
+import com.project.game.persistence.player.PlayerRepository;
 
 import com.project.game.network.handler.MessageHandler;
 import com.project.game.network.message.Message;
@@ -15,6 +18,7 @@ import com.project.game.network.message.MessageWriter;
 import com.project.game.account.AccountAuth;
 import com.project.game.player.Player;
 import com.project.game.player.PlayerSaveData;
+import com.project.game.resource.GameResources;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -22,6 +26,7 @@ import java.time.Instant;
 import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -89,6 +94,47 @@ class MessageHandlerAuthTest {
         assertEquals(session, manager.findByAccount("user01"));
         assertEquals(1, repository.metadataUpdateCount());
         assertEquals("198.51.100.1", repository.requireAccount("user01").ipAddress());
+        assertEquals(MessageName.START_CREATE_PLAYER_SCREEN, drainMessages(session).getFirst().command());
+    }
+
+    @Test
+    void playerLoadRunsAfterAuthenticationTransition() throws Exception {
+        TestAccountRepository accounts = new TestAccountRepository();
+        AccountAuth auth = new AccountAuth(accounts);
+        assertTrue(auth.register("user01", "secret1", "192.0.2.10").success());
+
+        TestPlayerRepository delegate = new TestPlayerRepository();
+        AtomicReference<Session> observedSession = new AtomicReference<>();
+        AtomicReference<SessionState> observedState = new AtomicReference<>();
+        PlayerRepository players = new PlayerRepository() {
+            @Override
+            public Optional<PlayerRecord> findByAccountId(long accountId) {
+                observedState.set(observedSession.get().state());
+                return delegate.findByAccountId(accountId);
+            }
+
+            @Override
+            public PlayerRecord create(PlayerRecord initialWithoutId) {
+                return delegate.create(initialWithoutId);
+            }
+
+            @Override
+            public void save(PlayerSaveData player) {
+                delegate.save(player);
+            }
+        };
+        GameResources resources = GameResources.fromRoots(null, java.nio.file.Path.of("resources", "json"));
+        SessionServices services = TestServices.serverServices(auth, resources,
+                new GameplayServices(MapTestSupport.canonicalMaps(), GameResources.unavailable()), players);
+        SessionManager manager = new SessionManager();
+        Session session = newSession(auth, services, 1024, manager, "198.51.100.1");
+        observedSession.set(session);
+        session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
+
+        newHandler(session, services, ClientConfig.defaults()).onMessage(loginMessage("user01", "secret1"));
+
+        assertEquals(SessionState.AUTHENTICATED, observedState.get());
+        assertEquals(SessionState.AUTHENTICATED, session.state());
         assertEquals(MessageName.START_CREATE_PLAYER_SCREEN, drainMessages(session).getFirst().command());
     }
 

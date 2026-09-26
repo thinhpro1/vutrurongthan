@@ -8,17 +8,20 @@ import com.project.game.network.Session;
 import com.project.game.network.SessionState;
 import com.project.game.network.message.Message;
 import com.project.game.network.message.MessageName;
+import com.project.game.network.message.MessageReader;
 import com.project.game.network.message.MessageWriter;
 import com.project.game.network.packet.PlayerPacketWriter;
 import com.project.game.player.Player;
 import com.project.game.player.PlayerSaveData;
 import com.project.game.resource.GameResources;
+import com.project.game.resource.SkillTemplate;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-/** Xử lý tạo Player và chuỗi packet vào game tương thích legacy. */
+/** Xử lý mở/tạo Player và chuỗi packet vào game tương thích legacy. */
 final class PlayerHandler {
     private static final Logger LOGGER = Logger.getLogger(PlayerHandler.class.getName());
     private static final String SYSTEM_BUSY = "Hệ thống đang bận, vui lòng thử lại";
@@ -37,7 +40,7 @@ final class PlayerHandler {
     }
 
     void handleCreatePlayer(Message message) throws IOException {
-        var reader = message.reader();
+        MessageReader reader = message.reader();
         String name = reader.readUtf();
         int gender = reader.readUnsignedByte();
         if (reader.remaining() != 0) {
@@ -69,8 +72,39 @@ final class PlayerHandler {
         enterGame(created);
     }
 
+    boolean openPlayerForAuthenticatedAccount(long accountId) throws IOException {
+        Player player;
+        try {
+            player = playerRepository.findByAccountId(accountId)
+                    .map(record -> record.toPlayer(0))
+                    .orElse(null);
+        } catch (PlayerRepositoryException exception) {
+            LOGGER.log(Level.WARNING,
+                    "PLAYER load repository failure accountId=" + accountId, exception);
+            if (session.state() != SessionState.CLOSED) {
+                sendDialog(SYSTEM_BUSY);
+            }
+            return false;
+        } catch (RuntimeException exception) {
+            LOGGER.log(Level.WARNING,
+                    "PLAYER load invalid persisted data accountId=" + accountId, exception);
+            if (session.state() != SessionState.CLOSED) {
+                sendDialog(SYSTEM_BUSY);
+            }
+            return false;
+        }
+        if (player == null) {
+            session.send(new Message(MessageName.START_CREATE_PLAYER_SCREEN));
+            return true;
+        }
+        session.bindPlayer(player);
+        session.transition(SessionState.AUTHENTICATED, SessionState.IN_GAME);
+        enterGame(player);
+        return true;
+    }
+
     void enterGame(Player player) throws IOException {
-        var skills = resources.playerSkills(player.gender());
+        List<SkillTemplate> skills = resources.playerSkills(player.gender());
         if (skills.size() != 11) {
             throw new IOException(
                     "legacy player skill bootstrap unavailable for gender " + player.gender());

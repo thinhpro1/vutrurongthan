@@ -49,10 +49,16 @@ final class MessageHandlerTestSupport {
 
     static Session newSession(AccountAuth auth, int maxPacketSize,
                                       SessionManager manager, String remoteAddress) {
+        return newSession(auth, TestServices.serverServices(auth, GameResources.unavailable()),
+                maxPacketSize, manager, remoteAddress);
+    }
+
+    static Session newSession(AccountAuth auth, SessionServices services,
+                              int maxPacketSize, SessionManager manager, String remoteAddress) {
         return new Session(manager.nextId(), new TestTransport(
                 new ByteArrayInputStream(new byte[0]), new ByteArrayOutputStream(), remoteAddress), manager,
                 new LegacyPacketCodec(maxPacketSize), "abc".getBytes(StandardCharsets.US_ASCII), 4,
-                TestServices.serverServices(auth, GameResources.unavailable()), ClientConfig.defaults());
+                services, ClientConfig.defaults());
     }
 
     static Session inGameSessionWithPlayer(AccountAuth auth) {

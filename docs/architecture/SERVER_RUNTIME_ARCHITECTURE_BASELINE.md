@@ -51,6 +51,29 @@ Zone membership, and Player map/zone location. During a committed cross-Map
 handoff, the Session is intentionally detached from the source while the
 destination reservation and Player destination location await `FINISH_LOAD_MAP`.
 
+Authenticated Player bootstrap is split at the protocol boundary:
+
+```text
+AuthHandler
+→ account authentication/admission
+→ Session AUTHENTICATED
+→ PlayerHandler.openPlayerForAuthenticatedAccount
+→ repository load or START_CREATE_PLAYER_SCREEN
+→ Session.bindPlayer
+→ IN_GAME
+→ PLAYER_INFO
+→ MAP_INFO
+→ FINISH_LOAD_MAP
+→ Zone.enter
+```
+
+`AuthHandler` owns account authentication, successful-login metadata, account
+admission, and the `HANDSHAKE_DONE → AUTHENTICATED` transition. `PlayerHandler`
+owns the Player repository load, no-Player create-screen branch, existing
+Player bind, `IN_GAME` transition, and `enterGame` packet bootstrap. A failed
+Player load reports the controlled system-busy result and rolls the Session
+back to `HANDSHAKE_DONE` before the admission reservation is released.
+
 ## Public Map / Zone lifecycle
 
 `MapManager` owns the public Map registry and `Map` owns the Zones inside each
@@ -192,8 +215,9 @@ MapHandler
 
 Future Dungeon runs do not route private Maps through `MapManager`; their
 runtime owner resolves private destination Maps and uses the Zone admission
-primitives directly. R6 final readability sweep is locked; P2 Monster Complete
-is the current migration phase.
+primitives directly. R6 final P1 readability sweep is locked; P2 Monster
+Complete is code-reviewed/locked according to the project workflow state; P3
+Player Core Complete is the current migration phase.
 
 ## Freeze semantics
 
@@ -267,8 +291,8 @@ R4  Public-world Cross-Map transition                LOCKED
 R5  Session / Player / Zone authority audit          LOCKED
 R6  Final P1 readability sweep                       LOCKED
 P1  Architecture Normalization                       LOCKED
-P2  Monster Complete                                 CURRENT
-P3  Player Complete                                  NEXT AFTER P2
+P2  Monster Complete                                 CODE-REVIEWED / LOCKED
+P3  Player Core Complete                             CURRENT
 ```
 
 Each phase must also clean the touched feature slice to current

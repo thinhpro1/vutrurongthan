@@ -89,41 +89,32 @@ resolves `MapManager.getMap(mapId)`, then `Map.findZone(zoneId)`, then reads
 Zone. Monster AI, combat, and Zone mutation use live runtime state directly;
 they do not route through a snapshot or `MonsterManager`.
 
-Monster lifecycle has two explicit views: the current implementation before N2
-Monster normalization, and the target contract after that readability/runtime
-slice.
+Monster lifecycle now follows the normalized N2 responsibility shape.
 
-CURRENT IMPLEMENTATION (before N2 Monster normalization):
+CURRENT IMPLEMENTATION (after N2 Monster normalization):
 
 ```text
-MonsterLifecycleScheduler
-→ MonsterManager.update
+MonsterManager scheduled lifecycle
+→ MonsterManager.update(MapManager)
 → MapManager.maps
 → Map.zones
 → Zone.updateMonsters(now, random)
-→ Zone writer: current movement, due-respawn, and attack work
+→ Zone writer
+→ for each Monster: Monster.update(...)
 → AreaService packets
 ```
 
-This is a description of the current production path, not a locked correctness
-invariant or the final Monster feature shape. The Scheduler/
-`MonsterManager` traversal remains until the N2 plan replaces it.
+`MonsterManager` owns the scheduled lifecycle trigger and public-world
+traversal only; the scheduler does not mutate Monster state directly. `Zone`
+remains the sole writer and owns the current Monster collection, membership
+candidates, cross-Monster death cleanup, and execution ordering. `Monster`
+owns its mutable combat, movement, cooldown, enemy, respawn, and update
+decisions. `AreaService` serializes neither gameplay decisions nor ownership;
+it only sends same-Zone packets through packet writers. Rejected sends close
+only after the Zone writer returns.
 
-TARGET CONTRACT AFTER N2:
-
-```text
-Zone writer
-→ each current Monster: Monster.update(...)
-→ AreaService packets
-```
-
-`Zone` remains the sole writer and owns the current Monster collection,
-membership candidates, cross-Monster death cleanup, and execution ordering.
-`Monster` owns its mutable combat, movement, cooldown, enemy, respawn, and
-update decisions. The exact `Monster.update(...)` world-context/API shape is
-reserved for N2. `AreaService` serializes neither gameplay decisions nor
-ownership; it only sends same-Zone packets through packet writers. Rejected
-sends close only after the Zone writer returns.
+The N2 change is a responsibility/readability normalization. It preserves the
+locked correctness baseline and does not change protocol or gameplay constants.
 
 ## Public world and future Dungeon runs
 
@@ -318,10 +309,10 @@ P3  Player Core correctness baseline                 LOCKED
 Readability normalization order:
 
 ```text
-N1.1 Zone                                           NEXT
-N1.2 Map / MapManager                               AFTER N1.1
-N2   Monster                                        AFTER Map
-N3   Player                                         AFTER Monster
+N1.1 Zone                                           DONE
+N2   Monster                                        DONE after this fix/review
+N1.2 Map / MapManager                               NEXT
+N3   Player                                         AFTER N1.2
 ```
 
 Correctness baselines being locked does not mean readability normalization is

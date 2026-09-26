@@ -153,8 +153,7 @@ public final class Monster {
                 targetDistance = distance;
             }
         }
-        Move move = target == null ? patrol() : moveTo(target.x());
-        return move != null;
+        return target == null ? patrol() : moveTo(target.x());
     }
 
     /** Attacks one valid in-range hostile Player when cooldown is strictly due. */
@@ -269,10 +268,10 @@ public final class Monster {
                 type, template.id(), id, level, levelStatus, x, y, maxHp, hp, status);
     }
 
-    private Move moveTo(int targetX) {
+    private boolean moveTo(int targetX) {
         int step = movementStep();
         if (step <= 0 || targetX == x) {
-            return null;
+            return false;
         }
 
         int direction = targetX > x ? 1 : -1;
@@ -281,13 +280,13 @@ public final class Monster {
         x = Math.addExact(x, direction * actualStep);
         y = yFirst;
         moveDir = direction;
-        return new Move(id, x, y, moveDir);
+        return true;
     }
 
-    private Move patrol() {
+    private boolean patrol() {
         int step = movementStep();
         if (step <= 0) {
-            return null;
+            return false;
         }
 
         int minX = Math.subtractExact(xFirst, template.rangeMove());
@@ -319,7 +318,7 @@ public final class Monster {
             }
         }
         y = yFirst;
-        return x == beforeX && y == beforeY ? null : new Move(id, x, y, moveDir);
+        return x != beforeX || y != beforeY;
     }
 
     private boolean attackDue(long nowMillis) {

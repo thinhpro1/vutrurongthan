@@ -173,11 +173,11 @@ class ZoneMonsterCombatTest {
     }
 
     private static List<Monster> monsters() {
-        MonsterManager factory = new MonsterManager(GameResources.fromFrameRoot(
+        MonsterManager manager = new MonsterManager(GameResources.fromFrameRoot(
                 Path.of("resources", "json"),
                 com.project.game.testsupport.MapTestSupport.canonicalMaps(), 2,
                 com.project.game.testsupport.MonsterTestSupport.canonicalRepository()));
-        return factory.createForMap(1);
+        return manager.createForMap(1);
     }
 
     private static Zone zone(int mapId, int zoneId, int maxPlayer, List<Monster> monsters) {

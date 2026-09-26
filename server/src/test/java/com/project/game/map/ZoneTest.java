@@ -51,7 +51,8 @@ class ZoneTest {
     @Test
     void zoneOwnsPlayerEnterMoveAndLeaveFlow() {
         Zone zone = zone(1, 0, Integer.MAX_VALUE, List.of());
-        Session session = session(TestPlayers.initial(1L, 7, "alpha1", 1));
+        Session session = session(TestPlayers.at(
+                TestPlayers.initial(1L, 7, "alpha1", 1), 1, 0, 100, 100));
 
         assertTrue(zone.enter(session));
         assertSame(zone, session.zone());
@@ -70,10 +71,29 @@ class ZoneTest {
     }
 
     @Test
+    void enterRejectsPlayerLocationMismatchBeforeMembershipMutation() {
+        Zone zone = zone(1, 0, Integer.MAX_VALUE, List.of());
+        Session session = session(TestPlayers.initial(1L, 7, "alpha1", 0));
+
+        assertFalse(zone.enter(session));
+        assertFalse(zone.hasPlayer(session));
+        assertNull(session.zone());
+        assertEquals(0, zone.reservedCount());
+
+        session.player().changeMap(1, 0, 1260, 640);
+
+        assertTrue(zone.enter(session));
+        assertTrue(zone.hasPlayer(session));
+        assertSame(zone, session.zone());
+    }
+
+    @Test
     void highLevelPlayerFlowRejectsZoneWriterReentry() {
         Zone zone = zone(1, 0, Integer.MAX_VALUE, List.of());
-        Session joined = session(TestPlayers.initial(1L, 7, "alpha1", 1));
-        Session other = session(TestPlayers.initial(2L, 8, "beta22", 1));
+        Session joined = session(TestPlayers.at(
+                TestPlayers.initial(1L, 7, "alpha1", 1), 1, 0, 100, 100));
+        Session other = session(TestPlayers.at(
+                TestPlayers.initial(2L, 8, "beta22", 1), 1, 0, 100, 100));
 
         assertTrue(zone.enter(joined));
         int originalX = joined.player().x();
@@ -127,8 +147,10 @@ class ZoneTest {
     void highLevelPlayerAndReservationFlowRejectsAnyZoneWriter() {
         Zone writerZone = zone(0, 0, Integer.MAX_VALUE, List.of());
         Zone targetZone = zone(0, 1, Integer.MAX_VALUE, List.of());
-        Session joined = session(TestPlayers.initial(1L, 1, "alpha1", 0));
-        Session other = session(TestPlayers.initial(2L, 2, "beta22", 0));
+        Session joined = session(TestPlayers.at(
+                TestPlayers.initial(1L, 1, "alpha1", 0), 0, 1, 100, 100));
+        Session other = session(TestPlayers.at(
+                TestPlayers.initial(2L, 2, "beta22", 0), 0, 1, 100, 100));
 
         assertTrue(targetZone.enter(joined));
         int originalX = joined.player().x();

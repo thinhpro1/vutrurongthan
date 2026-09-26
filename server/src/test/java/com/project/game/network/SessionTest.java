@@ -14,6 +14,8 @@ import com.project.game.persistence.player.PlayerRepositoryException;
 import com.project.game.player.Player;
 import com.project.game.player.PlayerSaveData;
 import com.project.game.testsupport.GameplayServices;
+import com.project.game.map.Zone;
+import com.project.game.service.AreaService;
 import com.project.game.testsupport.GameplayTestSupport;
 import com.project.game.testsupport.MutableClock;
 import com.project.game.monster.MonsterFactory;
@@ -43,10 +45,31 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class SessionTest {
+    @Test
+    void clearZoneRequiresTheExpectedZoneIdentity() {
+        SessionManager manager = new SessionManager();
+        Session session = new Session(manager.nextId(), new TestTransport(), manager,
+                new LegacyPacketCodec(1024), "abc".getBytes(StandardCharsets.US_ASCII), 4,
+                TestServices.serverServices(), ClientConfig.defaults());
+        Zone first = new Zone(0, 0, 10, List.of(), new AreaService(new PlayerPacketWriter()));
+        Zone second = new Zone(0, 1, 10, List.of(), new AreaService(new PlayerPacketWriter()));
+
+        session.bindZone(first);
+
+        session.clearZone(second);
+        assertSame(first, session.zone());
+        assertThrows(NullPointerException.class, () -> session.clearZone(null));
+
+        session.clearZone(first);
+        assertNull(session.zone());
+    }
+
     private static Player createPlayer(PlayerRepository repository,
                                        long accountId, String name, int gender) {
         Player initial = Player.create(accountId, name, gender);

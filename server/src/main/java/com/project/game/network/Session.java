@@ -151,7 +151,8 @@ public final class Session implements AutoCloseable {
     }
 
     public void clearZone(Zone expected) {
-        if (expected == null || zone == expected) {
+        Objects.requireNonNull(expected, "expected");
+        if (zone == expected) {
             zone = null;
         }
     }

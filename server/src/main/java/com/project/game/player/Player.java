@@ -25,8 +25,9 @@ public final class Player {
     private long coinLock;
     private int diamond;
     private int ruby;
-    // mapId and x/y are Player location state and are included in persistence.
-    // zoneId is the runtime Zone index; Zone/Session membership is separate.
+    // mapId/x/y are logical location state and participate in persistence.
+    // zoneId is the runtime Zone/handoff destination and is not persisted.
+    // None of these fields proves realtime Zone membership.
     private int mapId;
     private int zoneId;
     private int x;
@@ -192,7 +193,7 @@ public final class Player {
         return potential;
     }
 
-    /** Changes Player location fields only; Zone/Session membership is separate. */
+    /** Changes logical location/handoff fields only; it does not join a Zone. */
     public void changeMap(int mapId, int zoneId, int x, int y) {
         this.mapId = mapId;
         this.zoneId = zoneId;
@@ -200,7 +201,7 @@ public final class Player {
         this.y = y;
     }
 
-    /** Restores vitals and changes Player location fields without world orchestration. */
+    /** Restores vitals and changes logical location without world orchestration. */
     public void revive(int mapId, int zoneId, int x, int y) {
         hp = currentStats.maxHp();
         mp = currentStats.maxMp();

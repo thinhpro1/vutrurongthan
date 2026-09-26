@@ -37,13 +37,19 @@ the Player state transition does.
 Player location state has this contract:
 
 ```text
-mapId/x/y participate in durable location persistence.
-zoneId is runtime-only and is not stored in PlayerSaveData.
+mapId/x/y are logical location state and participate in durable persistence.
+zoneId is the runtime Zone/handoff destination and is not stored in PlayerSaveData.
 Player location fields do not by themselves prove realtime Zone membership.
 ```
 
-Session/Zone membership authority is intentionally not redesigned in R1; it is
-audited in R5.
+Joined realtime membership authority is `Zone.members`, using exact `Session`
+identity; `Zone.hasPlayer(session)` is the membership truth. `Session.zone` is
+only a routing/back-reference and candidate owner, not proof of membership.
+`Zone.reservedPlayers` is pending destination admission and is separate from
+active membership. A joined Session must have matching Session backlink, exact
+Zone membership, and Player map/zone location. During a committed cross-Map
+handoff, the Session is intentionally detached from the source while the
+destination reservation and Player destination location await `FINISH_LOAD_MAP`.
 
 ## Public Map / Zone lifecycle
 
@@ -143,6 +149,12 @@ presence delivery. `Zone.move` owns the ordered Player mutation and area
 delivery. `Zone.leave` owns membership removal, detachment, and stable save
 capture; rejected observer cleanup happens after the Zone writer returns.
 
+`MapManager.finishLoad` preserves the two authority branches: a Session with a
+Zone backlink must still be an exact member of that Zone with matching Player
+map/zone location; a detached Session is routed from Player map/zone location
+through `Zone.enter`, which rechecks the same location before membership is
+inserted.
+
 `MapManager` is the public-world cross-Map route owner. Public change-map and
 death-return coordination runs as:
 
@@ -160,8 +172,7 @@ MapHandler
 
 Future Dungeon runs do not route private Maps through `MapManager`; their
 runtime owner resolves private destination Maps and uses the Zone admission
-primitives directly. R5 Session/Player/Zone authority audit and R6 final
-readability sweep remain open.
+primitives directly. R6 final readability sweep remains open.
 
 ## Freeze semantics
 

@@ -947,7 +947,12 @@ class MapManagerTest {
 
         assertNotNull(change);
         assertNull(source.zone());
-        assertEquals(1, maps.findZone(1, 0).reservedCount());
+        Zone destination = maps.findZone(1, 0);
+        assertFalse(maps.findZone(0, 0).hasPlayer(source));
+        assertFalse(destination.hasPlayer(source));
+        assertEquals(1, source.player().mapId());
+        assertEquals(0, source.player().zoneId());
+        assertEquals(1, destination.reservedCount());
         assertEquals(0, maps.memberCount(1, 0));
         assertNull(maps.mapManager().changeMap(blocked));
         assertSame(maps.findZone(0, 1), blocked.zone());

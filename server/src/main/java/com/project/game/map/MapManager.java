@@ -86,10 +86,13 @@ public final class MapManager {
             return false;
         }
         if (currentZone != null) {
+            // A joined Session must be present in its Zone; Player location only
+            // participates in checking that joined invariant.
             return currentZone.mapId() == player.mapId()
                     && currentZone.zoneId() == player.zoneId()
                     && currentZone.hasPlayer(session);
         }
+        // A detached Session uses Player location to route the pending handoff.
         Zone zone = resolveZone(player.mapId(), player.zoneId());
         if (zone == null) {
             return false;

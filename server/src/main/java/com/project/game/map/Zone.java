@@ -257,11 +257,16 @@ public final class Zone {
         if (session == null || session.state() == SessionState.CLOSED || session.player() == null) {
             return false;
         }
+        if (!matchesLocation(session.player())) {
+            return false;
+        }
 
         try {
             EnterDelivery result = tryCall(() -> {
                 synchronized (this) {
-                    if (session.state() == SessionState.CLOSED || session.player() == null) {
+                    if (session.state() == SessionState.CLOSED
+                            || session.player() == null
+                            || !matchesLocation(session.player())) {
                         return new EnterDelivery(false, List.of());
                     }
                     if (session.zone() != null) {
@@ -516,9 +521,7 @@ public final class Zone {
                     .filter(member -> member.player() != null)
                     .filter(member -> {
                         Player player = member.player();
-                        return player.mapId() == mapId
-                                && player.zoneId() == zoneId
-                                && player.hp() > 0L
+                        return player.hp() > 0L
                                 && isWithinMonsterAttackRange(monster.snapshot(), player);
                     })
                     .toList();
@@ -610,9 +613,7 @@ public final class Zone {
                 .filter(member -> member.player() != null)
                 .filter(member -> {
                     Player player = member.player();
-                    return player.mapId() == mapId
-                            && player.zoneId() == zoneId
-                            && player.hp() > 0L;
+                    return player.hp() > 0L;
                 })
                 .toList();
     }
@@ -631,6 +632,10 @@ public final class Zone {
             throw new IllegalStateException("zone membership requires a bound player");
         }
         return player;
+    }
+
+    private boolean matchesLocation(Player player) {
+        return player != null && player.mapId() == mapId && player.zoneId() == zoneId;
     }
 
     static void requireOutsideRuntimeWorker(String action) {

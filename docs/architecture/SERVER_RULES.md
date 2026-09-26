@@ -832,6 +832,27 @@ mutation ordering
 live world collections
 ```
 
+## Session / Player / Zone authority
+
+Joined realtime membership authority is `Zone.members`, keyed by exact
+`Session` identity. `Zone.hasPlayer(session)` is the membership truth.
+
+`Session.zone` is a routing/back-reference and candidate owner. It is not proof
+that the Session is currently a member of that Zone.
+
+`Player.mapId`/`zoneId`/`x`/`y` are logical location and handoff state.
+`mapId`/`x`/`y` participate in persistence; `zoneId` is runtime-only and is not
+persisted. None of these fields proves realtime Zone membership.
+
+`Zone.reservedPlayers` is destination admission state for a pending handoff and
+is separate from active `Zone.members`.
+
+For a joined Session, the invariant is: `Session.zone == Zone`, exact Session
+membership in that Zone, and Player map/zone location matches that Zone. During
+a committed cross-Map handoff, the Session is intentionally detached from the
+source Zone while the destination reservation and Player destination location
+await `FINISH_LOAD_MAP` admission.
+
 Important:
 
 ```text

@@ -2,6 +2,7 @@ package com.project.game.service;
 
 import com.project.game.network.Session;
 import com.project.game.network.SessionState;
+import com.project.game.network.message.Message;
 import com.project.game.network.packet.PlayerPacketWriter;
 import com.project.game.player.Player;
 
@@ -42,13 +43,14 @@ public final class AreaService {
     public List<Session> removePlayer(Session leaving, int playerId, List<Session> remaining) {
         Objects.requireNonNull(leaving, "leaving");
         Objects.requireNonNull(remaining, "remaining");
-        var packet = packets.removePlayer(playerId);
+        Message packet = packets.removePlayer(playerId);
         List<Session> rejected = new ArrayList<>();
         for (Session member : remaining) {
-            if (member == leaving || member.state() == SessionState.CLOSED || !member.trySend(packet)) {
-                if (member != leaving && member.state() != SessionState.CLOSED) {
-                    rejected.add(member);
-                }
+            if (member == leaving || member.state() == SessionState.CLOSED) {
+                continue;
+            }
+            if (!member.trySend(packet)) {
+                rejected.add(member);
             }
         }
         return List.copyOf(rejected);
@@ -59,7 +61,7 @@ public final class AreaService {
         Objects.requireNonNull(mover, "mover");
         Objects.requireNonNull(player, "player");
         Objects.requireNonNull(members, "members");
-        var packet = packets.movePlayer(player.id(), player.x(), player.y());
+        Message packet = packets.movePlayer(player.id(), player.x(), player.y());
         List<Session> rejected = new ArrayList<>();
         for (Session member : members) {
             if (member == mover || member.state() == SessionState.CLOSED) {

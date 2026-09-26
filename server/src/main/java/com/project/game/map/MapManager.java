@@ -192,7 +192,7 @@ public final class MapManager {
                             DEATH_RETURN_X, DEATH_RETURN_Y);
                     session.clearZone(sourceZone);
                     committed.set(true);
-                    var rejected = area.removePlayer(
+                    List<Session> rejected = area.removePlayer(
                             session, player.id(), sourceZone.members());
                     return new Transition(
                             new MapChange(PlayerSaveData.capture(player), townZone.zoneId()),
@@ -324,7 +324,7 @@ public final class MapManager {
                             intent.waypoint().goX(), intent.waypoint().goY());
                     session.clearZone(sourceZone);
                     committed.set(true);
-                    var rejected = area.removePlayer(
+                    List<Session> rejected = area.removePlayer(
                             session, player.id(), sourceZone.members());
                     return new Transition(
                             new MapChange(PlayerSaveData.capture(player), destinationZone.zoneId()),

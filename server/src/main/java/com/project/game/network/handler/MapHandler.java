@@ -1,6 +1,8 @@
 package com.project.game.network.handler;
 
 import com.project.game.map.MapManager;
+import com.project.game.map.MapTemplate;
+import com.project.game.map.Waypoint;
 import com.project.game.map.Zone;
 import com.project.game.monster.MonsterManager;
 import com.project.game.monster.MonsterSnapshot;
@@ -119,13 +121,13 @@ final class MapHandler {
     }
 
     private void sendMapInfo(PlayerSaveData player, int zoneId) throws IOException {
-        var map = resources.map(player.mapId())
+        MapTemplate map = resources.map(player.mapId())
                 .orElseThrow(() -> new IOException(
                         "map unavailable: " + player.mapId()));
         boolean sendTemplate = !session.hasSentMapTemplate(map.id());
-        var waypointTargetNames = new ArrayList<String>(map.waypoints().size());
-        for (var waypoint : map.waypoints()) {
-            var target = resources.map(waypoint.goMap())
+        List<String> waypointTargetNames = new ArrayList<>(map.waypoints().size());
+        for (Waypoint waypoint : map.waypoints()) {
+            MapTemplate target = resources.map(waypoint.goMap())
                     .orElseThrow(() -> new IOException(
                             "waypoint target map unavailable: " + waypoint.goMap()));
             waypointTargetNames.add(target.name());

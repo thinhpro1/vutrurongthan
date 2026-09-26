@@ -25,7 +25,7 @@ import java.util.function.Supplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-/** Trạng thái thành viên runtime đồng thời của một khu vực bản đồ. */
+/** Runtime của một khu vực bản đồ: writer, membership và entity state. */
 public final class Zone {
     private static final int MONSTER_CHASE_LEASH = 1200;
     private static final int DEFAULT_RUNTIME_INPUT_CAPACITY = 1024;
@@ -444,32 +444,11 @@ public final class Zone {
         return removed;
     }
 
-    synchronized boolean canAddPlayer(Session session) {
-        Objects.requireNonNull(session, "session");
-        Player player = requirePlayer(session);
-        Session existing = members.get(player.id());
-        if (existing == session) {
-            return true;
-        }
-        if (existing != null) {
-            return false;
-        }
-        Session reserved = reservedPlayers.get(player.id());
-        if (reserved != null) {
-            return reserved == session;
-        }
-        return members.size() + reservedPlayers.size() < maxPlayer;
-    }
-
     public synchronized boolean hasPlayer(Session session) {
         if (session == null || session.player() == null) {
             return false;
         }
         return members.get(session.player().id()) == session;
-    }
-
-    public synchronized boolean hasPlayer(int playerId) {
-        return members.containsKey(playerId);
     }
 
     public synchronized int size() {

@@ -240,13 +240,21 @@ Exact completion/lock state is determined by the commit-review workflow.
 R0  Rules / runtime contract                         LOCKED
 R1  Player contract/readability                      LOCKED
 R2  Map → Zone ownership                             LOCKED
-R3A Public Map / Zone lifecycle
-R3B Zone-local Player move / enter / leave
-R4  Cross-Map transition
-R5  Session / Player / Zone authority audit
+R3A Public Map / Zone lifecycle                      LOCKED
+R3B Zone-local Player move / enter / leave           LOCKED
+R4  Public-world Cross-Map transition                LOCKED
+R5  Session / Player / Zone authority audit          LOCKED
 R6  Final P1 readability sweep
 → P1 LOCK
 → P2 Monster Complete
+```
+
+Known remaining debt:
+
+```text
+MapManager.zones()
+→ retained only for current MonsterManager.update traversal
+→ P2 cleanup
 ```
 
 Each phase must also clean the touched feature slice to current

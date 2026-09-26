@@ -182,9 +182,9 @@ class ZoneTest {
         assertEquals(0, zone.size());
         assertEquals(Zone.JoinStatus.ADDED, zone.addPlayer(session).status());
         assertEquals(1, zone.size());
-        assertTrue(zone.hasPlayer(7));
+        assertTrue(zone.hasPlayer(session));
         assertTrue(zone.removePlayer(session));
-        assertFalse(zone.hasPlayer(7));
+        assertFalse(zone.hasPlayer(session));
         assertEquals(0, zone.size());
     }
 
@@ -221,8 +221,6 @@ class ZoneTest {
         assertEquals(List.of(first), zone.members());
         assertTrue(zone.hasPlayer(first));
         assertFalse(zone.hasPlayer(second));
-        assertTrue(zone.canAddPlayer(first));
-        assertFalse(zone.canAddPlayer(second));
     }
 
     @Test

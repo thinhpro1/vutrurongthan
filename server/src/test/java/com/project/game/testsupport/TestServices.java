@@ -6,7 +6,6 @@ import com.project.game.resource.GameResources;
 import com.project.game.network.SessionServices;
 import com.project.game.map.MapManager;
 import com.project.game.combat.Combat;
-import com.project.game.monster.MonsterFactory;
 import com.project.game.monster.MonsterManager;
 import com.project.game.network.packet.PlayerPacketWriter;
 import com.project.game.network.packet.MonsterPacketWriter;
@@ -37,9 +36,9 @@ public final class TestServices {
         PlayerPacketWriter playerPackets = new PlayerPacketWriter();
         MonsterPacketWriter monsterPackets = new MonsterPacketWriter();
         AreaService area = new AreaService(playerPackets, monsterPackets);
-        MapManager maps = new MapManager(MapTestSupport.canonicalMaps(), new MonsterFactory(resources), area);
+        MonsterManager monsterManager = new MonsterManager(resources);
+        MapManager maps = new MapManager(MapTestSupport.canonicalMaps(), monsterManager, area);
         Combat combat = new Combat(area, playerPackets);
-        MonsterManager monsterManager = new MonsterManager(maps);
         return new SessionServices(auth, resources, maps, combat, monsterManager,
                 playerRepository(auth));
     }

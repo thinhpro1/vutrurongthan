@@ -24,7 +24,7 @@ class MonsterManagerMovementTest {
         MutableClock clock = new MutableClock(1_000_000L);
         GameplayServices maps = mapsWithMonsters(clock, new Random(1L));
 
-        maps.monsterManager().update();
+        maps.monsterManager().update(maps.mapManager());
 
         assertEquals(979, maps.monsterSnapshots(1, 0).getFirst().x());
     }
@@ -37,7 +37,7 @@ class MonsterManagerMovementTest {
         maps.finishLoad(player);
         drain(player);
 
-        maps.monsterManager().update();
+        maps.monsterManager().update(maps.mapManager());
 
         assertEquals(979, maps.monsterSnapshots(1, 0).getFirst().x());
         assertTrue(commands(drain(player)).contains(MessageName.MONSTER_MOVE));
@@ -53,7 +53,7 @@ class MonsterManagerMovementTest {
         assertTrue(maps.attackMonster(player, 101));
         drain(player);
 
-        maps.monsterManager().update();
+        maps.monsterManager().update(maps.mapManager());
 
         assertEquals(979, maps.monsterSnapshots(1, 0).getFirst().x());
     }
@@ -73,7 +73,7 @@ class MonsterManagerMovementTest {
         drain(lowerId);
         drain(higherId);
 
-        maps.monsterManager().update();
+        maps.monsterManager().update(maps.mapManager());
 
         assertEquals(971, maps.monsterSnapshots(1, 0).getFirst().x());
     }
@@ -88,7 +88,7 @@ class MonsterManagerMovementTest {
         assertTrue(inside.attackMonster(insidePlayer, 101));
         drain(insidePlayer);
 
-        inside.monsterManager().update();
+        inside.monsterManager().update(inside.mapManager());
         assertEquals(975, inside.monsterSnapshots(1, 0).getFirst().x());
 
         GameplayServices exact = mapsWithMonsters(clock, new Random(1L));
@@ -98,7 +98,7 @@ class MonsterManagerMovementTest {
         assertTrue(exact.attackMonster(exactPlayer, 101));
         drain(exactPlayer);
 
-        exact.monsterManager().update();
+        exact.monsterManager().update(exact.mapManager());
         assertEquals(979, exact.monsterSnapshots(1, 0).getFirst().x());
     }
 
@@ -110,7 +110,7 @@ class MonsterManagerMovementTest {
         maps.finishLoad(player);
         drain(player);
 
-        maps.monsterManager().update();
+        maps.monsterManager().update(maps.mapManager());
 
         assertEquals(100L, player.player().hp());
         assertEquals(List.of(), commands(drain(player)).stream()

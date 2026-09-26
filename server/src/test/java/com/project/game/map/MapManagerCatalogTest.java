@@ -1,6 +1,6 @@
 package com.project.game.map;
 
-import com.project.game.monster.MonsterFactory;
+import com.project.game.monster.MonsterManager;
 import com.project.game.network.packet.MonsterPacketWriter;
 import com.project.game.network.packet.PlayerPacketWriter;
 import com.project.game.resource.GameResources;
@@ -36,7 +36,7 @@ class MapManagerCatalogTest {
 
     @Test
     void maxZoneDoesNotExpandThePublicZoneSet() {
-        MapManager registry = new MapManager(singlePublicZoneMap(), monsterFactory(), area());
+        MapManager registry = new MapManager(singlePublicZoneMap(), monsterManager(), area());
 
         com.project.game.map.Map runtimeMap = registry.getMap(1);
 
@@ -74,7 +74,7 @@ class MapManagerCatalogTest {
     @Test
     void catalogIsDefensivelyCopiedAndSnapshotContainsOnlyRegisteredZones() {
         java.util.Map<Integer, MapTemplate> source = new HashMap<>(maps());
-        MapManager registry = new MapManager(source, monsterFactory(), area());
+        MapManager registry = new MapManager(source, monsterManager(), area());
         source.clear();
 
         assertEquals(2, zoneCount(registry));
@@ -85,7 +85,7 @@ class MapManagerCatalogTest {
     }
 
     private static MapManager registry() {
-        return new MapManager(maps(), monsterFactory(), area());
+        return new MapManager(maps(), monsterManager(), area());
     }
 
     private static java.util.Map<Integer, MapTemplate> maps() {
@@ -112,8 +112,8 @@ class MapManagerCatalogTest {
                 map.dataId(), map.data(), map.waypoints());
     }
 
-    private static MonsterFactory monsterFactory() {
-        return new MonsterFactory(GameResources.fromFrameRoot(
+    private static MonsterManager monsterManager() {
+        return new MonsterManager(GameResources.fromFrameRoot(
                 Path.of("resources", "json"), canonicalMaps(), 2,
                 com.project.game.testsupport.MonsterTestSupport.canonicalRepository()));
     }

@@ -1,6 +1,6 @@
 package com.project.game.map;
 
-import com.project.game.monster.MonsterFactory;
+import com.project.game.monster.MonsterManager;
 import com.project.game.network.packet.MonsterPacketWriter;
 import com.project.game.network.packet.PlayerPacketWriter;
 import com.project.game.resource.GameResources;
@@ -22,7 +22,7 @@ class MapTest {
     @Test
     void constructorCreatesMinimumZonesAndFindDoesNotCreate() {
         MapTemplate template = policy(MapTestSupport.canonicalMaps().get(1), 2, 4, 2);
-        Map map = new Map(template, monsterFactory(), area());
+        Map map = new Map(template, monsterManager(), area());
 
         assertEquals(List.of(0, 1), map.zones().stream().map(Zone::zoneId).toList());
         assertNotSame(map.findZone(1), map.findZone(0));
@@ -33,7 +33,7 @@ class MapTest {
     @Test
     void constructorCreatesExactlyMinimumZonesAndFindsOnlyExistingZones() {
         MapTemplate template = policy(MapTestSupport.canonicalMaps().get(1), 1, 4, 2);
-        Map map = new Map(template, monsterFactory(), area());
+        Map map = new Map(template, monsterManager(), area());
 
         assertEquals(List.of(0), map.zones().stream().map(Zone::zoneId).toList());
         assertSame(map.zones().getFirst(), map.findZone(0));
@@ -44,7 +44,7 @@ class MapTest {
 
     @Test
     void findsWaypointUsingTheMapTemplateRules() {
-        Map map = new Map(policy(MapTestSupport.canonicalMaps().get(0), 1, 2, 2), monsterFactory(), area());
+        Map map = new Map(policy(MapTestSupport.canonicalMaps().get(0), 1, 2, 2), monsterManager(), area());
         Waypoint expected = map.template().waypoints().getFirst();
 
         assertSame(expected, map.findWaypoint(expected.x(), expected.y()));
@@ -55,8 +55,8 @@ class MapTest {
     void runtimeMapsDoNotShareZones() {
         MapTemplate template = policy(MapTestSupport.canonicalMaps().get(1), 1, 2, 2);
 
-        Map first = new Map(template, monsterFactory(), area());
-        Map second = new Map(template, monsterFactory(), area());
+        Map first = new Map(template, monsterManager(), area());
+        Map second = new Map(template, monsterManager(), area());
 
         assertNotSame(first.findZone(0), second.findZone(0));
     }
@@ -66,8 +66,8 @@ class MapTest {
                 minZone, maxZone, maxPlayer, source.dataId(), source.data(), source.waypoints());
     }
 
-    private static MonsterFactory monsterFactory() {
-        return new MonsterFactory(GameResources.fromFrameRoot(
+    private static MonsterManager monsterManager() {
+        return new MonsterManager(GameResources.fromFrameRoot(
                 Path.of("resources", "json"), MapTestSupport.canonicalMaps(), 2,
                 MonsterTestSupport.canonicalRepository()));
     }

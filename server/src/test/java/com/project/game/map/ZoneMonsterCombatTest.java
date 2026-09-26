@@ -1,7 +1,7 @@
 package com.project.game.map;
 
 import com.project.game.monster.Monster;
-import com.project.game.monster.MonsterFactory;
+import com.project.game.monster.MonsterManager;
 import com.project.game.monster.MonsterSnapshot;
 import com.project.game.network.ClientConfig;
 import com.project.game.network.Session;
@@ -173,7 +173,7 @@ class ZoneMonsterCombatTest {
     }
 
     private static List<Monster> monsters() {
-        MonsterFactory factory = new MonsterFactory(GameResources.fromFrameRoot(
+        MonsterManager factory = new MonsterManager(GameResources.fromFrameRoot(
                 Path.of("resources", "json"),
                 com.project.game.testsupport.MapTestSupport.canonicalMaps(), 2,
                 com.project.game.testsupport.MonsterTestSupport.canonicalRepository()));

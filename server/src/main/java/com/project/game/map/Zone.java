@@ -359,20 +359,22 @@ public final class Zone {
     private synchronized void updateMonstersOnWriter(
             long nowMillis, RandomGenerator random, List<Session> rejected) {
         for (Monster monster : monsters.values()) {
-            Monster.Move move = monster.updateMove(hostileLivingPlayers(monster));
-            if (move != null) {
+            boolean wasAlive = monster.isAlive();
+            int oldX = monster.x();
+            int oldY = monster.y();
+            Monster.Attack attack = monster.update(
+                    hostileLivingPlayers(monster), nowMillis, random);
+
+            if (!wasAlive && monster.isAlive()) {
+                Monster.Respawn respawn = new Monster.Respawn(
+                        monster.id(), monster.levelStatus(), monster.hp());
+                rejected.addAll(area.monsterRespawn(respawn, members()));
+            } else if (oldX != monster.x() || oldY != monster.y()) {
+                Monster.Move move = new Monster.Move(
+                        monster.id(), monster.x(), monster.y(), monster.moveDir());
                 rejected.addAll(area.monsterMove(move, members()));
             }
-        }
-        for (Monster monster : monsters.values()) {
-            Monster.Respawn respawn = monster.updateRespawn(nowMillis);
-            if (respawn != null) {
-                rejected.addAll(area.monsterRespawn(respawn, members()));
-            }
-        }
-        for (Monster monster : monsters.values()) {
-            Monster.Attack attack = monster.updateAttack(
-                    hostileLivingPlayers(monster), nowMillis, random);
+
             if (attack == null) {
                 continue;
             }

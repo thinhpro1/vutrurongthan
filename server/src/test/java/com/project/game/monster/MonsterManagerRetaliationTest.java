@@ -40,7 +40,7 @@ class MonsterManagerRetaliationTest {
         drain(attacker);
         drain(observer);
         clock.advanceMillis(1L);
-        maps.monsterManager().update();
+        maps.monsterManager().update(maps.mapManager());
 
         List<Message> attackerMessages = withoutMonsterMoves(drain(attacker));
         List<Message> observerMessages = withoutMonsterMoves(drain(observer));
@@ -63,7 +63,7 @@ class MonsterManagerRetaliationTest {
         drain(target);
 
         clock.advanceMillis(1L);
-        maps.monsterManager().update();
+        maps.monsterManager().update(maps.mapManager());
 
         assertEquals(0L, target.player().hp());
     }
@@ -81,7 +81,7 @@ class MonsterManagerRetaliationTest {
         drain(target);
 
         clock.advanceMillis(1L);
-        maps.monsterManager().update();
+        maps.monsterManager().update(maps.mapManager());
 
         assertEquals(0L, target.player().hp());
     }
@@ -100,7 +100,7 @@ class MonsterManagerRetaliationTest {
         }
 
         clock.advanceMillis(1L);
-        maps.monsterManager().update();
+        maps.monsterManager().update(maps.mapManager());
 
         assertEquals(0L, target.player().hp());
         assertTrue(runtimeMonsters(maps, 1, 0).stream()
@@ -108,7 +108,7 @@ class MonsterManagerRetaliationTest {
 
         withoutMonsterMoves(drain(target));
         clock.advanceMillis(10_000L);
-        maps.monsterManager().update();
+        maps.monsterManager().update(maps.mapManager());
         assertEquals(List.of(), withoutMonsterMoves(drain(target)));
     }
 
@@ -127,7 +127,7 @@ class MonsterManagerRetaliationTest {
         drain(victim);
         drain(observer);
         clock.advanceMillis(1L);
-        maps.monsterManager().update();
+        maps.monsterManager().update(maps.mapManager());
 
         List<Message> victimMessages = withoutMonsterMoves(drain(victim));
         assertEquals(
@@ -163,7 +163,7 @@ class MonsterManagerRetaliationTest {
         assertTrue(maps.combat().attackMonster(attacker, 101));
         drain(attacker);
         clock.advanceMillis(1L);
-        maps.monsterManager().update();
+        maps.monsterManager().update(maps.mapManager());
 
         assertEquals(List.of(MessageName.MONSTER_ATTACK),
                 commands(withoutMonsterMoves(drain(attacker))));
@@ -186,7 +186,7 @@ class MonsterManagerRetaliationTest {
             return null;
         });
         clock.advanceMillis(1L);
-        maps.monsterManager().update();
+        maps.monsterManager().update(maps.mapManager());
         assertEquals(List.of(MessageName.MONSTER_ATTACK),
                 commands(withoutMonsterMoves(drain(attacker))));
 
@@ -195,10 +195,10 @@ class MonsterManagerRetaliationTest {
             return null;
         });
         clock.advanceMillis(1_600L);
-        maps.monsterManager().update();
+        maps.monsterManager().update(maps.mapManager());
         assertEquals(List.of(), withoutMonsterMoves(drain(attacker)));
         clock.advanceMillis(1L);
-        maps.monsterManager().update();
+        maps.monsterManager().update(maps.mapManager());
         assertEquals(List.of(MessageName.MONSTER_ATTACK),
                 commands(withoutMonsterMoves(drain(attacker))));
         assertEquals(80L, attacker.player().hp());
@@ -218,29 +218,33 @@ class MonsterManagerRetaliationTest {
         assertTrue(maps.combat().attackMonster(attacker, 101));
         drain(attacker);
         clock.advanceMillis(1L);
-        maps.monsterManager().update();
+        maps.monsterManager().update(maps.mapManager());
         assertEquals(List.of(MessageName.MONSTER_ATTACK),
                 commands(withoutMonsterMoves(drain(attacker))));
         assertEquals(10L, attacker.player().hp());
 
         clock.advanceMillis(1_601L);
-        maps.monsterManager().update();
+        maps.monsterManager().update(maps.mapManager());
         List<Message> lethalMessages = drain(attacker);
-        assertEquals(List.of(
-                        MessageName.MONSTER_MOVE,
-                        MessageName.MONSTER_MOVE,
-                        MessageName.MONSTER_MOVE,
-                        MessageName.MONSTER_MOVE,
-                        MessageName.MONSTER_MOVE,
-                        MessageName.MONSTER_ATTACK,
-                        MessageName.ME_DIE),
-                commands(lethalMessages));
+        List<Integer> lethalCommands = commands(lethalMessages);
+        assertEquals(7, lethalCommands.size());
+        assertEquals(5, lethalCommands.stream()
+                .filter(command -> command == MessageName.MONSTER_MOVE)
+                .count());
+        assertEquals(1, lethalCommands.stream()
+                .filter(command -> command == MessageName.MONSTER_ATTACK)
+                .count());
+        assertEquals(1, lethalCommands.stream()
+                .filter(command -> command == MessageName.ME_DIE)
+                .count());
+        assertTrue(lethalCommands.indexOf(MessageName.MONSTER_ATTACK)
+                < lethalCommands.indexOf(MessageName.ME_DIE));
         assertTrue(lethalMessages.subList(0, 5).stream()
                 .noneMatch(message -> monsterMoveId(message) == 0));
         assertEquals(0L, attacker.player().hp());
 
         clock.advanceMillis(1_601L);
-        maps.monsterManager().update();
+        maps.monsterManager().update(maps.mapManager());
         assertEquals(List.of(), withoutMonsterMoves(drain(attacker)));
         assertEquals(0L, attacker.player().hp());
 
@@ -256,14 +260,14 @@ class MonsterManagerRetaliationTest {
         assertTrue(maps.combat().attackMonster(survivor, 101));
         drain(survivor);
         clock.advanceMillis(9_000L);
-        maps.monsterManager().update();
+        maps.monsterManager().update(maps.mapManager());
         assertEquals(List.of(), withoutMonsterMoves(drain(survivor)));
         clock.advanceMillis(1L);
-        maps.monsterManager().update();
+        maps.monsterManager().update(maps.mapManager());
         assertEquals(List.of(MessageName.MONSTER_RESPAWN),
                 commands(withoutMonsterMoves(drain(survivor))));
         clock.advanceMillis(1L);
-        maps.monsterManager().update();
+        maps.monsterManager().update(maps.mapManager());
         assertEquals(List.of(), withoutMonsterMoves(drain(survivor)));
     }
 }

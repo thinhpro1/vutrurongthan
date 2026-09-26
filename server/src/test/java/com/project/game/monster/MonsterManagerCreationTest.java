@@ -17,7 +17,7 @@ import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-class MonsterFactoryTest {
+class MonsterManagerCreationTest {
     private static GameResources resources() {
         return GameResources.fromFrameRoot(
                 Path.of("resources", "json"), MapTestSupport.canonicalMaps(), 2,
@@ -26,12 +26,12 @@ class MonsterFactoryTest {
 
     @Test
     void createsCanonicalMonstersForSupportedMaps() {
-        MonsterFactory factory =
-                new MonsterFactory(resources());
+        MonsterManager manager =
+                new MonsterManager(resources());
 
-        assertTrue(factory.createForMap(0).isEmpty());
+        assertTrue(manager.createForMap(0).isEmpty());
 
-        List<Monster> map1 = factory.createForMap(1);
+        List<Monster> map1 = manager.createForMap(1);
         assertEquals(6, map1.size());
 
         List<MonsterSnapshot> snapshots =
@@ -61,11 +61,11 @@ class MonsterFactoryTest {
 
     @Test
     void createsFreshRuntimeObjectsForEverySeedRequest() {
-        MonsterFactory factory =
-                new MonsterFactory(resources());
+        MonsterManager manager =
+                new MonsterManager(resources());
 
-        List<Monster> first = factory.createForMap(1);
-        List<Monster> second = factory.createForMap(1);
+        List<Monster> first = manager.createForMap(1);
+        List<Monster> second = manager.createForMap(1);
 
         assertEquals(
                 first.stream().map(Monster::snapshot).toList(),

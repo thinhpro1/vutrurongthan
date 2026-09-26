@@ -50,9 +50,10 @@ class MonsterTest {
 
         assertTrue(death.killed());
         assertEquals(10L, death.potentialReward());
-        assertNull(monster.updateRespawn(NOW + 9_000));
-        assertEquals(new Monster.Respawn(101, 0, 300L),
-                monster.updateRespawn(NOW + 9_001));
+        assertFalse(monster.updateRespawn(NOW + 9_000));
+        assertTrue(monster.updateRespawn(NOW + 9_001));
+        assertTrue(monster.isAlive());
+        assertEquals(300L, monster.hp());
     }
 
     @Test
@@ -61,9 +62,8 @@ class MonsterTest {
 
         monster.injure(7, 500, NOW, 6);
 
-        assertNull(monster.updateRespawn(NOW + 5_000));
-        assertEquals(new Monster.Respawn(101, 0, 300L),
-                monster.updateRespawn(NOW + 5_001));
+        assertFalse(monster.updateRespawn(NOW + 5_000));
+        assertTrue(monster.updateRespawn(NOW + 5_001));
     }
 
     @Test
@@ -84,8 +84,8 @@ class MonsterTest {
         monster.injure(7, 10, NOW, 0);
         monster.injure(8, 500, NOW + 1, 0);
 
-        assertEquals(new Monster.Respawn(101, 0, 300L),
-                monster.updateRespawn(NOW + 10_002));
+        assertNull(monster.update(List.of(), NOW + 10_002, new Random(1L)));
+        assertTrue(monster.isAlive());
 
         assertEquals(975, monster.snapshot().x());
         assertEquals(936, monster.snapshot().y());
@@ -98,21 +98,27 @@ class MonsterTest {
     void patrolMovesByTheRunStepAndFlipsAtBoundaries() throws Exception {
         Monster monster = map1Monster();
 
-        assertEquals(new Monster.Move(101, 979, 936, 1), monster.updateMove(List.of()));
+        assertTrue(monster.updateMove(List.of()));
+        assertEquals(979, monster.x());
+        assertEquals(1, monster.moveDir());
 
         setIntField(monster, "x", 1071);
         setIntField(monster, "moveDir", 1);
-        assertEquals(new Monster.Move(101, 1075, 936, -1), monster.updateMove(List.of()));
-        assertEquals(new Monster.Move(101, 1071, 936, -1), monster.updateMove(List.of()));
+        assertTrue(monster.updateMove(List.of()));
+        assertEquals(1075, monster.x());
+        assertEquals(-1, monster.moveDir());
+        assertTrue(monster.updateMove(List.of()));
+        assertEquals(1071, monster.x());
+        assertEquals(-1, monster.moveDir());
     }
 
     @Test
     void doesNotMoveWhenAHostilePlayerIsInStrictAttackRange() {
         Monster monster = map1Monster();
 
-        assertNull(monster.updateMove(List.of(playerAt(7, 975 + 899, 936))));
-        assertEquals(new Monster.Move(101, 979, 936, 1),
-                monster.updateMove(List.of(playerAt(7, 975 + 900, 936))));
+        assertFalse(monster.updateMove(List.of(playerAt(7, 975 + 899, 936))));
+        assertTrue(monster.updateMove(List.of(playerAt(7, 975 + 900, 936))));
+        assertEquals(979, monster.x());
     }
 
     @Test
@@ -121,17 +127,17 @@ class MonsterTest {
         Player lowerId = playerAt(7, -25, 936);
         Player higherId = playerAt(8, 1975, 936);
 
-        Monster.Move move = monster.updateMove(List.of(higherId, lowerId));
-
-        assertEquals(new Monster.Move(101, 971, 936, -1), move);
+        assertTrue(monster.updateMove(List.of(higherId, lowerId)));
+        assertEquals(971, monster.x());
+        assertEquals(-1, monster.moveDir());
     }
 
     @Test
     void ignoresAHostilePlayerBeyondTheLeashAndPatrolsInstead() {
         Monster monster = map1Monster();
 
-        assertEquals(new Monster.Move(101, 979, 936, 1),
-                monster.updateMove(List.of(playerAt(7, 975 + 1201, 936))));
+        assertTrue(monster.updateMove(List.of(playerAt(7, 975 + 1201, 936))));
+        assertEquals(979, monster.x());
     }
 
     @Test
@@ -139,9 +145,8 @@ class MonsterTest {
         Monster monster = map1Monster();
         setIntField(monster, "x", 2000);
 
-        Monster.Move move = monster.updateMove(List.of(playerAt(7, 2002, 1936)));
-
-        assertEquals(new Monster.Move(101, 2002, 936, 1), move);
+        assertTrue(monster.updateMove(List.of(playerAt(7, 2002, 1936))));
+        assertEquals(2002, monster.x());
     }
 
     @Test
@@ -149,7 +154,7 @@ class MonsterTest {
         Monster monster = map1Monster();
         monster.injure(7, 500, NOW, 0);
 
-        assertNull(monster.updateMove(List.of()));
+        assertFalse(monster.updateMove(List.of()));
     }
 
     @Test
@@ -159,7 +164,7 @@ class MonsterTest {
         monster.injure(7, 10, NOW, 0);
 
         assertEquals(new Monster.Attack(101, 7, 10, 190, false),
-                monster.updateAttack(List.of(target), NOW + 1, new Random(1L)));
+                monster.update(List.of(target), NOW + 1, new Random(1L)));
         assertNull(monster.updateAttack(List.of(target), NOW + 1_601, new Random(1L)));
         assertEquals(new Monster.Attack(101, 7, 10, 180, false),
                 monster.updateAttack(List.of(target), NOW + 1_602, new Random(1L)));
@@ -225,6 +230,6 @@ class MonsterTest {
                 com.project.game.testsupport.MapTestSupport.canonicalMaps(),
                 2,
                 com.project.game.testsupport.MonsterTestSupport.canonicalRepository());
-        return new MonsterFactory(resources).createForMap(1).getFirst();
+        return new MonsterManager(resources).createForMap(1).getFirst();
     }
 }

@@ -64,6 +64,20 @@ public final class Monster {
         status = spawn.status();
     }
 
+    /** Runs this Monster's own respawn, movement, and attack decisions. */
+    public Attack update(
+            List<Player> hostilePlayers, long nowMillis, RandomGenerator random) {
+        Objects.requireNonNull(hostilePlayers, "hostilePlayers");
+        Objects.requireNonNull(random, "random");
+        if (!isAlive()) {
+            updateRespawn(nowMillis);
+            return null;
+        }
+
+        updateMove(hostilePlayers);
+        return updateAttack(hostilePlayers, nowMillis, random);
+    }
+
     public boolean isAlive() {
         return status == STATUS_LIVE && hp > 0L;
     }
@@ -96,9 +110,9 @@ public final class Monster {
     }
 
     /** Restores a dead Monster only after its strict respawn deadline. */
-    public Respawn updateRespawn(long nowMillis) {
+    boolean updateRespawn(long nowMillis) {
         if (status != STATUS_DIE || respawnAtMillis == NO_RESPAWN || nowMillis <= respawnAtMillis) {
-            return null;
+            return false;
         }
 
         x = xFirst;
@@ -109,19 +123,19 @@ public final class Monster {
         enemies.clear();
         lastAttackAtMillis = 0L;
         moveDir = INITIAL_MOVE_DIR;
-        return new Respawn(id, levelStatus, hp);
+        return true;
     }
 
     /** Chooses patrol or chase movement from the hostile Players supplied by its Zone. */
-    public Move updateMove(List<Player> hostilePlayers) {
+    boolean updateMove(List<Player> hostilePlayers) {
         Objects.requireNonNull(hostilePlayers, "hostilePlayers");
         if (!isAlive() || template.type() != MOVE_TYPE_RUN) {
-            return null;
+            return false;
         }
 
         for (Player player : hostilePlayers) {
             if (player != null && isWithinAttackRange(player)) {
-                return null;
+                return false;
             }
         }
 
@@ -139,11 +153,12 @@ public final class Monster {
                 targetDistance = distance;
             }
         }
-        return target == null ? patrol() : moveTo(target.x());
+        Move move = target == null ? patrol() : moveTo(target.x());
+        return move != null;
     }
 
     /** Attacks one valid in-range hostile Player when cooldown is strictly due. */
-    public Attack updateAttack(
+    Attack updateAttack(
             List<Player> hostilePlayers, long nowMillis, RandomGenerator random) {
         Objects.requireNonNull(hostilePlayers, "hostilePlayers");
         Objects.requireNonNull(random, "random");
@@ -152,6 +167,16 @@ public final class Monster {
         }
 
         lastAttackAtMillis = nowMillis;
+        Player target = findTarget(hostilePlayers, random);
+        if (target == null) {
+            return null;
+        }
+        int hpAfter = target.injure(damage());
+        return new Attack(id, target.id(), damage(), hpAfter, hpAfter == 0L);
+    }
+
+    /** Finds a current living hostile Player inside the strict attack range. */
+    Player findTarget(List<Player> hostilePlayers, RandomGenerator random) {
         int targetCount = 0;
         for (Player player : hostilePlayers) {
             if (player != null && isWithinAttackRange(player)) {
@@ -163,19 +188,16 @@ public final class Monster {
         }
 
         int targetIndex = random.nextInt(targetCount);
-        Player target = null;
         for (Player player : hostilePlayers) {
             if (player == null || !isWithinAttackRange(player)) {
                 continue;
             }
             if (targetIndex == 0) {
-                target = player;
-                break;
+                return player;
             }
             targetIndex--;
         }
-        int hpAfter = target.injure(damage());
-        return new Attack(id, target.id(), damage(), hpAfter, hpAfter == 0L);
+        return null;
     }
 
     public int id() {
@@ -184,6 +206,22 @@ public final class Monster {
 
     public long damage() {
         return template.damage();
+    }
+
+    public long hp() {
+        return hp;
+    }
+
+    public int x() {
+        return x;
+    }
+
+    public int y() {
+        return y;
+    }
+
+    public int levelStatus() {
+        return levelStatus;
     }
 
     int rangeMove() {
@@ -198,7 +236,7 @@ public final class Monster {
         return template.type();
     }
 
-    int moveDir() {
+    public int moveDir() {
         return moveDir;
     }
 

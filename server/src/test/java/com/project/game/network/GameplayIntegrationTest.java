@@ -11,7 +11,7 @@ import com.project.game.network.message.MessageWriter;
 import com.project.game.network.transport.LegacyTcpTransport;
 import com.project.game.testsupport.GameplayServices;
 import com.project.game.testsupport.MapTestSupport;
-import com.project.game.monster.MonsterFactory;
+import com.project.game.monster.MonsterManager;
 import com.project.game.account.AccountAuth;
 import com.project.game.resource.GameResources;
 import com.project.game.testsupport.MutableClock;
@@ -49,9 +49,8 @@ class GameplayIntegrationTest {
         GameplayServices maps = new GameplayServices(
                 new com.project.game.network.packet.PlayerPacketWriter(),
                 new MonsterPacketWriter(),
-                new MonsterFactory(resources),
-                clock,
-                random);
+                new MonsterManager(resources, clock, random),
+                clock);
         NetworkServer server = new NetworkServer(
                 "127.0.0.1", 0, 4, 262_144, 16, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
@@ -102,6 +101,10 @@ class GameplayIntegrationTest {
                 assertAddPlayerId(victim.readServerMessage(), observer.playerInfo().id());
                 assertAddPlayerId(observer.readServerMessage(), victim.playerInfo().id());
 
+                var currentMonster = maps.monsterSnapshots(1, 0).getFirst();
+                victim.move(currentMonster.x(), currentMonster.y());
+                assertEquals(MessageName.PLAYER_MOVE, observer.readServerMessage().command());
+
                 victim.prepareMonsterAttack(0, 101);
                 victim.impactMonster(101);
                 assertMonsterInjure(victim.readServerMessage(), 101, 10, 290);
@@ -112,9 +115,10 @@ class GameplayIntegrationTest {
                 random.release.countDown();
 
                 assertMonsterAttack(victim.readServerMessage(), 101, victim.playerInfo().id(), 10L);
-                assertMeDie(victim.readServerMessage(), 90, 1008);
+                assertMeDie(victim.readServerMessage(), currentMonster.x(), currentMonster.y());
                 assertMonsterAttack(observer.readServerMessage(), 101, victim.playerInfo().id(), 10L);
-                assertPlayerDie(observer.readServerMessage(), victim.playerInfo().id(), 90, 1008);
+                assertPlayerDie(observer.readServerMessage(), victim.playerInfo().id(),
+                        currentMonster.x(), currentMonster.y());
                 assertEquals(0L, server.sessions().findByAccount(victimAccount).player().hp());
 
                 Session beforePaidRevive = server.sessions().findByAccount(victimAccount);
@@ -322,7 +326,7 @@ class GameplayIntegrationTest {
         GameplayServices maps = new GameplayServices(
                 new com.project.game.network.packet.PlayerPacketWriter(),
                 new MonsterPacketWriter(),
-                new MonsterFactory(resources));
+                new MonsterManager(resources));
         NetworkServer server = new NetworkServer("127.0.0.1", 0, 4, 262_144, 16, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
                 TestServices.serverServices(auth, resources, maps), null,
@@ -405,9 +409,8 @@ class GameplayIntegrationTest {
         GameplayServices maps = new GameplayServices(
                 new com.project.game.network.packet.PlayerPacketWriter(),
                 new MonsterPacketWriter(),
-                new MonsterFactory(resources),
-                clock,
-                new Random(12345L));
+                new MonsterManager(resources, clock, new Random(12345L)),
+                clock);
         NetworkServer server = new NetworkServer(
                 "127.0.0.1", 0, 4, 262_144, 16, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
@@ -506,7 +509,7 @@ class GameplayIntegrationTest {
         GameplayServices maps = new GameplayServices(
                 new com.project.game.network.packet.PlayerPacketWriter(),
                 new MonsterPacketWriter(),
-                new MonsterFactory(resources));
+                new MonsterManager(resources));
         NetworkServer server = new NetworkServer(
                 "127.0.0.1", 0, 4, 262_144, 16, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
@@ -572,7 +575,7 @@ class GameplayIntegrationTest {
         GameplayServices maps = new GameplayServices(
                 new com.project.game.network.packet.PlayerPacketWriter(),
                 new MonsterPacketWriter(),
-                new MonsterFactory(resources),
+                new MonsterManager(resources, clock, RandomGenerator.getDefault()),
                 clock);
         NetworkServer server = new NetworkServer(
                 "127.0.0.1", 0, 4, 262_144, 16, 1_000,
@@ -706,7 +709,7 @@ class GameplayIntegrationTest {
         GameplayServices maps = new GameplayServices(
                 new com.project.game.network.packet.PlayerPacketWriter(),
                 new MonsterPacketWriter(),
-                new MonsterFactory(resources));
+                new MonsterManager(resources));
         NetworkServer server = new NetworkServer(
                 "127.0.0.1", 0, 4, 262_144, 16, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
@@ -789,9 +792,8 @@ class GameplayIntegrationTest {
         GameplayServices maps = new GameplayServices(
                 new com.project.game.network.packet.PlayerPacketWriter(),
                 new MonsterPacketWriter(),
-                new MonsterFactory(resources),
-                clock,
-                new Random(12345L));
+                new MonsterManager(resources, clock, new Random(12345L)),
+                clock);
         NetworkServer server = new NetworkServer(
                 "127.0.0.1", 0, 4, 262_144, 16, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),
@@ -833,6 +835,10 @@ class GameplayIntegrationTest {
                 assertNoServerMessage(first);
                 assertNoServerMessage(second);
 
+                var currentMonster = maps.monsterSnapshots(1, 0).getFirst();
+                first.move(currentMonster.x(), currentMonster.y());
+                assertEquals(MessageName.PLAYER_MOVE, second.readServerMessage().command());
+
                 first.prepareMonsterAttack(0, 101);
                 first.impactMonster(101);
                 assertMonsterInjure(first.readServerMessage(), 101, 10, 290);
@@ -859,9 +865,10 @@ class GameplayIntegrationTest {
                 }
                 clock.advanceMillis(1_601L);
                 assertMonsterAttack(first.readServerMessage(), 101, first.playerInfo().id(), 10L);
-                assertMeDie(first.readServerMessage(), 90, 1008);
+                assertMeDie(first.readServerMessage(), currentMonster.x(), currentMonster.y());
                 assertMonsterAttack(second.readServerMessage(), 101, first.playerInfo().id(), 10L);
-                assertPlayerDie(second.readServerMessage(), first.playerInfo().id(), 90, 1008);
+                assertPlayerDie(second.readServerMessage(), first.playerInfo().id(),
+                        currentMonster.x(), currentMonster.y());
                 assertEquals(0L, server.sessions().findByAccount("retaliatea").player().hp());
 
                 for (int expectedHp = 280; expectedHp >= 10; expectedHp -= 10) {
@@ -884,6 +891,10 @@ class GameplayIntegrationTest {
                 assertMonsterRespawn(second.readServerMessage(), 101, 0, 300L);
                 assertNoServerMessage(first);
                 assertNoServerMessage(second);
+
+                var respawnedMonster = maps.monsterSnapshots(1, 0).getFirst();
+                second.move(respawnedMonster.x(), respawnedMonster.y());
+                assertEquals(MessageName.PLAYER_MOVE, first.readServerMessage().command());
 
                 second.prepareMonsterAttack(0, 101);
                 second.impactMonster(101);
@@ -915,9 +926,8 @@ class GameplayIntegrationTest {
         GameplayServices maps = new GameplayServices(
                 new com.project.game.network.packet.PlayerPacketWriter(),
                 new MonsterPacketWriter(),
-                new MonsterFactory(resources),
-                clock,
-                new Random(12345L));
+                new MonsterManager(resources, clock, new Random(12345L)),
+                clock);
         NetworkServer server = new NetworkServer(
                 "127.0.0.1", 0, 2, 262_144, 8, 1_000,
                 "abc".getBytes(StandardCharsets.US_ASCII),

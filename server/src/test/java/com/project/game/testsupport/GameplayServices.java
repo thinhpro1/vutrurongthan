@@ -4,7 +4,6 @@ import com.project.game.combat.Combat;
 import com.project.game.map.MapManager;
 import com.project.game.map.MapTemplate;
 import com.project.game.map.Zone;
-import com.project.game.monster.MonsterFactory;
 import com.project.game.monster.MonsterManager;
 import com.project.game.monster.MonsterSnapshot;
 import com.project.game.network.Session;
@@ -26,26 +25,19 @@ public final class GameplayServices {
 
     public GameplayServices(PlayerPacketWriter playerPackets,
                             MonsterPacketWriter monsterPackets,
-                            MonsterFactory monsterFactory) {
-        this(runtime(MapTestSupport.canonicalMaps(), monsterFactory, playerPackets, monsterPackets),
-                playerPackets, monsterPackets, Clock.systemUTC(), RandomGenerator.getDefault());
+                            MonsterManager monsterManager) {
+        this(runtime(MapTestSupport.canonicalMaps(), monsterManager, playerPackets, monsterPackets),
+                playerPackets, monsterPackets, monsterManager,
+                Clock.systemUTC());
     }
 
     public GameplayServices(PlayerPacketWriter playerPackets,
                             MonsterPacketWriter monsterPackets,
-                            MonsterFactory monsterFactory,
+                            MonsterManager monsterManager,
                             Clock clock) {
-        this(runtime(MapTestSupport.canonicalMaps(), monsterFactory, playerPackets, monsterPackets),
-                playerPackets, monsterPackets, clock, RandomGenerator.getDefault());
-    }
-
-    public GameplayServices(PlayerPacketWriter playerPackets,
-                            MonsterPacketWriter monsterPackets,
-                            MonsterFactory monsterFactory,
-                            Clock clock,
-                            RandomGenerator random) {
-        this(runtime(MapTestSupport.canonicalMaps(), monsterFactory, playerPackets, monsterPackets),
-                playerPackets, monsterPackets, clock, random);
+        this(runtime(MapTestSupport.canonicalMaps(), monsterManager, playerPackets, monsterPackets),
+                playerPackets, monsterPackets, monsterManager,
+                clock);
     }
 
     public GameplayServices(GameResources resources) {
@@ -61,37 +53,40 @@ public final class GameplayServices {
         MonsterPacketWriter monsterPackets = new MonsterPacketWriter();
         Map<Integer, MapTemplate> catalog = resources.maps().isEmpty()
                 ? MapTestSupport.canonicalMaps() : resources.maps();
-        initialize(runtime(catalog, new MonsterFactory(resources), playerPackets, monsterPackets),
-                playerPackets, monsterPackets, clock, random);
+        MonsterManager monsterManager = new MonsterManager(resources, clock, random);
+        initialize(runtime(catalog, monsterManager, playerPackets, monsterPackets),
+                playerPackets, monsterPackets, monsterManager, clock);
     }
 
     public GameplayServices(Map<Integer, MapTemplate> maps, GameResources resources) {
         PlayerPacketWriter playerPackets = new PlayerPacketWriter();
         MonsterPacketWriter monsterPackets = new MonsterPacketWriter();
-        initialize(runtime(maps, new MonsterFactory(resources), playerPackets, monsterPackets),
-                playerPackets, monsterPackets, Clock.systemUTC(), RandomGenerator.getDefault());
+        MonsterManager monsterManager = new MonsterManager(resources);
+        initialize(runtime(maps, monsterManager, playerPackets, monsterPackets),
+                playerPackets, monsterPackets, monsterManager,
+                Clock.systemUTC());
     }
 
     private GameplayServices(Runtime runtime, PlayerPacketWriter playerPackets,
-                             MonsterPacketWriter monsterPackets, Clock clock,
-                             RandomGenerator random) {
-        initialize(runtime, playerPackets, monsterPackets, clock, random);
+                             MonsterPacketWriter monsterPackets,
+                             MonsterManager monsterManager, Clock clock) {
+        initialize(runtime, playerPackets, monsterPackets, monsterManager, clock);
     }
 
     private void initialize(Runtime runtime, PlayerPacketWriter playerPackets,
-                            MonsterPacketWriter monsterPackets, Clock clock,
-                            RandomGenerator random) {
+                            MonsterPacketWriter monsterPackets,
+                            MonsterManager monsterManager, Clock clock) {
         maps = runtime.maps();
         combat = new Combat(runtime.area(), playerPackets, clock);
-        monsterManager = new MonsterManager(maps, clock, random);
+        this.monsterManager = monsterManager;
     }
 
     private static Runtime runtime(Map<Integer, MapTemplate> catalog,
-                                   MonsterFactory monsterFactory,
+                                   MonsterManager monsterManager,
                                    PlayerPacketWriter playerPackets,
                                    MonsterPacketWriter monsterPackets) {
         AreaService area = new AreaService(playerPackets, monsterPackets);
-        return new Runtime(new MapManager(catalog, monsterFactory, area), area);
+        return new Runtime(new MapManager(catalog, monsterManager, area), area);
     }
 
     public MapManager mapManager() {
@@ -136,7 +131,7 @@ public final class GameplayServices {
     public boolean attackMonster(Session session, int monsterId) {
         return combat.attackMonster(session, monsterId);
     }
-    public void tickMonsterLifecycle() { monsterManager.update(); }
+    public void tickMonsterLifecycle() { monsterManager.update(maps); }
     public List<MonsterSnapshot> monsterSnapshots(int mapId, int zoneId) {
         Zone zone = maps.getMap(mapId).findZone(zoneId);
         if (zone == null) {

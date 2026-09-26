@@ -111,7 +111,8 @@ class MapManagerTest {
         assertEquals(List.of(MessageName.MONSTER_INJURE), commands(drain(player)));
         clock.advanceMillis(1L);
 
-        Thread lifecycle = Thread.ofVirtual().start(maps.monsterManager()::update);
+        Thread lifecycle = Thread.ofVirtual().start(
+                () -> maps.monsterManager().update(maps.mapManager()));
         assertTrue(random.entered.await(5, TimeUnit.SECONDS));
 
         AtomicBoolean moved = new AtomicBoolean();
@@ -132,7 +133,9 @@ class MapManagerTest {
         assertEquals(1260, player.player().x());
         assertEquals(640, player.player().y());
         List<Integer> lifecycleCommands = commands(drain(player));
-        assertEquals(MessageName.MONSTER_ATTACK, lifecycleCommands.getLast());
+        assertEquals(1, lifecycleCommands.stream()
+                .filter(command -> command == MessageName.MONSTER_ATTACK)
+                .count());
         assertEquals(5, lifecycleCommands.stream()
                 .filter(command -> command == MessageName.MONSTER_MOVE)
                 .count());
@@ -151,7 +154,8 @@ class MapManagerTest {
         drain(player);
         clock.advanceMillis(1L);
 
-        Thread lifecycle = Thread.ofVirtual().start(maps.monsterManager()::update);
+        Thread lifecycle = Thread.ofVirtual().start(
+                () -> maps.monsterManager().update(maps.mapManager()));
         assertTrue(random.entered.await(5, TimeUnit.SECONDS));
 
         AtomicBoolean moved = new AtomicBoolean();
@@ -173,7 +177,7 @@ class MapManagerTest {
         withoutMonsterMoves(drain(player));
 
         clock.advanceMillis(1L);
-        maps.monsterManager().update();
+        maps.monsterManager().update(maps.mapManager());
         List<Message> monsterMoves = drain(player).stream()
                 .filter(message -> message.command() == MessageName.MONSTER_MOVE)
                 .filter(message -> monsterMoveId(message) == 101)

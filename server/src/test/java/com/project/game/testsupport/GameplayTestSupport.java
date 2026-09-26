@@ -1,7 +1,7 @@
 package com.project.game.testsupport;
 
 import com.project.game.map.Zone;
-import com.project.game.monster.MonsterFactory;
+import com.project.game.monster.MonsterManager;
 import com.project.game.monster.MonsterSnapshot;
 import com.project.game.monster.Monster;
 import com.project.game.network.ClientConfig;
@@ -84,8 +84,8 @@ public static void joinAtBarrier(CyclicBarrier start, GameplayServices maps,
         }
     }
 
-    public static MonsterFactory monsterFactory() {
-        return new MonsterFactory(
+    public static MonsterManager monsterManager() {
+        return new MonsterManager(
                 GameResources.fromFrameRoot(
                         Path.of("resources", "json"), MapTestSupport.canonicalMaps(), 2,
                         MonsterTestSupport.canonicalRepository()));

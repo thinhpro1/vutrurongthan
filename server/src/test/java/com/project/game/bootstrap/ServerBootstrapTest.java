@@ -193,7 +193,7 @@ class ServerBootstrapTest {
     void seedFailureClosesDatabaseAndPreventsRepositoryAndNetworkConstruction() {
         AtomicReference<DatabaseManager> createdManager = new AtomicReference<>();
         AtomicBoolean mapFactoryCalled = new AtomicBoolean();
-        AtomicBoolean monsterFactoryCalled = new AtomicBoolean();
+        AtomicBoolean monsterManagerCalled = new AtomicBoolean();
         IllegalStateException failure = assertThrows(IllegalStateException.class,
                 () -> ServerBootstrap.fromProperties(
                         startupProperties(), () -> {
@@ -204,7 +204,7 @@ class ServerBootstrapTest {
                             mapFactoryCalled.set(true);
                             return mapRepository(bootstrapFixtureMapRows());
                         }, ignored -> {
-                            monsterFactoryCalled.set(true);
+                            monsterManagerCalled.set(true);
                             return com.project.game.testsupport.MonsterTestSupport.canonicalRepository();
                         }, NO_MIGRATION, (ignored, seedFile) -> {
                             throw new IllegalStateException("catalog seed failure");
@@ -213,7 +213,7 @@ class ServerBootstrapTest {
         assertEquals("catalog seed failure", failure.getMessage());
         assertTrue(isClosed(createdManager.get()));
         assertFalse(mapFactoryCalled.get());
-        assertFalse(monsterFactoryCalled.get());
+        assertFalse(monsterManagerCalled.get());
     }
 
     @Test
@@ -229,7 +229,7 @@ class ServerBootstrapTest {
     void migrationFailureClosesDatabaseAndPreventsRepositoryAndNetworkConstruction() {
         AtomicReference<DatabaseManager> createdManager = new AtomicReference<>();
         AtomicBoolean mapFactoryCalled = new AtomicBoolean();
-        AtomicBoolean monsterFactoryCalled = new AtomicBoolean();
+        AtomicBoolean monsterManagerCalled = new AtomicBoolean();
         IllegalStateException failure = assertThrows(IllegalStateException.class,
                 () -> ServerBootstrap.fromProperties(
                         startupProperties(), () -> {
@@ -240,7 +240,7 @@ class ServerBootstrapTest {
                             mapFactoryCalled.set(true);
                             return mapRepository(bootstrapFixtureMapRows());
                         }, ignored -> {
-                            monsterFactoryCalled.set(true);
+                            monsterManagerCalled.set(true);
                             return com.project.game.testsupport.MonsterTestSupport.canonicalRepository();
                         }, (ignored, migrationDirectory) -> {
                             throw new IllegalStateException("migration failure");
@@ -249,7 +249,7 @@ class ServerBootstrapTest {
         assertEquals("migration failure", failure.getMessage());
         assertTrue(isClosed(createdManager.get()));
         assertFalse(mapFactoryCalled.get());
-        assertFalse(monsterFactoryCalled.get());
+        assertFalse(monsterManagerCalled.get());
     }
 
     @Test

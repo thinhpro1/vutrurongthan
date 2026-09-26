@@ -11,7 +11,7 @@ import com.project.game.network.message.MessageName;
 import com.project.game.network.message.MessageWriter;
 import com.project.game.network.packet.PlayerPacketWriter;
 import com.project.game.network.packet.MonsterPacketWriter;
-import com.project.game.monster.MonsterFactory;
+import com.project.game.monster.MonsterManager;
 import com.project.game.resource.GameResources;
 import com.project.game.network.SessionServices;
 import org.junit.jupiter.api.Test;
@@ -137,7 +137,7 @@ class MessageHandlerCombatTest {
                 Path.of("resources", "json"), MapTestSupport.canonicalMaps(), 2,
                 com.project.game.testsupport.MonsterTestSupport.canonicalRepository());
         GameplayServices maps = new GameplayServices(new PlayerPacketWriter(), new MonsterPacketWriter(),
-                new MonsterFactory(resources));
+                new MonsterManager(resources));
         SessionServices services = TestServices.serverServices(TestServices.auth(), resources, maps);
         Session session = inGameSession(services,
                 TestPlayers.at(TestPlayers.initial(1L, 7, "alpha1", 0), 1, 0, 90, 1008));
@@ -184,7 +184,7 @@ class MessageHandlerCombatTest {
                 Path.of("resources", "json"), MapTestSupport.canonicalMaps(), 2,
                 com.project.game.testsupport.MonsterTestSupport.canonicalRepository());
         GameplayServices maps = new GameplayServices(new PlayerPacketWriter(), new MonsterPacketWriter(),
-                new MonsterFactory(resources));
+                new MonsterManager(resources));
         SessionServices services = TestServices.serverServices(TestServices.auth(), resources, maps);
         Session session = inGameSession(services,
                 TestPlayers.at(TestPlayers.initial(1L, 7, "alpha1", 0), 1, 0, 90, 1008));

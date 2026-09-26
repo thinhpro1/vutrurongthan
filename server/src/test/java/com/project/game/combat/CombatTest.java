@@ -36,7 +36,7 @@ class CombatTest {
         AreaService area = new AreaService(playerPackets, new MonsterPacketWriter());
         MapManager zones = new MapManager(
                 com.project.game.testsupport.MapTestSupport.canonicalMaps(),
-                new MonsterFactory(GameResources.unavailable()), area);
+                new MonsterManager(GameResources.unavailable()), area);
         Combat combat = new Combat(area, playerPackets);
 
         assertFalse(combat.canTargetMonster(null, 101));
@@ -229,7 +229,7 @@ class CombatTest {
         assertEquals(before + 10L, attacker.player().potential());
 
         clock.advanceMillis(9_001L);
-        maps.monsterManager().update();
+        maps.monsterManager().update(maps.mapManager());
         assertEquals(List.of(MessageName.MONSTER_RESPAWN),
                 commands(withoutMonsterMoves(drain(attacker))));
 

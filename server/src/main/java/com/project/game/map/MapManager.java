@@ -1,6 +1,6 @@
 package com.project.game.map;
 
-import com.project.game.monster.MonsterFactory;
+import com.project.game.monster.MonsterManager;
 import com.project.game.network.Session;
 import com.project.game.network.SessionState;
 import com.project.game.player.Player;
@@ -27,10 +27,10 @@ public final class MapManager {
     private final AreaService area;
 
     public MapManager(java.util.Map<Integer, MapTemplate> catalog,
-                      MonsterFactory monsterFactory,
+                      MonsterManager monsterManager,
                       AreaService area) {
         Objects.requireNonNull(catalog, "catalog");
-        Objects.requireNonNull(monsterFactory, "monsterFactory");
+        Objects.requireNonNull(monsterManager, "monsterManager");
         this.area = Objects.requireNonNull(area, "area");
 
         TreeMap<Integer, Map> runtimeMaps = new TreeMap<>();
@@ -42,7 +42,7 @@ public final class MapManager {
                 throw new IllegalArgumentException("map catalog key does not match map id");
             }
             if ("ONLINE".equals(template.type())) {
-                runtimeMaps.put(mapId, new Map(template, monsterFactory, area));
+                runtimeMaps.put(mapId, new Map(template, monsterManager, area));
             }
         });
         this.maps = java.util.Collections.unmodifiableMap(runtimeMaps);

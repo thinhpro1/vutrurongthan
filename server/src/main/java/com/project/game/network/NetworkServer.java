@@ -4,7 +4,6 @@ import com.project.game.network.codec.LegacyPacketCodec;
 import com.project.game.network.transport.ClientTransport;
 import com.project.game.network.transport.LegacyTcpTransport;
 import com.project.game.network.transport.TlsTcpTransport;
-import com.project.game.monster.MonsterLifecycleScheduler;
 import com.project.game.network.SessionServices;
 
 import java.io.IOException;
@@ -19,7 +18,6 @@ import java.util.logging.Logger;
 /** Legacy TCP accept loop for the new project; the old server is not referenced. */
 public final class NetworkServer {
     private static final Logger LOGGER = Logger.getLogger(NetworkServer.class.getName());
-    private static final long MONSTER_LIFECYCLE_PERIOD_MILLIS = 100L;
     private final String host;
     private final int port;
     private final int maxSessionsPerIp;
@@ -28,7 +26,6 @@ public final class NetworkServer {
     private final int handshakeTimeoutMillis;
     private final byte[] handshakeKey;
     private final SessionServices services;
-    private final MonsterLifecycleScheduler monsterLifecycleScheduler;
     private final SSLContext tlsContext;
     private final ClientConfig networkConfig;
     private final SessionManager sessions = new SessionManager();
@@ -53,9 +50,6 @@ public final class NetworkServer {
             throw new IllegalArgumentException("handshakeKey must not be empty");
         }
         this.services = Objects.requireNonNull(services, "services");
-        this.monsterLifecycleScheduler = new MonsterLifecycleScheduler(
-                this.services.monsterManager()::update,
-                MONSTER_LIFECYCLE_PERIOD_MILLIS);
         this.tlsContext = tlsContext;
         this.networkConfig = Objects.requireNonNull(networkConfig, "networkConfig");
     }
@@ -85,7 +79,7 @@ public final class NetworkServer {
         serverSocket = listener;
         running = true;
         try {
-            monsterLifecycleScheduler.start();
+            services.monsterManager().start(services.maps());
         } catch (RuntimeException exception) {
             running = false;
             serverSocket = null;
@@ -137,7 +131,7 @@ public final class NetworkServer {
             }
         } catch (IOException ignored) {
         }
-        monsterLifecycleScheduler.stop();
+        services.monsterManager().stop();
         sessions.closeAll();
     }
 

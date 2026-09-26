@@ -1,7 +1,7 @@
 package com.project.game.map;
 
 import com.project.game.monster.Monster;
-import com.project.game.monster.MonsterFactory;
+import com.project.game.monster.MonsterManager;
 import com.project.game.resource.GameResources;
 import com.project.game.testsupport.MapTestSupport;
 import com.project.game.testsupport.MonsterTestSupport;
@@ -916,7 +916,7 @@ class ZoneTest {
     }
 
     private static Monster monsterForTest() {
-        MonsterFactory factory = new MonsterFactory(GameResources.fromFrameRoot(
+        MonsterManager factory = new MonsterManager(GameResources.fromFrameRoot(
                 Path.of("resources", "json"),
                 MapTestSupport.canonicalMaps(),
                 2,

@@ -13,7 +13,7 @@ import com.project.game.network.message.MessageName;
 import com.project.game.network.message.MessageWriter;
 import com.project.game.network.packet.PlayerPacketWriter;
 import com.project.game.network.packet.MonsterPacketWriter;
-import com.project.game.monster.MonsterFactory;
+import com.project.game.monster.MonsterManager;
 import com.project.game.account.AccountAuth;
 import com.project.game.resource.GameResources;
 import com.project.game.network.SessionServices;
@@ -51,7 +51,7 @@ class MessageHandlerMapTest {
         GameplayServices maps = new GameplayServices(
                 new PlayerPacketWriter(),
                 new MonsterPacketWriter(),
-                new MonsterFactory(resources));
+                new MonsterManager(resources));
         SessionServices services = TestServices.serverServices(TestServices.auth(), resources, maps);
         Player start = TestPlayers.initial(1L, 7, "alpha1", 0);
         start.changeMap(0, 0, 4464, 936);
@@ -124,7 +124,7 @@ class MessageHandlerMapTest {
         GameplayServices maps = new GameplayServices(
                 new PlayerPacketWriter(),
                 new MonsterPacketWriter(),
-                new MonsterFactory(resources));
+                new MonsterManager(resources));
         SessionServices services = TestServices.serverServices(TestServices.auth(), resources, maps);
         Player start = TestPlayers.initial(1L, 7, "alpha1", 0);
         start.changeMap(0, 0, 1250, 648);
@@ -147,7 +147,7 @@ class MessageHandlerMapTest {
         GameplayServices maps = new GameplayServices(
                 new PlayerPacketWriter(),
                 new MonsterPacketWriter(),
-                new MonsterFactory(resources));
+                new MonsterManager(resources));
         SessionServices services = TestServices.serverServices(TestServices.auth(), resources, maps);
         Player start = TestPlayers.initial(1L, 7, "alpha1", 0);
         start.changeMap(0, 0, 4464, 936);
@@ -206,7 +206,7 @@ class MessageHandlerMapTest {
         GameplayServices maps = new GameplayServices(
                 new PlayerPacketWriter(),
                 new MonsterPacketWriter(),
-                new MonsterFactory(resources));
+                new MonsterManager(resources));
         SessionServices services = TestServices.serverServices(TestServices.auth(), resources, maps);
         Session session = inGameSession(services,
                 TestPlayers.at(TestPlayers.initial(1L, 7, "alpha1", 0), 0, 0, 4464, 936));
@@ -249,7 +249,7 @@ class MessageHandlerMapTest {
         GameplayServices maps = new GameplayServices(
                 new PlayerPacketWriter(),
                 new MonsterPacketWriter(),
-                new MonsterFactory(GameResources.unavailable()));
+                new MonsterManager(GameResources.unavailable()));
         SessionServices services = TestServices.serverServices(auth, GameResources.unavailable(), maps);
         Session first = inGameSession(services, TestPlayers.initial(1L, 1, "alpha1", 0));
         Session second = inGameSession(services, TestPlayers.initial(2L, 2, "beta22", 0));
@@ -316,7 +316,7 @@ class MessageHandlerMapTest {
         GameplayServices maps = new GameplayServices(
                 new PlayerPacketWriter(),
                 new MonsterPacketWriter(),
-                new MonsterFactory(GameResources.unavailable()));
+                new MonsterManager(GameResources.unavailable()));
         SessionServices services = TestServices.serverServices(TestServices.auth(), GameResources.unavailable(), maps);
         Session session = inGameSession(services, TestPlayers.initial(1L, 7, "alpha1", 0));
         MessageHandler handler = newHandler(session, services, ClientConfig.defaults());
@@ -358,7 +358,7 @@ class MessageHandlerMapTest {
         GameplayServices gameplay = new GameplayServices(
                 new PlayerPacketWriter(),
                 new MonsterPacketWriter(),
-                new MonsterFactory(GameResources.unavailable()));
+                new MonsterManager(GameResources.unavailable()));
         SessionServices services = TestServices.serverServices(
                 auth, GameResources.unavailable(), gameplay);
         Session first = inGameSession(services,

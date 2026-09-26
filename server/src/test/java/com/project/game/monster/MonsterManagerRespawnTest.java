@@ -30,12 +30,12 @@ class MonsterManagerRespawnTest {
         assertEquals(1, maps.monsterSnapshots(1, 0).getFirst().status());
 
         clock.advanceMillis(9_000L);
-        maps.monsterManager().update();
+        maps.monsterManager().update(maps.mapManager());
         assertTrue(commands(drain(attacker)).stream()
                 .noneMatch(command -> command == MessageName.MONSTER_RESPAWN));
 
         clock.advanceMillis(1L);
-        maps.monsterManager().update();
+        maps.monsterManager().update(maps.mapManager());
         assertEquals(List.of(MessageName.MONSTER_RESPAWN), commands(drain(attacker)).stream()
                 .filter(command -> command == MessageName.MONSTER_RESPAWN)
                 .toList());
@@ -66,10 +66,10 @@ class MonsterManagerRespawnTest {
         kill(maps, attacker, 101);
 
         clock.advanceMillis(9_001L);
-        maps.monsterManager().update();
+        maps.monsterManager().update(maps.mapManager());
         drain(attacker);
         clock.advanceMillis(2_000L);
-        maps.monsterManager().update();
+        maps.monsterManager().update(maps.mapManager());
 
         assertTrue(commands(drain(attacker)).stream()
                 .noneMatch(command -> command == MessageName.MONSTER_ATTACK));

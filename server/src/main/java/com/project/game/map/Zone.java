@@ -480,43 +480,39 @@ public final class Zone {
     public void updateMonsters(long nowMillis, RandomGenerator random) {
         requireOutsideRuntimeWorker("updateMonsters");
         Objects.requireNonNull(random, "random");
-        try {
-            MonsterDelivery delivery = tryCall(() -> {
-                synchronized (this) {
-                    List<Session> rejected = new ArrayList<>();
+        MonsterDelivery delivery = call(() -> {
+            synchronized (this) {
+                List<Session> rejected = new ArrayList<>();
 
-                    for (Monster monster : monsters.values()) {
-                        Monster.Move move = monster.updateMove(hostileLivingPlayers(monster));
-                        if (move != null) {
-                            rejected.addAll(area.monsterMove(move, members()));
-                        }
+                for (Monster monster : monsters.values()) {
+                    Monster.Move move = monster.updateMove(hostileLivingPlayers(monster));
+                    if (move != null) {
+                        rejected.addAll(area.monsterMove(move, members()));
                     }
-                    for (Monster monster : monsters.values()) {
-                        Monster.Respawn respawn = monster.updateRespawn(nowMillis);
-                        if (respawn != null) {
-                            rejected.addAll(area.monsterRespawn(respawn, members()));
-                        }
-                    }
-                    for (Monster monster : monsters.values()) {
-                        Monster.Attack attack = monster.updateAttack(
-                                hostileLivingPlayers(monster), nowMillis, random);
-                        if (attack == null) {
-                            continue;
-                        }
-                        if (attack.killed()) {
-                            for (Monster runtime : monsters.values()) {
-                                runtime.removeEnemy(attack.playerId());
-                            }
-                        }
-                        rejected.addAll(area.monsterAttack(attack, members()));
-                    }
-                    return new MonsterDelivery(rejected);
                 }
-            });
-            closeRejected(delivery.rejectedObservers());
-        } catch (RejectedExecutionException ignored) {
-            // A stopped or saturated Zone cannot run another lifecycle tick.
-        }
+                for (Monster monster : monsters.values()) {
+                    Monster.Respawn respawn = monster.updateRespawn(nowMillis);
+                    if (respawn != null) {
+                        rejected.addAll(area.monsterRespawn(respawn, members()));
+                    }
+                }
+                for (Monster monster : monsters.values()) {
+                    Monster.Attack attack = monster.updateAttack(
+                            hostileLivingPlayers(monster), nowMillis, random);
+                    if (attack == null) {
+                        continue;
+                    }
+                    if (attack.killed()) {
+                        for (Monster runtime : monsters.values()) {
+                            runtime.removeEnemy(attack.playerId());
+                        }
+                    }
+                    rejected.addAll(area.monsterAttack(attack, members()));
+                }
+                return new MonsterDelivery(rejected);
+            }
+        });
+        closeRejected(delivery.rejectedObservers());
     }
 
     private List<Player> hostileLivingPlayers(Monster monster) {

@@ -27,6 +27,8 @@ import java.io.OutputStream;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Random;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import static com.project.game.testsupport.GameplayTestSupport.commands;
 import static com.project.game.testsupport.GameplayTestSupport.drain;
@@ -68,6 +70,50 @@ class ZoneMonsterCombatTest {
         zone.updateMonsters(NOW + 9_001, new Random(1L));
         assertTrue(commands(drain(player)).contains(MessageName.MONSTER_RESPAWN));
         assertTrue(zone.hasLiveMonster(101));
+    }
+
+    @Test
+    void monsterLifecycleWaitsForAdmissionWhenZoneInputQueueIsFull() throws Exception {
+        List<Monster> monsters = monsters();
+        Zone zone = new Zone(1, 0, Integer.MAX_VALUE, monsters, 1,
+                new AreaService(new PlayerPacketWriter(), new MonsterPacketWriter()));
+        CountDownLatch priorStarted = new CountDownLatch(1);
+        CountDownLatch releasePrior = new CountDownLatch(1);
+        assertTrue(zone.submit(() -> {
+            priorStarted.countDown();
+            awaitRelease(releasePrior);
+        }));
+        assertTrue(priorStarted.await(5, TimeUnit.SECONDS));
+
+        CountDownLatch queuedAction = new CountDownLatch(1);
+        assertTrue(zone.submit(queuedAction::countDown));
+
+        CountDownLatch lifecycleStarted = new CountDownLatch(1);
+        CountDownLatch lifecycleFinished = new CountDownLatch(1);
+        Thread lifecycle = Thread.ofVirtual().start(() -> {
+            lifecycleStarted.countDown();
+            try {
+                zone.updateMonsters(NOW, new Random(1L));
+            } finally {
+                lifecycleFinished.countDown();
+            }
+        });
+
+        try {
+            assertTrue(lifecycleStarted.await(5, TimeUnit.SECONDS));
+            awaitWaiting(lifecycle);
+            assertFalse(queuedAction.await(100, TimeUnit.MILLISECONDS));
+
+            releasePrior.countDown();
+            assertTrue(lifecycleFinished.await(5, TimeUnit.SECONDS));
+            lifecycle.join();
+
+            assertTrue(queuedAction.getCount() == 0);
+            assertEquals(979, zone.monsterSnapshots().getFirst().x());
+        } finally {
+            releasePrior.countDown();
+            lifecycle.join(5_000);
+        }
     }
 
     @Test
@@ -151,6 +197,28 @@ class ZoneMonsterCombatTest {
                 TestServices.serverServices(), ClientConfig.defaults());
         session.bindPlayer(player);
         return session;
+    }
+
+    private static void awaitRelease(CountDownLatch release) {
+        try {
+            if (!release.await(5, TimeUnit.SECONDS)) {
+                throw new AssertionError("prior Zone action was not released");
+            }
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new AssertionError(exception);
+        }
+    }
+
+    private static void awaitWaiting(Thread thread) {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        while (thread.getState() != Thread.State.WAITING
+                && thread.getState() != Thread.State.TERMINATED
+                && System.nanoTime() < deadline) {
+            Thread.onSpinWait();
+        }
+        assertEquals(Thread.State.WAITING, thread.getState(),
+                "monster lifecycle did not wait for Zone admission");
     }
 
     private static final class NoopTransport implements ClientTransport {

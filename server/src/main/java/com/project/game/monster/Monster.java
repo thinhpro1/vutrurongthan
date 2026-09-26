@@ -2,7 +2,6 @@ package com.project.game.monster;
 
 import com.project.game.player.Player;
 
-import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Objects;
@@ -119,15 +118,27 @@ public final class Monster {
         if (!isAlive() || template.type() != MOVE_TYPE_RUN) {
             return null;
         }
-        if (hostilePlayers.stream().filter(Objects::nonNull).anyMatch(this::isWithinAttackRange)) {
-            return null;
+
+        for (Player player : hostilePlayers) {
+            if (player != null && isWithinAttackRange(player)) {
+                return null;
+            }
         }
 
-        Player target = hostilePlayers.stream()
-                .filter(Objects::nonNull)
-                .filter(player -> Math.abs((long) player.x() - xFirst) <= CHASE_LEASH)
-                .min(Comparator.comparingLong(this::squaredDistance).thenComparingInt(Player::id))
-                .orElse(null);
+        Player target = null;
+        long targetDistance = Long.MAX_VALUE;
+        for (Player player : hostilePlayers) {
+            if (player == null || Math.abs((long) player.x() - xFirst) > CHASE_LEASH) {
+                continue;
+            }
+            long distance = squaredDistance(player);
+            if (target == null
+                    || distance < targetDistance
+                    || distance == targetDistance && player.id() < target.id()) {
+                target = player;
+                targetDistance = distance;
+            }
+        }
         return target == null ? patrol() : moveTo(target.x());
     }
 
@@ -141,15 +152,28 @@ public final class Monster {
         }
 
         lastAttackAtMillis = nowMillis;
-        List<Player> targets = hostilePlayers.stream()
-                .filter(Objects::nonNull)
-                .filter(this::isWithinAttackRange)
-                .toList();
-        if (targets.isEmpty()) {
+        int targetCount = 0;
+        for (Player player : hostilePlayers) {
+            if (player != null && isWithinAttackRange(player)) {
+                targetCount++;
+            }
+        }
+        if (targetCount == 0) {
             return null;
         }
 
-        Player target = targets.get(random.nextInt(targets.size()));
+        int targetIndex = random.nextInt(targetCount);
+        Player target = null;
+        for (Player player : hostilePlayers) {
+            if (player == null || !isWithinAttackRange(player)) {
+                continue;
+            }
+            if (targetIndex == 0) {
+                target = player;
+                break;
+            }
+            targetIndex--;
+        }
         int hpAfter = target.injure(damage());
         return new Attack(id, target.id(), damage(), hpAfter, hpAfter == 0L);
     }

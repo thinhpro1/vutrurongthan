@@ -30,6 +30,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static com.project.game.network.MessageHandlerTestSupport.*;
@@ -136,6 +137,86 @@ class MessageHandlerAuthTest {
         assertEquals(SessionState.AUTHENTICATED, observedState.get());
         assertEquals(SessionState.AUTHENTICATED, session.state());
         assertEquals(MessageName.START_CREATE_PLAYER_SCREEN, drainMessages(session).getFirst().command());
+    }
+
+    @Test
+    void closedSessionIsNotBoundAfterBlockedPlayerLoad() throws Exception {
+        AccountAuth auth = TestServices.auth();
+        assertTrue(auth.register("user01", "secret1", "192.0.2.10").success());
+        TestPlayerRepository delegate = new TestPlayerRepository();
+        delegate.seed(PlayerRecord.fromSaveData(PlayerSaveData.capture(Player.create(1L, "alpha1", 0))));
+        BlockingPlayerRepository players = new BlockingPlayerRepository(delegate);
+        GameResources resources = GameResources.unavailable();
+        SessionServices services = TestServices.serverServices(auth, resources,
+                new GameplayServices(MapTestSupport.canonicalMaps(), resources), players);
+        SessionManager manager = new SessionManager();
+        Session session = newSession(auth, services, 1024, manager, "198.51.100.1");
+        session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
+
+        Message loginMessage = loginMessage("user01", "secret1");
+        Thread login = Thread.ofVirtual().start(() ->
+                newHandler(session, services, ClientConfig.defaults()).onMessage(loginMessage));
+        assertTrue(players.findEntered.await(1, TimeUnit.SECONDS));
+
+        CountDownLatch closeFinished = new CountDownLatch(1);
+        Thread close = Thread.ofVirtual().start(() -> {
+            session.close();
+            closeFinished.countDown();
+        });
+        assertTrue(closeFinished.await(1, TimeUnit.SECONDS));
+        assertEquals(SessionState.CLOSED, session.state());
+        assertTrue(login.isAlive());
+
+        players.allowFind.countDown();
+        login.join(1_000);
+        close.join(1_000);
+
+        assertFalse(login.isAlive());
+        assertFalse(close.isAlive());
+        assertNull(session.player());
+        assertNull(manager.findByAccount("user01"));
+        assertEquals(0, session.queuedMessages());
+    }
+
+    @Test
+    void closedSessionIsNotBoundAfterBlockedPlayerCreate() throws Exception {
+        AccountAuth auth = TestServices.auth();
+        assertTrue(auth.register("user01", "secret1", "192.0.2.10").success());
+        TestPlayerRepository delegate = new TestPlayerRepository();
+        BlockingPlayerRepository players = new BlockingPlayerRepository(delegate);
+        GameResources resources = GameResources.unavailable();
+        SessionServices services = TestServices.serverServices(auth, resources,
+                new GameplayServices(MapTestSupport.canonicalMaps(), resources), players);
+        SessionManager manager = new SessionManager();
+        Session session = newSession(auth, services, 1024, manager, "198.51.100.1");
+        session.bindAccount(1L, "user01");
+        session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
+        session.transition(SessionState.HANDSHAKE_DONE, SessionState.AUTHENTICATED);
+
+        Message create = new Message(MessageName.CREATE_PLAYER,
+                new MessageWriter().writeUtf("alpha1").writeByte(0).toByteArray());
+        Thread createThread = Thread.ofVirtual().start(() ->
+                newHandler(session, services, ClientConfig.defaults()).onMessage(create));
+        assertTrue(players.createEntered.await(1, TimeUnit.SECONDS));
+
+        CountDownLatch closeFinished = new CountDownLatch(1);
+        Thread close = Thread.ofVirtual().start(() -> {
+            session.close();
+            closeFinished.countDown();
+        });
+        assertTrue(closeFinished.await(1, TimeUnit.SECONDS));
+        assertEquals(SessionState.CLOSED, session.state());
+        assertTrue(createThread.isAlive());
+
+        players.allowCreate.countDown();
+        createThread.join(1_000);
+        close.join(1_000);
+
+        assertFalse(createThread.isAlive());
+        assertFalse(close.isAlive());
+        assertNull(session.player());
+        assertEquals(1, delegate.requireByAccountId(1L).id());
+        assertEquals(0, session.queuedMessages());
     }
 
     @Test
@@ -342,6 +423,48 @@ class MessageHandlerAuthTest {
         AccountAuth auth = TestServices.auth();
         auth.register("user01", "secret1", "127.0.0.1");
         return auth;
+    }
+
+    private static final class BlockingPlayerRepository implements PlayerRepository {
+        private final TestPlayerRepository delegate;
+        private final CountDownLatch findEntered = new CountDownLatch(1);
+        private final CountDownLatch allowFind = new CountDownLatch(1);
+        private final CountDownLatch createEntered = new CountDownLatch(1);
+        private final CountDownLatch allowCreate = new CountDownLatch(1);
+
+        private BlockingPlayerRepository(TestPlayerRepository delegate) {
+            this.delegate = delegate;
+        }
+
+        @Override
+        public Optional<PlayerRecord> findByAccountId(long accountId) {
+            findEntered.countDown();
+            await(allowFind, "find");
+            return delegate.findByAccountId(accountId);
+        }
+
+        @Override
+        public PlayerRecord create(PlayerRecord initialWithoutId) {
+            createEntered.countDown();
+            await(allowCreate, "create");
+            return delegate.create(initialWithoutId);
+        }
+
+        @Override
+        public void save(PlayerSaveData player) {
+            delegate.save(player);
+        }
+
+        private static void await(CountDownLatch latch, String operation) {
+            try {
+                if (!latch.await(5, TimeUnit.SECONDS)) {
+                    throw new IllegalStateException("timed out waiting for test " + operation + " release");
+                }
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException("interrupted while waiting for test " + operation, exception);
+            }
+        }
     }
 
     private static final class BlockingMetadataRepository implements AccountRepository {

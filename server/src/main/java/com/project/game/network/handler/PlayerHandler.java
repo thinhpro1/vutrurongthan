@@ -59,16 +59,25 @@ final class PlayerHandler {
                     PlayerRecord.withoutId(PlayerSaveData.capture(initial)));
             created = record.toPlayer(0);
         } catch (DuplicatePlayerException exception) {
-            sendDialog("Nhân vật đã tồn tại");
+            if (session.state() != SessionState.CLOSED) {
+                sendDialog("Nhân vật đã tồn tại");
+            }
             return;
         } catch (PlayerRepositoryException exception) {
             LOGGER.log(Level.WARNING,
                     "PLAYER create repository failure accountId=" + session.accountId(), exception);
-            sendDialog(SYSTEM_BUSY);
+            if (session.state() != SessionState.CLOSED) {
+                sendDialog(SYSTEM_BUSY);
+            }
+            return;
+        }
+        if (session.state() != SessionState.AUTHENTICATED) {
             return;
         }
         session.bindPlayer(created);
-        session.transition(SessionState.AUTHENTICATED, SessionState.IN_GAME);
+        if (!session.transition(SessionState.AUTHENTICATED, SessionState.IN_GAME)) {
+            return;
+        }
         enterGame(created);
     }
 
@@ -93,12 +102,17 @@ final class PlayerHandler {
             }
             return false;
         }
+        if (session.state() != SessionState.AUTHENTICATED) {
+            return false;
+        }
         if (player == null) {
             session.send(new Message(MessageName.START_CREATE_PLAYER_SCREEN));
             return true;
         }
         session.bindPlayer(player);
-        session.transition(SessionState.AUTHENTICATED, SessionState.IN_GAME);
+        if (!session.transition(SessionState.AUTHENTICATED, SessionState.IN_GAME)) {
+            return false;
+        }
         enterGame(player);
         return true;
     }

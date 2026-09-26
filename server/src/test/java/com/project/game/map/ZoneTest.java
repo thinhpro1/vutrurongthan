@@ -70,6 +70,31 @@ class ZoneTest {
     }
 
     @Test
+    void highLevelPlayerFlowRejectsZoneWriterReentry() {
+        Zone zone = zone(1, 0, Integer.MAX_VALUE, List.of());
+        Session joined = session(TestPlayers.initial(1L, 7, "alpha1", 1));
+        Session other = session(TestPlayers.initial(2L, 8, "beta22", 1));
+
+        assertTrue(zone.enter(joined));
+        int originalX = joined.player().x();
+        int originalY = joined.player().y();
+
+        zone.call(() -> {
+            assertThrows(IllegalStateException.class, () -> zone.move(joined, 1260, 640));
+            assertThrows(IllegalStateException.class, () -> zone.leave(joined));
+            assertThrows(IllegalStateException.class, () -> zone.enter(other));
+            return null;
+        });
+
+        assertSame(zone, joined.zone());
+        assertEquals(originalX, joined.player().x());
+        assertEquals(originalY, joined.player().y());
+        assertTrue(zone.hasPlayer(joined));
+        assertFalse(zone.hasPlayer(other));
+        assertNull(other.zone());
+    }
+
+    @Test
     void startsEmptyAndTracksBoundPlayer() {
         Zone zone = zone(0, 0, Integer.MAX_VALUE, List.of());
         Session session = session(TestPlayers.initial(1L, 7, "alpha1", 0));

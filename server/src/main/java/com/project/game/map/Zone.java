@@ -247,6 +247,7 @@ public final class Zone {
 
     /** Gia nhập Zone, gắn Session và trao đổi hiện diện với các thành viên hiện có. */
     public boolean enter(Session session) {
+        requireOutsideRuntimeWorker("enter");
         if (session == null || session.state() == SessionState.CLOSED || session.player() == null) {
             return false;
         }
@@ -284,6 +285,7 @@ public final class Zone {
 
     /** Di chuyển Player trong Zone owner rồi phát thông báo ra khu vực. */
     public boolean move(Session session, int x, int y) {
+        requireOutsideRuntimeWorker("move");
         if (session == null || session.state() == SessionState.CLOSED) {
             return false;
         }
@@ -310,6 +312,7 @@ public final class Zone {
 
     /** Tách Session khỏi Zone và chụp trạng thái Player ổn định trong Zone owner. */
     public PlayerSaveData leave(Session session) {
+        requireOutsideRuntimeWorker("leave");
         if (session == null || session.player() == null) {
             return null;
         }
@@ -610,6 +613,15 @@ public final class Zone {
             throw new IllegalStateException("zone membership requires a bound player");
         }
         return player;
+    }
+
+    private void requireOutsideRuntimeWorker(String action) {
+        synchronized (runtimeLock) {
+            if (runtimeWorker == Thread.currentThread()) {
+                throw new IllegalStateException(
+                        action + " must be called outside the Zone runtime writer");
+            }
+        }
     }
 
     private static void closeRejected(List<Session> rejectedObservers) {

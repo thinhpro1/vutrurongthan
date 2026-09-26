@@ -1,6 +1,7 @@
 package com.project.game.map;
 
 import com.project.game.monster.MonsterFactory;
+import com.project.game.network.packet.MonsterPacketWriter;
 import com.project.game.network.packet.PlayerPacketWriter;
 import com.project.game.resource.GameResources;
 import com.project.game.service.AreaService;
@@ -72,6 +73,6 @@ class MapTest {
     }
 
     private static AreaService area() {
-        return new AreaService(new PlayerPacketWriter());
+        return new AreaService(new PlayerPacketWriter(), new MonsterPacketWriter());
     }
 }

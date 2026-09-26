@@ -66,40 +66,35 @@ class MonsterLifecycleSchedulerTest {
     @Test
     void startStopAreIdempotentAndSchedulerCanRestart() throws Exception {
         AtomicInteger calls = new AtomicInteger();
+        AtomicBoolean restarted = new AtomicBoolean();
+        CountDownLatch firstTick = new CountDownLatch(1);
+        CountDownLatch restartedTick = new CountDownLatch(1);
 
         MonsterLifecycleScheduler scheduler = new MonsterLifecycleScheduler(
-                calls::incrementAndGet,
+                () -> {
+                    calls.incrementAndGet();
+                    (restarted.get() ? restartedTick : firstTick).countDown();
+                },
                 10L);
 
         scheduler.start();
         scheduler.start();
 
-        awaitAtLeast(calls, 1);
+        assertTrue(firstTick.await(1, TimeUnit.SECONDS));
 
         scheduler.stop();
         scheduler.stop();
 
-        int beforeRestart = calls.get();
-
+        restarted.set(true);
         scheduler.start();
-        awaitAtLeast(calls, beforeRestart + 1);
+        assertTrue(restartedTick.await(1, TimeUnit.SECONDS));
         scheduler.stop();
+        assertTrue(calls.get() >= 2);
     }
 
     @Test
     void rejectsNonPositivePeriod() {
         assertThrows(IllegalArgumentException.class,
                 () -> new MonsterLifecycleScheduler(() -> {}, 0L));
-    }
-
-    private static void awaitAtLeast(AtomicInteger value, int expected) throws Exception {
-        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(1);
-
-        while (value.get() < expected && System.nanoTime() < deadline) {
-            Thread.sleep(5L);
-        }
-
-        assertTrue(value.get() >= expected,
-                () -> "expected at least " + expected + " ticks but saw " + value.get());
     }
 }

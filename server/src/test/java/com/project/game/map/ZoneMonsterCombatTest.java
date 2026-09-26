@@ -1,23 +1,22 @@
 package com.project.game.map;
-import com.project.game.testsupport.TestPlayers;
 
-import com.project.game.testsupport.TestServices;
-
-import com.project.game.monster.MonsterFactory;
-import com.project.game.monster.MonsterAttack;
-import com.project.game.monster.MonsterSnapshot;
 import com.project.game.monster.Monster;
+import com.project.game.monster.MonsterFactory;
+import com.project.game.monster.MonsterSnapshot;
 import com.project.game.network.ClientConfig;
 import com.project.game.network.Session;
 import com.project.game.network.SessionManager;
 import com.project.game.network.SessionState;
 import com.project.game.network.codec.LegacyPacketCodec;
+import com.project.game.network.message.MessageName;
+import com.project.game.network.packet.MonsterPacketWriter;
 import com.project.game.network.packet.PlayerPacketWriter;
 import com.project.game.network.transport.ClientTransport;
 import com.project.game.player.Player;
 import com.project.game.resource.GameResources;
 import com.project.game.service.AreaService;
-import com.project.game.network.SessionServices;
+import com.project.game.testsupport.TestPlayers;
+import com.project.game.testsupport.TestServices;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
@@ -29,8 +28,12 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Random;
 
+import static com.project.game.testsupport.GameplayTestSupport.commands;
+import static com.project.game.testsupport.GameplayTestSupport.drain;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -38,313 +41,107 @@ class ZoneMonsterCombatTest {
     private static final long NOW = 1_000_000L;
 
     @Test
-    void ownsLiveMonsterDamageAndDeathState() {
+    void ownsOrderedMonsterSnapshotsAndThinDamageBridge() {
         Zone zone = map1Zone();
 
-        assertTrue(zone.hasLiveMonster(101));
-        assertFalse(zone.hasLiveMonster(99));
+        Monster.Damage damage = zone.damageMonster(101, 7, 10, NOW);
 
-        var nonLethal = zone.damageMonster(101, 7, 10, NOW).orElseThrow();
-        assertEquals(101, nonLethal.monsterId());
-        assertEquals(10L, nonLethal.damage());
-        assertEquals(290L, nonLethal.hpAfter());
-        assertFalse(nonLethal.killed());
-        assertEquals(290L, zone.monsterSnapshots().getFirst().hp());
-        assertEquals(300L, zone.monsterSnapshots().get(1).hp());
+        assertEquals(new Monster.Damage(101, 10, 290, false, 0L), damage);
+        assertNull(zone.damageMonster(99, 7, 10, NOW));
         assertEquals(List.of(101, 102, 103, 104, 105, 106),
                 zone.monsterSnapshots().stream().map(MonsterSnapshot::id).toList());
-
-        var lethal = zone.damageMonster(101, 7, 300, NOW + 1).orElseThrow();
-        assertTrue(lethal.killed());
-        assertEquals(0L, lethal.hpAfter());
-        assertFalse(zone.hasLiveMonster(101));
-        assertTrue(zone.damageMonster(101, 8, 10, NOW + 2).isEmpty());
+        assertEquals(290L, zone.monsterSnapshots().getFirst().hp());
     }
 
     @Test
-    void zoneOwnsOrderedMonsterSnapshots() {
+    void damageCapturesCurrentMemberCountForRespawnDeadline() throws Exception {
         Zone zone = map1Zone();
+        Session player = session(playerAt(1, 975, 936));
+        zone.addPlayer(player);
+        drain(player);
 
-        List<MonsterSnapshot> snapshots = zone.monsterSnapshots();
-        assertEquals(6, snapshots.size());
-        assertEquals(
-                List.of(101, 102, 103, 104, 105, 106),
-                snapshots.stream().map(MonsterSnapshot::id).toList());
-        assertEquals(
-                List.of(975, 1348, 1800, 2250, 2600, 2950),
-                snapshots.stream().map(MonsterSnapshot::x).toList());
+        assertTrue(zone.damageMonster(101, 1, 500, NOW).killed());
+        zone.updateMonsters(NOW + 9_000, new Random(1L));
+        assertTrue(commands(drain(player)).stream()
+                .noneMatch(command -> command == MessageName.MONSTER_RESPAWN));
+
+        zone.updateMonsters(NOW + 9_001, new Random(1L));
+        assertTrue(commands(drain(player)).contains(MessageName.MONSTER_RESPAWN));
+        assertTrue(zone.hasLiveMonster(101));
     }
 
     @Test
-    void zoneRejectsDuplicateMonsterRuntimeIds() {
-        MonsterFactory factory = new MonsterFactory(
-                GameResources.fromFrameRoot(Path.of("resources", "json"),
-                        com.project.game.testsupport.MapTestSupport.canonicalMaps(), 2,
-                        com.project.game.testsupport.MonsterTestSupport.canonicalRepository()));
-        List<Monster> runtimes = factory.createForMap(1);
+    void lifecycleUsesOnlyExactLiveZoneMembersAsMonsterTargets() throws Exception {
+        Zone zone = map1Zone();
+        Session target = session(playerAt(7, 975, 936));
+        zone.addPlayer(target);
+        drain(target);
+        assertNotNull(zone.damageMonster(101, 7, 10, NOW));
+        target.transition(SessionState.CONNECTED, SessionState.CLOSED);
 
-        assertThrows(
-                IllegalArgumentException.class,
-                () -> zone(
-                        1,
-                        0,
-                        Integer.MAX_VALUE,
-                        List.of(runtimes.getFirst(), runtimes.getFirst())));
+        zone.updateMonsters(NOW + 1, new Random(1L));
+
+        assertFalse(commands(drain(target)).contains(MessageName.MONSTER_ATTACK));
     }
 
     @Test
-    void containsRequiresExactSessionIdentity() {
+    void lethalMonsterAttackClearsVictimFromEveryMonster() throws Exception {
+        List<Monster> monsters = monsters();
+        Zone zone = zone(1, 0, Integer.MAX_VALUE, monsters);
+        Player player = playerAt(7, 975, 936);
+        player.injure(190);
+        Session victim = session(player);
+        zone.addPlayer(victim);
+        drain(victim);
+        assertNotNull(zone.damageMonster(101, 7, 10, NOW));
+        assertNotNull(zone.damageMonster(102, 7, 10, NOW));
+
+        zone.updateMonsters(NOW + 1, new Random(1L));
+
+        assertEquals(0L, player.hp());
+        assertTrue(monsters.stream().noneMatch(monster -> monster.hasEnemy(player.id())));
+        assertEquals(List.of(MessageName.MONSTER_ATTACK, MessageName.ME_DIE),
+                commands(drain(victim)).stream()
+                        .filter(command -> command != MessageName.MONSTER_MOVE)
+                        .toList());
+    }
+
+    @Test
+    void zoneRejectsDuplicateRuntimeIdsAndRequiresExactSessionIdentity() {
+        List<Monster> monsters = monsters();
+        assertThrows(IllegalArgumentException.class,
+                () -> zone(1, 0, Integer.MAX_VALUE,
+                        List.of(monsters.getFirst(), monsters.getFirst())));
+
         Zone zone = zone(1, 0, Integer.MAX_VALUE, List.of());
-        Session first = session(TestPlayers.initial(1L, 7, "alpha1", 1));
-        Session equivalent = session(TestPlayers.initial(2L, 7, "alpha2", 1));
-
+        Session first = session(playerAt(7, 975, 936));
+        Session samePlayerId = session(playerAt(7, 975, 936));
         zone.addPlayer(first);
 
         assertTrue(zone.hasPlayer(first));
-        assertFalse(zone.hasPlayer(equivalent));
-        assertFalse(zone.hasPlayer(null));
-    }
-
-    @Test
-    void computesCanonicalRespawnDelayFromDeathTimeMembership() {
-        assertEquals(10_000L, Zone.respawnDelayMillis(0));
-        assertEquals(9_000L, Zone.respawnDelayMillis(1));
-        assertEquals(8_000L, Zone.respawnDelayMillis(2));
-        assertEquals(7_000L, Zone.respawnDelayMillis(3));
-        assertEquals(6_000L, Zone.respawnDelayMillis(4));
-        assertEquals(5_000L, Zone.respawnDelayMillis(5));
-        assertEquals(5_000L, Zone.respawnDelayMillis(6));
-        assertEquals(5_000L, Zone.respawnDelayMillis(Integer.MAX_VALUE));
-    }
-
-    @Test
-    void rejectsNegativeRespawnPlayerCount() {
-        assertThrows(IllegalArgumentException.class, () -> Zone.respawnDelayMillis(-1));
-    }
-
-    @Test
-    void oneMemberDeathRespawnsOnlyAfterNineSecondDeadline() {
-        Zone zone = map1Zone();
-        Session player = session(TestPlayers.initial(1L, 1, "alpha1", 1));
-        zone.addPlayer(player);
-
-        zone.damageMonster(101, 1, 500, NOW).orElseThrow();
-
-        assertTrue(zone.respawnDueMonsters(NOW + 8_999).isEmpty());
-        assertTrue(zone.respawnDueMonsters(NOW + 9_000).isEmpty());
-
-        var due = zone.respawnDueMonsters(NOW + 9_001);
-
-        assertEquals(List.of(new Monster.Respawn(101, 0, 300L)), due);
-        assertTrue(zone.hasLiveMonster(101));
-    }
-
-    @Test
-    void respawnDeadlineDoesNotChangeWhenMembershipChangesAfterDeath() {
-        Zone zone = map1Zone();
-        Session first = session(TestPlayers.initial(1L, 1, "alpha1", 1));
-        Session second = session(TestPlayers.initial(2L, 2, "beta22", 1));
-
-        zone.addPlayer(first);
-        zone.addPlayer(second);
-
-        zone.damageMonster(101, 1, 500, NOW).orElseThrow();
-        zone.removePlayer(second);
-
-        assertTrue(zone.respawnDueMonsters(NOW + 8_000).isEmpty());
-        assertEquals(List.of(new Monster.Respawn(101, 0, 300L)),
-                zone.respawnDueMonsters(NOW + 8_001));
-    }
-
-    @Test
-    void joinsAfterDeathDoNotShortenExistingRespawnDeadline() {
-        Zone zone = map1Zone();
-        Session first = session(TestPlayers.initial(1L, 1, "alpha1", 1));
-        zone.addPlayer(first);
-
-        zone.damageMonster(101, 1, 500, NOW).orElseThrow();
-
-        for (int id = 2; id <= 6; id++) {
-            zone.addPlayer(session(TestPlayers.initial(
-                    (long) id, id, "player" + id, 1)));
-        }
-
-        assertTrue(zone.respawnDueMonsters(NOW + 5_001).isEmpty());
-        assertTrue(zone.respawnDueMonsters(NOW + 9_000).isEmpty());
-        assertEquals(List.of(new Monster.Respawn(101, 0, 300L)),
-                zone.respawnDueMonsters(NOW + 9_001));
-    }
-
-    @Test
-    void returnsMultipleDueRespawnsOnceInRuntimeOrder() {
-        Zone zone = map1Zone();
-        Session first = session(TestPlayers.initial(1L, 1, "alpha1", 1));
-        zone.addPlayer(first);
-
-        zone.damageMonster(101, 1, 500, NOW).orElseThrow();
-        zone.damageMonster(102, 1, 500, NOW).orElseThrow();
-
-        assertEquals(List.of(
-                        new Monster.Respawn(101, 0, 300L),
-                        new Monster.Respawn(102, 0, 300L)),
-                zone.respawnDueMonsters(NOW + 9_001));
-        assertTrue(zone.respawnDueMonsters(NOW + 9_002).isEmpty());
-    }
-
-    @Test
-    void noHostilityProducesNoAttack() {
-        Zone zone = map1Zone();
-        Session player = playerAt(7, 975, 936);
-        zone.addPlayer(player);
-
-        assertTrue(zone.attackDueMonsters(NOW, new Random(12345L)).isEmpty());
-        assertEquals(100L, player.player().hp());
-    }
-
-    @Test
-    void successfulHitEnablesOneNonLethalRetaliationAndUpdatesAuthoritativeHp() {
-        Zone zone = map1Zone();
-        Session player = playerAt(7, 975, 936);
-        zone.addPlayer(player);
-
-        zone.damageMonster(101, 7, 10, NOW).orElseThrow();
-
-        assertEquals(List.of(new MonsterAttack(101, 7, 10L, 90L, false)),
-                zone.attackDueMonsters(NOW + 1, new Random(12345L)));
-        assertEquals(90L, player.player().hp());
-    }
-
-    @Test
-    void attackRangeIsStrictlyLessThanNineHundred() {
-        assertEquals(90L, attackAtX(975 + 899).hp());
-        assertEquals(100L, attackAtX(975 + 900).hp());
-        assertEquals(100L, attackAtX(975 + 901).hp());
-    }
-
-    @Test
-    void attackAllowsExactLethalMonsterDamage() {
-        Zone allowed = map1Zone();
-        Session twenty = playerAtWithFullHealth(20, 975, 936);
-        twenty.player().injure(180);
-        allowed.addPlayer(twenty);
-        allowed.damageMonster(101, 20, 10, NOW).orElseThrow();
-        assertEquals(10L, allowed.attackDueMonsters(NOW + 1, new Random(1L))
-                .getFirst().hpAfter());
-
-        Zone lethal = map1Zone();
-        Session ten = playerAtWithFullHealth(10, 975, 936);
-        ten.player().injure(190);
-        lethal.addPlayer(ten);
-        lethal.damageMonster(101, 10, 10, NOW).orElseThrow();
-        assertEquals(List.of(new MonsterAttack(101, 10, 10L, 0L, true)),
-                lethal.attackDueMonsters(NOW + 1, new Random(1L)));
-        assertEquals(0L, ten.player().hp());
-    }
-
-    @Test
-    void closedOrRemovedEnemyIsNotTargeted() {
-        Zone closed = map1Zone();
-        Session closedPlayer = playerAt(7, 975, 936);
-        closed.addPlayer(closedPlayer);
-        closed.damageMonster(101, 7, 10, NOW).orElseThrow();
-        closedPlayer.transition(SessionState.CONNECTED, SessionState.CLOSED);
-        assertTrue(closed.attackDueMonsters(NOW + 1, new Random(1L)).isEmpty());
-
-        Zone removed = map1Zone();
-        Session removedPlayer = playerAt(8, 975, 936);
-        removed.addPlayer(removedPlayer);
-        removed.damageMonster(101, 8, 10, NOW).orElseThrow();
-        removed.removePlayer(removedPlayer);
-        assertTrue(removed.attackDueMonsters(NOW + 1, new Random(1L)).isEmpty());
-    }
-
-    @Test
-    void failedTargetAttemptConsumesCooldown() {
-        Zone zone = map1Zone();
-        Session player = playerAt(7, 975 + 901, 936);
-        zone.addPlayer(player);
-        zone.damageMonster(101, 7, 10, NOW).orElseThrow();
-
-        assertTrue(zone.attackDueMonsters(NOW + 1, new Random(1L)).isEmpty());
-        zone.call(() -> {
-            player.player().move(975, 936);
-            return null;
-        });
-        assertTrue(zone.attackDueMonsters(NOW + 1_601, new Random(1L)).isEmpty());
-        assertEquals(90L, zone.attackDueMonsters(NOW + 1_602, new Random(1L))
-                .getFirst().hpAfter());
-    }
-
-    @Test
-    void deterministicSelectionAmongTwoEnemies() {
-        Zone zone = map1Zone();
-        Session first = playerAt(7, 975, 936);
-        Session second = playerAt(8, 975, 936);
-        zone.addPlayer(first);
-        zone.addPlayer(second);
-        zone.damageMonster(101, 7, 10, NOW).orElseThrow();
-        zone.damageMonster(101, 8, 10, NOW + 1).orElseThrow();
-
-        List<MonsterAttack> attacks = zone.attackDueMonsters(NOW + 2, new Random(12345L));
-
-        assertEquals(1, attacks.size());
-        assertTrue(attacks.getFirst().playerId() == 7 || attacks.getFirst().playerId() == 8);
-        assertEquals(90L, attacks.getFirst().playerId() == 7 ? first.player().hp() : second.player().hp());
-    }
-
-    @Test
-    void deadMonsterCannotAttackAndRespawnClearsHostility() {
-        Zone zone = map1Zone();
-        Session player = playerAt(7, 975, 936);
-        zone.addPlayer(player);
-        zone.damageMonster(101, 7, 300, NOW).orElseThrow();
-        assertTrue(zone.attackDueMonsters(NOW + 1, new Random(1L)).isEmpty());
-
-        zone.respawnDueMonsters(NOW + 9_001);
-        assertTrue(zone.attackDueMonsters(NOW + 9_002, new Random(1L)).isEmpty());
-    }
-
-    private static Player attackAtX(int x) {
-        Zone zone = map1Zone();
-        Session player = playerAt(7, x, 936);
-        zone.addPlayer(player);
-        zone.damageMonster(101, 7, 10, NOW).orElseThrow();
-        List<MonsterAttack> attacks = zone.attackDueMonsters(NOW + 1, new Random(1L));
-        return player.player();
-    }
-
-    private static Session playerAt(int id, int x, int y) {
-        Player player = TestPlayers.at(
-                TestPlayers.initial((long) id, id, "player" + id, 1), 1, 0, x, y);
-        player.injure(100);
-        return session(player);
-    }
-
-    private static Session playerAtWithFullHealth(int id, int x, int y) {
-        Player player = TestPlayers.at(
-                TestPlayers.initial((long) id, id, "player" + id, 1), 1, 0, x, y);
-        return session(player);
-    }
-
-    private static Zone zone(
-            int mapId,
-            int zoneId,
-            int maxPlayer,
-            List<Monster> monsters) {
-        return new Zone(
-                mapId,
-                zoneId,
-                maxPlayer,
-                monsters,
-                new AreaService(new PlayerPacketWriter()));
+        assertFalse(zone.hasPlayer(samePlayerId));
     }
 
     private static Zone map1Zone() {
-        MonsterFactory factory = new MonsterFactory(
-                GameResources.fromFrameRoot(Path.of("resources", "json"),
-                        com.project.game.testsupport.MapTestSupport.canonicalMaps(), 2,
-                        com.project.game.testsupport.MonsterTestSupport.canonicalRepository()));
-        return zone(1, 0, Integer.MAX_VALUE, factory.createForMap(1));
+        return zone(1, 0, Integer.MAX_VALUE, monsters());
+    }
+
+    private static List<Monster> monsters() {
+        MonsterFactory factory = new MonsterFactory(GameResources.fromFrameRoot(
+                Path.of("resources", "json"),
+                com.project.game.testsupport.MapTestSupport.canonicalMaps(), 2,
+                com.project.game.testsupport.MonsterTestSupport.canonicalRepository()));
+        return factory.createForMap(1);
+    }
+
+    private static Zone zone(int mapId, int zoneId, int maxPlayer, List<Monster> monsters) {
+        return new Zone(mapId, zoneId, maxPlayer, monsters,
+                new AreaService(new PlayerPacketWriter(), new MonsterPacketWriter()));
+    }
+
+    private static Player playerAt(int id, int x, int y) {
+        return TestPlayers.at(TestPlayers.initial((long) id, id, "player" + id, 1),
+                1, 0, x, y);
     }
 
     private static Session session(Player player) {

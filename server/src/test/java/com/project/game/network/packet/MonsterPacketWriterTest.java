@@ -1,8 +1,6 @@
 package com.project.game.network.packet;
 
 import com.project.game.monster.Monster;
-
-import com.project.game.monster.MonsterAttack;
 import com.project.game.network.message.Message;
 import com.project.game.network.message.MessageName;
 import org.junit.jupiter.api.Test;
@@ -76,7 +74,7 @@ class MonsterPacketWriterTest {
     @Test
     void writesExactPlayerTargetMonsterAttackPayload() throws Exception {
         Message message = new MonsterPacketWriter().attackPlayer(
-                new MonsterAttack(17, 42, 10L, 90L, false));
+                new Monster.Attack(17, 42, 10L, 90L, false));
 
         assertEquals(MessageName.MONSTER_ATTACK, message.command());
         assertEquals(17, message.payload().length);
@@ -92,8 +90,8 @@ class MonsterPacketWriterTest {
     void monsterAttackPacketDoesNotEncodeHpAfter() {
         MonsterPacketWriter writer = new MonsterPacketWriter();
 
-        Message first = writer.attackPlayer(new MonsterAttack(1, 2, 10L, 90L, false));
-        Message second = writer.attackPlayer(new MonsterAttack(1, 2, 10L, 80L, false));
+        Message first = writer.attackPlayer(new Monster.Attack(1, 2, 10L, 90L, false));
+        Message second = writer.attackPlayer(new Monster.Attack(1, 2, 10L, 80L, false));
 
         assertArrayEquals(first.payload(), second.payload());
     }

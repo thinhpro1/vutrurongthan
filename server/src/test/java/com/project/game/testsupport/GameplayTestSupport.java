@@ -116,7 +116,9 @@ public static void joinAtBarrier(CyclicBarrier start, GameplayServices maps,
 
     public static int zoneRegistrySize(GameplayServices maps) {
         try {
-            return maps.mapManager().zones().size();
+            return maps.mapManager().maps().stream()
+                    .mapToInt(map -> map.zones().size())
+                    .sum();
         } catch (RuntimeException exception) {
             throw new AssertionError("unable to inspect zone registry", exception);
         }

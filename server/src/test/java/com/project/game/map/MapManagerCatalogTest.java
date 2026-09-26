@@ -1,8 +1,10 @@
 package com.project.game.map;
 
 import com.project.game.monster.MonsterFactory;
+import com.project.game.network.packet.MonsterPacketWriter;
 import com.project.game.network.packet.PlayerPacketWriter;
 import com.project.game.resource.GameResources;
+import com.project.game.service.AreaService;
 import com.project.game.testsupport.MapTestSupport;
 import org.junit.jupiter.api.Test;
 
@@ -29,19 +31,19 @@ class MapManagerCatalogTest {
         assertNull(runtimeMap.findZone(2));
         assertNull(runtimeMap.findZone(3));
         assertNull(registry.findMap(0));
-        assertEquals(2, registry.zones().size());
+        assertEquals(2, zoneCount(registry));
     }
 
     @Test
     void maxZoneDoesNotExpandThePublicZoneSet() {
-        MapManager registry = new MapManager(singlePublicZoneMap(), monsterFactory(), new PlayerPacketWriter());
+        MapManager registry = new MapManager(singlePublicZoneMap(), monsterFactory(), area());
 
         com.project.game.map.Map runtimeMap = registry.getMap(1);
 
         assertNotNull(runtimeMap.findZone(0));
         assertNull(runtimeMap.findZone(1));
         assertNull(runtimeMap.findZone(3));
-        assertEquals(1, registry.zones().size());
+        assertEquals(1, zoneCount(registry));
     }
 
     @Test
@@ -72,10 +74,10 @@ class MapManagerCatalogTest {
     @Test
     void catalogIsDefensivelyCopiedAndSnapshotContainsOnlyRegisteredZones() {
         java.util.Map<Integer, MapTemplate> source = new HashMap<>(maps());
-        MapManager registry = new MapManager(source, monsterFactory(), new PlayerPacketWriter());
+        MapManager registry = new MapManager(source, monsterFactory(), area());
         source.clear();
 
-        assertEquals(2, registry.zones().size());
+        assertEquals(2, zoneCount(registry));
         com.project.game.map.Map runtimeMap = registry.findMap(1);
         assertNotNull(runtimeMap.findZone(0));
         assertNull(runtimeMap.findZone(2));
@@ -83,7 +85,7 @@ class MapManagerCatalogTest {
     }
 
     private static MapManager registry() {
-        return new MapManager(maps(), monsterFactory(), new PlayerPacketWriter());
+        return new MapManager(maps(), monsterFactory(), area());
     }
 
     private static java.util.Map<Integer, MapTemplate> maps() {
@@ -114,5 +116,13 @@ class MapManagerCatalogTest {
         return new MonsterFactory(GameResources.fromFrameRoot(
                 Path.of("resources", "json"), canonicalMaps(), 2,
                 com.project.game.testsupport.MonsterTestSupport.canonicalRepository()));
+    }
+
+    private static AreaService area() {
+        return new AreaService(new PlayerPacketWriter(), new MonsterPacketWriter());
+    }
+
+    private static int zoneCount(MapManager maps) {
+        return maps.maps().stream().mapToInt(map -> map.zones().size()).sum();
     }
 }

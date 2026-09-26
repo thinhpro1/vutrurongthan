@@ -1,14 +1,12 @@
 package com.project.game.combat;
 
-import com.project.game.map.MapManager;
 import com.project.game.map.Zone;
 import com.project.game.monster.Monster;
 import com.project.game.network.Session;
 import com.project.game.network.SessionState;
-import com.project.game.network.message.Message;
-import com.project.game.network.packet.MonsterPacketWriter;
 import com.project.game.network.packet.PlayerPacketWriter;
 import com.project.game.player.Player;
+import com.project.game.service.AreaService;
 
 import java.time.Clock;
 import java.util.ArrayList;
@@ -16,26 +14,19 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.RejectedExecutionException;
 
-/** Điều phối việc Player đánh Monster; Player sở hữu chuyển trạng thái của mình. */
+/** Coordinates Player damage against a Monster in the owning Zone writer. */
 public final class Combat {
-    private final MapManager maps;
-    private final PlayerPacketWriter packets;
-    private final MonsterPacketWriter monsterPackets;
+    private final AreaService area;
+    private final PlayerPacketWriter playerPackets;
     private final Clock clock;
 
-    public Combat(MapManager maps,
-                         PlayerPacketWriter packets,
-                         MonsterPacketWriter monsterPackets) {
-        this(maps, packets, monsterPackets, Clock.systemUTC());
+    public Combat(AreaService area, PlayerPacketWriter playerPackets) {
+        this(area, playerPackets, Clock.systemUTC());
     }
 
-    public Combat(MapManager maps,
-                         PlayerPacketWriter packets,
-                         MonsterPacketWriter monsterPackets,
-                         Clock clock) {
-        this.maps = Objects.requireNonNull(maps, "maps");
-        this.packets = Objects.requireNonNull(packets, "packets");
-        this.monsterPackets = Objects.requireNonNull(monsterPackets, "monsterPackets");
+    public Combat(AreaService area, PlayerPacketWriter playerPackets, Clock clock) {
+        this.area = Objects.requireNonNull(area, "area");
+        this.playerPackets = Objects.requireNonNull(playerPackets, "playerPackets");
         this.clock = Objects.requireNonNull(clock, "clock");
     }
 
@@ -66,43 +57,34 @@ public final class Combat {
         }
         Zone zone = session.zone();
         try {
-            AttackDelivery result = zone.tryCall(() -> {
+            AttackDelivery delivery = zone.tryCall(() -> {
                 synchronized (zone) {
                     Player player = session.player();
                     if (player == null || player.isDead() || !zone.hasPlayer(session)
-                            || player.currentStats().damage() <= 0) {
+                            || player.currentStats().damage() <= 0L) {
                         return new AttackDelivery(false, List.of());
                     }
 
-                    var damageResult = zone.damageMonster(
+                    Monster.Damage result = zone.damageMonster(
                             monsterId, player.id(), player.currentStats().damage(), clock.millis());
-                    if (damageResult.isEmpty()) {
+                    if (result == null) {
                         return new AttackDelivery(false, List.of());
                     }
 
-                    Monster.Damage combat = damageResult.orElseThrow();
-                    List<Session> rejected = new ArrayList<>();
-                    Message packet = combat.killed()
-                            ? monsterPackets.startDie(combat)
-                            : monsterPackets.injure(combat);
-                    for (Session member : zone.members()) {
-                        if (member.state() != SessionState.CLOSED && !member.trySend(packet)) {
-                            rejected.add(member);
-                        }
-                    }
-
-                    if (combat.killed() && combat.potentialReward() > 0L) {
-                        long potential = player.addPotential(combat.potentialReward());
+                    List<Session> rejected = new ArrayList<>(
+                            area.monsterDamage(result, zone.members()));
+                    if (result.killed() && result.potentialReward() > 0L) {
+                        long potential = player.addPotential(result.potentialReward());
                         if (session.state() != SessionState.CLOSED
-                                && !session.trySend(packets.potentialUpdate(potential))) {
+                                && !session.trySend(playerPackets.potentialUpdate(potential))) {
                             rejected.add(session);
                         }
                     }
                     return new AttackDelivery(true, rejected);
                 }
             });
-            closeRejected(result.rejectedObservers());
-            return result.attacked();
+            closeRejected(delivery.rejectedObservers());
+            return delivery.attacked();
         } catch (RejectedExecutionException exception) {
             return false;
         }

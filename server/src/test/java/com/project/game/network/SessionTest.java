@@ -57,8 +57,10 @@ class SessionTest {
         Session session = new Session(manager.nextId(), new TestTransport(), manager,
                 new LegacyPacketCodec(1024), "abc".getBytes(StandardCharsets.US_ASCII), 4,
                 TestServices.serverServices(), ClientConfig.defaults());
-        Zone first = new Zone(0, 0, 10, List.of(), new AreaService(new PlayerPacketWriter()));
-        Zone second = new Zone(0, 1, 10, List.of(), new AreaService(new PlayerPacketWriter()));
+        Zone first = new Zone(0, 0, 10, List.of(),
+                new AreaService(new PlayerPacketWriter(), new MonsterPacketWriter()));
+        Zone second = new Zone(0, 1, 10, List.of(),
+                new AreaService(new PlayerPacketWriter(), new MonsterPacketWriter()));
 
         session.bindZone(first);
 

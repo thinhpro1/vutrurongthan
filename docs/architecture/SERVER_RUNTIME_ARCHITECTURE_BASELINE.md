@@ -60,10 +60,30 @@ request never creates a missing Zone, even when `zoneId` is below the template
 `maxZone` bound. `maxZone` remains catalog/template metadata and does not
 authorize runtime Zone expansion.
 
-Monster snapshot access follows the same contract: it finds an already
-registered public Zone and rejects an absent Zone. `MapManager.zones()` remains
-temporarily available for the existing Monster update traversal and is tracked
-as P2 cleanup rather than a new public lifecycle API.
+Monster snapshots are an external `MAP_INFO` boundary only: `MapHandler`
+resolves `MapManager.getMap(mapId)`, then `Map.findZone(zoneId)`, then reads
+`Zone.monsterSnapshots()`. The read never creates a Zone and rejects an absent
+Zone. Monster AI, combat, and Zone mutation use live runtime state directly;
+they do not route through a snapshot or `MonsterManager`.
+
+Monster lifecycle follows the public-world traversal:
+
+```text
+MonsterLifecycleScheduler
+→ MonsterManager.update
+→ MapManager.maps
+→ Map.zones
+→ Zone.updateMonsters(now, random)
+→ Zone writer: all movement, all due respawns, all attacks
+→ AreaService packets
+```
+
+`Monster` owns its mutable combat, movement, cooldown, enemy, and respawn
+decisions. `Zone` owns the collection, exact current-member candidates,
+cross-Monster death cleanup, lifecycle phase ordering, and the sole writer.
+`AreaService` serializes neither gameplay decisions nor ownership; it only
+sends same-Zone packets through packet writers. Rejected sends close only after
+the Zone writer returns.
 
 ## Public world and future Dungeon runs
 
@@ -172,7 +192,8 @@ MapHandler
 
 Future Dungeon runs do not route private Maps through `MapManager`; their
 runtime owner resolves private destination Maps and uses the Zone admission
-primitives directly. R6 final readability sweep remains open.
+primitives directly. R6 final readability sweep is locked; P2 Monster Complete
+is the current migration phase.
 
 ## Freeze semantics
 
@@ -244,17 +265,10 @@ R3A Public Map / Zone lifecycle                      LOCKED
 R3B Zone-local Player move / enter / leave           LOCKED
 R4  Public-world Cross-Map transition                LOCKED
 R5  Session / Player / Zone authority audit          LOCKED
-R6  Final P1 readability sweep
-→ P1 LOCK
-→ P2 Monster Complete
-```
-
-Known remaining debt:
-
-```text
-MapManager.zones()
-→ retained only for current MonsterManager.update traversal
-→ P2 cleanup
+R6  Final P1 readability sweep                       LOCKED
+P1  Architecture Normalization                       LOCKED
+P2  Monster Complete                                 CURRENT
+P3  Player Complete                                  NEXT AFTER P2
 ```
 
 Each phase must also clean the touched feature slice to current

@@ -11,41 +11,41 @@ import com.project.game.network.Session;
 import com.project.game.network.packet.MonsterPacketWriter;
 import com.project.game.network.packet.PlayerPacketWriter;
 import com.project.game.resource.GameResources;
+import com.project.game.service.AreaService;
 
 import java.time.Clock;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.random.RandomGenerator;
 
-/** Test-only composition of the three gameplay services over one MapManager. */
+/** Test-only composition of public Map, Zone combat, and lifecycle services. */
 public final class GameplayServices {
     private MapManager maps;
     private Combat combat;
     private MonsterManager monsterManager;
 
     public GameplayServices(PlayerPacketWriter playerPackets,
-                             MonsterPacketWriter monsterPackets,
-                             MonsterFactory monsterFactory) {
-        this(new MapManager(MapTestSupport.canonicalMaps(), monsterFactory, playerPackets), playerPackets, monsterPackets,
-                Clock.systemUTC(), RandomGenerator.getDefault());
+                            MonsterPacketWriter monsterPackets,
+                            MonsterFactory monsterFactory) {
+        this(runtime(MapTestSupport.canonicalMaps(), monsterFactory, playerPackets, monsterPackets),
+                playerPackets, monsterPackets, Clock.systemUTC(), RandomGenerator.getDefault());
     }
 
     public GameplayServices(PlayerPacketWriter playerPackets,
-                             MonsterPacketWriter monsterPackets,
-                             MonsterFactory monsterFactory,
-                             Clock clock) {
-        this(new MapManager(MapTestSupport.canonicalMaps(), monsterFactory, playerPackets), playerPackets, monsterPackets,
-                clock, RandomGenerator.getDefault());
+                            MonsterPacketWriter monsterPackets,
+                            MonsterFactory monsterFactory,
+                            Clock clock) {
+        this(runtime(MapTestSupport.canonicalMaps(), monsterFactory, playerPackets, monsterPackets),
+                playerPackets, monsterPackets, clock, RandomGenerator.getDefault());
     }
 
     public GameplayServices(PlayerPacketWriter playerPackets,
-                             MonsterPacketWriter monsterPackets,
-                             MonsterFactory monsterFactory,
-                             Clock clock,
-                             RandomGenerator random) {
-        this(new MapManager(MapTestSupport.canonicalMaps(), monsterFactory, playerPackets), playerPackets,
-                monsterPackets, clock, random);
+                            MonsterPacketWriter monsterPackets,
+                            MonsterFactory monsterFactory,
+                            Clock clock,
+                            RandomGenerator random) {
+        this(runtime(MapTestSupport.canonicalMaps(), monsterFactory, playerPackets, monsterPackets),
+                playerPackets, monsterPackets, clock, random);
     }
 
     public GameplayServices(GameResources resources) {
@@ -59,33 +59,39 @@ public final class GameplayServices {
     public GameplayServices(GameResources resources, Clock clock, RandomGenerator random) {
         PlayerPacketWriter playerPackets = new PlayerPacketWriter();
         MonsterPacketWriter monsterPackets = new MonsterPacketWriter();
-        Map<Integer, MapTemplate> maps = resources.maps().isEmpty()
-                ? MapTestSupport.canonicalMaps()
-                : resources.maps();
-        initialize(new MapManager(maps, new MonsterFactory(resources), playerPackets), playerPackets,
-                monsterPackets, clock, random);
+        Map<Integer, MapTemplate> catalog = resources.maps().isEmpty()
+                ? MapTestSupport.canonicalMaps() : resources.maps();
+        initialize(runtime(catalog, new MonsterFactory(resources), playerPackets, monsterPackets),
+                playerPackets, monsterPackets, clock, random);
     }
 
-    public GameplayServices(Map<Integer, MapTemplate> maps,
-                            GameResources resources) {
+    public GameplayServices(Map<Integer, MapTemplate> maps, GameResources resources) {
         PlayerPacketWriter playerPackets = new PlayerPacketWriter();
         MonsterPacketWriter monsterPackets = new MonsterPacketWriter();
-        initialize(new MapManager(maps, new MonsterFactory(resources), playerPackets), playerPackets,
-                monsterPackets, Clock.systemUTC(), RandomGenerator.getDefault());
+        initialize(runtime(maps, new MonsterFactory(resources), playerPackets, monsterPackets),
+                playerPackets, monsterPackets, Clock.systemUTC(), RandomGenerator.getDefault());
     }
 
-    private GameplayServices(MapManager maps, PlayerPacketWriter playerPackets,
+    private GameplayServices(Runtime runtime, PlayerPacketWriter playerPackets,
                              MonsterPacketWriter monsterPackets, Clock clock,
                              RandomGenerator random) {
-        initialize(maps, playerPackets, monsterPackets, clock, random);
+        initialize(runtime, playerPackets, monsterPackets, clock, random);
     }
 
-    private void initialize(MapManager manager, PlayerPacketWriter playerPackets,
+    private void initialize(Runtime runtime, PlayerPacketWriter playerPackets,
                             MonsterPacketWriter monsterPackets, Clock clock,
                             RandomGenerator random) {
-        this.maps = manager;
-        this.combat = new Combat(manager, playerPackets, monsterPackets, clock);
-        this.monsterManager = new MonsterManager(manager, monsterPackets, playerPackets, clock, random);
+        maps = runtime.maps();
+        combat = new Combat(runtime.area(), playerPackets, clock);
+        monsterManager = new MonsterManager(maps, clock, random);
+    }
+
+    private static Runtime runtime(Map<Integer, MapTemplate> catalog,
+                                   MonsterFactory monsterFactory,
+                                   PlayerPacketWriter playerPackets,
+                                   MonsterPacketWriter monsterPackets) {
+        AreaService area = new AreaService(playerPackets, monsterPackets);
+        return new Runtime(new MapManager(catalog, monsterFactory, area), area);
     }
 
     public MapManager mapManager() {
@@ -132,10 +138,17 @@ public final class GameplayServices {
     }
     public void tickMonsterLifecycle() { monsterManager.update(); }
     public List<MonsterSnapshot> monsterSnapshots(int mapId, int zoneId) {
-        return monsterManager.monsterSnapshots(mapId, zoneId);
+        Zone zone = maps.getMap(mapId).findZone(zoneId);
+        if (zone == null) {
+            throw new IllegalArgumentException("unknown zone " + mapId + "/" + zoneId);
+        }
+        return zone.monsterSnapshots();
     }
     public Zone findZone(int mapId, int zoneId) {
         com.project.game.map.Map map = maps.findMap(mapId);
         return map == null ? null : map.findZone(zoneId);
+    }
+
+    private record Runtime(MapManager maps, AreaService area) {
     }
 }

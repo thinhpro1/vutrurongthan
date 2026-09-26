@@ -4,7 +4,6 @@ import com.project.game.map.MapManager;
 import com.project.game.map.MapTemplate;
 import com.project.game.map.Waypoint;
 import com.project.game.map.Zone;
-import com.project.game.monster.MonsterManager;
 import com.project.game.monster.MonsterSnapshot;
 import com.project.game.network.Session;
 import com.project.game.network.SessionState;
@@ -29,17 +28,15 @@ final class MapHandler {
     private static final Logger LOGGER = Logger.getLogger(MapHandler.class.getName());
     private final Session session;
     private final MapManager mapManager;
-    private final MonsterManager monsterManager;
     private final PlayerRepository playerRepository;
     private final GameResources resources;
     private final PlayerPacketWriter playerPackets = new PlayerPacketWriter();
     private final MapPacketWriter mapPackets = new MapPacketWriter();
 
-    MapHandler(Session session, MapManager mapManager, MonsterManager monsterManager,
+    MapHandler(Session session, MapManager mapManager,
                PlayerRepository playerRepository, GameResources resources) {
         this.session = session;
         this.mapManager = mapManager;
-        this.monsterManager = monsterManager;
         this.playerRepository = playerRepository;
         this.resources = resources;
     }
@@ -134,7 +131,11 @@ final class MapHandler {
         }
         List<MonsterSnapshot> monsters;
         try {
-            monsters = monsterManager.monsterSnapshots(map.id(), zoneId);
+            Zone zone = mapManager.getMap(map.id()).findZone(zoneId);
+            if (zone == null) {
+                throw new IllegalArgumentException("unknown zone " + zoneId);
+            }
+            monsters = zone.monsterSnapshots();
         } catch (IllegalArgumentException exception) {
             throw new IOException("invalid map zone: " + map.id() + "/" + zoneId, exception);
         }

@@ -12,6 +12,7 @@ import com.project.game.account.*;
 import com.project.game.resource.*;
 import com.project.game.testsupport.MutableClock;
 import com.project.game.testsupport.GameplayServices;
+import com.project.game.service.AreaService;
 import org.junit.jupiter.api.Test;
 
 import java.io.*;
@@ -31,11 +32,12 @@ import static org.junit.jupiter.api.Assertions.*;
 class CombatTest {
     @Test
     void targetingAndAttackingDoNotCreateAbsentZones() {
+        PlayerPacketWriter playerPackets = new PlayerPacketWriter();
+        AreaService area = new AreaService(playerPackets, new MonsterPacketWriter());
         MapManager zones = new MapManager(
                 com.project.game.testsupport.MapTestSupport.canonicalMaps(),
-                new MonsterFactory(GameResources.unavailable()), new PlayerPacketWriter());
-        Combat combat = new Combat(
-                zones, new PlayerPacketWriter(), new MonsterPacketWriter());
+                new MonsterFactory(GameResources.unavailable()), area);
+        Combat combat = new Combat(area, playerPackets);
 
         assertFalse(combat.canTargetMonster(null, 101));
         assertFalse(combat.attackMonster(null, 101));
@@ -56,13 +58,13 @@ class CombatTest {
     @Test
     void mapInfoCreatedButPreFinishSessionCannotCombat() {
         GameplayServices maps = mapsWithMonsters();
-        assertEquals(300L, maps.monsterManager().monsterSnapshots(1, 0).getFirst().hp());
+        assertEquals(300L, maps.monsterSnapshots(1, 0).getFirst().hp());
         Session session = session(player(1, 1, 0), maps);
 
         assertEquals(0, maps.memberCount(1, 0));
         assertFalse(maps.combat().canTargetMonster(session, 101));
         assertFalse(maps.combat().attackMonster(session, 101));
-        assertEquals(300L, maps.monsterManager().monsterSnapshots(1, 0).getFirst().hp());
+        assertEquals(300L, maps.monsterSnapshots(1, 0).getFirst().hp());
     }
 
     @Test
@@ -74,7 +76,7 @@ class CombatTest {
 
         assertFalse(maps.combat().canTargetMonster(dead, 101));
         assertFalse(maps.combat().attackMonster(dead, 101));
-        assertEquals(300L, maps.monsterManager().monsterSnapshots(1, 0).getFirst().hp());
+        assertEquals(300L, maps.monsterSnapshots(1, 0).getFirst().hp());
         assertEquals(List.of(), drain(dead));
     }
 
@@ -290,7 +292,7 @@ class CombatTest {
         assertTrue(maps.combat().attackMonster(attacker, 101));
         assertEquals(List.of(MessageName.MONSTER_INJURE), commands(drain(attacker)));
         assertEquals(List.of(), drain(otherZone));
-        assertEquals(300L, maps.monsterManager().monsterSnapshots(1, 1).getFirst().hp());
+        assertEquals(300L, maps.monsterSnapshots(1, 1).getFirst().hp());
     }
 
     @Test
@@ -330,8 +332,8 @@ class CombatTest {
         Session loser = firstResult.get() ? second : first;
         assertEquals(11L, winner.player().potential());
         assertEquals(1L, loser.player().potential());
-        assertEquals(0L, maps.monsterManager().monsterSnapshots(1, 0).getFirst().hp());
-        assertEquals(1, maps.monsterManager().monsterSnapshots(1, 0).getFirst().status());
+        assertEquals(0L, maps.monsterSnapshots(1, 0).getFirst().hp());
+        assertEquals(1, maps.monsterSnapshots(1, 0).getFirst().status());
         List<Message> firstMessages = drain(first);
         List<Message> secondMessages = drain(second);
         assertEquals(1, commands(firstMessages).stream()

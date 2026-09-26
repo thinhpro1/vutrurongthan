@@ -1,7 +1,6 @@
 package com.project.game.map;
 
 import com.project.game.monster.MonsterSnapshot;
-import com.project.game.monster.MonsterAttack;
 import com.project.game.monster.Monster;
 import com.project.game.network.Session;
 import com.project.game.network.SessionState;
@@ -10,12 +9,10 @@ import com.project.game.player.PlayerSaveData;
 import com.project.game.service.AreaService;
 
 import java.util.LinkedHashMap;
-import java.util.Comparator;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.random.RandomGenerator;
-import java.util.Optional;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
@@ -27,7 +24,6 @@ import java.util.logging.Logger;
 
 /** Runtime của một khu vực bản đồ: writer, membership và entity state. */
 public final class Zone {
-    private static final int MONSTER_CHASE_LEASH = 1200;
     private static final int DEFAULT_RUNTIME_INPUT_CAPACITY = 1024;
     private static final Logger LOGGER = Logger.getLogger(Zone.class.getName());
     private static final ThreadLocal<Zone> CURRENT_RUNTIME = new ThreadLocal<>();
@@ -470,139 +466,72 @@ public final class Zone {
         return monster != null && monster.isAlive();
     }
 
-    public synchronized Optional<Monster.Damage> damageMonster(
+    /** Damage bridge for Combat while the caller owns this Zone writer. */
+    public synchronized Monster.Damage damageMonster(
             int monsterId,
             int attackerPlayerId,
             long damage,
             long nowMillis) {
         Monster monster = monsters.get(monsterId);
-        if (monster == null) {
-            return Optional.empty();
-        }
-
-        long delay = respawnDelayMillis(members.size());
-        return monster.injure(attackerPlayerId, damage, nowMillis, delay);
+        return monster == null ? null : monster.injure(attackerPlayerId, damage, nowMillis, members.size());
     }
 
-    public synchronized List<MonsterAttack> attackDueMonsters(
-            long nowMillis,
-            RandomGenerator random) {
+    /** Runs Monster lifecycle phases through this Zone writer in stable runtime order. */
+    public void updateMonsters(long nowMillis, RandomGenerator random) {
+        requireOutsideRuntimeWorker("updateMonsters");
         Objects.requireNonNull(random, "random");
-        List<MonsterAttack> attacks = new java.util.ArrayList<>();
-        for (Monster monster : monsters.values()) {
-            if (!monster.beginAttack(nowMillis)) {
-                continue;
-            }
-            List<Session> eligible = monster.enemyPlayerIds().stream()
-                    .map(members::get)
-                    .filter(Objects::nonNull)
-                    .filter(member -> member.state() != SessionState.CLOSED)
-                    .filter(member -> member.player() != null)
-                    .filter(member -> {
-                        Player player = member.player();
-                        return player.hp() > 0L
-                                && isWithinMonsterAttackRange(monster.snapshot(), player);
-                    })
-                    .toList();
-            if (eligible.isEmpty()) {
-                continue;
-            }
-            Session target = eligible.get(random.nextInt(eligible.size()));
-            Player player = target.player();
-            int hpAfter = player.injure(monster.damage());
-            boolean killed = hpAfter == 0L;
-            if (killed) {
-                for (Monster runtime : monsters.values()) {
-                    runtime.removeEnemy(player.id());
+        try {
+            MonsterDelivery delivery = tryCall(() -> {
+                synchronized (this) {
+                    List<Session> rejected = new ArrayList<>();
+
+                    for (Monster monster : monsters.values()) {
+                        Monster.Move move = monster.updateMove(hostileLivingPlayers(monster));
+                        if (move != null) {
+                            rejected.addAll(area.monsterMove(move, members()));
+                        }
+                    }
+                    for (Monster monster : monsters.values()) {
+                        Monster.Respawn respawn = monster.updateRespawn(nowMillis);
+                        if (respawn != null) {
+                            rejected.addAll(area.monsterRespawn(respawn, members()));
+                        }
+                    }
+                    for (Monster monster : monsters.values()) {
+                        Monster.Attack attack = monster.updateAttack(
+                                hostileLivingPlayers(monster), nowMillis, random);
+                        if (attack == null) {
+                            continue;
+                        }
+                        if (attack.killed()) {
+                            for (Monster runtime : monsters.values()) {
+                                runtime.removeEnemy(attack.playerId());
+                            }
+                        }
+                        rejected.addAll(area.monsterAttack(attack, members()));
+                    }
+                    return new MonsterDelivery(rejected);
                 }
-            }
-            attacks.add(new MonsterAttack(
-                    monster.id(), player.id(), monster.damage(), hpAfter, killed));
+            });
+            closeRejected(delivery.rejectedObservers());
+        } catch (RejectedExecutionException ignored) {
+            // A stopped or saturated Zone cannot run another lifecycle tick.
         }
-        return List.copyOf(attacks);
     }
 
-    public synchronized List<Monster.Move> moveMonsters() {
-        List<Monster.Move> moves = new ArrayList<>();
-        for (Monster monster : monsters.values()) {
-            if (!monster.isAlive()) {
+    private List<Player> hostileLivingPlayers(Monster monster) {
+        List<Player> players = new ArrayList<>();
+        for (int playerId : monster.enemyPlayerIds()) {
+            Session member = members.get(playerId);
+            if (member == null || member.state() == SessionState.CLOSED) {
                 continue;
             }
-
-            List<Session> chaseEligible = chaseEligibleMembers(monster);
-            if (chaseEligible.stream().anyMatch(member ->
-                    isWithinMonsterAttackRange(monster.snapshot(), member.player()))) {
-                continue;
+            Player player = member.player();
+            if (player != null && !player.isDead()) {
+                players.add(player);
             }
-
-            Session target = nearestChaseTarget(monster, chaseEligible);
-            Optional<Monster.Move> moved = target == null
-                    ? monster.patrol()
-                    : monster.moveTo(target.player().x());
-            moved.ifPresent(moves::add);
         }
-        return List.copyOf(moves);
-    }
-
-    public synchronized List<Monster.Respawn> respawnDueMonsters(long nowMillis) {
-        return monsters.values().stream()
-                .map(monster -> monster.updateRespawn(nowMillis))
-                .flatMap(Optional::stream)
-                .toList();
-    }
-
-    static long respawnDelayMillis(int playerCount) {
-        if (playerCount < 0) {
-            throw new IllegalArgumentException("playerCount must be non-negative");
-        }
-        return Math.max(10_000L - 1_000L * playerCount, 5_000L);
-    }
-
-    private static boolean isWithinMonsterAttackRange(
-            MonsterSnapshot monster,
-            Player player) {
-        return squaredDistance(monster, player) < 900L * 900L;
-    }
-
-    private Session nearestChaseTarget(
-            Monster monster,
-            List<Session> chaseEligible) {
-        MonsterSnapshot snapshot = monster.snapshot();
-        return chaseEligible.stream()
-                .min(Comparator
-                        .comparingLong((Session member) ->
-                                squaredDistance(snapshot, member.player()))
-                        .thenComparingInt(member -> member.player().id()))
-                .orElse(null);
-    }
-
-    private List<Session> chaseEligibleMembers(Monster monster) {
-        return hostileLivingMembers(monster).stream()
-                .filter(member -> Math.abs(
-                        (long) member.player().x() - monster.xFirst())
-                        <= MONSTER_CHASE_LEASH)
-                .toList();
-    }
-
-    private List<Session> hostileLivingMembers(Monster monster) {
-        return monster.enemyPlayerIds().stream()
-                .map(members::get)
-                .filter(Objects::nonNull)
-                .filter(member -> member.state() != SessionState.CLOSED)
-                .filter(member -> member.player() != null)
-                .filter(member -> {
-                    Player player = member.player();
-                    return player.hp() > 0L;
-                })
-                .toList();
-    }
-
-    private static long squaredDistance(
-            MonsterSnapshot monster,
-            Player player) {
-        long dx = (long) monster.x() - player.x();
-        long dy = (long) monster.y() - player.y();
-        return dx * dx + dy * dy;
+        return List.copyOf(players);
     }
 
     private static Player requirePlayer(Session session) {
@@ -644,6 +573,12 @@ public final class Zone {
 
     private record LeaveDelivery(PlayerSaveData saveData, List<Session> rejectedObservers) {
         private LeaveDelivery {
+            rejectedObservers = List.copyOf(rejectedObservers);
+        }
+    }
+
+    private record MonsterDelivery(List<Session> rejectedObservers) {
+        private MonsterDelivery {
             rejectedObservers = List.copyOf(rejectedObservers);
         }
     }

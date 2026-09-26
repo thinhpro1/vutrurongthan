@@ -3,12 +3,10 @@ package com.project.game.map;
 import com.project.game.monster.MonsterFactory;
 import com.project.game.network.Session;
 import com.project.game.network.SessionState;
-import com.project.game.network.packet.PlayerPacketWriter;
 import com.project.game.player.Player;
 import com.project.game.player.PlayerSaveData;
 import com.project.game.service.AreaService;
 
-import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import java.util.TreeMap;
@@ -30,10 +28,10 @@ public final class MapManager {
 
     public MapManager(java.util.Map<Integer, MapTemplate> catalog,
                       MonsterFactory monsterFactory,
-                      PlayerPacketWriter packets) {
+                      AreaService area) {
         Objects.requireNonNull(catalog, "catalog");
         Objects.requireNonNull(monsterFactory, "monsterFactory");
-        this.area = new AreaService(Objects.requireNonNull(packets, "packets"));
+        this.area = Objects.requireNonNull(area, "area");
 
         TreeMap<Integer, Map> runtimeMaps = new TreeMap<>();
         catalog.forEach((mapId, template) -> {
@@ -64,15 +62,9 @@ public final class MapManager {
         return map;
     }
 
-    /**
-     * Trả về toàn bộ Zone hiện có theo thứ tự Map rồi Zone.
-     * Tạm thời giữ cho MonsterManager.update(); sẽ xem xét lại ở P2.
-     */
-    public List<Zone> zones() {
-        return maps.values().stream()
-                .sorted(Comparator.comparingInt(Map::id))
-                .flatMap(map -> map.zones().stream())
-                .toList();
+    /** Trả về các Map public đã đăng ký theo thứ tự id ổn định. */
+    public List<Map> maps() {
+        return List.copyOf(maps.values());
     }
 
     /** Gia nhập Zone sau khi client hoàn tất tải bản đồ. */

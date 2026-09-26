@@ -9,6 +9,7 @@ import com.project.game.network.ClientConfig;
 import com.project.game.network.NetworkServer;
 import com.project.game.network.packet.MonsterPacketWriter;
 import com.project.game.network.packet.PlayerPacketWriter;
+import com.project.game.service.AreaService;
 import com.project.game.network.transport.TlsContextFactory;
 import com.project.game.persistence.DatabaseConfig;
 import com.project.game.persistence.DatabaseManager;
@@ -112,9 +113,10 @@ public final class ServerBootstrap {
             MonsterFactory monsterFactory = new MonsterFactory(resources);
             PlayerPacketWriter playerPackets = new PlayerPacketWriter();
             MonsterPacketWriter monsterPackets = new MonsterPacketWriter();
-            MapManager maps = new MapManager(mapCatalog, monsterFactory, playerPackets);
-            Combat combat = new Combat(maps, playerPackets, monsterPackets);
-            MonsterManager monsterManager = new MonsterManager(maps, monsterPackets, playerPackets);
+            AreaService area = new AreaService(playerPackets, monsterPackets);
+            MapManager maps = new MapManager(mapCatalog, monsterFactory, area);
+            Combat combat = new Combat(area, playerPackets);
+            MonsterManager monsterManager = new MonsterManager(maps);
 
             JdbcAccountRepository accountRepository =
                     new JdbcAccountRepository(databaseManager.dataSource());

@@ -10,6 +10,7 @@ import com.project.game.monster.MonsterFactory;
 import com.project.game.monster.MonsterManager;
 import com.project.game.network.packet.PlayerPacketWriter;
 import com.project.game.network.packet.MonsterPacketWriter;
+import com.project.game.service.AreaService;
 
 import java.util.Map;
 import java.util.WeakHashMap;
@@ -35,9 +36,10 @@ public final class TestServices {
     public static SessionServices serverServices(AccountAuth auth, GameResources resources) {
         PlayerPacketWriter playerPackets = new PlayerPacketWriter();
         MonsterPacketWriter monsterPackets = new MonsterPacketWriter();
-        MapManager maps = new MapManager(MapTestSupport.canonicalMaps(), new MonsterFactory(resources), playerPackets);
-        Combat combat = new Combat(maps, playerPackets, monsterPackets);
-        MonsterManager monsterManager = new MonsterManager(maps, monsterPackets, playerPackets);
+        AreaService area = new AreaService(playerPackets, monsterPackets);
+        MapManager maps = new MapManager(MapTestSupport.canonicalMaps(), new MonsterFactory(resources), area);
+        Combat combat = new Combat(area, playerPackets);
+        MonsterManager monsterManager = new MonsterManager(maps);
         return new SessionServices(auth, resources, maps, combat, monsterManager,
                 playerRepository(auth));
     }

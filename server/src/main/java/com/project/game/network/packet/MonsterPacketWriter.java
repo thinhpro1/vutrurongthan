@@ -1,8 +1,6 @@
 package com.project.game.network.packet;
 
 import com.project.game.monster.Monster;
-
-import com.project.game.monster.MonsterAttack;
 import com.project.game.network.message.Message;
 import com.project.game.network.message.MessageName;
 import com.project.game.network.message.MessageWriter;
@@ -50,7 +48,7 @@ public final class MonsterPacketWriter {
                         .toByteArray());
     }
 
-    public Message attackPlayer(MonsterAttack result) {
+    public Message attackPlayer(Monster.Attack result) {
         Objects.requireNonNull(result, "result");
         return new Message(
                 MessageName.MONSTER_ATTACK,

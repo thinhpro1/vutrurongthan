@@ -16,6 +16,7 @@ import com.project.game.network.transport.ClientTransport;
 import com.project.game.player.Player;
 import com.project.game.player.PlayerSaveData;
 import com.project.game.network.packet.PlayerPacketWriter;
+import com.project.game.network.packet.MonsterPacketWriter;
 import com.project.game.service.AreaService;
 import com.project.game.network.SessionServices;
 import org.junit.jupiter.api.Test;
@@ -883,7 +884,7 @@ class ZoneTest {
     }
 
     private static AreaService area() {
-        return new AreaService(new PlayerPacketWriter());
+        return new AreaService(new PlayerPacketWriter(), new MonsterPacketWriter());
     }
 
     private static void submitFromBarrier(

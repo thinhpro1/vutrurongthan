@@ -1,4 +1,4 @@
-# SERVER RULES V2.1
+# SERVER RULES V2.2
 
 > **Status:** Sole authoritative architecture, coding, readability, ownership, concurrency, persistence, and safety contract for `server/**`
 >
@@ -18,7 +18,7 @@ These rules override style preferences and must be checked on every gameplay tas
 1. Feature.java owns the main feature behavior.
 2. Manager does not become the default place for gameplay logic.
 3. Service means message / packet / send / broadcast unless explicitly approved otherwise.
-4. Zone owns execution timing and mutation ordering.
+4. Zone owns execution timing and serial mutation ordering.
 5. Entity owns the behavior that naturally describes that entity.
 6. Repository owns persistence.
 7. Handler owns protocol parsing/dispatch, not gameplay.
@@ -33,6 +33,9 @@ These rules override style preferences and must be checked on every gameplay tas
 16. Do not change protocol bytes, DB schema, persistence ordering, or gameplay behavior unless explicitly approved.
 17. Do not silently turn temporary coordination code into permanent feature ownership.
 18. If ownership is unclear, stop planning implementation and resolve ownership first.
+19. Zone decides WHEN runtime mutation runs; Entity decides WHAT its gameplay behavior does.
+20. Do not impose global entity-update phases without a demonstrated gameplay or correctness requirement.
+21. Same-Zone combat ordering is decided by the server-side Zone writer, never by client timestamps.
 ```
 
 ---
@@ -59,6 +62,34 @@ When sources disagree, use this order:
 5. Older plans/specifications
 
 6. Legacy source
+```
+
+## V2.2 explicit supersession
+
+The former P2 Monster rule:
+
+```text
+move ALL monsters
+→ respawn ALL monsters
+→ attack ALL monsters
+```
+
+is **retired**.
+
+It must NOT be treated as a locked correctness invariant after V2.2.
+
+The correctness invariants that remain are:
+
+```text
+1 Zone = 1 writer.
+
+All mutable gameplay operations owned by one Zone are serialized by that Zone writer.
+
+A Monster can transition from alive to dead only once for one HP state.
+
+The Player attack that changes Monster HP from > 0 to 0 is the finisher for that death.
+
+Later attacks must observe the Monster as dead and must not produce another kill/reward for the same death.
 ```
 
 Important:
@@ -505,6 +536,10 @@ zone.call(() -> {
 
 Do not turn normal gameplay into functional chains for style.
 
+Execution-boundary lambdas must remain implementation detail.
+
+A normal gameplay flow should not require a reader to follow nested lambdas before understanding the action.
+
 ---
 
 # 12. Record / Result / Snapshot rule
@@ -550,6 +585,8 @@ Why is direct control flow less clear or less safe?
 
 If there is no concrete answer, do not create the type.
 
+If several small result wrappers exist only to move ordinary gameplay control through Zone execution plumbing, review whether they can be removed or hidden without weakening correctness.
+
 ---
 
 # 13. Naming rule
@@ -571,6 +608,7 @@ leave
 move
 moveTo
 attack
+update
 updateAttack
 findTarget
 injure
@@ -730,6 +768,20 @@ The statement:
 
 is not enough.
 
+When legacy flow is easier to read but technically unsafe, preserve the readable responsibility shape while replacing only the unsafe implementation detail.
+
+Example:
+
+```text
+Adopt:
+Zone → monster.update()
+
+Reject:
+Zone extends Thread
+per-entity lock ownership
+direct network coupling from Monster
+```
+
 ---
 
 # 16. What must NOT be copied from legacy
@@ -746,6 +798,7 @@ arbitrary multi-thread mutation
 large lock-per-entity concurrency model
 unsafe global mutable state
 obsolete protocol/data behavior
+client-controlled combat ordering
 ```
 
 Use legacy for readability and responsibility shape, not obsolete technical architecture.
@@ -964,6 +1017,8 @@ A coding model must not independently decide:
 
 because the operation crosses owners.
 
+Legacy `Player.requestChangeMap()` / `joinMap()` is a readability reference for a direct game flow, but its direct source-leave → destination-enter mutation model must NOT be copied when it would violate the new single-writer/cross-Zone safety rules.
+
 ---
 
 # 20. Zone contract
@@ -990,6 +1045,54 @@ mutation ordering
 Zone lifecycle
 ```
 
+Zone decides:
+
+```text
+WHEN Player/Monster/Npc/etc. runtime mutation is allowed to run.
+```
+
+The entity decides:
+
+```text
+WHAT its own gameplay update/action does.
+```
+
+Default direction:
+
+```java
+for (Monster monster : monsters) {
+    monster.update(...);
+}
+```
+
+not:
+
+```java
+for (Monster monster : monsters) {
+    monster.updateMove(...);
+}
+
+for (Monster monster : monsters) {
+    monster.updateRespawn(...);
+}
+
+for (Monster monster : monsters) {
+    monster.updateAttack(...);
+}
+```
+
+unless a real gameplay/correctness requirement explicitly needs global phases.
+
+There is NO default requirement that:
+
+```text
+all Monsters move
+before all Monsters respawn
+before all Monsters attack
+```
+
+A difference in which Monster moves or attacks first is not, by itself, a correctness problem.
+
 Zone should call entity behavior:
 
 ```java
@@ -997,7 +1100,7 @@ player.update();
 monster.update();
 ```
 
-Zone should not absorb the behavior of the entity.
+Zone should not absorb or micromanage the internal lifecycle of the entity.
 
 Bad long-term direction:
 
@@ -1006,18 +1109,42 @@ Zone.findMonsterTarget()
 Zone.calculateMonsterAttack()
 Zone.moveMonster()
 Zone.respawnMonster()
+Zone.updateMonsterEffect()
+Zone.updateMonsterSkill()
 ```
 
 Preferred:
 
 ```text
+Monster.update()
 Monster.findTarget()
 Monster.attack()
 Monster.move()
 Monster.respawn()
 ```
 
-Zone provides execution and world context.
+Zone provides:
+
+```text
+execution ownership
+world membership
+world/entity lookup
+mutation ordering
+the minimum world context the entity genuinely needs
+```
+
+The technical writer machinery may use queues, lambdas, calls, locks, or wait primitives when correctness requires them, but that machinery should remain an implementation detail.
+
+A reader opening `Zone.java` should encounter the game-facing Zone API clearly and should not need to understand the writer implementation before understanding:
+
+```text
+enter
+leave
+move
+members
+monsters
+update
+```
 
 ---
 
@@ -1044,12 +1171,79 @@ respawn
 aggro/enemy behavior
 ```
 
+Preferred normal lifecycle:
+
+```text
+Zone
+→ Monster.update(...)
+
+Monster.update(...)
+→ decides its own respawn/move/attack flow
+→ calls direct Monster behavior methods
+```
+
+The internal order inside one Monster update is Monster behavior.
+
+Do not require Zone to know every Monster lifecycle phase.
+
 MonsterManager should mainly own:
 
 ```text
 template/catalog init
 create/find when meaningful
-global lifecycle only if genuinely needed
+global lifecycle start/stop only if genuinely needed
+```
+
+A separate `Factory`, `Scheduler`, `Registry`, or similar type should not exist when the same responsibility fits naturally and clearly in `MonsterManager`.
+
+### Monster combat authority
+
+Monster HP is live mutable gameplay state.
+
+For attacks against a Monster in a Zone:
+
+```text
+Zone writer serializes the attacks.
+Monster.injure(...) owns the Monster-local HP/death transition.
+```
+
+Example:
+
+```text
+Monster HP = 100
+
+Player A attack = 60
+Player B attack = 70
+```
+
+If Zone writer processes A then B:
+
+```text
+A: 100 → 40
+B: 40 → 0
+B is the finisher.
+```
+
+If Zone writer processes B then A:
+
+```text
+B: 100 → 30
+A: 30 → 0
+A is the finisher.
+```
+
+Both orders are valid.
+
+The server does NOT attempt to reconstruct a “true simultaneous order” from client timestamps.
+
+The attack that performs the alive → dead transition owns that kill result.
+
+A later attack must observe the Monster as dead and must not:
+
+```text
+kill it again
+award the same kill again
+award duplicate death rewards
 ```
 
 ## Npc
@@ -1090,6 +1284,53 @@ capture source intent
 → source revalidation/commit
 → handoff
 ```
+
+## Same-Zone mutation ordering
+
+Inside one Zone:
+
+```text
+the Zone writer order is the authoritative server order.
+```
+
+This applies to gameplay mutations such as:
+
+```text
+Player movement
+Player damage
+Monster damage
+Monster death
+Monster respawn
+effect application
+future item/entity mutation owned by that Zone
+```
+
+Two commands that arrive close together do not need a separate timestamp arbitration system.
+
+Do NOT use:
+
+```text
+client timestamp
+client frame order
+client-declared hit time
+client clock
+```
+
+to override the server-side Zone writer order.
+
+Do not add:
+
+```text
+combat priority queue
+attack timestamp resolver
+simultaneous-hit coordinator
+```
+
+unless a future gameplay rule explicitly requires one.
+
+Single-writer serialization is sufficient for ordinary same-Zone ordering.
+
+## Blocking rules
 
 Do not block Zone gameplay execution on:
 
@@ -1179,6 +1420,10 @@ few wrappers
 
 Do not use Snapshot/Optional/Stream/DTO/Result in hot paths without a concrete reason.
 
+Do not split one entity's normal update into multiple world-level passes only for abstract determinism.
+
+A global phase is justified only when the gameplay rule itself requires all entities to complete one phase before another phase starts.
+
 ---
 
 # 24. Testing rule
@@ -1219,6 +1464,19 @@ is stronger than only asserting:
 reservedCount == 0
 ```
 
+For contested Monster kills, focused tests should prove:
+
+```text
+two Player attacks are serialized
+only one attack performs alive → dead
+the finisher is the attack that reduces HP to 0
+a later attack cannot produce a second kill/reward for the same death
+```
+
+The test should control server-side execution order directly.
+
+Do not test finisher ownership using client timestamps.
+
 Package-private access may be used when a focused test genuinely needs it, but production API must not be expanded casually.
 
 ---
@@ -1233,13 +1491,15 @@ For every touched top-level type, review:
 Is this still the correct feature center?
 Is Manager doing gameplay?
 Is Service doing business logic?
-Is Zone doing entity behavior?
+Is Zone doing entity behavior instead of only execution/world ownership?
+Is Zone micromanaging entity lifecycle phases that belong in Feature.java?
 Is Handler doing gameplay?
 Is a Result/record/wrapper truly required?
 Is there duplicate mutable authority?
 Did a convenience API hide ownership?
 Did a method hide side effects?
 Did we increase file jumps without a correctness reason?
+Did we introduce global phases without a demonstrated gameplay/correctness requirement?
 ```
 
 Before implementation, report:
@@ -1300,6 +1560,7 @@ Who owns persistence?
 Where is packet encoding?
 How many files must I open for the normal flow?
 Can a beginner follow the method top-to-bottom?
+Does Zone call high-level entity behavior, or does it micromanage entity internals?
 ```
 
 Desired result:

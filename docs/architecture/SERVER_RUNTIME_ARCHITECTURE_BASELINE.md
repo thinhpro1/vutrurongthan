@@ -311,8 +311,8 @@ Readability normalization order:
 ```text
 N1.1 Zone                                           DONE
 N2   Monster                                        DONE after this fix/review
-N1.2 Map / MapManager                               NEXT
-N3   Player                                         AFTER N1.2
+N1.2 Map / MapManager                               DONE
+N3   Player                                         NEXT
 ```
 
 Correctness baselines being locked does not mean readability normalization is

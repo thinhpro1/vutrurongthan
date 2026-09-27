@@ -7,6 +7,7 @@ import com.project.game.player.Player;
 import com.project.game.player.PlayerSaveData;
 import com.project.game.service.AreaService;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.TreeMap;
@@ -34,7 +35,9 @@ public final class MapManager {
         this.area = Objects.requireNonNull(area, "area");
 
         TreeMap<Integer, Map> runtimeMaps = new TreeMap<>();
-        catalog.forEach((mapId, template) -> {
+        for (java.util.Map.Entry<Integer, MapTemplate> entry : catalog.entrySet()) {
+            Integer mapId = entry.getKey();
+            MapTemplate template = entry.getValue();
             if (mapId == null || template == null) {
                 throw new NullPointerException("catalog must not contain null entries");
             }
@@ -44,7 +47,7 @@ public final class MapManager {
             if ("ONLINE".equals(template.type())) {
                 runtimeMaps.put(mapId, new Map(template, monsterManager, area));
             }
-        });
+        }
         this.maps = java.util.Collections.unmodifiableMap(runtimeMaps);
     }
 
@@ -85,7 +88,7 @@ public final class MapManager {
                     && currentZone.hasPlayer(session);
         }
         // A detached Session uses Player location to route the pending handoff.
-        Zone zone = resolveZone(player.mapId(), player.zoneId());
+        Zone zone = findZone(player.mapId(), player.zoneId());
         if (zone == null) {
             return false;
         }
@@ -100,7 +103,7 @@ public final class MapManager {
         }
         Zone zone = session.zone();
         if (zone == null) {
-            Zone pendingZone = resolveZone(session.player().mapId(), session.player().zoneId());
+            Zone pendingZone = findZone(session.player().mapId(), session.player().zoneId());
             if (pendingZone != null) {
                 try {
                     pendingZone.cancel(session);
@@ -122,105 +125,6 @@ public final class MapManager {
         }
     }
 
-    /** Trả Player đã chết về town và trả handoff bất biến cho handler. */
-    public MapChange returnTownFromDeath(Session session) {
-        if (session == null || session.state() == SessionState.CLOSED) {
-            return null;
-        }
-        Zone sourceZone = session.zone();
-        if (sourceZone == null) {
-            return null;
-        }
-        Zone.requireOutsideRuntimeWorker("returnTownFromDeath");
-        Zone townZone = resolveZone(DEATH_RETURN_MAP_ID, DEATH_RETURN_ZONE_ID);
-        if (townZone == null) {
-            return null;
-        }
-        Player sourcePlayer = session.player();
-        if (sourcePlayer == null) {
-            return null;
-        }
-
-        boolean reserved = false;
-        if (sourceZone != townZone) {
-            Zone.ReserveStatus status;
-            try {
-                status = townZone.reserve(session);
-            } catch (RejectedExecutionException exception) {
-                return null;
-            }
-            reserved = status == Zone.ReserveStatus.RESERVED
-                    || status == Zone.ReserveStatus.ALREADY_RESERVED;
-            if (!reserved) {
-                return null;
-            }
-        }
-
-        AtomicBoolean committed = new AtomicBoolean();
-        try {
-            Transition result = sourceZone.call(() -> {
-                synchronized (sourceZone) {
-                    Player player = session.player();
-                    if (session.state() == SessionState.CLOSED
-                            || player == null
-                            || player != sourcePlayer
-                            || !player.isDead()
-                            || session.zone() != sourceZone
-                            || !sourceZone.hasPlayer(session)) {
-                        return new Transition(null, List.of());
-                    }
-                    if (sourceZone == townZone) {
-                        player.revive(DEATH_RETURN_MAP_ID, DEATH_RETURN_ZONE_ID,
-                                DEATH_RETURN_X, DEATH_RETURN_Y);
-                        return new Transition(
-                                new MapChange(PlayerSaveData.capture(player), townZone.zoneId()),
-                                List.of());
-                    }
-
-                    if (!sourceZone.removePlayer(session)) {
-                        return new Transition(null, List.of());
-                    }
-                    player.revive(DEATH_RETURN_MAP_ID, DEATH_RETURN_ZONE_ID,
-                            DEATH_RETURN_X, DEATH_RETURN_Y);
-                    session.clearZone(sourceZone);
-                    committed.set(true);
-                    List<Session> rejected = area.removePlayer(
-                            session, player.id(), sourceZone.members());
-                    return new Transition(
-                            new MapChange(PlayerSaveData.capture(player), townZone.zoneId()),
-                            rejected);
-                }
-            });
-            if (result.change() == null && reserved && !committed.get()) {
-                try {
-                    townZone.cancel(session);
-                } catch (RejectedExecutionException ignored) {
-                    // A stopped destination cannot have an active runtime admission.
-                }
-            }
-            closeRejected(result.rejectedObservers());
-            return result.change();
-        } catch (RejectedExecutionException exception) {
-            if (reserved && !committed.get()) {
-                try {
-                    townZone.cancel(session);
-                } catch (RejectedExecutionException ignored) {
-                    // A stopped destination cannot have an active runtime admission.
-                }
-            }
-            return null;
-        } catch (RuntimeException exception) {
-            if (reserved && !committed.get()) {
-                try {
-                    townZone.cancel(session);
-                } catch (RejectedExecutionException ignored) {
-                    // A stopped destination cannot have an active runtime admission.
-                }
-            }
-            throw exception;
-        }
-    }
-
     /** Chọn waypoint và chuyển Player sau khi Zone nguồn xác nhận trạng thái. */
     public MapChange changeMap(Session session) {
         if (session == null || session.state() == SessionState.CLOSED) {
@@ -236,26 +140,9 @@ public final class MapManager {
             return null;
         }
 
-        TransitionIntent intent;
+        MapChangeIntent intent;
         try {
-            intent = sourceZone.call(() -> {
-                synchronized (sourceZone) {
-                    Player player = session.player();
-                    if (session.state() == SessionState.CLOSED
-                            || player == null
-                            || player.isDead()
-                            || session.zone() != sourceZone
-                            || !sourceZone.hasPlayer(session)) {
-                        return null;
-                    }
-                    Waypoint waypoint = sourceMap.findWaypoint(player.x(), player.y());
-                    if (waypoint == null) {
-                        return null;
-                    }
-                    return new TransitionIntent(
-                            player, player.mapId(), player.zoneId(), player.x(), player.y(), waypoint);
-                }
-            });
+            intent = captureMapChangeIntent(session, sourceZone, sourceMap);
         } catch (RejectedExecutionException exception) {
             return null;
         }
@@ -263,97 +150,199 @@ public final class MapManager {
             return null;
         }
 
-        Zone destinationZone = resolveZone(intent.waypoint().goMap(), 0);
+        Zone destinationZone = findZone(intent.waypoint().goMap(), 0);
         if (destinationZone == null) {
             return null;
         }
 
-        boolean reserved = false;
-        if (sourceZone != destinationZone) {
-            Zone.ReserveStatus status;
-            try {
-                status = destinationZone.reserve(session);
-            } catch (RejectedExecutionException exception) {
-                return null;
-            }
-            reserved = status == Zone.ReserveStatus.RESERVED
-                    || status == Zone.ReserveStatus.ALREADY_RESERVED;
-            if (!reserved) {
-                return null;
-            }
+        boolean reserved = sourceZone != destinationZone
+                && reserveDestination(destinationZone, session);
+        if (sourceZone != destinationZone && !reserved) {
+            return null;
         }
 
         AtomicBoolean committed = new AtomicBoolean();
+        List<Session> rejected = new ArrayList<>();
         try {
-            Transition result = sourceZone.call(() -> {
-                synchronized (sourceZone) {
-                    Player player = session.player();
-                    Waypoint currentWaypoint = sourceMap.findWaypoint(intent.x(), intent.y());
-                    if (session.state() == SessionState.CLOSED
-                            || player == null
-                            || player != intent.player()
-                            || player.isDead()
-                            || session.zone() != sourceZone
-                            || !sourceZone.hasPlayer(session)
-                            || player.mapId() != intent.mapId()
-                            || player.zoneId() != intent.zoneId()
-                            || player.x() != intent.x() || player.y() != intent.y()
-                            || !intent.waypoint().equals(currentWaypoint)) {
-                        return new Transition(null, List.of());
-                    }
-                    if (sourceZone == destinationZone) {
-                        player.changeMap(intent.waypoint().goMap(), 0,
-                                intent.waypoint().goX(), intent.waypoint().goY());
-                        return new Transition(
-                                new MapChange(PlayerSaveData.capture(player), destinationZone.zoneId()),
-                                List.of());
-                    }
-
-                    if (!sourceZone.removePlayer(session)) {
-                        return new Transition(null, List.of());
-                    }
-                    player.changeMap(intent.waypoint().goMap(), 0,
-                            intent.waypoint().goX(), intent.waypoint().goY());
-                    session.clearZone(sourceZone);
-                    committed.set(true);
-                    List<Session> rejected = area.removePlayer(
-                            session, player.id(), sourceZone.members());
-                    return new Transition(
-                            new MapChange(PlayerSaveData.capture(player), destinationZone.zoneId()),
-                            rejected);
-                }
-            });
-            if (result.change() == null && reserved && !committed.get()) {
-                try {
-                    destinationZone.cancel(session);
-                } catch (RejectedExecutionException ignored) {
-                    // A stopped destination cannot have an active runtime admission.
-                }
-            }
-            closeRejected(result.rejectedObservers());
-            return result.change();
+            MapChange change = commitMapChange(
+                    session, sourceZone, destinationZone, sourceMap, intent, committed, rejected);
+            closeRejected(rejected);
+            return change;
         } catch (RejectedExecutionException exception) {
-            if (reserved && !committed.get()) {
-                try {
-                    destinationZone.cancel(session);
-                } catch (RejectedExecutionException ignored) {
-                    // A stopped destination cannot have an active runtime admission.
-                }
-            }
             return null;
-        } catch (RuntimeException exception) {
+        } finally {
             if (reserved && !committed.get()) {
-                try {
-                    destinationZone.cancel(session);
-                } catch (RejectedExecutionException ignored) {
-                    // A stopped destination cannot have an active runtime admission.
-                }
+                cancelReservation(destinationZone, session);
             }
-            throw exception;
         }
     }
 
-    private Zone resolveZone(int mapId, int zoneId) {
+    /** Trả Player đã chết về town và trả handoff bất biến cho handler. */
+    public MapChange returnTownFromDeath(Session session) {
+        if (session == null || session.state() == SessionState.CLOSED) {
+            return null;
+        }
+        Zone sourceZone = session.zone();
+        if (sourceZone == null) {
+            return null;
+        }
+        Zone.requireOutsideRuntimeWorker("returnTownFromDeath");
+        Zone townZone = findZone(DEATH_RETURN_MAP_ID, DEATH_RETURN_ZONE_ID);
+        if (townZone == null) {
+            return null;
+        }
+        Player sourcePlayer = session.player();
+        if (sourcePlayer == null) {
+            return null;
+        }
+
+        boolean reserved = sourceZone != townZone
+                && reserveDestination(townZone, session);
+        if (sourceZone != townZone && !reserved) {
+            return null;
+        }
+
+        AtomicBoolean committed = new AtomicBoolean();
+        List<Session> rejected = new ArrayList<>();
+        try {
+            MapChange change = commitReturnTown(
+                    session, sourcePlayer, sourceZone, townZone, committed, rejected);
+            closeRejected(rejected);
+            return change;
+        } catch (RejectedExecutionException exception) {
+            return null;
+        } finally {
+            if (reserved && !committed.get()) {
+                cancelReservation(townZone, session);
+            }
+        }
+    }
+
+    private MapChangeIntent captureMapChangeIntent(
+            Session session, Zone sourceZone, Map sourceMap) {
+        return sourceZone.call(() -> {
+            synchronized (sourceZone) {
+                Player player = session.player();
+                if (session.state() == SessionState.CLOSED
+                        || player == null
+                        || player.isDead()
+                        || session.zone() != sourceZone
+                        || !sourceZone.hasPlayer(session)) {
+                    return null;
+                }
+                Waypoint waypoint = sourceMap.findWaypoint(player.x(), player.y());
+                if (waypoint == null) {
+                    return null;
+                }
+                return new MapChangeIntent(
+                        player, player.mapId(), player.zoneId(), player.x(), player.y(), waypoint);
+            }
+        });
+    }
+
+    private MapChange commitMapChange(
+            Session session,
+            Zone sourceZone,
+            Zone destinationZone,
+            Map sourceMap,
+            MapChangeIntent intent,
+            AtomicBoolean committed,
+            List<Session> rejected) {
+        return sourceZone.call(() -> {
+            synchronized (sourceZone) {
+                Player player = session.player();
+                Waypoint currentWaypoint = sourceMap.findWaypoint(intent.x(), intent.y());
+                if (session.state() == SessionState.CLOSED
+                        || player == null
+                        || player != intent.player()
+                        || player.isDead()
+                        || session.zone() != sourceZone
+                        || !sourceZone.hasPlayer(session)
+                        || player.mapId() != intent.mapId()
+                        || player.zoneId() != intent.zoneId()
+                        || player.x() != intent.x() || player.y() != intent.y()
+                        || !intent.waypoint().equals(currentWaypoint)) {
+                    return null;
+                }
+                if (sourceZone == destinationZone) {
+                    player.changeMap(intent.waypoint().goMap(), 0,
+                            intent.waypoint().goX(), intent.waypoint().goY());
+                    return new MapChange(
+                            PlayerSaveData.capture(player), destinationZone.zoneId());
+                }
+
+                if (!sourceZone.removePlayer(session)) {
+                    return null;
+                }
+                player.changeMap(intent.waypoint().goMap(), 0,
+                        intent.waypoint().goX(), intent.waypoint().goY());
+                session.clearZone(sourceZone);
+                committed.set(true);
+                rejected.addAll(area.removePlayer(session, player.id(), sourceZone.members()));
+                return new MapChange(
+                        PlayerSaveData.capture(player), destinationZone.zoneId());
+            }
+        });
+    }
+
+    private MapChange commitReturnTown(
+            Session session,
+            Player sourcePlayer,
+            Zone sourceZone,
+            Zone townZone,
+            AtomicBoolean committed,
+            List<Session> rejected) {
+        return sourceZone.call(() -> {
+            synchronized (sourceZone) {
+                Player player = session.player();
+                if (session.state() == SessionState.CLOSED
+                        || player == null
+                        || player != sourcePlayer
+                        || !player.isDead()
+                        || session.zone() != sourceZone
+                        || !sourceZone.hasPlayer(session)) {
+                    return null;
+                }
+                if (sourceZone == townZone) {
+                    player.revive(DEATH_RETURN_MAP_ID, DEATH_RETURN_ZONE_ID,
+                            DEATH_RETURN_X, DEATH_RETURN_Y);
+                    return new MapChange(
+                            PlayerSaveData.capture(player), townZone.zoneId());
+                }
+
+                if (!sourceZone.removePlayer(session)) {
+                    return null;
+                }
+                player.revive(DEATH_RETURN_MAP_ID, DEATH_RETURN_ZONE_ID,
+                        DEATH_RETURN_X, DEATH_RETURN_Y);
+                session.clearZone(sourceZone);
+                committed.set(true);
+                rejected.addAll(area.removePlayer(session, player.id(), sourceZone.members()));
+                return new MapChange(
+                        PlayerSaveData.capture(player), townZone.zoneId());
+            }
+        });
+    }
+
+    private boolean reserveDestination(Zone zone, Session session) {
+        try {
+            Zone.ReserveStatus status = zone.reserve(session);
+            return status == Zone.ReserveStatus.RESERVED
+                    || status == Zone.ReserveStatus.ALREADY_RESERVED;
+        } catch (RejectedExecutionException exception) {
+            return false;
+        }
+    }
+
+    private void cancelReservation(Zone zone, Session session) {
+        try {
+            zone.cancel(session);
+        } catch (RejectedExecutionException ignored) {
+            // A stopped destination cannot have an active runtime admission.
+        }
+    }
+
+    private Zone findZone(int mapId, int zoneId) {
         Map map = findMap(mapId);
         if (map == null) {
             return null;
@@ -376,13 +365,7 @@ public final class MapManager {
         }
     }
 
-    private record TransitionIntent(
+    private record MapChangeIntent(
             Player player, int mapId, int zoneId, int x, int y, Waypoint waypoint) {
-    }
-
-    private record Transition(MapChange change, List<Session> rejectedObservers) {
-        private Transition {
-            rejectedObservers = List.copyOf(rejectedObservers);
-        }
     }
 }

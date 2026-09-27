@@ -3,17 +3,16 @@ package com.project.game.map;
 import com.project.game.monster.MonsterManager;
 import com.project.game.service.AreaService;
 
-import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Objects;
-import java.util.concurrent.ConcurrentHashMap;
 
 /** Runtime của một bản đồ và các Zone thuộc về bản đồ đó. */
 public final class Map {
     private final MapTemplate template;
     private final MonsterManager monsterManager;
     private final AreaService area;
-    private final ConcurrentHashMap<Integer, Zone> zones = new ConcurrentHashMap<>();
+    private final LinkedHashMap<Integer, Zone> zones = new LinkedHashMap<>();
 
     public Map(MapTemplate template, MonsterManager monsterManager, AreaService area) {
         this.template = Objects.requireNonNull(template, "template");
@@ -42,17 +41,17 @@ public final class Map {
 
     /** Trả về các Zone hiện có theo thứ tự id ổn định. */
     public List<Zone> zones() {
-        return zones.values().stream()
-                .sorted(Comparator.comparingInt(Zone::zoneId))
-                .toList();
+        return List.copyOf(zones.values());
     }
 
     /** Tìm waypoint thuộc Map theo luật contains của waypoint. */
     public Waypoint findWaypoint(int x, int y) {
-        return template.waypoints().stream()
-                .filter(waypoint -> waypoint.contains(x, y))
-                .findFirst()
-                .orElse(null);
+        for (Waypoint waypoint : template.waypoints()) {
+            if (waypoint.contains(x, y)) {
+                return waypoint;
+            }
+        }
+        return null;
     }
 
     private Zone newZone(int zoneId) {

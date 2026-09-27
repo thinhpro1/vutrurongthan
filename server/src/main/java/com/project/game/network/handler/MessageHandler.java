@@ -32,8 +32,8 @@ public final class MessageHandler {
         this.connectionHandler = new ConnectionHandler(session, networkConfig);
         this.resourceHandler = new ResourceHandler(session, services.resources());
         this.mapHandler = new MapHandler(session, services.maps(),
-                services.playerRepository(), services.resources());
-        this.playerHandler = new PlayerHandler(session, services.playerRepository(),
+                services.playerManager(), services.resources());
+        this.playerHandler = new PlayerHandler(session, services.playerManager(),
                 services.resources(), mapHandler);
         this.authHandler = new AuthHandler(session, services.auth(), networkConfig, playerHandler);
         this.combatHandler = new CombatHandler(session, services.combat());

@@ -58,7 +58,8 @@ AuthHandler
 → account authentication/admission
 → Session AUTHENTICATED
 → PlayerHandler.openPlayerForAuthenticatedAccount
-→ repository load or START_CREATE_PLAYER_SCREEN
+→ PlayerManager.load → PlayerRepository
+   or START_CREATE_PLAYER_SCREEN
 → Session.bindPlayer
 → IN_GAME
 → PLAYER_INFO
@@ -69,10 +70,24 @@ AuthHandler
 
 `AuthHandler` owns account authentication, successful-login metadata, account
 admission, and the `HANDSHAKE_DONE → AUTHENTICATED` transition. `PlayerHandler`
-owns the Player repository load, no-Player create-screen branch, existing
+owns the `PlayerManager.load` call, no-Player create-screen branch, existing
 Player bind, `IN_GAME` transition, and `enterGame` packet bootstrap. A failed
 Player load reports the controlled system-busy result and rolls the Session
 back to `HANDSHAKE_DONE` before the admission reservation is released.
+
+Player lifecycle conversion is centralized in `PlayerManager`:
+
+```text
+PlayerHandler → PlayerManager.create → Player.create → PlayerSaveData
+→ PlayerRecord → PlayerRepository → Player
+
+PlayerHandler → PlayerManager.load → PlayerRepository → PlayerRecord → Player
+```
+
+`PlayerManager` owns only Player create/load/save lifecycle conversion. It is
+not an online registry and has no Session, Zone, packet, or gameplay behavior
+responsibility. `SessionManager` remains online account/session authority and
+`Zone.members` remains realtime membership authority.
 
 ## Public Map / Zone lifecycle
 
@@ -192,7 +207,7 @@ MapHandler → Session.zone → Zone.move → Player.move → AreaService
 ```text
 normal joined disconnect:
 Session.close → MapManager bridge → Zone.leave → PlayerSaveData
-→ Repository outside Zone
+→ PlayerManager.save → PlayerRepository outside Zone
 ```
 
 `Zone.enter` owns admission, membership binding, and the existing-player
@@ -216,7 +231,7 @@ MapHandler
 → destination Zone reservation
 → source Zone commit
 → PlayerSaveData
-→ Repository outside Zone
+→ PlayerManager.save → PlayerRepository outside Zone
 → FINISH_LOAD_MAP
 → Zone.enter consumes reservation
 ```
@@ -310,9 +325,9 @@ Readability normalization order:
 
 ```text
 N1.1 Zone                                           DONE
-N2   Monster                                        DONE after this fix/review
+N2   Monster                                        DONE
 N1.2 Map / MapManager                               DONE
-N3   Player                                         NEXT
+N3   Player                                         DONE after review
 ```
 
 Correctness baselines being locked does not mean readability normalization is

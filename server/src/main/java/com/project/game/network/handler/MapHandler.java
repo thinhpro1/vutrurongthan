@@ -11,9 +11,9 @@ import com.project.game.network.message.Message;
 import com.project.game.network.message.MessageReader;
 import com.project.game.network.packet.MapPacketWriter;
 import com.project.game.network.packet.PlayerPacketWriter;
-import com.project.game.persistence.player.PlayerRepository;
 import com.project.game.persistence.player.PlayerRepositoryException;
 import com.project.game.player.Player;
+import com.project.game.player.PlayerManager;
 import com.project.game.player.PlayerSaveData;
 import com.project.game.resource.GameResources;
 
@@ -28,16 +28,16 @@ final class MapHandler {
     private static final Logger LOGGER = Logger.getLogger(MapHandler.class.getName());
     private final Session session;
     private final MapManager mapManager;
-    private final PlayerRepository playerRepository;
+    private final PlayerManager playerManager;
     private final GameResources resources;
     private final PlayerPacketWriter playerPackets = new PlayerPacketWriter();
     private final MapPacketWriter mapPackets = new MapPacketWriter();
 
     MapHandler(Session session, MapManager mapManager,
-               PlayerRepository playerRepository, GameResources resources) {
+               PlayerManager playerManager, GameResources resources) {
         this.session = session;
         this.mapManager = mapManager;
-        this.playerRepository = playerRepository;
+        this.playerManager = playerManager;
         this.resources = resources;
     }
 
@@ -111,7 +111,7 @@ final class MapHandler {
 
     private void save(PlayerSaveData player) {
         try {
-            playerRepository.save(player);
+            playerManager.save(player);
         } catch (PlayerRepositoryException exception) {
             LOGGER.log(Level.WARNING, "PLAYER transition save failed playerId=" + player.id(), exception);
         }

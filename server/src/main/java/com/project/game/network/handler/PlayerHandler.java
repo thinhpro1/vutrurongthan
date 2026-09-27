@@ -1,8 +1,6 @@
 package com.project.game.network.handler;
 
 import com.project.game.persistence.player.DuplicatePlayerException;
-import com.project.game.persistence.player.PlayerRecord;
-import com.project.game.persistence.player.PlayerRepository;
 import com.project.game.persistence.player.PlayerRepositoryException;
 import com.project.game.network.Session;
 import com.project.game.network.SessionState;
@@ -12,7 +10,7 @@ import com.project.game.network.message.MessageReader;
 import com.project.game.network.message.MessageWriter;
 import com.project.game.network.packet.PlayerPacketWriter;
 import com.project.game.player.Player;
-import com.project.game.player.PlayerSaveData;
+import com.project.game.player.PlayerManager;
 import com.project.game.resource.GameResources;
 import com.project.game.resource.SkillTemplate;
 
@@ -26,15 +24,15 @@ final class PlayerHandler {
     private static final Logger LOGGER = Logger.getLogger(PlayerHandler.class.getName());
     private static final String SYSTEM_BUSY = "Hệ thống đang bận, vui lòng thử lại";
     private final Session session;
-    private final PlayerRepository playerRepository;
+    private final PlayerManager playerManager;
     private final GameResources resources;
     private final MapHandler mapHandler;
     private final PlayerPacketWriter playerPackets = new PlayerPacketWriter();
 
-    PlayerHandler(Session session, PlayerRepository playerRepository, GameResources resources,
+    PlayerHandler(Session session, PlayerManager playerManager, GameResources resources,
                   MapHandler mapHandler) {
         this.session = session;
-        this.playerRepository = playerRepository;
+        this.playerManager = playerManager;
         this.resources = resources;
         this.mapHandler = mapHandler;
     }
@@ -46,18 +44,12 @@ final class PlayerHandler {
         if (reader.remaining() != 0) {
             throw new IOException("trailing CREATE_PLAYER payload bytes");
         }
-        final Player initial;
-        try {
-            initial = Player.create(session.accountId(), name, gender);
-        } catch (RuntimeException exception) {
-            sendDialog("Thông tin nhân vật không hợp lệ");
-            return;
-        }
         Player created;
         try {
-            PlayerRecord record = playerRepository.create(
-                    PlayerRecord.withoutId(PlayerSaveData.capture(initial)));
-            created = record.toPlayer(0);
+            created = playerManager.create(session.accountId(), name, gender);
+        } catch (IllegalArgumentException exception) {
+            sendDialog("Thông tin nhân vật không hợp lệ");
+            return;
         } catch (DuplicatePlayerException exception) {
             if (session.state() != SessionState.CLOSED) {
                 sendDialog("Nhân vật đã tồn tại");
@@ -86,19 +78,10 @@ final class PlayerHandler {
     boolean openPlayerForAuthenticatedAccount(long accountId) throws IOException {
         Player player;
         try {
-            player = playerRepository.findByAccountId(accountId)
-                    .map(record -> record.toPlayer(0))
-                    .orElse(null);
+            player = playerManager.load(accountId);
         } catch (PlayerRepositoryException exception) {
             LOGGER.log(Level.WARNING,
                     "PLAYER load repository failure accountId=" + accountId, exception);
-            if (session.state() != SessionState.CLOSED) {
-                sendDialog(SYSTEM_BUSY);
-            }
-            return false;
-        } catch (RuntimeException exception) {
-            LOGGER.log(Level.WARNING,
-                    "PLAYER load invalid persisted data accountId=" + accountId, exception);
             if (session.state() != SessionState.CLOSED) {
                 sendDialog(SYSTEM_BUSY);
             }

@@ -2,6 +2,7 @@ package com.project.game.testsupport;
 
 import com.project.game.account.AccountAuth;
 import com.project.game.persistence.player.PlayerRepository;
+import com.project.game.player.PlayerManager;
 import com.project.game.resource.GameResources;
 import com.project.game.network.SessionServices;
 import com.project.game.map.MapManager;
@@ -40,21 +41,21 @@ public final class TestServices {
         MapManager maps = new MapManager(MapTestSupport.canonicalMaps(), monsterManager, area);
         Combat combat = new Combat(area, playerPackets);
         return new SessionServices(auth, resources, maps, combat, monsterManager,
-                playerRepository(auth));
+                new PlayerManager(playerRepository(auth)));
     }
 
     public static SessionServices serverServices(AccountAuth auth, GameResources resources,
                                                 GameplayServices gameplay) {
         return new SessionServices(auth, resources, gameplay.mapManager(),
                 gameplay.combat(), gameplay.monsterManager(),
-                playerRepository(auth));
+                new PlayerManager(playerRepository(auth)));
     }
 
     public static SessionServices serverServices(AccountAuth auth, GameResources resources,
                                                 GameplayServices gameplay,
                                                 PlayerRepository players) {
         return new SessionServices(auth, resources, gameplay.mapManager(),
-                gameplay.combat(), gameplay.monsterManager(), players);
+                gameplay.combat(), gameplay.monsterManager(), new PlayerManager(players));
     }
 
     public static PlayerRepository playerRepositoryFor(AccountAuth auth) {

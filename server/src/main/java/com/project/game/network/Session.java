@@ -8,9 +8,9 @@ import com.project.game.network.transport.ClientTransport;
 import com.project.game.map.Zone;
 import com.project.game.map.MapManager;
 import com.project.game.network.SessionServices;
-import com.project.game.persistence.player.PlayerRepository;
 import com.project.game.persistence.player.PlayerRepositoryException;
 import com.project.game.player.Player;
+import com.project.game.player.PlayerManager;
 import com.project.game.player.PlayerSaveData;
 
 import java.io.IOException;
@@ -39,7 +39,7 @@ public final class Session implements AutoCloseable {
     private final AtomicReference<SessionState> state = new AtomicReference<>(SessionState.CONNECTED);
     private final AtomicBoolean closed = new AtomicBoolean();
     private final MapManager mapManager;
-    private final PlayerRepository playerRepository;
+    private final PlayerManager playerManager;
     private final Object writeLock = new Object();
     private final MessageHandler handler;
     private final Set<Integer> sentMapTemplates = ConcurrentHashMap.newKeySet();
@@ -68,7 +68,7 @@ public final class Session implements AutoCloseable {
         this.cipher = new LegacyCipher(handshakeKey);
         this.sendQueue = new ArrayBlockingQueue<>(queueSize);
         this.mapManager = Objects.requireNonNull(services, "services").maps();
-        this.playerRepository = services.playerRepository();
+        this.playerManager = services.playerManager();
         this.handler = new MessageHandler(this, services, networkConfig);
     }
 
@@ -248,7 +248,7 @@ public final class Session implements AutoCloseable {
             if (finalSave != null && finalSave.id() > 0 && accountId > 0L) {
                 boolean interruptedBeforeCheckpoint = Thread.interrupted();
                 try {
-                    playerRepository.save(finalSave);
+                    playerManager.save(finalSave);
                 } catch (PlayerRepositoryException exception) {
                     LOGGER.log(Level.WARNING, "Player checkpoint failed for session id=" + id, exception);
                 } catch (RuntimeException exception) {

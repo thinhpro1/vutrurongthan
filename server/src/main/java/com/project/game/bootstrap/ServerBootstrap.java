@@ -20,6 +20,7 @@ import com.project.game.persistence.map.MapRepository;
 import com.project.game.persistence.monster.JdbcMonsterRepository;
 import com.project.game.persistence.monster.MonsterRepository;
 import com.project.game.persistence.player.JdbcPlayerRepository;
+import com.project.game.player.PlayerManager;
 import com.project.game.resource.GameResources;
 import com.project.game.map.MapTemplate;
 import com.project.game.resource.loader.MapCatalogLoader;
@@ -122,10 +123,11 @@ public final class ServerBootstrap {
             JdbcPlayerRepository playerRepository =
                     new JdbcPlayerRepository(databaseManager.dataSource());
             playerRepository.probeTable();
+            PlayerManager playerManager = new PlayerManager(playerRepository);
 
             AccountAuth auth = new AccountAuth(accountRepository);
             SessionServices services = new SessionServices(
-                    auth, resources, maps, combat, monsterManager, playerRepository);
+                    auth, resources, maps, combat, monsterManager, playerManager);
             NetworkServer server = new NetworkServer(
                     properties.getProperty("game.network.host", "127.0.0.1"),
                     integer(properties, "game.network.port", 1707),

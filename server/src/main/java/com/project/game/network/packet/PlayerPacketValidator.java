@@ -1,6 +1,5 @@
 package com.project.game.network.packet;
 
-import com.project.game.player.Appearance;
 import com.project.game.player.Player;
 
 /** Kiểm tra giá trị trước khi thu hẹp vào field signed trên wire legacy. */
@@ -40,7 +39,7 @@ public final class PlayerPacketValidator {
         validateAppearance(player.appearance());
     }
 
-    private static void validateAppearance(Appearance appearance) {
+    private static void validateAppearance(Player.Appearance appearance) {
         requireSignedShort(appearance.head(), "head");
         requireSignedShort(appearance.body(), "body");
         requireSignedShort(appearance.mount(), "mount");

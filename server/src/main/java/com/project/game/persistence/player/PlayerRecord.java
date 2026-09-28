@@ -1,8 +1,5 @@
 package com.project.game.persistence.player;
 
-import com.project.game.player.Appearance;
-import com.project.game.player.BaseStats;
-import com.project.game.player.CurrentStats;
 import com.project.game.player.Player;
 import com.project.game.player.PlayerSaveData;
 
@@ -18,11 +15,11 @@ public record PlayerRecord(
         long potential,
         int level,
         long exp,
-        BaseStats baseStats,
-        CurrentStats currentStats,
+        Player.BaseStats baseStats,
+        Player.CurrentStats currentStats,
         int hp,
         int mp,
-        Appearance appearance,
+        Player.Appearance appearance,
         long coin,
         long coinLock,
         int diamond,

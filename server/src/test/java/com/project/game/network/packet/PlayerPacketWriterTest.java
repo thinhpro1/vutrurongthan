@@ -289,13 +289,13 @@ class PlayerPacketWriterTest {
 
     private static Player playerWith(
             int level, int speed, int spaceship, int x, int y) {
-        var base = new com.project.game.player.BaseStats(200, 200, 10, 0, 0, 0, 5, speed);
-        var current = new com.project.game.player.CurrentStats(
+        var base = new Player.BaseStats(200, 200, 10, 0, 0, 0, 5, speed);
+        var current = new Player.CurrentStats(
                 200, 200, 10, 0, 0, 0, 5, speed);
         return new Player(
                 7, 1L, "alpha1", 0, 1L, 1L, level, 0L,
                 base, current, 200, 200,
-                new com.project.game.player.Appearance(5, 6, -1, -1, -1, -1, spaceship),
+                new Player.Appearance(5, 6, -1, -1, -1, -1, spaceship),
                 0L, 10_000L, 0, 25, 0, 0, x, y);
     }
 }

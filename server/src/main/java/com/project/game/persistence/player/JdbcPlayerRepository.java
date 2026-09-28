@@ -4,9 +4,9 @@ import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import com.project.game.player.Appearance;
-import com.project.game.player.BaseStats;
-import com.project.game.player.CurrentStats;
+import com.project.game.player.Player.Appearance;
+import com.project.game.player.Player.BaseStats;
+import com.project.game.player.Player.CurrentStats;
 import com.project.game.player.PlayerSaveData;
 
 import javax.sql.DataSource;

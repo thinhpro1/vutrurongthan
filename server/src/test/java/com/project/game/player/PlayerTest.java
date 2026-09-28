@@ -68,8 +68,8 @@ class PlayerTest {
         player.injure(Long.MAX_VALUE);
         player.addPotential(123);
         long potential = player.potential();
-        Appearance appearance = player.appearance();
-        BaseStats baseStats = player.baseStats();
+        Player.Appearance appearance = player.appearance();
+        Player.BaseStats baseStats = player.baseStats();
 
         player.revive(1, 2, 333, 444);
 

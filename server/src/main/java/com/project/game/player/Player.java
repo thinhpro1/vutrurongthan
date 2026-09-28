@@ -207,4 +207,56 @@ public final class Player {
         mp = currentStats.maxMp();
         changeMap(mapId, zoneId, x, y);
     }
+
+    /** Durable/progression source statistics for a player. */
+    public record BaseStats(
+            int hp,
+            int mp,
+            int damage,
+            int armor,
+            int critical,
+            int dodge,
+            int constitution,
+            int speed) {
+        public BaseStats {
+            if (hp < 0 || mp < 0 || damage < 0 || armor < 0
+                    || critical < 0 || dodge < 0 || constitution < 0 || speed <= 0) {
+                throw new IllegalArgumentException("base stats must be non-negative and speed must be positive");
+            }
+        }
+    }
+
+    /** Durable snapshot of effective player statistics used by realtime combat. */
+    public record CurrentStats(
+            int maxHp,
+            int maxMp,
+            int damage,
+            int armor,
+            int critical,
+            int dodge,
+            int constitution,
+            int speed) {
+        public CurrentStats {
+            if (maxHp < 0 || maxMp < 0 || damage < 0 || armor < 0
+                    || critical < 0 || dodge < 0 || constitution < 0 || speed <= 0) {
+                throw new IllegalArgumentException("current stats must be non-negative and speed must be positive");
+            }
+        }
+    }
+
+    /** Durable appearance identifiers; negative values are legacy empty sentinels. */
+    public record Appearance(
+            int head,
+            int body,
+            int mount,
+            int bag,
+            int medal,
+            int aura,
+            int spaceship) {
+        public Appearance {
+            if (head < 0 || body < 0) {
+                throw new IllegalArgumentException("head and body must be non-negative");
+            }
+        }
+    }
 }

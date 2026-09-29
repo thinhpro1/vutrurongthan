@@ -39,7 +39,7 @@ public final class TestServices {
         AreaService area = new AreaService(playerPackets, monsterPackets);
         MonsterManager monsterManager = new MonsterManager(resources);
         MapManager maps = new MapManager(MapTestSupport.canonicalMaps(), monsterManager, area);
-        Combat combat = new Combat(area, playerPackets);
+        Combat combat = new Combat(java.time.Clock.systemUTC());
         return new SessionServices(auth, resources, maps, combat, monsterManager,
                 new PlayerManager(playerRepository(auth)));
     }

@@ -27,8 +27,7 @@ public final class GameplayServices {
                             MonsterPacketWriter monsterPackets,
                             MonsterManager monsterManager) {
         this(runtime(MapTestSupport.canonicalMaps(), monsterManager, playerPackets, monsterPackets),
-                playerPackets, monsterPackets, monsterManager,
-                Clock.systemUTC());
+                monsterManager, Clock.systemUTC());
     }
 
     public GameplayServices(PlayerPacketWriter playerPackets,
@@ -36,8 +35,7 @@ public final class GameplayServices {
                             MonsterManager monsterManager,
                             Clock clock) {
         this(runtime(MapTestSupport.canonicalMaps(), monsterManager, playerPackets, monsterPackets),
-                playerPackets, monsterPackets, monsterManager,
-                clock);
+                monsterManager, clock);
     }
 
     public GameplayServices(GameResources resources) {
@@ -55,7 +53,7 @@ public final class GameplayServices {
                 ? MapTestSupport.canonicalMaps() : resources.maps();
         MonsterManager monsterManager = new MonsterManager(resources, clock, random);
         initialize(runtime(catalog, monsterManager, playerPackets, monsterPackets),
-                playerPackets, monsterPackets, monsterManager, clock);
+                monsterManager, clock);
     }
 
     public GameplayServices(Map<Integer, MapTemplate> maps, GameResources resources) {
@@ -63,21 +61,16 @@ public final class GameplayServices {
         MonsterPacketWriter monsterPackets = new MonsterPacketWriter();
         MonsterManager monsterManager = new MonsterManager(resources);
         initialize(runtime(maps, monsterManager, playerPackets, monsterPackets),
-                playerPackets, monsterPackets, monsterManager,
-                Clock.systemUTC());
+                monsterManager, Clock.systemUTC());
     }
 
-    private GameplayServices(Runtime runtime, PlayerPacketWriter playerPackets,
-                             MonsterPacketWriter monsterPackets,
-                             MonsterManager monsterManager, Clock clock) {
-        initialize(runtime, playerPackets, monsterPackets, monsterManager, clock);
+    private GameplayServices(Runtime runtime, MonsterManager monsterManager, Clock clock) {
+        initialize(runtime, monsterManager, clock);
     }
 
-    private void initialize(Runtime runtime, PlayerPacketWriter playerPackets,
-                            MonsterPacketWriter monsterPackets,
-                            MonsterManager monsterManager, Clock clock) {
+    private void initialize(Runtime runtime, MonsterManager monsterManager, Clock clock) {
         maps = runtime.maps();
-        combat = new Combat(runtime.area(), playerPackets, clock);
+        combat = new Combat(clock);
         this.monsterManager = monsterManager;
     }
 
@@ -86,7 +79,7 @@ public final class GameplayServices {
                                    PlayerPacketWriter playerPackets,
                                    MonsterPacketWriter monsterPackets) {
         AreaService area = new AreaService(playerPackets, monsterPackets);
-        return new Runtime(new MapManager(catalog, monsterManager, area), area);
+        return new Runtime(new MapManager(catalog, monsterManager, area));
     }
 
     public MapManager mapManager() {
@@ -144,6 +137,6 @@ public final class GameplayServices {
         return map == null ? null : map.findZone(zoneId);
     }
 
-    private record Runtime(MapManager maps, AreaService area) {
+    private record Runtime(MapManager maps) {
     }
 }

@@ -115,7 +115,7 @@ public final class ServerBootstrap {
             MonsterPacketWriter monsterPackets = new MonsterPacketWriter();
             AreaService area = new AreaService(playerPackets, monsterPackets);
             MapManager maps = new MapManager(mapCatalog, monsterManager, area);
-            Combat combat = new Combat(area, playerPackets);
+            Combat combat = new Combat(java.time.Clock.systemUTC());
 
             JdbcAccountRepository accountRepository =
                     new JdbcAccountRepository(databaseManager.dataSource());

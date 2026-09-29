@@ -181,19 +181,13 @@ class MonsterManagerRetaliationTest {
         assertTrue(maps.combat().attackMonster(attacker, 101));
         drain(attacker);
 
-        maps.findZone(attacker.player().mapId(), attacker.player().zoneId()).call(() -> {
-            attacker.player().changeMap(1, 0, 975 + 901, 936);
-            return null;
-        });
+        assertTrue(maps.movePlayer(attacker, 975 + 901, 936));
         clock.advanceMillis(1L);
         maps.monsterManager().update(maps.mapManager());
         assertEquals(List.of(MessageName.MONSTER_ATTACK),
                 commands(withoutMonsterMoves(drain(attacker))));
 
-        maps.findZone(attacker.player().mapId(), attacker.player().zoneId()).call(() -> {
-            attacker.player().changeMap(1, 0, 975, 936);
-            return null;
-        });
+        assertTrue(maps.movePlayer(attacker, 975, 936));
         clock.advanceMillis(1_600L);
         maps.monsterManager().update(maps.mapManager());
         assertEquals(List.of(), withoutMonsterMoves(drain(attacker)));

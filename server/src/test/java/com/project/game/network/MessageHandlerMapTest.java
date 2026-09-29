@@ -7,6 +7,7 @@ import com.project.game.testsupport.GameplayServices;
 import com.project.game.testsupport.MapTestSupport;
 import com.project.game.map.MapTemplate;
 import com.project.game.map.Zone;
+import com.project.game.map.ZoneTestHooks;
 import com.project.game.network.handler.MessageHandler;
 import com.project.game.network.message.Message;
 import com.project.game.network.message.MessageName;
@@ -159,7 +160,7 @@ class MessageHandlerMapTest {
 
         CountDownLatch priorStarted = new CountDownLatch(1);
         CountDownLatch releasePrior = new CountDownLatch(1);
-        assertTrue(sourceZone.submit(() -> {
+        assertTrue(ZoneTestHooks.submit(sourceZone, () -> {
             priorStarted.countDown();
             try {
                 if (!releasePrior.await(5, java.util.concurrent.TimeUnit.SECONDS)) {
@@ -219,7 +220,7 @@ class MessageHandlerMapTest {
         drainMessages(session);
         maps.finishLoad(session);
         drainMessages(session);
-        zoneFor(maps, 1, 0).call(() -> {
+        ZoneTestHooks.call(zoneFor(maps, 1, 0), () -> {
             session.player().changeMap(1, 0, 20, 1008);
             return null;
         });

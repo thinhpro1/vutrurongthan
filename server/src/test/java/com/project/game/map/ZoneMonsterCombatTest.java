@@ -43,7 +43,7 @@ class ZoneMonsterCombatTest {
     private static final long NOW = 1_000_000L;
 
     @Test
-    void ownsOrderedMonsterSnapshotsAndThinDamageBridge() {
+    void ownsOrderedMonsterSnapshotsAndLowLevelDamageInvariant() {
         Zone zone = map1Zone();
 
         Monster.Damage damage = zone.damageMonster(101, 7, 10, NOW);
@@ -53,6 +53,20 @@ class ZoneMonsterCombatTest {
         assertEquals(List.of(101, 102, 103, 104, 105, 106),
                 zone.monsterSnapshots().stream().map(MonsterSnapshot::id).toList());
         assertEquals(290L, zone.monsterSnapshots().getFirst().hp());
+    }
+
+    @Test
+    void semanticCombatApiOwnsTargetingAndDamageOrdering() throws Exception {
+        Zone zone = map1Zone();
+        Session attacker = session(playerAt(7, 975, 936));
+
+        assertTrue(zone.enter(attacker));
+        drain(attacker);
+
+        assertTrue(zone.canTargetMonster(attacker, 101));
+        assertTrue(zone.attackMonster(attacker, 101, NOW));
+        assertEquals(290L, zone.monsterSnapshots().getFirst().hp());
+        assertEquals(List.of(MessageName.MONSTER_INJURE), commands(drain(attacker)));
     }
 
     @Test

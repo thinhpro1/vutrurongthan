@@ -37,7 +37,7 @@ class CombatTest {
         MapManager zones = new MapManager(
                 com.project.game.testsupport.MapTestSupport.canonicalMaps(),
                 new MonsterManager(GameResources.unavailable()), area);
-        Combat combat = new Combat(area, playerPackets);
+        Combat combat = new Combat(Clock.systemUTC());
 
         assertFalse(combat.canTargetMonster(null, 101));
         assertFalse(combat.attackMonster(null, 101));

@@ -11,6 +11,7 @@ import com.project.game.network.message.MessageWriter;
 import com.project.game.network.transport.LegacyTcpTransport;
 import com.project.game.testsupport.GameplayServices;
 import com.project.game.testsupport.MapTestSupport;
+import com.project.game.map.ZoneTestHooks;
 import com.project.game.monster.MonsterManager;
 import com.project.game.account.AccountAuth;
 import com.project.game.resource.GameResources;
@@ -80,7 +81,7 @@ class GameplayIntegrationTest {
                 observer.finishLoadMap();
                 assertAddPlayer(observer.readServerMessage(), victim.playerInfo().id(), "victim1", 0);
                 assertAddPlayer(victim.readServerMessage(), observer.playerInfo().id(), "observer1", 1);
-                maps.findZone(0, 0).call(() -> {
+                ZoneTestHooks.call(maps.findZone(0, 0), () -> {
                     beforeLoad.player().injure(beforeLoad.player().hp() - 10);
                     return null;
                 });

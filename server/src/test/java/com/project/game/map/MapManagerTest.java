@@ -31,6 +31,24 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class MapManagerTest {
     @Test
+    void sourceZoneCapturesMapChangeIntent() {
+        GameplayServices maps = mapsWithoutMonsters();
+        Session source = session(at(player(1, 0, 0), 4464, 936), maps);
+        assertTrue(maps.mapManager().finishLoad(source));
+
+        Zone sourceZone = maps.findZone(0, 0);
+        Zone.MapChangeIntent intent = sourceZone.prepareMapChange(
+                source, maps.mapManager().findMap(0));
+
+        assertNotNull(intent);
+        assertSame(source.player(), intent.player());
+        assertEquals(0, intent.mapId());
+        assertEquals(0, intent.zoneId());
+        assertEquals(4464, intent.x());
+        assertEquals(936, intent.y());
+    }
+
+    @Test
     void finishLoadExchangesPresenceOnlyWithExistingSameZoneMembers() throws Exception {
         GameplayServices maps = mapsWithoutMonsters();
         Session first = session(player(1, 0, 0));

@@ -4,6 +4,7 @@ import com.project.game.testsupport.TestPlayers;
 import com.project.game.testsupport.TestServices;
 
 import com.project.game.testsupport.GameplayServices;
+import com.project.game.map.ZoneTestHooks;
 import com.project.game.testsupport.MapTestSupport;
 import com.project.game.network.handler.MessageHandler;
 import com.project.game.network.message.Message;
@@ -156,7 +157,7 @@ class MessageHandlerCombatTest {
         CombatContext context = combatContext();
 
         context.handler().onMessage(prepareMonster(7, 101));
-        context.maps().findZone(1, 0).call(() -> {
+        ZoneTestHooks.call(context.maps().findZone(1, 0), () -> {
             context.session().player().changeMap(1, 0, 0, 1008);
             return null;
         });

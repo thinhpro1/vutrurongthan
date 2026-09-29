@@ -15,6 +15,7 @@ import com.project.game.player.Player;
 import com.project.game.player.PlayerSaveData;
 import com.project.game.testsupport.GameplayServices;
 import com.project.game.map.Zone;
+import com.project.game.map.ZoneTestHooks;
 import com.project.game.service.AreaService;
 import com.project.game.testsupport.GameplayTestSupport;
 import com.project.game.testsupport.MutableClock;
@@ -204,7 +205,7 @@ class SessionTest {
         assertTrue(movement.isAlive());
 
         CountDownLatch nextZoneAction = new CountDownLatch(1);
-        assertTrue(gameplay.findZone(0, 0).submit(nextZoneAction::countDown));
+        assertTrue(ZoneTestHooks.submit(gameplay.findZone(0, 0), nextZoneAction::countDown));
         assertTrue(nextZoneAction.await(5, TimeUnit.SECONDS));
         assertFalse(moved.get());
 
@@ -234,7 +235,7 @@ class SessionTest {
 
         CountDownLatch priorStarted = new CountDownLatch(1);
         CountDownLatch releasePrior = new CountDownLatch(1);
-        assertTrue(zone.submit(() -> {
+        assertTrue(ZoneTestHooks.submit(zone, () -> {
             session.player().move(1260, 640);
             priorStarted.countDown();
             try {
@@ -248,7 +249,7 @@ class SessionTest {
         }));
         assertTrue(priorStarted.await(5, TimeUnit.SECONDS));
         for (int index = 0; index < 1024; index++) {
-            assertTrue(zone.submit(() -> {
+            assertTrue(ZoneTestHooks.submit(zone, () -> {
             }));
         }
 
@@ -296,7 +297,7 @@ class SessionTest {
         assertTrue(repository.updateEntered.await(5, TimeUnit.SECONDS));
         assertTrue(finishLoad.isAlive());
         CountDownLatch nextZoneAction = new CountDownLatch(1);
-        assertTrue(gameplay.findZone(0, 0).submit(nextZoneAction::countDown));
+        assertTrue(ZoneTestHooks.submit(gameplay.findZone(0, 0), nextZoneAction::countDown));
         assertTrue(nextZoneAction.await(5, TimeUnit.SECONDS));
         assertEquals(1, gameplay.memberCount(0, 0));
 

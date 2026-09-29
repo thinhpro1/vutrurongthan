@@ -347,9 +347,11 @@ class ZoneTest {
                 Zone.class.getDeclaredMethod("runtimeState").getModifiers()));
         assertFalse(Modifier.isPublic(
                 Zone.class.getDeclaredMethod("stopRuntime").getModifiers()));
-        assertTrue(Modifier.isPublic(
+        assertFalse(Modifier.isPublic(
                 Zone.class.getDeclaredMethod("call", Supplier.class).getModifiers()));
-        assertTrue(Modifier.isPublic(
+        assertFalse(Modifier.isPublic(
+                Zone.class.getDeclaredMethod("tryCall", Supplier.class).getModifiers()));
+        assertFalse(Modifier.isPublic(
                 Zone.class.getDeclaredMethod("submit", Runnable.class).getModifiers()));
     }
 

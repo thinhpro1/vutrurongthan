@@ -64,6 +64,15 @@ public final class AreaService {
                 members, null);
     }
 
+    /** Sends the authoritative potential total to one Player. */
+    public boolean potential(Session session, long potential) {
+        Objects.requireNonNull(session, "session");
+        if (session.state() == SessionState.CLOSED) {
+            return false;
+        }
+        return session.trySend(playerPackets.potentialUpdate(potential));
+    }
+
     /** Broadcasts a Monster movement packet in the current Zone. */
     public List<Session> monsterMove(Monster.Move result, List<Session> members) {
         Objects.requireNonNull(result, "result");

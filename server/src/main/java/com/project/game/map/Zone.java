@@ -16,6 +16,7 @@ import java.util.random.RandomGenerator;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -141,6 +142,188 @@ public final class Zone {
         return saved;
     }
 
+    /** Checks combat target state in this Zone's writer. */
+    public boolean canTargetMonster(Session session, int monsterId) {
+        requireOutsideRuntimeWorker("canTargetMonster");
+        if (session == null || session.state() == SessionState.CLOSED) {
+            return false;
+        }
+        try {
+            return tryCall(() -> canTargetMonsterOnWriter(session, monsterId));
+        } catch (RejectedExecutionException exception) {
+            return false;
+        }
+    }
+
+    /** Applies one Player attack and delivers its same-Zone effects in writer order. */
+    public boolean attackMonster(Session session, int monsterId, long nowMillis) {
+        requireOutsideRuntimeWorker("attackMonster");
+        if (session == null || session.state() == SessionState.CLOSED) {
+            return false;
+        }
+
+        List<Session> rejected = new ArrayList<>();
+        try {
+            boolean attacked = tryCall(
+                    () -> attackMonsterOnWriter(session, monsterId, nowMillis, rejected));
+            closeRejected(rejected);
+            return attacked;
+        } catch (RejectedExecutionException exception) {
+            return false;
+        }
+    }
+
+    /** Returns an immutable view of the current Monster state in writer order. */
+    public synchronized List<MonsterSnapshot> monsterSnapshots() {
+        List<MonsterSnapshot> snapshots = new ArrayList<>(monsters.size());
+        for (Monster monster : monsters.values()) {
+            snapshots.add(monster.snapshot());
+        }
+        return List.copyOf(snapshots);
+    }
+
+    /** Runs the current Monster lifecycle through this Zone writer. */
+    public void updateMonsters(long nowMillis, RandomGenerator random) {
+        requireOutsideRuntimeWorker("updateMonsters");
+        Objects.requireNonNull(random, "random");
+        List<Session> rejected = new ArrayList<>();
+        call(() -> {
+            updateMonstersOnWriter(nowMillis, random, rejected);
+            return null;
+        });
+        closeRejected(rejected);
+    }
+
+    /** Captures the source state required for a later cross-Zone map commit. */
+    MapChangeIntent prepareMapChange(Session session, Map sourceMap) {
+        requireOutsideRuntimeWorker("prepareMapChange");
+        if (session == null || sourceMap == null) {
+            return null;
+        }
+        return call(() -> {
+            Player player = session.player();
+            if (session.state() == SessionState.CLOSED
+                    || player == null
+                    || player.isDead()
+                    || session.zone() != this
+                    || members.get(player.id()) != session) {
+                return null;
+            }
+            Waypoint waypoint = sourceMap.findWaypoint(player.x(), player.y());
+            if (waypoint == null) {
+                return null;
+            }
+            return new MapChangeIntent(
+                    player, player.mapId(), player.zoneId(), player.x(), player.y(), waypoint);
+        });
+    }
+
+    /** Revalidates and commits a previously prepared map transition. */
+    MapManager.MapChange commitMapChange(
+            Session session,
+            Zone destinationZone,
+            Map sourceMap,
+            MapChangeIntent intent,
+            AtomicBoolean committed,
+            List<Session> rejected) {
+        requireOutsideRuntimeWorker("commitMapChange");
+        Objects.requireNonNull(destinationZone, "destinationZone");
+        Objects.requireNonNull(sourceMap, "sourceMap");
+        Objects.requireNonNull(intent, "intent");
+        Objects.requireNonNull(committed, "committed");
+        Objects.requireNonNull(rejected, "rejected");
+        return call(() -> {
+            Player player = session.player();
+            Waypoint currentWaypoint = sourceMap.findWaypoint(intent.x(), intent.y());
+            if (session.state() == SessionState.CLOSED
+                    || player == null
+                    || player != intent.player()
+                    || player.isDead()
+                    || session.zone() != this
+                    || members.get(player.id()) != session
+                    || player.mapId() != intent.mapId()
+                    || player.zoneId() != intent.zoneId()
+                    || player.x() != intent.x() || player.y() != intent.y()
+                    || !intent.waypoint().equals(currentWaypoint)) {
+                return null;
+            }
+            if (this == destinationZone) {
+                player.changeMap(intent.waypoint().goMap(), 0,
+                        intent.waypoint().goX(), intent.waypoint().goY());
+                return new MapManager.MapChange(
+                        PlayerSaveData.capture(player), destinationZone.zoneId());
+            }
+
+            if (!removePlayer(session)) {
+                return null;
+            }
+            player.changeMap(intent.waypoint().goMap(), 0,
+                    intent.waypoint().goX(), intent.waypoint().goY());
+            session.clearZone(this);
+            committed.set(true);
+            rejected.addAll(area.removePlayer(session, player.id(), members()));
+            return new MapManager.MapChange(
+                    PlayerSaveData.capture(player), destinationZone.zoneId());
+        });
+    }
+
+    /** Captures the expected Player before a death-return destination is reserved. */
+    Player prepareReturnTown(Session session) {
+        requireOutsideRuntimeWorker("prepareReturnTown");
+        if (session == null) {
+            return null;
+        }
+        return call(() -> session.state() == SessionState.CLOSED ? null : session.player());
+    }
+
+    /** Revalidates and commits a previously prepared death return. */
+    MapManager.MapChange commitReturnTown(
+            Session session,
+            Player expectedPlayer,
+            Zone townZone,
+            AtomicBoolean committed,
+            List<Session> rejected) {
+        requireOutsideRuntimeWorker("commitReturnTown");
+        Objects.requireNonNull(townZone, "townZone");
+        Objects.requireNonNull(expectedPlayer, "expectedPlayer");
+        Objects.requireNonNull(committed, "committed");
+        Objects.requireNonNull(rejected, "rejected");
+        return call(() -> {
+            Player player = session.player();
+            if (session.state() == SessionState.CLOSED
+                    || player == null
+                    || player != expectedPlayer
+                    || !player.isDead()
+                    || session.zone() != this
+                    || members.get(player.id()) != session) {
+                return null;
+            }
+            if (this == townZone) {
+                player.revive(
+                        MapManager.DEATH_RETURN_MAP_ID,
+                        MapManager.DEATH_RETURN_ZONE_ID,
+                        MapManager.DEATH_RETURN_X,
+                        MapManager.DEATH_RETURN_Y);
+                return new MapManager.MapChange(
+                        PlayerSaveData.capture(player), townZone.zoneId());
+            }
+
+            if (!removePlayer(session)) {
+                return null;
+            }
+            player.revive(
+                    MapManager.DEATH_RETURN_MAP_ID,
+                    MapManager.DEATH_RETURN_ZONE_ID,
+                    MapManager.DEATH_RETURN_X,
+                    MapManager.DEATH_RETURN_Y);
+            session.clearZone(this);
+            committed.set(true);
+            rejected.addAll(area.removePlayer(session, player.id(), members()));
+            return new MapManager.MapChange(
+                    PlayerSaveData.capture(player), townZone.zoneId());
+        });
+    }
+
     /** Giữ một slot cho Session trước khi route owner tách Player khỏi Zone nguồn. */
     ReserveStatus reserve(Session session) {
         requireOutsideRuntimeWorker("reserve");
@@ -250,39 +433,19 @@ public final class Zone {
         return List.copyOf(members.values());
     }
 
-    public synchronized List<MonsterSnapshot> monsterSnapshots() {
-        List<MonsterSnapshot> snapshots = new ArrayList<>(monsters.size());
-        for (Monster monster : monsters.values()) {
-            snapshots.add(monster.snapshot());
-        }
-        return List.copyOf(snapshots);
-    }
-
-    public synchronized boolean hasLiveMonster(int monsterId) {
+    synchronized boolean hasLiveMonster(int monsterId) {
         Monster monster = monsters.get(monsterId);
         return monster != null && monster.isAlive();
     }
 
-    /** Damage bridge for Combat while the caller owns this Zone writer. */
-    public synchronized Monster.Damage damageMonster(
+    /** Low-level damage hook retained for map-package Monster invariant tests. */
+    synchronized Monster.Damage damageMonster(
             int monsterId,
             int attackerPlayerId,
             long damage,
             long nowMillis) {
         Monster monster = monsters.get(monsterId);
         return monster == null ? null : monster.injure(attackerPlayerId, damage, nowMillis, members.size());
-    }
-
-    /** Runs the current Monster lifecycle through this Zone writer. */
-    public void updateMonsters(long nowMillis, RandomGenerator random) {
-        requireOutsideRuntimeWorker("updateMonsters");
-        Objects.requireNonNull(random, "random");
-        List<Session> rejected = new ArrayList<>();
-        call(() -> {
-            updateMonstersOnWriter(nowMillis, random, rejected);
-            return null;
-        });
-        closeRejected(rejected);
     }
 
     private List<Player> hostileLivingPlayers(Monster monster) {
@@ -335,6 +498,50 @@ public final class Zone {
         }
 
         rejected.addAll(area.move(session, player, members()));
+        return true;
+    }
+
+    private synchronized boolean canTargetMonsterOnWriter(Session session, int monsterId) {
+        Player player = session.player();
+        Monster monster = monsters.get(monsterId);
+        return session.state() != SessionState.CLOSED
+                && player != null
+                && !player.isDead()
+                && session.zone() == this
+                && members.get(player.id()) == session
+                && monster != null
+                && monster.isAlive();
+    }
+
+    private synchronized boolean attackMonsterOnWriter(
+            Session session, int monsterId, long nowMillis, List<Session> rejected) {
+        Player player = session.player();
+        if (session.state() == SessionState.CLOSED
+                || player == null
+                || player.isDead()
+                || session.zone() != this
+                || members.get(player.id()) != session
+                || player.currentStats().damage() <= 0L) {
+            return false;
+        }
+
+        Monster monster = monsters.get(monsterId);
+        if (monster == null) {
+            return false;
+        }
+        Monster.Damage result = monster.injure(
+                player.id(), player.currentStats().damage(), nowMillis, members.size());
+        if (result == null) {
+            return false;
+        }
+
+        rejected.addAll(area.monsterDamage(result, members()));
+        if (result.killed() && result.potentialReward() > 0L) {
+            long potential = player.addPotential(result.potentialReward());
+            if (session.state() != SessionState.CLOSED && !area.potential(session, potential)) {
+                rejected.add(session);
+            }
+        }
         return true;
     }
 
@@ -413,7 +620,7 @@ public final class Zone {
     }
 
     /** Xếp một tác vụ vào writer tuần tự của Zone mà không chặn khi hàng đợi đầy. */
-    public boolean submit(Runnable action) {
+    boolean submit(Runnable action) {
         Objects.requireNonNull(action, "action");
         synchronized (runtimeLock) {
             if (runtimeState == RuntimeState.STOPPED || !runtimeInputs.offer(action)) {
@@ -425,12 +632,12 @@ public final class Zone {
     }
 
     /** Chạy tác vụ trên writer và từ chối ngay khi hàng đợi giới hạn đã đầy. */
-    public <T> T tryCall(Supplier<T> action) {
+    <T> T tryCall(Supplier<T> action) {
         return executeCall(action, false);
     }
 
     /** Chạy tác vụ bắt buộc trên writer, chờ chỗ trống nếu hàng đợi đã đầy. */
-    public <T> T call(Supplier<T> action) {
+    <T> T call(Supplier<T> action) {
         return executeCall(action, true);
     }
 
@@ -614,6 +821,14 @@ public final class Zone {
                 throw error;
             }
             return result;
+        }
+    }
+
+    record MapChangeIntent(
+            Player player, int mapId, int zoneId, int x, int y, Waypoint waypoint) {
+        MapChangeIntent {
+            Objects.requireNonNull(player, "player");
+            Objects.requireNonNull(waypoint, "waypoint");
         }
     }
 

@@ -54,7 +54,7 @@ final class MapHandler {
         if (message.payload().length != 0) {
             throw new IOException("trailing RETURN_TOWN_FROM_DIE payload bytes");
         }
-        MapManager.MapChange change = mapManager.returnTownFromDeath(session);
+        MapManager.MapChange change = mapManager.returnHomeFromDeath(session);
         if (change == null) {
             return;
         }

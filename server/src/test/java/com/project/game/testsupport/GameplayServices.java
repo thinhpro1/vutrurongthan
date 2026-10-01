@@ -100,8 +100,8 @@ public final class GameplayServices {
 
     public void finishLoad(Session session) { maps.finishLoad(session); }
     public void leave(Session session) { maps.leave(session); }
-    public boolean returnTownFromDeath(Session session) {
-        return maps.returnTownFromDeath(session) != null;
+    public boolean returnHomeFromDeath(Session session) {
+        return maps.returnHomeFromDeath(session) != null;
     }
     public boolean changeMap(Session session) {
         return maps.changeMap(session) != null;

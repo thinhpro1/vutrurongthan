@@ -16,7 +16,6 @@ import java.util.random.RandomGenerator;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -194,136 +193,6 @@ public final class Zone {
         closeRejected(rejected);
     }
 
-    /** Captures the source state required for a later cross-Zone map commit. */
-    MapChangeIntent prepareMapChange(Session session, Map sourceMap) {
-        requireOutsideRuntimeWorker("prepareMapChange");
-        if (session == null || sourceMap == null) {
-            return null;
-        }
-        return call(() -> {
-            Player player = session.player();
-            if (session.state() == SessionState.CLOSED
-                    || player == null
-                    || player.isDead()
-                    || session.zone() != this
-                    || members.get(player.id()) != session) {
-                return null;
-            }
-            Waypoint waypoint = sourceMap.findWaypoint(player.x(), player.y());
-            if (waypoint == null) {
-                return null;
-            }
-            return new MapChangeIntent(
-                    player, player.mapId(), player.zoneId(), player.x(), player.y(), waypoint);
-        });
-    }
-
-    /** Revalidates and commits a previously prepared map transition. */
-    MapManager.MapChange commitMapChange(
-            Session session,
-            Zone destinationZone,
-            Map sourceMap,
-            MapChangeIntent intent,
-            AtomicBoolean committed,
-            List<Session> rejected) {
-        requireOutsideRuntimeWorker("commitMapChange");
-        Objects.requireNonNull(destinationZone, "destinationZone");
-        Objects.requireNonNull(sourceMap, "sourceMap");
-        Objects.requireNonNull(intent, "intent");
-        Objects.requireNonNull(committed, "committed");
-        Objects.requireNonNull(rejected, "rejected");
-        return call(() -> {
-            Player player = session.player();
-            Waypoint currentWaypoint = sourceMap.findWaypoint(intent.x(), intent.y());
-            if (session.state() == SessionState.CLOSED
-                    || player == null
-                    || player != intent.player()
-                    || player.isDead()
-                    || session.zone() != this
-                    || members.get(player.id()) != session
-                    || player.mapId() != intent.mapId()
-                    || player.zoneId() != intent.zoneId()
-                    || player.x() != intent.x() || player.y() != intent.y()
-                    || !intent.waypoint().equals(currentWaypoint)) {
-                return null;
-            }
-            if (this == destinationZone) {
-                player.changeMap(intent.waypoint().goMap(), 0,
-                        intent.waypoint().goX(), intent.waypoint().goY());
-                return new MapManager.MapChange(
-                        PlayerSaveData.capture(player), destinationZone.zoneId());
-            }
-
-            if (!removePlayer(session)) {
-                return null;
-            }
-            player.changeMap(intent.waypoint().goMap(), 0,
-                    intent.waypoint().goX(), intent.waypoint().goY());
-            session.clearZone(this);
-            committed.set(true);
-            rejected.addAll(area.removePlayer(session, player.id(), members()));
-            return new MapManager.MapChange(
-                    PlayerSaveData.capture(player), destinationZone.zoneId());
-        });
-    }
-
-    /** Captures the expected Player before a death-return destination is reserved. */
-    Player prepareReturnTown(Session session) {
-        requireOutsideRuntimeWorker("prepareReturnTown");
-        if (session == null) {
-            return null;
-        }
-        return call(() -> session.state() == SessionState.CLOSED ? null : session.player());
-    }
-
-    /** Revalidates and commits a previously prepared death return. */
-    MapManager.MapChange commitReturnTown(
-            Session session,
-            Player expectedPlayer,
-            Zone townZone,
-            AtomicBoolean committed,
-            List<Session> rejected) {
-        requireOutsideRuntimeWorker("commitReturnTown");
-        Objects.requireNonNull(townZone, "townZone");
-        Objects.requireNonNull(expectedPlayer, "expectedPlayer");
-        Objects.requireNonNull(committed, "committed");
-        Objects.requireNonNull(rejected, "rejected");
-        return call(() -> {
-            Player player = session.player();
-            if (session.state() == SessionState.CLOSED
-                    || player == null
-                    || player != expectedPlayer
-                    || !player.isDead()
-                    || session.zone() != this
-                    || members.get(player.id()) != session) {
-                return null;
-            }
-            if (this == townZone) {
-                player.revive(
-                        MapManager.DEATH_RETURN_MAP_ID,
-                        MapManager.DEATH_RETURN_ZONE_ID,
-                        MapManager.DEATH_RETURN_X,
-                        MapManager.DEATH_RETURN_Y);
-                return new MapManager.MapChange(
-                        PlayerSaveData.capture(player), townZone.zoneId());
-            }
-
-            if (!removePlayer(session)) {
-                return null;
-            }
-            player.revive(
-                    MapManager.DEATH_RETURN_MAP_ID,
-                    MapManager.DEATH_RETURN_ZONE_ID,
-                    MapManager.DEATH_RETURN_X,
-                    MapManager.DEATH_RETURN_Y);
-            session.clearZone(this);
-            committed.set(true);
-            rejected.addAll(area.removePlayer(session, player.id(), members()));
-            return new MapManager.MapChange(
-                    PlayerSaveData.capture(player), townZone.zoneId());
-        });
-    }
-
     /** Giữ một slot cho Session trước khi route owner tách Player khỏi Zone nguồn. */
     ReserveStatus reserve(Session session) {
         requireOutsideRuntimeWorker("reserve");
@@ -416,6 +285,15 @@ public final class Zone {
             }
         }
         return removed;
+    }
+
+    /** Hoàn tất detach sau removePlayer và cập nhật state bởi route owner trên writer này. */
+    synchronized void detach(Session session, List<Session> rejected) {
+        if (CURRENT_RUNTIME.get() != this) {
+            throw new IllegalStateException("detach requires this Zone writer");
+        }
+        session.clearZone(this);
+        rejected.addAll(area.removePlayer(session, session.player().id(), members()));
     }
 
     public synchronized boolean hasPlayer(Session session) {
@@ -821,14 +699,6 @@ public final class Zone {
                 throw error;
             }
             return result;
-        }
-    }
-
-    record MapChangeIntent(
-            Player player, int mapId, int zoneId, int x, int y, Waypoint waypoint) {
-        MapChangeIntent {
-            Objects.requireNonNull(player, "player");
-            Objects.requireNonNull(waypoint, "waypoint");
         }
     }
 

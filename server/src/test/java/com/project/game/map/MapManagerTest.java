@@ -31,21 +31,52 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class MapManagerTest {
     @Test
-    void sourceZoneCapturesMapChangeIntent() {
+    void changeMapCapturesStableDestinationState() {
         GameplayServices maps = mapsWithoutMonsters();
         Session source = session(at(player(1, 0, 0), 4464, 936), maps);
         assertTrue(maps.mapManager().finishLoad(source));
+        Waypoint waypoint = maps.mapManager().getMap(0).findWaypoint(4464, 936);
 
-        Zone sourceZone = maps.findZone(0, 0);
-        Zone.MapChangeIntent intent = sourceZone.prepareMapChange(
-                source, maps.mapManager().findMap(0));
+        MapManager.MapChange change = maps.mapManager().changeMap(source);
 
-        assertNotNull(intent);
-        assertSame(source.player(), intent.player());
-        assertEquals(0, intent.mapId());
-        assertEquals(0, intent.zoneId());
-        assertEquals(4464, intent.x());
-        assertEquals(936, intent.y());
+        assertNotNull(change);
+        assertEquals(waypoint.goMap(), change.saveData().mapId());
+        assertEquals(waypoint.goX(), change.saveData().x());
+        assertEquals(waypoint.goY(), change.saveData().y());
+        assertNull(source.zone());
+        assertTrue(maps.mapManager().finishLoad(source));
+        assertTrue(source.zone().move(source, waypoint.goX() + 1, waypoint.goY()));
+        assertEquals(waypoint.goX(), change.saveData().x());
+    }
+
+    @Test
+    void sameZoneWaypointKeepsMembershipWithoutRemovingPresence() throws Exception {
+        MapTemplate template = MapTestSupport.canonicalMaps().get(0);
+        Waypoint waypoint = new Waypoint(1, 0, 4464, 936, 1250, 648, 2);
+        MapTemplate local = new MapTemplate(template.id(), template.name(), "ONLINE",
+                template.planet(), 1, 1, 2, template.dataId(), template.data(), List.of(waypoint));
+        GameplayServices maps = new GameplayServices(java.util.Map.of(0, local),
+                GameResources.unavailable());
+        Session moving = session(at(player(1, 0, 0), 4464, 936), maps);
+        Session observer = session(player(2, 0, 0), maps);
+        assertTrue(maps.mapManager().finishLoad(moving));
+        assertTrue(maps.mapManager().finishLoad(observer));
+        drain(moving);
+        drain(observer);
+        Zone source = moving.zone();
+
+        MapManager.MapChange change = maps.mapManager().changeMap(moving);
+
+        assertNotNull(change);
+        assertSame(source, moving.zone());
+        assertTrue(source.hasPlayer(moving));
+        assertEquals(2, source.size());
+        assertEquals(0, source.reservedCount());
+        assertEquals(1250, change.saveData().x());
+        assertEquals(648, change.saveData().y());
+        assertEquals(List.of(), drain(observer));
+        assertTrue(maps.mapManager().finishLoad(moving));
+        assertEquals(List.of(), drain(observer));
     }
 
     @Test
@@ -698,7 +729,7 @@ class MapManagerTest {
         CountDownLatch finished = new CountDownLatch(1);
         Thread returnTown = Thread.ofVirtual().start(() -> {
             try {
-                change.set(maps.mapManager().returnTownFromDeath(dead));
+                change.set(maps.mapManager().returnHomeFromDeath(dead));
             } finally {
                 finished.countDown();
             }
@@ -760,7 +791,7 @@ class MapManagerTest {
         drain(observer);
 
         Player revived = dead.player();
-        assertNotNull(maps.mapManager().returnTownFromDeath(dead));
+        assertNotNull(maps.mapManager().returnHomeFromDeath(dead));
 
         assertEquals(0, revived.mapId());
         assertEquals(0, revived.zoneId());
@@ -785,7 +816,7 @@ class MapManagerTest {
         Session alive = session(player(1, 0, 0), maps);
         Player original = alive.player();
 
-        assertNull(maps.mapManager().returnTownFromDeath(alive));
+        assertNull(maps.mapManager().returnHomeFromDeath(alive));
         assertEquals(original, alive.player());
     }
 
@@ -799,7 +830,7 @@ class MapManagerTest {
         drain(dead);
         drain(observer);
 
-        MapManager.MapChange change = maps.mapManager().returnTownFromDeath(dead);
+        MapManager.MapChange change = maps.mapManager().returnHomeFromDeath(dead);
         assertNotNull(change);
         assertEquals(2, maps.memberCount(0, 0));
         assertEquals(List.of(), drain(observer));
@@ -819,8 +850,8 @@ class MapManagerTest {
         maps.mapManager().finishLoad(dead);
 
         Player once = dead.player();
-        assertNotNull(maps.mapManager().returnTownFromDeath(dead));
-        assertNull(maps.mapManager().returnTownFromDeath(dead));
+        assertNotNull(maps.mapManager().returnHomeFromDeath(dead));
+        assertNull(maps.mapManager().returnHomeFromDeath(dead));
         assertSame(once, dead.player());
     }
 
@@ -837,7 +868,7 @@ class MapManagerTest {
 
         BlockingOfferQueue observerQueue = new BlockingOfferQueue();
         replaceSendQueue(observer, observerQueue);
-        Thread revive = Thread.ofVirtual().start(() -> maps.mapManager().returnTownFromDeath(dead));
+        Thread revive = Thread.ofVirtual().start(() -> maps.mapManager().returnHomeFromDeath(dead));
         assertTrue(observerQueue.offerEntered.await(5, TimeUnit.SECONDS));
 
         CountDownLatch joinFinished = new CountDownLatch(1);
@@ -923,7 +954,7 @@ class MapManagerTest {
         maps.mapManager().finishLoad(blocker);
         Player before = dead.player();
 
-        assertNull(maps.mapManager().returnTownFromDeath(dead));
+        assertNull(maps.mapManager().returnHomeFromDeath(dead));
 
         assertEquals(before, dead.player());
         assertEquals(1, maps.memberCount(1, 0));
@@ -943,12 +974,12 @@ class MapManagerTest {
         drain(secondDead);
         drain(townPlayer);
 
-        assertNotNull(maps.mapManager().returnTownFromDeath(firstDead));
+        assertNotNull(maps.mapManager().returnHomeFromDeath(firstDead));
         assertNull(firstDead.zone());
         assertEquals(1, maps.findZone(0, 0).reservedCount());
         assertEquals(1, maps.memberCount(0, 0));
 
-        assertNull(maps.mapManager().returnTownFromDeath(secondDead));
+        assertNull(maps.mapManager().returnHomeFromDeath(secondDead));
         assertSame(maps.findZone(1, 1), secondDead.zone());
         assertTrue(secondDead.player().isDead());
         assertEquals(1, maps.findZone(0, 0).reservedCount());
@@ -1122,6 +1153,57 @@ class MapManagerTest {
     }
 
     @Test
+    void deathReturnRevalidationFailureKeepsSourceAndReleasesHomeCapacity() throws Exception {
+        GameplayServices maps = policyMaps("ONLINE", "ONLINE", 1, 2);
+        Session dead = session(hp(player(1, 1, 0), 0), maps);
+        assertTrue(maps.mapManager().finishLoad(dead));
+        Zone source = dead.zone();
+        Zone home = maps.findZone(0, 0);
+        CountDownLatch homeStarted = new CountDownLatch(1);
+        CountDownLatch releaseHome = new CountDownLatch(1);
+        assertTrue(home.submit(() -> {
+            homeStarted.countDown();
+            awaitRelease(releaseHome);
+        }));
+        assertTrue(homeStarted.await(5, TimeUnit.SECONDS));
+        AtomicReference<MapManager.MapChange> change = new AtomicReference<>();
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+        Thread transition = Thread.ofVirtual().start(() -> {
+            try {
+                change.set(maps.mapManager().returnHomeFromDeath(dead));
+            } catch (Throwable exception) {
+                failure.set(exception);
+            }
+        });
+        try {
+            awaitWaiting(transition);
+            source.call(() -> {
+                dead.player().changeMap(1, 0, 500, 600);
+                return null;
+            });
+        } finally {
+            releaseHome.countDown();
+            transition.join(5_000);
+        }
+        assertFalse(transition.isAlive());
+        assertNull(failure.get());
+        assertNull(change.get());
+        assertSame(source, dead.zone());
+        assertTrue(source.hasPlayer(dead));
+        assertTrue(dead.player().isDead());
+        assertEquals(1, dead.player().mapId());
+        assertEquals(500, dead.player().x());
+        assertEquals(600, dead.player().y());
+        assertEquals(0, home.reservedCount());
+
+        Session next = session(hp(player(2, 1, 0), 0), maps);
+        assertTrue(maps.mapManager().finishLoad(next));
+        assertNotNull(maps.mapManager().returnHomeFromDeath(next));
+        assertTrue(maps.mapManager().finishLoad(next));
+        assertEquals(1, home.size());
+    }
+
+    @Test
     void postCommitChangeFailureKeepsDestinationReservation() throws Exception {
         GameplayServices maps = policyMaps("ONLINE", "ONLINE", 2, 1);
         Session source = session(at(player(1, 0, 0), 4464, 936), maps);
@@ -1155,7 +1237,7 @@ class MapManagerTest {
         replaceSendQueue(observer, new ThrowingOfferQueue());
 
         assertThrows(IllegalStateException.class,
-                () -> maps.mapManager().returnTownFromDeath(dead));
+                () -> maps.mapManager().returnHomeFromDeath(dead));
 
         Zone town = maps.findZone(0, 0);
         assertNull(dead.zone());
@@ -1201,7 +1283,7 @@ class MapManagerTest {
         PlayerSaveData before = PlayerSaveData.capture(dead.player());
 
         assertThrows(IllegalStateException.class, () -> sourceZone.call(() -> {
-            maps.mapManager().returnTownFromDeath(dead);
+            maps.mapManager().returnHomeFromDeath(dead);
             return null;
         }));
 
@@ -1249,7 +1331,7 @@ class MapManagerTest {
         PlayerSaveData before = PlayerSaveData.capture(dead.player());
 
         assertThrows(IllegalStateException.class, () -> unrelated.call(() -> {
-            maps.mapManager().returnTownFromDeath(dead);
+            maps.mapManager().returnHomeFromDeath(dead);
             return null;
         }));
 

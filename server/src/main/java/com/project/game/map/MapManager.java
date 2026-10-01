@@ -19,10 +19,10 @@ import java.util.logging.Logger;
 /** Quản lý registry Map public và điều phối chuyển Player giữa các Map public. */
 public final class MapManager {
     private static final Logger LOGGER = Logger.getLogger(MapManager.class.getName());
-    static final int DEATH_RETURN_MAP_ID = 0;
-    static final int DEATH_RETURN_ZONE_ID = 0;
-    static final int DEATH_RETURN_X = 1250;
-    static final int DEATH_RETURN_Y = 648;
+    static final int HOME_MAP_ID = 0;
+    static final int HOME_ZONE_ID = 0;
+    static final int HOME_X = 1250;
+    static final int HOME_Y = 648;
 
     private final java.util.Map<Integer, Map> maps;
 
@@ -139,45 +139,31 @@ public final class MapManager {
             return null;
         }
 
-        Zone.MapChangeIntent intent;
+        ChangeState state;
         try {
-            intent = sourceZone.prepareMapChange(session, sourceMap);
+            state = sourceZone.call(() -> {
+                Player player = session.player();
+                if (!canLeave(session, sourceZone, player) || player.isDead()) {
+                    return null;
+                }
+                Waypoint waypoint = sourceMap.findWaypoint(player.x(), player.y());
+                return waypoint == null ? null : new ChangeState(player,
+                        player.mapId(), player.zoneId(), player.x(), player.y(), waypoint);
+            });
         } catch (RejectedExecutionException exception) {
             return null;
         }
-        if (intent == null) {
+        if (state == null) {
             return null;
         }
 
-        Zone destinationZone = findZone(intent.waypoint().goMap(), 0);
-        if (destinationZone == null) {
-            return null;
-        }
-
-        boolean reserved = sourceZone != destinationZone
-                && reserveDestination(destinationZone, session);
-        if (sourceZone != destinationZone && !reserved) {
-            return null;
-        }
-
-        AtomicBoolean committed = new AtomicBoolean();
-        List<Session> rejected = new ArrayList<>();
-        try {
-            MapChange change = sourceZone.commitMapChange(
-                    session, destinationZone, sourceMap, intent, committed, rejected);
-            closeRejected(rejected);
-            return change;
-        } catch (RejectedExecutionException exception) {
-            return null;
-        } finally {
-            if (reserved && !committed.get()) {
-                cancelReservation(destinationZone, session);
-            }
-        }
+        Zone destination = findZone(state.waypoint().goMap(), 0);
+        return destination == null ? null
+                : changeZone(session, sourceZone, destination, sourceMap, state);
     }
 
-    /** Trả Player đã chết về town và trả handoff bất biến cho handler. */
-    public MapChange returnTownFromDeath(Session session) {
+    /** Protocol death-return: chỉ Player chết được hồi sinh và chuyển về home. */
+    public MapChange returnHomeFromDeath(Session session) {
         if (session == null || session.state() == SessionState.CLOSED) {
             return null;
         }
@@ -185,43 +171,89 @@ public final class MapManager {
         if (sourceZone == null) {
             return null;
         }
-        Zone.requireOutsideRuntimeWorker("returnTownFromDeath");
-        Zone townZone = findZone(DEATH_RETURN_MAP_ID, DEATH_RETURN_ZONE_ID);
-        if (townZone == null) {
-            return null;
-        }
-        Player sourcePlayer;
-        try {
-            sourcePlayer = sourceZone.prepareReturnTown(session);
-        } catch (RejectedExecutionException exception) {
-            return null;
-        }
-        if (sourcePlayer == null) {
+        Zone.requireOutsideRuntimeWorker("returnHomeFromDeath");
+        Zone home = findZone(HOME_MAP_ID, HOME_ZONE_ID);
+        if (home == null) {
             return null;
         }
 
-        boolean reserved = sourceZone != townZone
-                && reserveDestination(townZone, session);
-        if (sourceZone != townZone && !reserved) {
+        ChangeState state;
+        try {
+            state = sourceZone.call(() -> {
+                Player player = session.player();
+                if (!canLeave(session, sourceZone, player) || !player.isDead()) {
+                    return null;
+                }
+                return new ChangeState(player, player.mapId(), player.zoneId(),
+                        player.x(), player.y(), null);
+            });
+        } catch (RejectedExecutionException exception) {
+            return null;
+        }
+        return state == null ? null : changeZone(session, sourceZone, home, null, state);
+    }
+
+    /** Reserve ở destination rồi revalidate/commit trên source; không chờ hai writer lồng nhau. */
+    private MapChange changeZone(Session session, Zone source, Zone destination,
+                                 Map sourceMap, ChangeState state) {
+        boolean reserved = source != destination && reserveDestination(destination, session);
+        if (source != destination && !reserved) {
             return null;
         }
 
         AtomicBoolean committed = new AtomicBoolean();
         List<Session> rejected = new ArrayList<>();
         try {
-            MapChange change = sourceZone.commitReturnTown(
-                    session, sourcePlayer, townZone, committed, rejected);
+            MapChange change = source.call(() -> {
+                Player player = session.player();
+                Waypoint waypoint = state.waypoint();
+                boolean home = waypoint == null;
+                if (!canLeave(session, source, player)
+                        || player != state.player()
+                        || player.isDead() != home
+                        || player.mapId() != state.mapId()
+                        || player.zoneId() != state.zoneId()
+                        || player.x() != state.x() || player.y() != state.y()
+                        || (!home && !waypoint.equals(sourceMap.findWaypoint(state.x(), state.y())))) {
+                    return null;
+                }
+                if (source != destination && !source.removePlayer(session)) {
+                    return null;
+                }
+                if (home) {
+                    player.revive(HOME_MAP_ID, HOME_ZONE_ID, HOME_X, HOME_Y);
+                } else {
+                    player.changeMap(waypoint.goMap(), 0, waypoint.goX(), waypoint.goY());
+                }
+                // Handoff đã commit trước delivery: lỗi packet không được hủy slot đích.
+                committed.set(true);
+                if (source != destination) {
+                    source.detach(session, rejected);
+                }
+                return new MapChange(PlayerSaveData.capture(player), destination.zoneId());
+            });
             closeRejected(rejected);
             return change;
         } catch (RejectedExecutionException exception) {
             return null;
         } finally {
             if (reserved && !committed.get()) {
-                cancelReservation(townZone, session);
+                cancelReservation(destination, session);
             }
         }
     }
 
+    private static boolean canLeave(Session session, Zone source, Player player) {
+        return session.state() != SessionState.CLOSED
+                && player != null
+                && session.zone() == source
+                && source.hasPlayer(session);
+    }
+
+    /** Source state bất biến; waypoint null biểu thị yêu cầu death-return về home. */
+    private record ChangeState(Player player, int mapId, int zoneId, int x, int y,
+                               Waypoint waypoint) {
+    }
 
     private boolean reserveDestination(Zone zone, Session session) {
         try {

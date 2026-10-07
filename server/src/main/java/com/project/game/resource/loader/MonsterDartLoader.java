@@ -2,8 +2,8 @@ package com.project.game.resource.loader;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import com.project.game.monster.MonsterDart;
-import com.project.game.monster.MonsterDart.Phase;
+import com.project.game.monster.MonsterTemplate.Dart;
+import com.project.game.monster.MonsterTemplate.Dart.Phase;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -23,7 +23,7 @@ final class MonsterDartLoader {
     private MonsterDartLoader() {
     }
 
-    static List<MonsterDart> load(Path root, boolean required) {
+    static List<Dart> load(Path root, boolean required) {
         Path normalizedRoot = Objects.requireNonNull(root, "root").toAbsolutePath().normalize();
         Path source = normalizedRoot.resolve(FILE_NAME).normalize();
         if (!source.startsWith(normalizedRoot)
@@ -37,10 +37,10 @@ final class MonsterDartLoader {
         }
 
         JsonObject rootObject = JsonResourceReader.readObject(root, FILE_NAME);
-        Map<Integer, MonsterDart> dartsById = new TreeMap<>();
+        Map<Integer, Dart> dartsById = new TreeMap<>();
         for (String key : rootObject.keySet()) {
             int id = parseId(key);
-            MonsterDart dart = readDart(JsonResourceReader.required(rootObject, key), id);
+            Dart dart = readDart(JsonResourceReader.required(rootObject, key), id);
             if (dartsById.put(id, dart) != null) {
                 throw new IllegalArgumentException("duplicate " + FILE_NAME + " dart id " + id);
             }
@@ -66,14 +66,14 @@ final class MonsterDartLoader {
         }
     }
 
-    private static MonsterDart readDart(JsonElement value, int id) {
+    private static Dart readDart(JsonElement value, int id) {
         if (!value.isJsonObject()) {
             throw new IllegalArgumentException(FILE_NAME + " dart " + id + " must be an object");
         }
         JsonObject object = value.getAsJsonObject();
         JsonResourceReader.requireExactFields(object, DART_FIELDS,
                 FILE_NAME + " dart " + id);
-        return new MonsterDart(id,
+        return new Dart(id,
                 JsonResourceReader.readBoolean(object, "is_meteorite"),
                 readPhase(object, "light", id),
                 readPhase(object, "bullet", id),

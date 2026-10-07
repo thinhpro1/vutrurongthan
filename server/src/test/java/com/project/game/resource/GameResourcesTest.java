@@ -119,7 +119,7 @@ class GameResourcesTest {
         assertEquals(List.of(11824), resources.monsterTemplates().getFirst().iconsInjure());
         assertEquals(List.of(11823), resources.monsterTemplates().getFirst().iconsAttack());
         assertEquals(List.of(101, 102, 103, 104, 105, 106),
-                resources.monstersForMap(1).stream().map(com.project.game.monster.MonsterSpawn::id).toList());
+                resources.monstersForMap(1).stream().map(com.project.game.monster.MonsterTemplate.Spawn::id).toList());
     }
 
     @Test

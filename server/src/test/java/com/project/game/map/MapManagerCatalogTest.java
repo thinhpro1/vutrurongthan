@@ -1,11 +1,15 @@
 package com.project.game.map;
 
 import com.project.game.monster.MonsterManager;
+import com.project.game.network.Session;
 import com.project.game.network.packet.MonsterPacketWriter;
 import com.project.game.network.packet.PlayerPacketWriter;
 import com.project.game.resource.GameResources;
 import com.project.game.service.AreaService;
 import com.project.game.testsupport.MapTestSupport;
+import com.project.game.testsupport.GameplayTestSupport;
+import com.project.game.testsupport.TestPlayers;
+import com.project.game.testsupport.TestServices;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Path;
@@ -18,6 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class MapManagerCatalogTest {
     @Test
@@ -65,7 +70,11 @@ class MapManagerCatalogTest {
         assertNotSame(first, second);
         assertEquals(300L, second.monsterSnapshots().getFirst().hp());
 
-        first.damageMonster(101, 1, 10L, 0L);
+        Session attacker = GameplayTestSupport.session(
+                TestPlayers.at(TestPlayers.initial(1L, 1, "alpha1", 0), 1, 0, 975, 936),
+                TestServices.serverServices());
+        assertTrue(first.enter(attacker));
+        assertTrue(first.attackMonster(attacker, 101, 0L));
 
         assertEquals(290L, first.monsterSnapshots().getFirst().hp());
         assertEquals(300L, second.monsterSnapshots().getFirst().hp());

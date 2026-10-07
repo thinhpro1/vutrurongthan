@@ -1,7 +1,7 @@
 package com.project.game.resource.loader;
 
 import com.project.game.map.MapTemplate;
-import com.project.game.monster.MonsterSpawn;
+import com.project.game.monster.MonsterTemplate.Spawn;
 import com.project.game.persistence.monster.MonsterRepository;
 import com.project.game.testsupport.MapTestSupport;
 import org.junit.jupiter.api.Test;
@@ -41,9 +41,9 @@ class MonsterCatalogLoaderTest {
         assertEquals(List.of(1, 2), loaded.templates().stream()
                 .map(template -> template.id()).toList());
         assertEquals(List.of(101, 102), loaded.spawns().get(1).stream()
-                .map(MonsterSpawn::id).toList());
+                .map(Spawn::id).toList());
         assertEquals(List.of(2, 2), loaded.spawns().get(1).stream()
-                .map(MonsterSpawn::level).toList());
+                .map(Spawn::level).toList());
         assertTrue(loaded.spawns().get(1).stream().allMatch(spawn ->
                 spawn.type() == 0
                         && spawn.levelStatus() == 0
@@ -57,7 +57,7 @@ class MonsterCatalogLoaderTest {
         assertThrows(UnsupportedOperationException.class,
                 () -> loaded.templates().getFirst().iconsMove().add(99));
         assertThrows(UnsupportedOperationException.class,
-                () -> loaded.spawns().get(1).add(new MonsterSpawn(0, 1, 103, 2,
+                () -> loaded.spawns().get(1).add(new Spawn(0, 1, 103, 2,
                         0, 1, 1, 300, 300, 0)));
         assertThrows(UnsupportedOperationException.class,
                 () -> loaded.spawns().put(0, List.of()));

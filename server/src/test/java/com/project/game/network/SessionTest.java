@@ -12,8 +12,11 @@ import com.project.game.persistence.player.PlayerRecord;
 import com.project.game.persistence.player.PlayerRepository;
 import com.project.game.persistence.player.PlayerRepositoryException;
 import com.project.game.player.Player;
+import com.project.game.player.PlayerManager;
 import com.project.game.player.PlayerSaveData;
 import com.project.game.testsupport.GameplayServices;
+import com.project.game.testsupport.MapTestSupport;
+import com.project.game.map.MapManager;
 import com.project.game.map.Zone;
 import com.project.game.map.ZoneTestHooks;
 import com.project.game.service.AreaService;
@@ -35,10 +38,15 @@ import java.io.PipedInputStream;
 import java.io.PipedOutputStream;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
@@ -46,6 +54,8 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -216,6 +226,74 @@ class SessionTest {
         assertEquals(SessionState.CLOSED, observer.state());
 
         mover.close();
+    }
+
+    @Test
+    void combatRejectionCheckpointsRewardOutsideWriter() throws Exception {
+        TestPlayerRepository delegate = new TestPlayerRepository();
+        BlockingPlayerRepository repository = new BlockingPlayerRepository(delegate);
+        MutableClock clock = new MutableClock(1_000_000L);
+        GameResources resources = GameResources.fromFrameRoot(
+                java.nio.file.Path.of("resources", "json"),
+                com.project.game.testsupport.MapTestSupport.canonicalMaps(), 2,
+                com.project.game.testsupport.MonsterTestSupport.canonicalRepository());
+        GameplayServices gameplay = new GameplayServices(resources, clock);
+        SessionServices services = TestServices.serverServices(
+                new AccountAuth(new TestAccountRepository()), resources, gameplay, repository);
+        Player player = createPlayer(repository, 101L, "alpha1", 0);
+        player.changeMap(1, 0, 1250, 648);
+        Session attacker = managedSession(services, player, "user01");
+        assertTrue(gameplay.mapManager().finishLoad(attacker));
+        GameplayTestSupport.drain(attacker);
+        for (int hit = 0; hit < 29; hit++) {
+            assertTrue(gameplay.attackMonster(attacker, 101));
+            GameplayTestSupport.drain(attacker);
+        }
+        Zone zone = gameplay.findZone(1, 0);
+        RejectDeathQueue rejectedOutput = new RejectDeathQueue();
+        GameplayTestSupport.replaceSendQueue(attacker, rejectedOutput);
+        AtomicReference<Thread> attackCaller = new AtomicReference<>();
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+        AtomicBoolean attacked = new AtomicBoolean();
+        Thread attack = Thread.ofVirtual().start(() -> {
+            attackCaller.set(Thread.currentThread());
+            try {
+                attacked.set(gameplay.attackMonster(attacker, 101));
+            } catch (Throwable exception) {
+                failure.set(exception);
+            }
+        });
+
+        try {
+            assertTrue(repository.updateEntered.await(5, TimeUnit.SECONDS));
+            assertSame(attackCaller.get(), repository.checkpointThread.get());
+            assertNotNull(rejectedOutput.writerThread.get());
+            assertNotSame(rejectedOutput.writerThread.get(), repository.checkpointThread.get());
+            assertEquals(11L, repository.savedPlayer.get().potential());
+            assertEquals(11L, attacker.player().potential());
+            assertEquals(0L, zone.monsterSnapshots().getFirst().hp());
+            assertEquals(SessionState.CLOSED, attacker.state());
+            assertFalse(zone.hasPlayer(attacker));
+            assertNull(attacker.zone());
+            assertSame(attacker, attacker.manager().findByAccount("user01"));
+            assertTrue(attack.isAlive());
+
+            CountDownLatch nextZoneAction = new CountDownLatch(1);
+            assertTrue(ZoneTestHooks.submit(zone, nextZoneAction::countDown));
+            assertTrue(nextZoneAction.await(5, TimeUnit.SECONDS));
+
+            repository.allowUpdate.countDown();
+            attack.join(5_000);
+            assertFalse(attack.isAlive());
+            assertNull(failure.get());
+            assertTrue(attacked.get());
+            assertEquals(1, repository.checkpointCalls.get());
+            assertEquals(11L, delegate.requireByAccountId(101L).potential());
+            assertNull(attacker.manager().findByAccount("user01"));
+        } finally {
+            repository.allowUpdate.countDown();
+            attack.join(5_000);
+        }
     }
 
     @Test
@@ -419,7 +497,7 @@ class SessionTest {
         gameplay.mapManager().finishLoad(observer);
         GameplayTestSupport.drain(target);
         GameplayTestSupport.drain(observer);
-        assertTrue(gameplay.combat().attackMonster(target, 101));
+        assertTrue(gameplay.attackMonster(target, 101));
         GameplayTestSupport.drain(target);
         GameplayTestSupport.drain(observer);
         clock.advanceMillis(1L);
@@ -555,12 +633,541 @@ class SessionTest {
         assertEquals(0, manager.onlineCount());
     }
 
+    @Test
+    void closeOrdersFinalCheckpointAfterEarlierDeathReturnSave() throws Exception {
+        TestPlayerRepository delegate = new TestPlayerRepository();
+        OrderedPlayerRepository repository = new OrderedPlayerRepository(delegate, false);
+        GameResources resources = mapsWithoutMonsters();
+        GameplayServices gameplay = new GameplayServices(resources);
+        SessionServices services = TestServices.serverServices(
+                new AccountAuth(new TestAccountRepository()), resources, gameplay, repository);
+        Session session = managedSession(
+                services, createPlayer(repository, 101L, "alpha1", 0), "user01");
+        assertTrue(gameplay.mapManager().finishLoad(session));
+        GameplayTestSupport.drain(session);
+        Zone owner = session.zone();
+        ZoneTestHooks.call(owner, () -> session.player().injure(200));
+        Object handler = mapHandler(session, services);
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+        Thread transition = startDeathReturn(handler, failure);
+        Thread close = null;
+
+        try {
+            assertTrue(repository.firstSaveEntered.await(5, TimeUnit.SECONDS));
+            assertSame(owner, session.zone(), "same-Zone death return keeps its writer");
+            int latestHp = ZoneTestHooks.call(owner, () -> session.player().injure(10));
+            assertEquals(190, latestHp);
+            close = startClose(session, failure);
+            waitForCloseStarted(session);
+            waitForCheckpointWaitOrCompletion(session, owner, close);
+
+            assertTrue(close.isAlive(), "final save must wait for the earlier checkpoint");
+            assertEquals(1, repository.checkpointCalls.get());
+            assertSame(session, session.manager().findByAccount("user01"));
+            assertFalse(owner.hasPlayer(session));
+            assertNull(session.zone());
+            CountDownLatch writerAvailable = new CountDownLatch(1);
+            assertTrue(ZoneTestHooks.submit(owner, writerAvailable::countDown));
+            assertTrue(writerAvailable.await(5, TimeUnit.SECONDS));
+
+            repository.allowFirstSave.countDown();
+            transition.join(5_000);
+            close.join(5_000);
+
+            assertFalse(transition.isAlive());
+            assertFalse(close.isAlive());
+            assertNull(failure.get());
+            assertEquals(List.of(200, 190), repository.completedSaves.stream()
+                    .map(PlayerSaveData::hp).toList());
+            assertEquals(190, delegate.requireByAccountId(101L).hp());
+            assertNull(session.manager().findByAccount("user01"));
+        } finally {
+            repository.allowFirstSave.countDown();
+            transition.join(5_000);
+            if (close != null) {
+                close.join(5_000);
+            }
+            session.close();
+        }
+    }
+
+    @Test
+    void checkpointAndCloseRejectZoneWriterReentry() throws Exception {
+        TestPlayerRepository delegate = new TestPlayerRepository();
+        OrderedPlayerRepository repository = new OrderedPlayerRepository(delegate, false);
+        repository.allowFirstSave.countDown();
+        GameResources resources = mapsWithoutMonsters();
+        GameplayServices gameplay = new GameplayServices(resources);
+        SessionServices services = TestServices.serverServices(
+                new AccountAuth(new TestAccountRepository()), resources, gameplay, repository);
+        Session session = managedSession(
+                services, createPlayer(repository, 101L, "alpha1", 0), "user01");
+        assertTrue(gameplay.mapManager().finishLoad(session));
+        Zone owner = session.zone();
+        try {
+            ZoneTestHooks.call(owner, () -> {
+                PlayerSaveData saved = PlayerSaveData.capture(session.player());
+                assertThrows(IllegalStateException.class, () -> session.savePlayer(saved));
+                assertThrows(IllegalStateException.class, session::close);
+                return null;
+            });
+            assertEquals(0, repository.checkpointCalls.get());
+            assertEquals(SessionState.IN_GAME, session.state());
+            assertSame(owner, session.zone());
+            assertTrue(owner.hasPlayer(session));
+        } finally {
+            session.close();
+        }
+    }
+
+    @Test
+    void closedSessionRejectsLateTransitionCheckpoint() throws Exception {
+        TestPlayerRepository delegate = new TestPlayerRepository();
+        OrderedPlayerRepository repository = new OrderedPlayerRepository(delegate, false);
+        repository.allowFirstSave.countDown();
+        GameResources resources = mapsWithoutMonsters();
+        GameplayServices gameplay = new GameplayServices(resources);
+        SessionServices services = TestServices.serverServices(
+                new AccountAuth(new TestAccountRepository()), resources, gameplay, repository);
+        Session session = managedSession(
+                services, createPlayer(repository, 101L, "alpha1", 0), "user01");
+        assertTrue(gameplay.mapManager().finishLoad(session));
+        GameplayTestSupport.drain(session);
+        Zone owner = session.zone();
+        ZoneTestHooks.call(owner, () -> session.player().injure(200));
+        MapManager.MapChange earlier = gameplay.mapManager().returnHomeFromDeath(session);
+        assertNotNull(earlier);
+        assertEquals(200, earlier.saveData().hp());
+        int latestHp = ZoneTestHooks.call(owner, () -> session.player().injure(10));
+        assertEquals(190, latestHp);
+        Object handler = mapHandler(session, services);
+
+        session.close();
+        Method save = handler.getClass().getDeclaredMethod("save", PlayerSaveData.class);
+        save.setAccessible(true);
+        save.invoke(handler, earlier.saveData());
+
+        assertEquals(SessionState.CLOSED, session.state());
+        assertEquals(1, repository.checkpointCalls.get(), "late checkpoint must not reach persistence");
+        assertEquals(190, delegate.requireByAccountId(101L).hp());
+        assertNull(session.manager().findByAccount("user01"));
+    }
+
+    @Test
+    void deadDisconnectCheckpointsRevivedHomeAndReloadsAlive() throws Exception {
+        TestPlayerRepository repository = new TestPlayerRepository();
+        GameResources resources = mapsWithoutMonsters();
+        GameplayServices gameplay = new GameplayServices(resources);
+        SessionServices services = TestServices.serverServices(
+                new AccountAuth(new TestAccountRepository()), resources, gameplay, repository);
+        Player initial = createPlayer(repository, 101L, "alpha1", 0);
+        Player player = new Player(initial.id(), initial.accountId(), initial.name(), initial.gender(),
+                initial.power(), initial.potential(), initial.level(), initial.exp(), initial.baseStats(),
+                new Player.CurrentStats(450, 320, 10, 0, 0, 0, 5, 12), 450, 23,
+                initial.appearance(), initial.coin(), initial.coinLock(), initial.diamond(), initial.ruby(),
+                1, 0, 4464, 936);
+        Session session = managedSession(services, player, "user01");
+        assertTrue(gameplay.mapManager().finishLoad(session));
+        GameplayTestSupport.drain(session);
+        Zone owner = session.zone();
+        ZoneTestHooks.call(owner, () -> player.injure(450));
+        assertTrue(player.isDead());
+
+        session.close();
+
+        PlayerRecord saved = repository.requireByAccountId(101L);
+        assertEquals(0, saved.mapId());
+        assertEquals(1250, saved.x());
+        assertEquals(648, saved.y());
+        assertEquals(450, saved.hp());
+        assertEquals(320, saved.mp());
+        assertEquals(450, saved.currentStats().maxHp());
+        assertEquals(320, saved.currentStats().maxMp());
+        Player loaded = services.playerManager().load(101L);
+        assertNotNull(loaded);
+        assertFalse(loaded.isDead());
+        assertEquals(0, loaded.mapId());
+        assertEquals(1250, loaded.x());
+        assertEquals(648, loaded.y());
+        assertEquals(450, loaded.hp());
+        assertEquals(320, loaded.mp());
+        assertFalse(owner.hasPlayer(session));
+        assertNull(session.zone());
+        assertNull(session.manager().findByAccount("user01"));
+    }
+
+    @Test
+    void bootstrapCompletionKeepsAccountReservedUntilFinalCheckpoint() throws Exception {
+        TestPlayerRepository delegate = new TestPlayerRepository();
+        BlockingPlayerRepository repository = new BlockingPlayerRepository(delegate);
+        GameResources resources = GameResources.unavailable();
+        GameplayServices gameplay = new GameplayServices(resources);
+        SessionServices services = TestServices.serverServices(
+                new AccountAuth(new TestAccountRepository()), resources, gameplay, repository);
+        Player player = createPlayer(repository, 101L, "alpha1", 0);
+        SessionManager manager = new SessionManager();
+        Session session = new Session(manager.nextId(), new TestTransport(), manager,
+                new LegacyPacketCodec(1024), "abc".getBytes(StandardCharsets.US_ASCII), 4,
+                services, ClientConfig.defaults());
+        Session competing = new Session(manager.nextId(), new TestTransport(), manager,
+                new LegacyPacketCodec(1024), "abc".getBytes(StandardCharsets.US_ASCII), 4,
+                services, ClientConfig.defaults());
+        assertTrue(manager.tryAdd(session, 1));
+        assertTrue(manager.beginAccountAdmission(session, player.accountId(), "user01"));
+        session.bindPlayer(player);
+        assertTrue(session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE));
+        assertTrue(session.transition(SessionState.HANDSHAKE_DONE, SessionState.AUTHENTICATED));
+        assertTrue(session.transition(SessionState.AUTHENTICATED, SessionState.IN_GAME));
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+        Thread close = startClose(session, failure);
+
+        try {
+            assertTrue(repository.updateEntered.await(5, TimeUnit.SECONDS));
+            assertEquals(SessionState.CLOSED, session.state());
+
+            manager.finishAccountAdmission(session, true);
+
+            assertSame(session, manager.findByAccount("user01"),
+                    "bootstrap completion must not release an account whose final save is pending");
+            assertFalse(manager.beginAccountAdmission(competing, 101L, "user01"));
+            assertTrue(close.isAlive());
+            repository.allowUpdate.countDown();
+            close.join(5_000);
+
+            assertFalse(close.isAlive());
+            assertNull(failure.get());
+            assertEquals(1, repository.checkpointCalls.get());
+            assertEquals(200, delegate.requireByAccountId(101L).hp());
+            assertNull(manager.findByAccount("user01"));
+            assertEquals(0, manager.onlineCount());
+        } finally {
+            repository.allowUpdate.countDown();
+            close.join(5_000);
+            manager.finishAccountAdmission(competing, false);
+            competing.close();
+            session.close();
+        }
+    }
+
+    @Test
+    void failedFinalCheckpointStillWaitsForEarlierSaveBeforeAccountRelease() throws Exception {
+        TestPlayerRepository delegate = new TestPlayerRepository();
+        OrderedPlayerRepository repository = new OrderedPlayerRepository(delegate, true);
+        GameResources resources = mapsWithoutMonsters();
+        GameplayServices gameplay = new GameplayServices(resources);
+        SessionServices services = TestServices.serverServices(
+                new AccountAuth(new TestAccountRepository()), resources, gameplay, repository);
+        Session session = managedSession(
+                services, createPlayer(repository, 101L, "alpha1", 0), "user01");
+        assertTrue(gameplay.mapManager().finishLoad(session));
+        GameplayTestSupport.drain(session);
+        Zone owner = session.zone();
+        ZoneTestHooks.call(owner, () -> session.player().injure(200));
+        Object handler = mapHandler(session, services);
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+        Thread transition = startDeathReturn(handler, failure);
+        Thread close = null;
+
+        try {
+            assertTrue(repository.firstSaveEntered.await(5, TimeUnit.SECONDS));
+            int latestHp = ZoneTestHooks.call(owner, () -> session.player().injure(10));
+            assertEquals(190, latestHp);
+            close = startClose(session, failure);
+            waitForCloseStarted(session);
+            waitForCheckpointWaitOrCompletion(session, owner, close);
+
+            assertTrue(close.isAlive(), "account remains reserved while the earlier save is pending");
+            assertSame(session, session.manager().findByAccount("user01"));
+            assertEquals(1, repository.checkpointCalls.get());
+            assertNull(repository.failedSave.get());
+
+            repository.allowFirstSave.countDown();
+            transition.join(5_000);
+            close.join(5_000);
+
+            assertFalse(transition.isAlive());
+            assertFalse(close.isAlive());
+            assertNull(failure.get());
+            assertEquals(2, repository.checkpointCalls.get());
+            assertNotNull(repository.failedSave.get());
+            assertEquals(190, repository.failedSave.get().hp());
+            assertEquals(List.of(200), repository.completedSaves.stream()
+                    .map(PlayerSaveData::hp).toList());
+            assertEquals(200, delegate.requireByAccountId(101L).hp());
+            assertNull(session.manager().findByAccount("user01"));
+            assertEquals(0, session.manager().onlineCount());
+            assertFalse(owner.hasPlayer(session));
+            assertNull(session.zone());
+        } finally {
+            repository.allowFirstSave.countDown();
+            transition.join(5_000);
+            if (close != null) {
+                close.join(5_000);
+            }
+            session.close();
+        }
+    }
+
+    @Test
+    void closeWaitsForEarlierCheckpointWhenFinalCaptureFails() throws Exception {
+        TestPlayerRepository delegate = new TestPlayerRepository();
+        OrderedPlayerRepository repository = new OrderedPlayerRepository(delegate, false);
+        GameResources resources = mapsWithoutMonsters();
+        GameplayServices gameplay = new GameplayServices(resources);
+        SessionServices services = TestServices.serverServices(
+                new AccountAuth(new TestAccountRepository()), resources, gameplay, repository);
+        Session session = managedSession(
+                services, createPlayer(repository, 101L, "alpha1", 0), "user01");
+        assertTrue(gameplay.mapManager().finishLoad(session));
+        GameplayTestSupport.drain(session);
+        Zone owner = session.zone();
+        PlayerSaveData earlier = ZoneTestHooks.call(owner, () -> PlayerSaveData.capture(session.player()));
+        AtomicBoolean savedEarlier = new AtomicBoolean();
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+        Thread save = startCheckpoint(session, earlier, savedEarlier, failure);
+        Thread close = null;
+
+        try {
+            assertTrue(repository.firstSaveEntered.await(5, TimeUnit.SECONDS));
+            int latestHp = ZoneTestHooks.call(owner, () -> session.player().injure(10));
+            assertEquals(190, latestHp);
+            Method stop = Zone.class.getDeclaredMethod("stopRuntime");
+            stop.setAccessible(true);
+            stop.invoke(owner);
+            close = startClose(session, failure);
+            waitForCloseStarted(session);
+            waitForCheckpointBlockOrCompletion(close);
+
+            assertTrue(close.isAlive(), "failed final capture still drains the earlier checkpoint");
+            assertSame(owner, session.zone(), "stopped writer cannot detach or capture a final save");
+            assertTrue(owner.hasPlayer(session));
+            assertSame(session, session.manager().findByAccount("user01"));
+            assertEquals(1, repository.checkpointCalls.get());
+
+            repository.allowFirstSave.countDown();
+            save.join(5_000);
+            close.join(5_000);
+
+            assertFalse(save.isAlive());
+            assertFalse(close.isAlive());
+            assertNull(failure.get());
+            assertTrue(savedEarlier.get());
+            assertEquals(1, repository.checkpointCalls.get(), "unsafe final capture must not reach DB");
+            assertEquals(List.of(200), repository.completedSaves.stream()
+                    .map(PlayerSaveData::hp).toList());
+            assertEquals(200, delegate.requireByAccountId(101L).hp());
+            assertNull(session.manager().findByAccount("user01"));
+            assertEquals(0, session.manager().onlineCount());
+        } finally {
+            repository.allowFirstSave.countDown();
+            save.join(5_000);
+            if (close != null) {
+                close.join(5_000);
+            }
+            session.close();
+        }
+    }
+
+    @Test
+    void queuedCheckpointRechecksClosedAfterWaitingForEarlierSave() throws Exception {
+        TestPlayerRepository delegate = new TestPlayerRepository();
+        OrderedPlayerRepository repository = new OrderedPlayerRepository(delegate, false);
+        GameResources resources = mapsWithoutMonsters();
+        GameplayServices gameplay = new GameplayServices(resources);
+        SessionServices services = TestServices.serverServices(
+                new AccountAuth(new TestAccountRepository()), resources, gameplay, repository);
+        Session session = managedSession(
+                services, createPlayer(repository, 101L, "alpha1", 0), "user01");
+        assertTrue(gameplay.mapManager().finishLoad(session));
+        GameplayTestSupport.drain(session);
+        Zone owner = session.zone();
+        PlayerSaveData earlier = ZoneTestHooks.call(owner, () -> PlayerSaveData.capture(session.player()));
+        AtomicBoolean savedEarlier = new AtomicBoolean();
+        AtomicBoolean savedQueued = new AtomicBoolean(true);
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+        Thread first = startCheckpoint(session, earlier, savedEarlier, failure);
+        Thread queued = null;
+        Thread close = null;
+
+        try {
+            assertTrue(repository.firstSaveEntered.await(5, TimeUnit.SECONDS));
+            PlayerSaveData waitingSave = ZoneTestHooks.call(owner, () -> {
+                session.player().injure(10);
+                return PlayerSaveData.capture(session.player());
+            });
+            queued = startCheckpoint(session, waitingSave, savedQueued, failure);
+            waitForCheckpointBlockOrCompletion(queued);
+            assertEquals(Thread.State.BLOCKED, queued.getState());
+            assertEquals(SessionState.IN_GAME, session.state());
+            int latestHp = ZoneTestHooks.call(owner, () -> session.player().injure(20));
+            assertEquals(170, latestHp);
+
+            close = startClose(session, failure);
+            waitForCloseStarted(session);
+            waitForCheckpointWaitOrCompletion(session, owner, close);
+            assertTrue(close.isAlive());
+            assertSame(session, session.manager().findByAccount("user01"));
+            assertEquals(1, repository.checkpointCalls.get());
+
+            repository.allowFirstSave.countDown();
+            first.join(5_000);
+            queued.join(5_000);
+            close.join(5_000);
+
+            assertFalse(first.isAlive());
+            assertFalse(queued.isAlive());
+            assertFalse(close.isAlive());
+            assertNull(failure.get());
+            assertTrue(savedEarlier.get());
+            assertFalse(savedQueued.get(), "queued ordinary checkpoint must recheck CLOSED inside the lock");
+            assertEquals(2, repository.checkpointCalls.get());
+            assertEquals(List.of(200, 170), repository.completedSaves.stream()
+                    .map(PlayerSaveData::hp).toList());
+            assertEquals(170, delegate.requireByAccountId(101L).hp());
+            assertNull(session.manager().findByAccount("user01"));
+            assertFalse(owner.hasPlayer(session));
+            assertNull(session.zone());
+        } finally {
+            repository.allowFirstSave.countDown();
+            first.join(5_000);
+            if (queued != null) {
+                queued.join(5_000);
+            }
+            if (close != null) {
+                close.join(5_000);
+            }
+            session.close();
+        }
+    }
+
+    private static GameResources mapsWithoutMonsters() {
+        return new GameResources(null, -1, List.of(), java.util.Map.of(),
+                MapTestSupport.canonicalMaps(), List.of(), List.of(), -1,
+                List.of(), List.of(), java.util.Map.of());
+    }
+
+    private static Object mapHandler(Session session, SessionServices services) throws Exception {
+        Class<?> type = Class.forName("com.project.game.network.handler.MapHandler");
+        Constructor<?> constructor = type.getDeclaredConstructor(
+                Session.class, MapManager.class, GameResources.class);
+        constructor.setAccessible(true);
+        return constructor.newInstance(session, services.maps(), services.resources());
+    }
+
+    private static Thread startDeathReturn(Object handler, AtomicReference<Throwable> failure) throws Exception {
+        Method returnHome = handler.getClass().getDeclaredMethod("handleReturnTownFromDie", Message.class);
+        returnHome.setAccessible(true);
+        return Thread.ofVirtual().start(() -> {
+            try {
+                returnHome.invoke(handler, new Message(MessageName.RETURN_TOWN_FROM_DIE));
+            } catch (Throwable exception) {
+                failure.compareAndSet(null, exception);
+            }
+        });
+    }
+
+    private static Thread startClose(Session session, AtomicReference<Throwable> failure) {
+        return Thread.ofVirtual().start(() -> {
+            try {
+                session.close();
+            } catch (Throwable exception) {
+                failure.compareAndSet(null, exception);
+            }
+        });
+    }
+
+    private static Thread startCheckpoint(Session session, PlayerSaveData player,
+                                          AtomicBoolean saved, AtomicReference<Throwable> failure) {
+        return Thread.ofVirtual().start(() -> {
+            try {
+                saved.set(session.savePlayer(player));
+            } catch (Throwable exception) {
+                failure.compareAndSet(null, exception);
+            }
+        });
+    }
+
+    private static void waitForCheckpointBlockOrCompletion(Thread checkpoint) {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        while (System.nanoTime() < deadline) {
+            Thread.State state = checkpoint.getState();
+            if (state == Thread.State.BLOCKED || state == Thread.State.TERMINATED) {
+                return;
+            }
+            Thread.onSpinWait();
+        }
+        throw new AssertionError("checkpoint neither completed nor reached the checkpoint lock");
+    }
+
+    private static void waitForCheckpointWaitOrCompletion(Session session, Zone owner, Thread close) {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        while (System.nanoTime() < deadline) {
+            if (close.getState() == Thread.State.TERMINATED) {
+                return;
+            }
+            if (session.zone() == null && !owner.hasPlayer(session)
+                    && close.getState() == Thread.State.BLOCKED) {
+                return;
+            }
+            Thread.onSpinWait();
+        }
+        throw new AssertionError("close neither completed nor reached the checkpoint wait");
+    }
+
+    private static final class OrderedPlayerRepository implements PlayerRepository {
+        private final TestPlayerRepository delegate;
+        private final boolean failFinalSave;
+        private final CountDownLatch firstSaveEntered = new CountDownLatch(1);
+        private final CountDownLatch allowFirstSave = new CountDownLatch(1);
+        private final AtomicInteger checkpointCalls = new AtomicInteger();
+        private final List<PlayerSaveData> completedSaves = Collections.synchronizedList(new ArrayList<>());
+        private final AtomicReference<PlayerSaveData> failedSave = new AtomicReference<>();
+
+        private OrderedPlayerRepository(TestPlayerRepository delegate, boolean failFinalSave) {
+            this.delegate = delegate;
+            this.failFinalSave = failFinalSave;
+        }
+
+        @Override
+        public Optional<PlayerRecord> findByAccountId(long accountId) {
+            return delegate.findByAccountId(accountId);
+        }
+
+        @Override
+        public PlayerRecord create(PlayerRecord initialWithoutId) {
+            return delegate.create(initialWithoutId);
+        }
+
+        @Override
+        public void save(PlayerSaveData player) {
+            int saveNumber = checkpointCalls.incrementAndGet();
+            if (saveNumber == 1) {
+                firstSaveEntered.countDown();
+                try {
+                    if (!allowFirstSave.await(5, TimeUnit.SECONDS)) {
+                        throw new PlayerRepositoryException("first checkpoint was not released");
+                    }
+                } catch (InterruptedException exception) {
+                    Thread.currentThread().interrupt();
+                    throw new PlayerRepositoryException("first checkpoint interrupted", exception);
+                }
+            } else if (failFinalSave) {
+                failedSave.set(player);
+                throw new PlayerRepositoryException("injected final checkpoint failure");
+            }
+            delegate.save(player);
+            completedSaves.add(player);
+        }
+    }
+
     private static final class BlockingPlayerRepository implements PlayerRepository {
         private final TestPlayerRepository delegate;
         private final CountDownLatch updateEntered = new CountDownLatch(1);
         private final CountDownLatch allowUpdate = new CountDownLatch(1);
         private final AtomicBoolean interruptedAtCheckpoint = new AtomicBoolean();
         private final AtomicInteger checkpointCalls = new AtomicInteger();
+        private final AtomicReference<Thread> checkpointThread = new AtomicReference<>();
+        private final AtomicReference<PlayerSaveData> savedPlayer = new AtomicReference<>();
 
         private BlockingPlayerRepository(TestPlayerRepository delegate) {
             this.delegate = delegate;
@@ -580,9 +1187,11 @@ class SessionTest {
         public void save(PlayerSaveData player) {
             checkpointCalls.incrementAndGet();
             interruptedAtCheckpoint.set(Thread.currentThread().isInterrupted());
+            checkpointThread.set(Thread.currentThread());
+            savedPlayer.set(player);
             updateEntered.countDown();
             try {
-                if (!allowUpdate.await(1, java.util.concurrent.TimeUnit.SECONDS)) {
+                if (!allowUpdate.await(5, java.util.concurrent.TimeUnit.SECONDS)) {
                     throw new PlayerRepositoryException("timed out in test");
                 }
             } catch (InterruptedException exception) {
@@ -590,6 +1199,19 @@ class SessionTest {
                 throw new PlayerRepositoryException("interrupted in test", exception);
             }
             delegate.save(player);
+        }
+    }
+
+    private static final class RejectDeathQueue extends LinkedBlockingQueue<Message> {
+        private final AtomicReference<Thread> writerThread = new AtomicReference<>();
+
+        @Override
+        public boolean offer(Message message) {
+            if (message.command() == MessageName.MONSTER_START_DIE) {
+                writerThread.set(Thread.currentThread());
+                return false;
+            }
+            return super.offer(message);
         }
     }
 

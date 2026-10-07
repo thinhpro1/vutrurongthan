@@ -4,12 +4,14 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import com.project.game.monster.MonsterTemplate.Dart;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -47,6 +49,17 @@ class MonsterDartLoaderTest {
                 () -> darts.add(dart0));
         assertThrows(UnsupportedOperationException.class,
                 () -> dart0.light().icons().add(1));
+    }
+
+    @Test
+    void phaseKeepsItsOwnImmutableIconList() {
+        List<Integer> icons = new ArrayList<>(List.of(1, 2, 3));
+        Dart.Phase phase = new Dart.Phase(icons, 0, 0, 30);
+
+        icons.add(4);
+
+        assertEquals(List.of(1, 2, 3), phase.icons());
+        assertThrows(UnsupportedOperationException.class, () -> phase.icons().add(5));
     }
 
     @Test

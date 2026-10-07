@@ -58,7 +58,9 @@ public final class SessionManager {
                 return;
             }
             session.clearAccountAdmissionPending();
-            if (!success || session.state() == SessionState.CLOSED) {
+            boolean closed = session.state() == SessionState.CLOSED;
+            // Closing retains the reservation until its checkpoint attempt has completed.
+            if ((!closed && !success) || (closed && session.accountReleaseReady())) {
                 String accountName = session.accountName();
                 if (accountName != null) {
                     sessionsByAccount.remove(accountName, session);
@@ -69,6 +71,8 @@ public final class SessionManager {
 
     public void unbindAccount(Session session) {
         synchronized (session) {
+            // Called by close only after its checkpoint gate has drained.
+            session.markAccountReleaseReady();
             if (session.accountAdmissionPending()) {
                 return;
             }

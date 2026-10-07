@@ -1,6 +1,5 @@
 package com.project.game.map;
 
-import com.project.game.combat.*;
 import com.project.game.monster.*;
 import com.project.game.network.*;
 import com.project.game.network.message.*;
@@ -156,7 +155,7 @@ class MapManagerTest {
         maps.mapManager().finishLoad(player);
         drain(player);
 
-        assertTrue(maps.combat().attackMonster(player, 101));
+        assertTrue(maps.attackMonster(player, 101));
         assertEquals(List.of(MessageName.MONSTER_INJURE), commands(drain(player)));
         clock.advanceMillis(1L);
 
@@ -199,7 +198,7 @@ class MapManagerTest {
         maps.mapManager().finishLoad(player);
         drain(player);
 
-        assertTrue(maps.combat().attackMonster(player, 101));
+        assertTrue(maps.attackMonster(player, 101));
         drain(player);
         clock.advanceMillis(1L);
 
@@ -1095,6 +1094,414 @@ class MapManagerTest {
     }
 
     @Test
+    void disconnectDuringCommittedHandoffReleasesDestinationCapacity() throws Exception {
+        GameplayServices maps = policyMaps("ONLINE", "ONLINE", 1, 1);
+        Session moving = session(at(player(1, 0, 0), 4464, 936), maps);
+        assertTrue(maps.mapManager().finishLoad(moving));
+        Zone source = moving.zone();
+        Zone destination = maps.findZone(1, 0);
+        BlockingMonsters monsters = new BlockingMonsters();
+        replaceZoneField(source, "monsters", monsters);
+        BlockingQueue<?> sourceInputs = zoneInputs(source);
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+        AtomicReference<MapManager.MapChange> change = new AtomicReference<>();
+        Thread transition = startTask(failure,
+                () -> change.set(maps.mapManager().changeMap(moving)));
+        Thread close = null;
+        try {
+            assertTrue(monsters.entered.await(5, TimeUnit.SECONDS),
+                    "handoff did not reach source removal after revalidation");
+            assertSame(source, moving.zone());
+            close = startTask(failure, moving::close);
+            awaitCondition(() -> moving.state() == SessionState.CLOSED
+                            && !sourceInputs.isEmpty(),
+                    "disconnect did not queue source cleanup before backlink detach");
+        } finally {
+            monsters.release.countDown();
+            joinTasks(transition, close);
+        }
+
+        assertNull(failure.get());
+        assertNotNull(change.get(), "source revalidation already accepted the handoff");
+        assertEquals(SessionState.CLOSED, moving.state());
+        assertNull(moving.zone());
+        assertFalse(source.hasPlayer(moving));
+        assertFalse(destination.hasPlayer(moving));
+        assertFalse(destination.hasReservation(moving));
+
+        // A fresh Session for the same Player must be able to reuse the only slot.
+        Session replacement = session(at(player(1, 0, 0), 4464, 936), maps);
+        try {
+            assertTrue(maps.mapManager().finishLoad(replacement));
+            assertNotNull(maps.mapManager().changeMap(replacement));
+            assertTrue(maps.mapManager().finishLoad(replacement));
+            assertSame(destination, replacement.zone());
+        } finally {
+            replacement.close();
+        }
+    }
+
+    @Test
+    void disconnectBeforeEnterBacklinkBindDoesNotLeaveClosedMember() throws Exception {
+        GameplayServices maps = policyMaps("ONLINE", "ONLINE", 1, 1);
+        Session joining = session(player(1, 1, 0), maps);
+        Zone destination = maps.findZone(1, 0);
+        BlockingMembers members = new BlockingMembers();
+        replaceZoneField(destination, "members", members);
+        BlockingQueue<?> destinationInputs = zoneInputs(destination);
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+        Thread enter = startTask(failure, () -> maps.mapManager().finishLoad(joining));
+        Thread close = null;
+        try {
+            assertTrue(members.entered.await(5, TimeUnit.SECONDS),
+                    "enter did not insert membership before binding the backlink");
+            assertNull(joining.zone());
+            close = startTask(failure, joining::close);
+            awaitCondition(() -> joining.state() == SessionState.CLOSED
+                            && !destinationInputs.isEmpty(),
+                    "disconnect did not queue cleanup while the backlink was absent");
+        } finally {
+            members.release.countDown();
+            joinTasks(enter, close);
+        }
+
+        assertNull(failure.get());
+        assertEquals(SessionState.CLOSED, joining.state());
+        assertNull(joining.zone());
+        assertFalse(destination.hasPlayer(joining));
+        assertFalse(destination.hasReservation(joining));
+        Session replacement = session(player(1, 1, 0), maps);
+        try {
+            assertTrue(maps.mapManager().finishLoad(replacement));
+            assertSame(destination, replacement.zone());
+        } finally {
+            replacement.close();
+        }
+    }
+
+    @Test
+    void disconnectWhileReserveIsQueuedDoesNotAdmitLateReservation() throws Exception {
+        GameplayServices maps = policyMaps("ONLINE", "ONLINE", 1, 1);
+        Session moving = session(at(player(1, 0, 0), 4464, 936), maps);
+        Session replacement = session(player(2, 1, 0), maps);
+        assertTrue(maps.mapManager().finishLoad(moving));
+        Zone source = moving.zone();
+        Zone destination = maps.findZone(1, 0);
+        BlockingQueue<?> destinationInputs = zoneInputs(destination);
+        CountDownLatch destinationStarted = new CountDownLatch(1);
+        CountDownLatch releaseDestination = new CountDownLatch(1);
+        CountDownLatch sourceStarted = new CountDownLatch(1);
+        CountDownLatch releaseSource = new CountDownLatch(1);
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+        AtomicReference<MapManager.MapChange> change = new AtomicReference<>();
+        AtomicBoolean joined = new AtomicBoolean();
+        Thread transition = null;
+        Thread close = null;
+        Thread enter = null;
+        try {
+            assertTrue(destination.submit(() -> {
+                destinationStarted.countDown();
+                awaitRelease(releaseDestination);
+            }));
+            assertTrue(destinationStarted.await(5, TimeUnit.SECONDS));
+            transition = startTask(failure,
+                    () -> change.set(maps.mapManager().changeMap(moving)));
+            awaitCondition(() -> !destinationInputs.isEmpty(),
+                    "destination reservation was not queued");
+            close = startTask(failure, moving::close);
+            awaitCondition(() -> moving.state() == SessionState.CLOSED && moving.zone() == null,
+                    "disconnect did not detach the source while reserve was pending");
+
+            // Keep source revalidation/rollback pending while destination admission runs.
+            assertTrue(source.submit(() -> {
+                sourceStarted.countDown();
+                awaitRelease(releaseSource);
+            }));
+            assertTrue(sourceStarted.await(5, TimeUnit.SECONDS));
+            enter = startTask(failure,
+                    () -> joined.set(maps.mapManager().finishLoad(replacement)));
+            Thread pendingEnter = enter;
+            awaitCondition(() -> destinationInputs.size() >= 2
+                            && pendingEnter.getState() == Thread.State.WAITING,
+                    "replacement admission was not queued behind the closed Session reserve");
+            releaseDestination.countDown();
+            joinTasks(enter);
+            assertTrue(joined.get(),
+                    "a CLOSED Session took destination capacity before source rollback");
+        } finally {
+            releaseDestination.countDown();
+            releaseSource.countDown();
+            joinTasks(transition, close, enter);
+            replacement.close();
+        }
+
+        assertNull(failure.get());
+        assertNull(change.get());
+        assertFalse(source.hasPlayer(moving));
+        assertFalse(destination.hasPlayer(moving));
+        assertFalse(destination.hasReservation(moving));
+        assertNull(moving.zone());
+    }
+
+    @Test
+    void duplicateHandoffDoesNotCancelWinningDestinationReservation() throws Exception {
+        GameplayServices maps = policyMaps("ONLINE", "ONLINE", 1, 1);
+        Session moving = session(at(player(1, 0, 0), 4464, 936), maps);
+        assertTrue(maps.mapManager().finishLoad(moving));
+        Zone source = moving.zone();
+        Zone destination = maps.findZone(1, 0);
+        BlockingQueue<?> sourceInputs = zoneInputs(source);
+        BlockingQueue<?> destinationInputs = zoneInputs(destination);
+        CountDownLatch destinationStarted = new CountDownLatch(1);
+        CountDownLatch releaseDestination = new CountDownLatch(1);
+        CountDownLatch sourceStarted = new CountDownLatch(1);
+        CountDownLatch releaseSource = new CountDownLatch(1);
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+        AtomicReference<MapManager.MapChange> firstChange = new AtomicReference<>();
+        AtomicReference<MapManager.MapChange> duplicateChange = new AtomicReference<>();
+        Thread first = null;
+        Thread duplicate = null;
+        try {
+            assertTrue(destination.submit(() -> {
+                destinationStarted.countDown();
+                awaitRelease(releaseDestination);
+            }));
+            assertTrue(destinationStarted.await(5, TimeUnit.SECONDS));
+            first = startTask(failure,
+                    () -> firstChange.set(maps.mapManager().changeMap(moving)));
+            awaitCondition(() -> !destinationInputs.isEmpty(),
+                    "first handoff did not queue its destination reservation");
+            duplicate = startTask(failure,
+                    () -> duplicateChange.set(maps.mapManager().changeMap(moving)));
+            Thread pendingDuplicate = duplicate;
+            awaitCondition(() -> destinationInputs.size() >= 2 || !pendingDuplicate.isAlive(),
+                    "duplicate neither rejected nor reached destination reservation");
+            assertTrue(source.submit(() -> {
+                sourceStarted.countDown();
+                awaitRelease(releaseSource);
+            }));
+            assertTrue(sourceStarted.await(5, TimeUnit.SECONDS));
+            releaseDestination.countDown();
+            awaitCondition(() -> !sourceInputs.isEmpty()
+                            && (sourceInputs.size() >= 2 || !pendingDuplicate.isAlive()),
+                    "handoffs did not reach source commit or duplicate rejection");
+        } finally {
+            releaseDestination.countDown();
+            releaseSource.countDown();
+            joinTasks(first, duplicate);
+        }
+
+        assertNull(failure.get());
+        assertEquals(1, (firstChange.get() == null ? 0 : 1)
+                + (duplicateChange.get() == null ? 0 : 1));
+        assertNull(moving.zone());
+        assertFalse(source.hasPlayer(moving));
+        Session competing = session(player(2, 1, 0), maps);
+        try {
+            assertFalse(maps.mapManager().finishLoad(competing),
+                    "the losing duplicate released the winning handoff's only destination slot");
+            assertTrue(destination.hasReservation(moving));
+            assertTrue(maps.mapManager().finishLoad(moving));
+            assertSame(destination, moving.zone());
+            assertEquals(1, destination.size());
+        } finally {
+            competing.close();
+            moving.close();
+        }
+    }
+
+    @Test
+    void oldFinishLoadDoesNotClearNewHandoffToSameDestination() throws Exception {
+        GameplayServices maps = policyMaps("ONLINE", "ONLINE", 1, 2);
+        Session moving = session(at(player(1, 0, 0), 4464, 936), maps);
+        Session observer = session(player(2, 1, 0), maps);
+        Session remaining = session(player(3, 1, 0), maps);
+        assertTrue(maps.mapManager().finishLoad(observer));
+        ClosingTransport transport = new ClosingTransport();
+        replaceTransport(observer, transport);
+        LinkedBlockingQueue<Message> fullQueue = new LinkedBlockingQueue<>(1);
+        fullQueue.add(new Message(MessageName.ADD_PLAYER, new byte[0]));
+        replaceSendQueue(observer, fullQueue);
+        assertTrue(maps.mapManager().finishLoad(moving));
+        assertNotNull(maps.mapManager().changeMap(moving));
+        Zone source = maps.findZone(0, 0);
+        Zone destination = maps.findZone(1, 0);
+        BlockingQueue<?> sourceInputs = zoneInputs(source);
+        BlockingQueue<?> destinationInputs = zoneInputs(destination);
+        CountDownLatch admissionStarted = new CountDownLatch(1);
+        CountDownLatch releaseAdmission = new CountDownLatch(1);
+        CountDownLatch reserveStarted = new CountDownLatch(1);
+        CountDownLatch releaseReserve = new CountDownLatch(1);
+        CountDownLatch sourceStarted = new CountDownLatch(1);
+        CountDownLatch releaseSource = new CountDownLatch(1);
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+        AtomicBoolean firstEntered = new AtomicBoolean();
+        AtomicBoolean secondEntered = new AtomicBoolean();
+        AtomicReference<MapManager.MapChange> change = new AtomicReference<>();
+        AtomicReference<MapManager.MapChange> duplicateChange = new AtomicReference<>();
+        Thread first = null;
+        Thread second = null;
+        Thread transition = null;
+        Thread duplicate = null;
+        try {
+            assertTrue(destination.submit(() -> {
+                admissionStarted.countDown();
+                awaitRelease(releaseAdmission);
+            }));
+            assertTrue(admissionStarted.await(5, TimeUnit.SECONDS));
+            first = startTask(failure,
+                    () -> firstEntered.set(maps.mapManager().finishLoad(moving)));
+            awaitCondition(() -> destinationInputs.size() == 1,
+                    "first detached finishLoad was not queued");
+            second = startTask(failure,
+                    () -> secondEntered.set(maps.mapManager().finishLoad(moving)));
+            awaitCondition(() -> destinationInputs.size() == 2,
+                    "both finishLoad calls did not select the detached admission branch");
+            releaseAdmission.countDown();
+            assertTrue(transport.entered.await(5, TimeUnit.SECONDS),
+                    "first enter did not close its rejected observer after admission");
+            joinTasks(second);
+            assertTrue(secondEntered.get());
+            assertTrue(destination.hasPlayer(moving));
+            assertFalse(destination.hasPlayer(observer));
+            assertTrue(maps.mapManager().finishLoad(remaining));
+
+            // Return to the original source, then prepare a fresh handoff to the same Zone.
+            assertTrue(destination.move(moving, 0, 1008));
+            assertNotNull(maps.mapManager().changeMap(moving));
+            assertTrue(maps.mapManager().finishLoad(moving));
+            assertTrue(source.move(moving, 4464, 936));
+            assertTrue(destination.submit(() -> {
+                reserveStarted.countDown();
+                awaitRelease(releaseReserve);
+            }));
+            assertTrue(reserveStarted.await(5, TimeUnit.SECONDS));
+            transition = startTask(failure,
+                    () -> change.set(maps.mapManager().changeMap(moving)));
+            awaitCondition(() -> !destinationInputs.isEmpty(),
+                    "new handoff did not queue its destination reservation");
+
+            // The old admission caller returns only after the new handoff already exists.
+            transport.release.countDown();
+            joinTasks(first);
+            assertTrue(firstEntered.get());
+            duplicate = startTask(failure,
+                    () -> duplicateChange.set(maps.mapManager().changeMap(moving)));
+            Thread pendingDuplicate = duplicate;
+            awaitCondition(() -> destinationInputs.size() >= 2 || !pendingDuplicate.isAlive(),
+                    "duplicate neither rejected nor reached destination reservation");
+            assertTrue(source.submit(() -> {
+                sourceStarted.countDown();
+                awaitRelease(releaseSource);
+            }));
+            assertTrue(sourceStarted.await(5, TimeUnit.SECONDS));
+            releaseReserve.countDown();
+            awaitCondition(() -> !sourceInputs.isEmpty()
+                            && (sourceInputs.size() >= 2 || !pendingDuplicate.isAlive()),
+                    "handoffs did not reach source commit or duplicate rejection");
+        } finally {
+            releaseAdmission.countDown();
+            transport.release.countDown();
+            releaseReserve.countDown();
+            releaseSource.countDown();
+            joinTasks(first, second, transition, duplicate);
+        }
+
+        assertNull(failure.get());
+        assertEquals(1, (change.get() == null ? 0 : 1)
+                + (duplicateChange.get() == null ? 0 : 1));
+        assertNull(moving.zone());
+        Session competing = session(player(4, 1, 0), maps);
+        try {
+            assertFalse(maps.mapManager().finishLoad(competing),
+                    "old finishLoad cleared the new handoff and allowed its slot to be canceled");
+            assertTrue(destination.hasReservation(moving));
+            assertTrue(maps.mapManager().finishLoad(moving));
+            assertSame(destination, moving.zone());
+        } finally {
+            competing.close();
+            moving.close();
+            remaining.close();
+            observer.close();
+        }
+    }
+
+    @Test
+    void finishLoadWithStaleHandoffReadConsumesCurrentAdmissionGuard() throws Exception {
+        assertStaleFinishLoadConsumesCurrentAdmissionGuard(true);
+    }
+
+    @Test
+    void finishLoadWithInitiallyMissingHandoffConsumesCurrentAdmissionGuard() throws Exception {
+        assertStaleFinishLoadConsumesCurrentAdmissionGuard(false);
+    }
+
+    @Test
+    void disconnectAfterObserverDeliveryFailureCleansPendingDestinationAndNormalizesPlayer()
+            throws Exception {
+        GameplayServices maps = policyMaps("ONLINE", "ONLINE", 2, 1);
+        Session moving = session(at(player(1, 0, 0), 4464, 936), maps);
+        Session observer = session(player(2, 0, 0), maps);
+        assertTrue(maps.mapManager().finishLoad(moving));
+        assertTrue(maps.mapManager().finishLoad(observer));
+        drain(moving);
+        drain(observer);
+        Zone source = moving.zone();
+        Zone destination = maps.findZone(1, 0);
+        BlockingReservations reservations = new BlockingReservations();
+        replaceZoneField(destination, "reservedPlayers", reservations);
+        replaceSendQueue(observer, new ThrowingOfferQueue());
+        BlockingQueue<?> destinationInputs = zoneInputs(destination);
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+        AtomicReference<MapManager.MapChange> change = new AtomicReference<>();
+        Thread transition = startTask(failure,
+                () -> change.set(maps.mapManager().changeMap(moving)));
+        Thread close = null;
+        try {
+            assertTrue(reservations.entered.await(5, TimeUnit.SECONDS),
+                    "destination did not insert the pending reservation");
+            source.call(() -> {
+                moving.player().injure(moving.player().hp());
+                return null;
+            });
+            close = startTask(failure, moving::close);
+            // Reserve has not returned, so source commit cannot send REMOVE_PLAYER.
+            // Its observer failure therefore belongs to disconnect's source cleanup.
+            awaitCondition(() -> moving.state() == SessionState.CLOSED
+                            && moving.zone() == null && !destinationInputs.isEmpty(),
+                    "source delivery failure prevented pending destination cleanup");
+            assertFalse(source.hasPlayer(moving));
+            assertTrue(source.hasPlayer(observer));
+        } finally {
+            reservations.release.countDown();
+            joinTasks(transition, close);
+        }
+
+        assertNull(failure.get());
+        assertNull(change.get());
+        assertEquals(SessionState.CLOSED, moving.state());
+        assertNull(moving.zone());
+        assertFalse(source.hasPlayer(moving));
+        assertFalse(destination.hasPlayer(moving));
+        assertFalse(destination.hasReservation(moving));
+        assertFalse(moving.player().isDead());
+        assertEquals(moving.player().currentStats().maxHp(), moving.player().hp());
+        assertEquals(0, moving.player().mapId());
+        assertEquals(0, moving.player().zoneId());
+        assertEquals(1250, moving.player().x());
+        assertEquals(648, moving.player().y());
+
+        Session replacement = session(player(1, 1, 0), maps);
+        try {
+            assertTrue(maps.mapManager().finishLoad(replacement));
+            assertSame(destination, replacement.zone());
+        } finally {
+            replacement.close();
+            observer.close();
+        }
+    }
+
+    @Test
     void sourceRevalidationFailureRollsBackDestinationReservation() throws Exception {
         GameplayServices maps = policyMaps("ONLINE", "ONLINE", 2, 1);
         Session source = session(at(player(1, 0, 0), 4464, 936), maps);
@@ -1342,6 +1749,60 @@ class MapManagerTest {
         assertEquals(0, town.reservedCount());
     }
 
+    private static void assertStaleFinishLoadConsumesCurrentAdmissionGuard(boolean initialHandoff)
+            throws Exception {
+        GameplayServices maps = policyMaps("ONLINE", "ONLINE", 1, 1);
+        Session moving;
+        if (initialHandoff) {
+            moving = session(at(player(1, 0, 0), 4464, 936), maps);
+            assertTrue(maps.mapManager().finishLoad(moving));
+            assertNotNull(maps.mapManager().changeMap(moving));
+        } else {
+            moving = session(player(1, 1, 0), maps);
+        }
+        Zone source = maps.findZone(0, 0);
+        Zone destination = maps.findZone(1, 0);
+        DelayedMapLookup route = new DelayedMapLookup();
+        replaceRuntimeMaps(maps.mapManager(), route);
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+        AtomicBoolean entered = new AtomicBoolean();
+        Thread oldFinish = startTask(failure, () -> {
+            route.delayedThread.set(Thread.currentThread());
+            entered.set(maps.mapManager().finishLoad(moving));
+        });
+        try {
+            assertTrue(route.entered.await(5, TimeUnit.SECONDS),
+                    "old finishLoad did not reach detached destination lookup");
+            assertNull(moving.zone());
+            // A different caller admits the Player, then completes an entire round trip.
+            assertTrue(maps.mapManager().finishLoad(moving));
+            assertTrue(destination.move(moving, 0, 1008));
+            assertNotNull(maps.mapManager().changeMap(moving));
+            assertTrue(maps.mapManager().finishLoad(moving));
+            assertTrue(source.move(moving, 4464, 936));
+            assertNotNull(maps.mapManager().changeMap(moving));
+            assertTrue(destination.hasReservation(moving));
+
+            // Old route selection now admits the fresh handoff, regardless of its old read.
+            route.release.countDown();
+            joinTasks(oldFinish);
+            assertNull(failure.get());
+            assertTrue(entered.get());
+            assertTrue(destination.hasPlayer(moving));
+            assertFalse(destination.hasReservation(moving));
+            assertTrue(maps.mapManager().finishLoad(moving));
+            assertTrue(destination.move(moving, 0, 1008));
+            assertNotNull(maps.mapManager().changeMap(moving),
+                    "successful admission left a stale handoff guard blocking valid travel");
+            assertTrue(maps.mapManager().finishLoad(moving));
+            assertSame(source, moving.zone());
+        } finally {
+            route.release.countDown();
+            joinTasks(oldFinish);
+            moving.close();
+        }
+    }
+
     private static GameplayServices policyMaps(
             String map0Type, String map1Type, int map0MaxPlayer, int map1MaxPlayer) {
         java.util.Map<Integer, MapTemplate> canonical = MapTestSupport.canonicalMaps();
@@ -1443,6 +1904,161 @@ class MapManagerTest {
         @Override
         public boolean offer(Message message) {
             throw new IllegalStateException("injected packet enqueue failure");
+        }
+    }
+
+    private static void replaceZoneField(Zone zone, String name, Object replacement)
+            throws Exception {
+        Field field = Zone.class.getDeclaredField(name);
+        field.setAccessible(true);
+        field.set(zone, replacement);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void replaceRuntimeMaps(MapManager maps, DelayedMapLookup replacement)
+            throws Exception {
+        Field field = MapManager.class.getDeclaredField("maps");
+        field.setAccessible(true);
+        replacement.putAll((java.util.Map<Integer, Map>) field.get(maps));
+        field.set(maps, replacement);
+    }
+
+    private static void replaceTransport(Session session, ClientTransport replacement)
+            throws Exception {
+        Field field = Session.class.getDeclaredField("transport");
+        field.setAccessible(true);
+        field.set(session, replacement);
+    }
+
+    private static BlockingQueue<?> zoneInputs(Zone zone) throws Exception {
+        Field writerField = Zone.class.getDeclaredField("writer");
+        writerField.setAccessible(true);
+        Field inputsField = ZoneWriter.class.getDeclaredField("inputs");
+        inputsField.setAccessible(true);
+        return (BlockingQueue<?>) inputsField.get(writerField.get(zone));
+    }
+
+    private static Thread startTask(AtomicReference<Throwable> failure, Runnable action) {
+        return Thread.ofVirtual().start(() -> {
+            try {
+                action.run();
+            } catch (Throwable exception) {
+                failure.compareAndSet(null, exception);
+            }
+        });
+    }
+
+    private static void joinTasks(Thread... tasks) throws InterruptedException {
+        for (Thread task : tasks) {
+            if (task != null) {
+                task.join(5_000);
+            }
+        }
+        for (Thread task : tasks) {
+            if (task != null) {
+                assertFalse(task.isAlive(), "controlled task did not finish after release");
+            }
+        }
+    }
+
+    private static void awaitCondition(java.util.function.BooleanSupplier condition, String message) {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        while (!condition.getAsBoolean() && System.nanoTime() < deadline) {
+            Thread.onSpinWait();
+        }
+        assertTrue(condition.getAsBoolean(), message);
+    }
+
+    /** Holds source removal after revalidation, before location mutation/backlink detach. */
+    private static final class BlockingMonsters extends LinkedHashMap<Integer, Monster> {
+        private final AtomicBoolean first = new AtomicBoolean(true);
+        private final CountDownLatch entered = new CountDownLatch(1);
+        private final CountDownLatch release = new CountDownLatch(1);
+
+        @Override
+        public Collection<Monster> values() {
+            if (first.compareAndSet(true, false)) {
+                entered.countDown();
+                awaitRelease(release);
+            }
+            return super.values();
+        }
+    }
+
+    /** Holds enter after the membership insert, before Session.bindZone. */
+    private static final class BlockingMembers extends LinkedHashMap<Integer, Session> {
+        private final AtomicBoolean first = new AtomicBoolean(true);
+        private final CountDownLatch entered = new CountDownLatch(1);
+        private final CountDownLatch release = new CountDownLatch(1);
+
+        @Override
+        public Session put(Integer id, Session session) {
+            Session previous = super.put(id, session);
+            if (first.compareAndSet(true, false)) {
+                entered.countDown();
+                awaitRelease(release);
+            }
+            return previous;
+        }
+    }
+
+    /** Holds a newly reserved slot before the reserve call can submit source commit. */
+    private static final class BlockingReservations extends LinkedHashMap<Integer, Session> {
+        private final CountDownLatch entered = new CountDownLatch(1);
+        private final CountDownLatch release = new CountDownLatch(1);
+
+        @Override
+        public Session put(Integer id, Session session) {
+            Session previous = super.put(id, session);
+            entered.countDown();
+            awaitRelease(release);
+            return previous;
+        }
+    }
+
+    /** Delays one caller's detached route lookup without holding a Zone writer. */
+    private static final class DelayedMapLookup extends TreeMap<Integer, Map> {
+        private final AtomicReference<Thread> delayedThread = new AtomicReference<>();
+        private final AtomicBoolean first = new AtomicBoolean(true);
+        private final CountDownLatch entered = new CountDownLatch(1);
+        private final CountDownLatch release = new CountDownLatch(1);
+
+        @Override
+        public Map get(Object key) {
+            Map map = super.get(key);
+            if (Integer.valueOf(1).equals(key) && Thread.currentThread() == delayedThread.get()
+                    && first.compareAndSet(true, false)) {
+                entered.countDown();
+                awaitRelease(release);
+            }
+            return map;
+        }
+    }
+
+    /** Holds rejected-observer close after its gameplay cleanup, outside every Zone writer. */
+    private static final class ClosingTransport implements ClientTransport {
+        private final CountDownLatch entered = new CountDownLatch(1);
+        private final CountDownLatch release = new CountDownLatch(1);
+
+        @Override
+        public InputStream input() {
+            return new ByteArrayInputStream(new byte[0]);
+        }
+
+        @Override
+        public OutputStream output() {
+            return new ByteArrayOutputStream();
+        }
+
+        @Override
+        public String remoteAddress() {
+            return "map-test";
+        }
+
+        @Override
+        public void close() {
+            entered.countDown();
+            awaitRelease(release);
         }
     }
 

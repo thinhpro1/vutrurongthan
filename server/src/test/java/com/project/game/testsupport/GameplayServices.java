@@ -1,12 +1,12 @@
 package com.project.game.testsupport;
 
-import com.project.game.combat.Combat;
 import com.project.game.map.MapManager;
 import com.project.game.map.MapTemplate;
 import com.project.game.map.Zone;
 import com.project.game.monster.MonsterManager;
-import com.project.game.monster.MonsterSnapshot;
+import com.project.game.monster.Monster.Snapshot;
 import com.project.game.network.Session;
+import com.project.game.network.SessionState;
 import com.project.game.network.packet.MonsterPacketWriter;
 import com.project.game.network.packet.PlayerPacketWriter;
 import com.project.game.resource.GameResources;
@@ -15,12 +15,13 @@ import com.project.game.service.AreaService;
 import java.time.Clock;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.random.RandomGenerator;
 
 /** Test-only composition of public Map, Zone combat, and lifecycle services. */
 public final class GameplayServices {
     private MapManager maps;
-    private Combat combat;
+    private Clock clock;
     private MonsterManager monsterManager;
 
     public GameplayServices(PlayerPacketWriter playerPackets,
@@ -70,7 +71,7 @@ public final class GameplayServices {
 
     private void initialize(Runtime runtime, MonsterManager monsterManager, Clock clock) {
         maps = runtime.maps();
-        combat = new Combat(clock);
+        this.clock = Objects.requireNonNull(clock, "clock");
         this.monsterManager = monsterManager;
     }
 
@@ -86,8 +87,8 @@ public final class GameplayServices {
         return maps;
     }
 
-    public Combat combat() {
-        return combat;
+    public Clock clock() {
+        return clock;
     }
 
     public MonsterManager monsterManager() {
@@ -119,13 +120,21 @@ public final class GameplayServices {
         return zone == null ? 0 : zone.size();
     }
     public boolean canTargetMonster(Session session, int monsterId) {
-        return combat.canTargetMonster(session, monsterId);
+        Zone zone = session == null ? null : session.zone();
+        if (zone == null || session.state() == SessionState.CLOSED) {
+            return false;
+        }
+        return zone.canTargetMonster(session, monsterId);
     }
     public boolean attackMonster(Session session, int monsterId) {
-        return combat.attackMonster(session, monsterId);
+        Zone zone = session == null ? null : session.zone();
+        if (zone == null || session.state() == SessionState.CLOSED) {
+            return false;
+        }
+        return zone.attackMonster(session, monsterId, clock.millis());
     }
     public void tickMonsterLifecycle() { monsterManager.update(maps); }
-    public List<MonsterSnapshot> monsterSnapshots(int mapId, int zoneId) {
+    public List<Snapshot> monsterSnapshots(int mapId, int zoneId) {
         Zone zone = maps.getMap(mapId).findZone(zoneId);
         if (zone == null) {
             throw new IllegalArgumentException("unknown zone " + mapId + "/" + zoneId);

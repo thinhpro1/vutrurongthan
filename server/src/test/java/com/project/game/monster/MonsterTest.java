@@ -1,11 +1,13 @@
 package com.project.game.monster;
 
+import com.project.game.monster.Monster.Snapshot;
 import com.project.game.player.Player;
 import com.project.game.resource.GameResources;
 import com.project.game.testsupport.TestPlayers;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
@@ -69,10 +71,15 @@ class MonsterTest {
     @Test
     void rejectsRespawnDeadlineOverflowAndNegativePlayerCount() {
         Monster monster = map1Monster();
+        monster.injure(7, 10, NOW, 0);
+        Snapshot before = monster.snapshot();
 
-        assertThrows(IllegalArgumentException.class, () -> monster.injure(7, 10, NOW, -1));
+        assertThrows(IllegalArgumentException.class, () -> monster.injure(8, 10, NOW, -1));
         assertThrows(ArithmeticException.class,
-                () -> monster.injure(7, 500, Long.MAX_VALUE - 10, 0));
+                () -> monster.injure(8, 500, Long.MAX_VALUE - 10, 0));
+
+        assertEquals(before, monster.snapshot());
+        assertEquals(List.of(7), monster.enemyPlayerIds());
     }
 
     @Test
@@ -119,6 +126,19 @@ class MonsterTest {
         assertFalse(monster.updateMove(List.of(playerAt(7, 975 + 899, 936))));
         assertTrue(monster.updateMove(List.of(playerAt(7, 975 + 900, 936))));
         assertEquals(979, monster.x());
+    }
+
+    @Test
+    void stopsForAnInRangePlayerBeforeChoosingAChaseTarget() throws Exception {
+        Monster monster = map1Monster();
+        setIntField(monster, "x", 2300);
+        Player chaseTarget = playerAt(7, 1975, 1936);
+        Player inRangeBeyondSpawnLeash = playerAt(8, 2400, 936);
+
+        assertFalse(monster.updateMove(List.of(chaseTarget, inRangeBeyondSpawnLeash)));
+        assertEquals(2300, monster.x());
+        assertFalse(monster.updateMove(List.of(inRangeBeyondSpawnLeash, chaseTarget)));
+        assertEquals(2300, monster.x());
     }
 
     @Test
@@ -211,6 +231,40 @@ class MonsterTest {
         assertFalse(monster.hasEnemy(7));
         assertTrue(monster.hasEnemy(8));
         assertFalse(monster.removeEnemy(7));
+    }
+
+    @Test
+    void repeatedHitsKeepEnemyOrderAndRemovalAdjustsRetaliationCooldown() {
+        Monster monster = map1Monster();
+        Player first = playerAt(8, 975, 936);
+        Player second = playerAt(7, 975, 936);
+        FirstTargetRandom random = new FirstTargetRandom();
+        monster.injure(8, 10, NOW, 0);
+        monster.injure(7, 10, NOW + 1, 0);
+        monster.injure(8, 10, NOW + 2, 0);
+
+        assertEquals(List.of(8, 7), monster.enemyPlayerIds());
+        assertEquals(new Monster.Attack(101, 8, 10, 190, false),
+                monster.update(List.of(first, second), NOW + 3, random));
+        assertNull(monster.update(List.of(first, second), NOW + 1_203, random));
+
+        assertTrue(monster.removeEnemy(8));
+        assertEquals(List.of(7), monster.enemyPlayerIds());
+        assertNull(monster.update(List.of(second), NOW + 1_204, random));
+        assertNull(monster.update(List.of(second), NOW + 1_603, random));
+        assertEquals(new Monster.Attack(101, 7, 10, 190, false),
+                monster.update(List.of(second), NOW + 1_604, random));
+        assertEquals(List.of(2, 1), random.bounds);
+    }
+
+    private static final class FirstTargetRandom extends Random {
+        private final List<Integer> bounds = new ArrayList<>();
+
+        @Override
+        public int nextInt(int bound) {
+            bounds.add(bound);
+            return 0;
+        }
     }
 
     private static Player playerAt(int id, int x, int y) {

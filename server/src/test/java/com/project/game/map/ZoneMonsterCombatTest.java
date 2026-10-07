@@ -2,17 +2,20 @@ package com.project.game.map;
 
 import com.project.game.monster.Monster;
 import com.project.game.monster.MonsterManager;
-import com.project.game.monster.MonsterSnapshot;
+import com.project.game.monster.Monster.Snapshot;
 import com.project.game.network.ClientConfig;
 import com.project.game.network.Session;
 import com.project.game.network.SessionManager;
 import com.project.game.network.SessionState;
 import com.project.game.network.codec.LegacyPacketCodec;
+import com.project.game.network.message.Message;
 import com.project.game.network.message.MessageName;
+import com.project.game.network.message.MessageReader;
 import com.project.game.network.packet.MonsterPacketWriter;
 import com.project.game.network.packet.PlayerPacketWriter;
 import com.project.game.network.transport.ClientTransport;
 import com.project.game.player.Player;
+import com.project.game.player.PlayerSaveData;
 import com.project.game.resource.GameResources;
 import com.project.game.service.AreaService;
 import com.project.game.testsupport.TestPlayers;
@@ -29,6 +32,8 @@ import java.util.List;
 import java.util.Random;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static com.project.game.testsupport.GameplayTestSupport.commands;
 import static com.project.game.testsupport.GameplayTestSupport.drain;
@@ -43,16 +48,27 @@ class ZoneMonsterCombatTest {
     private static final long NOW = 1_000_000L;
 
     @Test
-    void ownsOrderedMonsterSnapshotsAndLowLevelDamageInvariant() {
+    void ownsOrderedMonsterSnapshotsAndDamageInvariant() throws Exception {
         Zone zone = map1Zone();
+        Session attacker = session(playerAt(7, 975, 936));
+        assertTrue(zone.enter(attacker));
+        drain(attacker);
 
-        Monster.Damage damage = zone.damageMonster(101, 7, 10, NOW);
+        assertTrue(zone.attackMonster(attacker, 101, NOW));
 
-        assertEquals(new Monster.Damage(101, 10, 290, false, 0L), damage);
-        assertNull(zone.damageMonster(99, 7, 10, NOW));
+        assertFalse(zone.canTargetMonster(attacker, 99));
+        assertFalse(zone.attackMonster(attacker, 99, NOW));
         assertEquals(List.of(101, 102, 103, 104, 105, 106),
-                zone.monsterSnapshots().stream().map(MonsterSnapshot::id).toList());
+                zone.monsterSnapshots().stream().map(Snapshot::id).toList());
         assertEquals(290L, zone.monsterSnapshots().getFirst().hp());
+        List<Message> messages = drain(attacker);
+        assertEquals(List.of(MessageName.MONSTER_INJURE), commands(messages));
+        MessageReader injury = messages.getFirst().reader();
+        assertEquals(101, injury.readInt());
+        assertEquals(10L, injury.readLong());
+        assertEquals(290L, injury.readLong());
+        assertFalse(injury.readBoolean());
+        assertEquals(0, injury.remaining());
     }
 
     @Test
@@ -72,18 +88,162 @@ class ZoneMonsterCombatTest {
     @Test
     void damageCapturesCurrentMemberCountForRespawnDeadline() throws Exception {
         Zone zone = map1Zone();
-        Session player = session(playerAt(1, 975, 936));
-        zone.addPlayer(player);
+        Session player = session(playerAt(1, 975, 936, 500));
+        assertTrue(zone.enter(player));
         drain(player);
 
-        assertTrue(zone.damageMonster(101, 1, 500, NOW).killed());
+        assertTrue(zone.attackMonster(player, 101, NOW));
+        assertEquals(0L, zone.monsterSnapshots().getFirst().hp());
+        drain(player);
         zone.updateMonsters(NOW + 9_000, new Random(1L));
         assertTrue(commands(drain(player)).stream()
                 .noneMatch(command -> command == MessageName.MONSTER_RESPAWN));
 
         zone.updateMonsters(NOW + 9_001, new Random(1L));
         assertTrue(commands(drain(player)).contains(MessageName.MONSTER_RESPAWN));
-        assertTrue(zone.hasLiveMonster(101));
+        assertEquals(300L, zone.monsterSnapshots().getFirst().hp());
+        assertEquals(0, zone.monsterSnapshots().getFirst().status());
+    }
+
+    @Test
+    void zeroDamagePrepareAndImpactKeepExistingSemantics() throws Exception {
+        Zone zone = map1Zone();
+        Session attacker = session(playerAt(7, 975, 936, 0));
+        assertTrue(zone.enter(attacker));
+        drain(attacker);
+
+        assertTrue(zone.canTargetMonster(attacker, 101));
+        assertFalse(zone.attackMonster(attacker, 101, NOW));
+
+        assertEquals(300L, zone.monsterSnapshots().getFirst().hp());
+        assertEquals(1L, attacker.player().potential());
+        assertTrue(drain(attacker).isEmpty());
+    }
+
+    @Test
+    void combatRejectsStaleBacklinkAndDifferentSessionWithSamePlayerId() throws Exception {
+        Zone zone = map1Zone();
+        Session member = session(playerAt(7, 975, 936));
+        assertTrue(zone.enter(member));
+        drain(member);
+        Session staleBacklink = session(playerAt(8, 975, 936));
+        Session samePlayerId = session(playerAt(7, 975, 936));
+        staleBacklink.bindZone(zone);
+        samePlayerId.bindZone(zone);
+
+        for (Session nonMember : List.of(staleBacklink, samePlayerId)) {
+            assertFalse(zone.hasPlayer(nonMember));
+            assertFalse(zone.canTargetMonster(nonMember, 101));
+            assertFalse(zone.attackMonster(nonMember, 101, NOW));
+            assertEquals(1L, nonMember.player().potential());
+            assertTrue(drain(nonMember).isEmpty());
+        }
+
+        assertTrue(zone.hasPlayer(member));
+        assertEquals(300L, zone.monsterSnapshots().getFirst().hp());
+        assertEquals(1L, member.player().potential());
+        assertTrue(drain(member).isEmpty());
+    }
+
+    @Test
+    void queuedAttackRevalidatesMembershipAfterDetach() throws Exception {
+        Zone zone = map1Zone();
+        Session attacker = session(playerAt(7, 975, 936));
+        assertTrue(zone.enter(attacker));
+        drain(attacker);
+        CountDownLatch writerStarted = new CountDownLatch(1);
+        CountDownLatch releaseWriter = new CountDownLatch(1);
+        assertTrue(ZoneTestHooks.submit(zone, () -> {
+            writerStarted.countDown();
+            awaitRelease(releaseWriter);
+        }));
+        assertTrue(writerStarted.await(5, TimeUnit.SECONDS));
+        AtomicReference<PlayerSaveData> detached = new AtomicReference<>();
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+        AtomicBoolean attacked = new AtomicBoolean();
+        Thread detach = Thread.ofVirtual().start(() -> {
+            try {
+                detached.set(zone.leave(attacker));
+            } catch (Throwable exception) {
+                failure.compareAndSet(null, exception);
+            }
+        });
+        Thread hit = null;
+        try {
+            awaitWaiting(detach);
+            hit = Thread.ofVirtual().start(() -> {
+                try {
+                    attacked.set(zone.attackMonster(attacker, 101, NOW));
+                } catch (Throwable exception) {
+                    failure.compareAndSet(null, exception);
+                }
+            });
+            awaitWaiting(hit);
+            releaseWriter.countDown();
+            detach.join(5_000);
+            hit.join(5_000);
+
+            assertFalse(detach.isAlive());
+            assertFalse(hit.isAlive());
+            assertNull(failure.get());
+            assertNotNull(detached.get());
+            assertFalse(attacked.get());
+            assertFalse(zone.hasPlayer(attacker));
+            assertNull(attacker.zone());
+            assertEquals(300L, zone.monsterSnapshots().getFirst().hp());
+            assertEquals(1L, attacker.player().potential());
+            assertTrue(drain(attacker).isEmpty());
+        } finally {
+            releaseWriter.countDown();
+            detach.join(5_000);
+            if (hit != null) {
+                hit.join(5_000);
+            }
+        }
+    }
+
+    @Test
+    void writerOrderDecidesFinisherInBothOrders() throws Exception {
+        assertFinisherOrder(true);
+        assertFinisherOrder(false);
+    }
+
+    @Test
+    void combatRejectsFullOrStoppedWriterWithoutDelayedMutation() throws Exception {
+        Zone zone = new Zone(1, 0, Integer.MAX_VALUE, monsters(), 1,
+                new AreaService(new PlayerPacketWriter(), new MonsterPacketWriter()));
+        Session attacker = session(playerAt(7, 975, 936));
+        assertTrue(zone.enter(attacker));
+        drain(attacker);
+        CountDownLatch writerStarted = new CountDownLatch(1);
+        CountDownLatch releaseWriter = new CountDownLatch(1);
+        CountDownLatch queuedAction = new CountDownLatch(1);
+        assertTrue(ZoneTestHooks.submit(zone, () -> {
+            writerStarted.countDown();
+            awaitRelease(releaseWriter);
+        }));
+        assertTrue(writerStarted.await(5, TimeUnit.SECONDS));
+        try {
+            assertTrue(ZoneTestHooks.submit(zone, queuedAction::countDown));
+            assertFalse(zone.canTargetMonster(attacker, 101));
+            assertFalse(zone.attackMonster(attacker, 101, NOW));
+
+            releaseWriter.countDown();
+            assertTrue(queuedAction.await(5, TimeUnit.SECONDS));
+            ZoneTestHooks.call(zone, () -> null);
+            assertEquals(300L, zone.monsterSnapshots().getFirst().hp());
+            assertEquals(1L, attacker.player().potential());
+            assertTrue(drain(attacker).isEmpty());
+
+            zone.stopRuntime();
+            assertFalse(zone.canTargetMonster(attacker, 101));
+            assertFalse(zone.attackMonster(attacker, 101, NOW));
+            assertEquals(300L, zone.monsterSnapshots().getFirst().hp());
+            assertEquals(1L, attacker.player().potential());
+            assertTrue(drain(attacker).isEmpty());
+        } finally {
+            releaseWriter.countDown();
+        }
     }
 
     @Test
@@ -134,9 +294,10 @@ class ZoneMonsterCombatTest {
     void lifecycleUsesOnlyExactLiveZoneMembersAsMonsterTargets() throws Exception {
         Zone zone = map1Zone();
         Session target = session(playerAt(7, 975, 936));
-        zone.addPlayer(target);
+        assertTrue(zone.enter(target));
         drain(target);
-        assertNotNull(zone.damageMonster(101, 7, 10, NOW));
+        assertTrue(zone.attackMonster(target, 101, NOW));
+        drain(target);
         target.transition(SessionState.CONNECTED, SessionState.CLOSED);
 
         zone.updateMonsters(NOW + 1, new Random(1L));
@@ -151,10 +312,13 @@ class ZoneMonsterCombatTest {
         Player player = playerAt(7, 975, 936);
         player.injure(190);
         Session victim = session(player);
-        zone.addPlayer(victim);
+        assertTrue(zone.enter(victim));
         drain(victim);
-        assertNotNull(zone.damageMonster(101, 7, 10, NOW));
-        assertNotNull(zone.damageMonster(102, 7, 10, NOW));
+        ZoneTestHooks.call(zone, () -> {
+            assertNotNull(monsters.get(0).injure(7, 10, NOW, zone.size()));
+            assertNotNull(monsters.get(1).injure(7, 10, NOW, zone.size()));
+            return null;
+        });
 
         zone.updateMonsters(NOW + 1, new Random(1L));
 
@@ -176,7 +340,7 @@ class ZoneMonsterCombatTest {
         Zone zone = zone(1, 0, Integer.MAX_VALUE, List.of());
         Session first = session(playerAt(7, 975, 936));
         Session samePlayerId = session(playerAt(7, 975, 936));
-        zone.addPlayer(first);
+        assertTrue(zone.enter(first));
 
         assertTrue(zone.hasPlayer(first));
         assertFalse(zone.hasPlayer(samePlayerId));
@@ -202,6 +366,91 @@ class ZoneMonsterCombatTest {
     private static Player playerAt(int id, int x, int y) {
         return TestPlayers.at(TestPlayers.initial((long) id, id, "player" + id, 1),
                 1, 0, x, y);
+    }
+
+    private static Player playerAt(int id, int x, int y, int damage) {
+        Player player = playerAt(id, x, y);
+        Player.CurrentStats stats = player.currentStats();
+        Player.CurrentStats current = new Player.CurrentStats(
+                stats.maxHp(), stats.maxMp(), damage, stats.armor(), stats.critical(),
+                stats.dodge(), stats.constitution(), stats.speed());
+        return new Player(player.id(), player.accountId(), player.name(), player.gender(),
+                player.power(), player.potential(), player.level(), player.exp(),
+                player.baseStats(), current, player.hp(), player.mp(), player.appearance(),
+                player.coin(), player.coinLock(), player.diamond(), player.ruby(),
+                player.mapId(), player.zoneId(), player.x(), player.y());
+    }
+
+    private static void assertFinisherOrder(boolean aFirst) throws Exception {
+        List<Monster> monsters = monsters();
+        assertNotNull(monsters.getFirst().injure(99, 200, NOW, 0));
+        Zone zone = zone(1, 0, Integer.MAX_VALUE, monsters);
+        Session playerA = session(playerAt(7, 975, 936, 60));
+        Session playerB = session(playerAt(8, 975, 936, 70));
+        assertTrue(zone.enter(playerA));
+        assertTrue(zone.enter(playerB));
+        drain(playerA);
+        drain(playerB);
+        Session first = aFirst ? playerA : playerB;
+        Session second = aFirst ? playerB : playerA;
+        CountDownLatch writerStarted = new CountDownLatch(1);
+        CountDownLatch releaseWriter = new CountDownLatch(1);
+        assertTrue(ZoneTestHooks.submit(zone, () -> {
+            writerStarted.countDown();
+            awaitRelease(releaseWriter);
+        }));
+        assertTrue(writerStarted.await(5, TimeUnit.SECONDS));
+        AtomicBoolean firstAttacked = new AtomicBoolean();
+        AtomicBoolean secondAttacked = new AtomicBoolean();
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+        Thread firstHit = attack(zone, first, firstAttacked, failure);
+        Thread secondHit = null;
+        try {
+            awaitWaiting(firstHit);
+            secondHit = attack(zone, second, secondAttacked, failure);
+            awaitWaiting(secondHit);
+            releaseWriter.countDown();
+            firstHit.join(5_000);
+            secondHit.join(5_000);
+
+            assertFalse(firstHit.isAlive());
+            assertFalse(secondHit.isAlive());
+            assertNull(failure.get());
+            assertTrue(firstAttacked.get());
+            assertTrue(secondAttacked.get());
+            assertEquals(aFirst ? 1L : 11L, playerA.player().potential());
+            assertEquals(aFirst ? 11L : 1L, playerB.player().potential());
+            assertEquals(0L, zone.monsterSnapshots().getFirst().hp());
+            assertEquals(List.of(MessageName.MONSTER_INJURE, MessageName.MONSTER_START_DIE),
+                    commands(drain(first)));
+            assertEquals(List.of(MessageName.MONSTER_INJURE, MessageName.MONSTER_START_DIE,
+                            MessageName.PLAYER_INFO),
+                    commands(drain(second)));
+
+            assertFalse(zone.attackMonster(playerA, 101, NOW + 1));
+            assertFalse(zone.attackMonster(playerB, 101, NOW + 1));
+            assertEquals(1L, first.player().potential());
+            assertEquals(11L, second.player().potential());
+            assertTrue(drain(playerA).isEmpty());
+            assertTrue(drain(playerB).isEmpty());
+        } finally {
+            releaseWriter.countDown();
+            firstHit.join(5_000);
+            if (secondHit != null) {
+                secondHit.join(5_000);
+            }
+        }
+    }
+
+    private static Thread attack(Zone zone, Session attacker, AtomicBoolean attacked,
+                                 AtomicReference<Throwable> failure) {
+        return Thread.ofVirtual().start(() -> {
+            try {
+                attacked.set(zone.attackMonster(attacker, 101, NOW));
+            } catch (Throwable exception) {
+                failure.compareAndSet(null, exception);
+            }
+        });
     }
 
     private static Session session(Player player) {
@@ -232,7 +481,7 @@ class ZoneMonsterCombatTest {
             Thread.onSpinWait();
         }
         assertEquals(Thread.State.WAITING, thread.getState(),
-                "monster lifecycle did not wait for Zone admission");
+                "caller did not wait for the Zone writer");
     }
 
     private static final class NoopTransport implements ClientTransport {

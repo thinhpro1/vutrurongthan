@@ -31,12 +31,11 @@ public final class MessageHandler {
 
         this.connectionHandler = new ConnectionHandler(session, networkConfig);
         this.resourceHandler = new ResourceHandler(session, services.resources());
-        this.mapHandler = new MapHandler(session, services.maps(),
-                services.playerManager(), services.resources());
+        this.mapHandler = new MapHandler(session, services.maps(), services.resources());
         this.playerHandler = new PlayerHandler(session, services.playerManager(),
                 services.resources(), mapHandler);
         this.authHandler = new AuthHandler(session, services.auth(), networkConfig, playerHandler);
-        this.combatHandler = new CombatHandler(session, services.combat());
+        this.combatHandler = new CombatHandler(session, services.clock());
     }
 
     public void onMessage(Message message) {

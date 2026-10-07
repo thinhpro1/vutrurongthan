@@ -1,5 +1,7 @@
 package com.project.game.player;
 
+import com.project.game.monster.Monster;
+
 import java.util.Locale;
 import java.util.Objects;
 import java.util.regex.Pattern;
@@ -179,6 +181,36 @@ public final class Player {
         }
         hp = (int) Math.max(0L, (long) hp - damage);
         return hp;
+    }
+
+    public boolean canTarget(Monster monster) {
+        if (isDead()) {
+            return false;
+        }
+        if (monster == null) {
+            return false;
+        }
+        return monster.isAlive();
+    }
+
+    /** Applies this Player's attack and reward; the caller owns both runtime entities. */
+    public Monster.Damage attackMonster(Monster monster, long nowMillis, int playerCount) {
+        if (!canTarget(monster)) {
+            return null;
+        }
+        long damage = currentStats.damage();
+        if (damage <= 0L) {
+            return null;
+        }
+
+        Monster.Damage result = monster.injure(id, damage, nowMillis, playerCount);
+        if (result == null) {
+            return null;
+        }
+        if (result.killed() && result.potentialReward() > 0L) {
+            addPotential(result.potentialReward());
+        }
+        return result;
     }
 
     public long addPotential(long amount) {

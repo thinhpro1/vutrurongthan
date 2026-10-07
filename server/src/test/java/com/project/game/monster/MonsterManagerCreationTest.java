@@ -1,5 +1,7 @@
 package com.project.game.monster;
 
+import com.project.game.monster.Monster.Snapshot;
+import com.project.game.monster.MonsterTemplate.Spawn;
 import com.project.game.resource.GameResources;
 import com.project.game.persistence.monster.MonsterRepository;
 import com.project.game.testsupport.MapTestSupport;
@@ -34,15 +36,15 @@ class MonsterManagerCreationTest {
         List<Monster> map1 = manager.createForMap(1);
         assertEquals(6, map1.size());
 
-        List<MonsterSnapshot> snapshots =
+        List<Snapshot> snapshots =
                 map1.stream().map(Monster::snapshot).toList();
 
         assertEquals(
                 List.of(101, 102, 103, 104, 105, 106),
-                snapshots.stream().map(MonsterSnapshot::id).toList());
+                snapshots.stream().map(Snapshot::id).toList());
         assertEquals(
                 List.of(975, 1348, 1800, 2250, 2600, 2950),
-                snapshots.stream().map(MonsterSnapshot::x).toList());
+                snapshots.stream().map(Snapshot::x).toList());
         assertTrue(snapshots.stream().allMatch(monster ->
                 monster.type() == 0
                         && monster.templateId() == 1
@@ -74,6 +76,26 @@ class MonsterManagerCreationTest {
         for (int i = 0; i < first.size(); i++) {
             assertNotSame(first.get(i), second.get(i));
         }
+    }
+
+    @Test
+    void runtimeInjuryDoesNotChangeSpawnDataOrCapturedSnapshots() {
+        GameResources resources = resources();
+        MonsterManager manager = new MonsterManager(resources);
+        Spawn spawn = resources.monstersForMap(1).getFirst();
+        Monster monster = manager.createForMap(1).getFirst();
+        Snapshot captured = monster.snapshot();
+
+        Monster.Damage death = monster.injure(7, 500L, 1_000_000L, 0);
+
+        assertTrue(death.killed());
+        assertEquals(0L, monster.snapshot().hp());
+        assertEquals(1, monster.snapshot().status());
+        assertEquals(300L, captured.hp());
+        assertEquals(0, captured.status());
+        assertEquals(300L, spawn.hp());
+        assertEquals(0, spawn.status());
+        assertEquals(captured, manager.createForMap(1).getFirst().snapshot());
     }
 
     @Test

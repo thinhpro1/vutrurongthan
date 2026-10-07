@@ -6,13 +6,13 @@ import com.project.game.player.PlayerManager;
 import com.project.game.resource.GameResources;
 import com.project.game.network.SessionServices;
 import com.project.game.map.MapManager;
-import com.project.game.combat.Combat;
 import com.project.game.monster.MonsterManager;
 import com.project.game.network.packet.PlayerPacketWriter;
 import com.project.game.network.packet.MonsterPacketWriter;
 import com.project.game.service.AreaService;
 
 import java.util.Map;
+import java.time.Clock;
 import java.util.WeakHashMap;
 
 public final class TestServices {
@@ -39,15 +39,14 @@ public final class TestServices {
         AreaService area = new AreaService(playerPackets, monsterPackets);
         MonsterManager monsterManager = new MonsterManager(resources);
         MapManager maps = new MapManager(MapTestSupport.canonicalMaps(), monsterManager, area);
-        Combat combat = new Combat(java.time.Clock.systemUTC());
-        return new SessionServices(auth, resources, maps, combat, monsterManager,
+        return new SessionServices(auth, resources, maps, Clock.systemUTC(), monsterManager,
                 new PlayerManager(playerRepository(auth)));
     }
 
     public static SessionServices serverServices(AccountAuth auth, GameResources resources,
                                                 GameplayServices gameplay) {
         return new SessionServices(auth, resources, gameplay.mapManager(),
-                gameplay.combat(), gameplay.monsterManager(),
+                gameplay.clock(), gameplay.monsterManager(),
                 new PlayerManager(playerRepository(auth)));
     }
 
@@ -55,7 +54,7 @@ public final class TestServices {
                                                 GameplayServices gameplay,
                                                 PlayerRepository players) {
         return new SessionServices(auth, resources, gameplay.mapManager(),
-                gameplay.combat(), gameplay.monsterManager(), new PlayerManager(players));
+                gameplay.clock(), gameplay.monsterManager(), new PlayerManager(players));
     }
 
     public static PlayerRepository playerRepositoryFor(AccountAuth auth) {

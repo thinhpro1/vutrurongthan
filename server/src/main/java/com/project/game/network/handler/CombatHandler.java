@@ -1,10 +1,14 @@
 package com.project.game.network.handler;
 
-import com.project.game.combat.Combat;
+import com.project.game.map.Zone;
 import com.project.game.network.Session;
+import com.project.game.network.SessionState;
 import com.project.game.network.message.Message;
+import com.project.game.network.message.MessageReader;
 
 import java.io.IOException;
+import java.time.Clock;
+import java.util.Objects;
 
 /** Phân tích lệnh chiến đấu và quản lý đòn đánh quái đang chờ ở protocol. */
 final class CombatHandler {
@@ -12,12 +16,12 @@ final class CombatHandler {
     }
 
     private final Session session;
-    private final Combat combat;
+    private final Clock clock;
     private PendingMonsterAttack pendingMonsterAttack;
 
-    CombatHandler(Session session, Combat combat) {
+    CombatHandler(Session session, Clock clock) {
         this.session = session;
-        this.combat = combat;
+        this.clock = Objects.requireNonNull(clock, "clock");
     }
 
     void clearPendingAttack() {
@@ -27,7 +31,7 @@ final class CombatHandler {
     void handlePrepareMonsterAttack(Message message) throws IOException {
         pendingMonsterAttack = null;
 
-        var reader = message.reader();
+        MessageReader reader = message.reader();
         int skillId = reader.readByte();
 
         if (reader.remaining() == 0) {
@@ -53,7 +57,11 @@ final class CombatHandler {
             throw new IOException("unsupported -72 target type " + targetType);
         }
 
-        if (session.player() == null || !combat.canTargetMonster(session, targetId)) {
+        Zone zone = session.zone();
+        if (zone == null || session.state() == SessionState.CLOSED) {
+            return;
+        }
+        if (!zone.canTargetMonster(session, targetId)) {
             return;
         }
 
@@ -61,7 +69,7 @@ final class CombatHandler {
     }
 
     void handleMonsterAttackImpact(Message message) throws IOException {
-        var reader = message.reader();
+        MessageReader reader = message.reader();
         int targetType = reader.readByte();
         int targetId = -1;
 
@@ -93,6 +101,10 @@ final class CombatHandler {
             return;
         }
 
-        combat.attackMonster(session, targetId);
+        Zone zone = session.zone();
+        if (zone == null || session.state() == SessionState.CLOSED) {
+            return;
+        }
+        zone.attackMonster(session, targetId, clock.millis());
     }
 }

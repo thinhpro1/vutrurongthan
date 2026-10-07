@@ -1,9 +1,6 @@
 package com.project.game.resource.loader;
 
 import com.project.game.map.MapTemplate;
-import com.project.game.monster.MonsterDart;
-import com.project.game.monster.MonsterSpawn;
-import com.project.game.monster.MonsterTemplate;
 import com.project.game.persistence.monster.MonsterRepository;
 import com.project.game.resource.GameResources;
 import com.project.game.resource.IconCatalog;

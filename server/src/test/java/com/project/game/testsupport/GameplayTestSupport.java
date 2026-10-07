@@ -2,7 +2,7 @@ package com.project.game.testsupport;
 
 import com.project.game.map.Zone;
 import com.project.game.monster.MonsterManager;
-import com.project.game.monster.MonsterSnapshot;
+import com.project.game.monster.Monster.Snapshot;
 import com.project.game.monster.Monster;
 import com.project.game.network.ClientConfig;
 import com.project.game.network.Session;
@@ -78,7 +78,7 @@ public static void joinAtBarrier(CyclicBarrier start, GameplayServices maps,
                                         AtomicReference<Throwable> failure) {
         try {
             start.await();
-            result.set(maps.combat().attackMonster(session, 101));
+            result.set(maps.attackMonster(session, 101));
         } catch (Throwable exception) {
             failure.compareAndSet(null, exception);
         }

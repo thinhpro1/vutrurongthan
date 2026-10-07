@@ -5,7 +5,7 @@ import com.google.gson.JsonParser;
 import com.project.game.map.MapData;
 import com.project.game.map.MapTemplate;
 import com.project.game.map.Waypoint;
-import com.project.game.monster.MonsterSnapshot;
+import com.project.game.monster.Monster.Snapshot;
 import com.project.game.network.message.Message;
 import com.project.game.network.message.MessageName;
 import com.project.game.player.Player;
@@ -269,9 +269,9 @@ class MapPacketWriterTest {
         Player player = TestPlayers.initial(1L, 7, "alpha1", 0);
         player.changeMap(4, 0, 1, 2);
         List<String> names = waypoints.stream().map(ignored -> "target").toList();
-        List<MonsterSnapshot> monsters = new ArrayList<>();
+        List<Snapshot> monsters = new ArrayList<>();
         for (int index = 0; index < 128; index++) {
-            monsters.add(new MonsterSnapshot(0, 1, index, 1, 0,
+            monsters.add(new Snapshot(0, 1, index, 1, 0,
                     1, 2, 3L, 2L, 0));
         }
 

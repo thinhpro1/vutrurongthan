@@ -1,7 +1,6 @@
 package com.project.game.monster;
 
 import com.project.game.map.*;
-import com.project.game.combat.*;
 import com.project.game.network.*;
 import com.project.game.network.message.*;
 import com.project.game.network.packet.*;
@@ -36,7 +35,7 @@ class MonsterManagerRetaliationTest {
         drain(attacker);
         drain(observer);
 
-        assertTrue(maps.combat().attackMonster(attacker, 101));
+        assertTrue(maps.attackMonster(attacker, 101));
         drain(attacker);
         drain(observer);
         clock.advanceMillis(1L);
@@ -59,7 +58,7 @@ class MonsterManagerRetaliationTest {
         maps.mapManager().finishLoad(target);
         drain(target);
 
-        assertTrue(maps.combat().attackMonster(target, 101));
+        assertTrue(maps.attackMonster(target, 101));
         drain(target);
 
         clock.advanceMillis(1L);
@@ -77,7 +76,7 @@ class MonsterManagerRetaliationTest {
         maps.mapManager().finishLoad(target);
         drain(target);
 
-        assertTrue(maps.combat().attackMonster(target, 101));
+        assertTrue(maps.attackMonster(target, 101));
         drain(target);
 
         clock.advanceMillis(1L);
@@ -95,7 +94,7 @@ class MonsterManagerRetaliationTest {
         drain(target);
 
         for (int monsterId = 101; monsterId <= 106; monsterId++) {
-            assertTrue(maps.combat().attackMonster(target, monsterId));
+            assertTrue(maps.attackMonster(target, monsterId));
             drain(target);
         }
 
@@ -123,7 +122,7 @@ class MonsterManagerRetaliationTest {
         drain(victim);
         drain(observer);
 
-        assertTrue(maps.combat().attackMonster(victim, 101));
+        assertTrue(maps.attackMonster(victim, 101));
         drain(victim);
         drain(observer);
         clock.advanceMillis(1L);
@@ -160,7 +159,7 @@ class MonsterManagerRetaliationTest {
         drain(attacker);
         drain(otherZone);
 
-        assertTrue(maps.combat().attackMonster(attacker, 101));
+        assertTrue(maps.attackMonster(attacker, 101));
         drain(attacker);
         clock.advanceMillis(1L);
         maps.monsterManager().update(maps.mapManager());
@@ -178,7 +177,7 @@ class MonsterManagerRetaliationTest {
         Session attacker = session(player(1, 1, 0), maps);
         maps.mapManager().finishLoad(attacker);
         drain(attacker);
-        assertTrue(maps.combat().attackMonster(attacker, 101));
+        assertTrue(maps.attackMonster(attacker, 101));
         drain(attacker);
 
         assertTrue(maps.movePlayer(attacker, 975 + 901, 936));
@@ -209,7 +208,7 @@ class MonsterManagerRetaliationTest {
         maps.mapManager().finishLoad(attacker);
         drain(attacker);
 
-        assertTrue(maps.combat().attackMonster(attacker, 101));
+        assertTrue(maps.attackMonster(attacker, 101));
         drain(attacker);
         clock.advanceMillis(1L);
         maps.monsterManager().update(maps.mapManager());
@@ -248,10 +247,10 @@ class MonsterManagerRetaliationTest {
         drain(survivor);
 
         for (int hit = 0; hit < 28; hit++) {
-            assertTrue(maps.combat().attackMonster(survivor, 101));
+            assertTrue(maps.attackMonster(survivor, 101));
             drain(survivor);
         }
-        assertTrue(maps.combat().attackMonster(survivor, 101));
+        assertTrue(maps.attackMonster(survivor, 101));
         drain(survivor);
         clock.advanceMillis(9_000L);
         maps.monsterManager().update(maps.mapManager());

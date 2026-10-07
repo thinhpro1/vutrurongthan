@@ -27,4 +27,35 @@ public record MonsterTemplate(
         iconsInjure = List.copyOf(Objects.requireNonNull(iconsInjure, "iconsInjure"));
         iconsAttack = List.copyOf(Objects.requireNonNull(iconsAttack, "iconsAttack"));
     }
+
+    /** Immutable animation data shared by the Monster resource catalog. */
+    public record Dart(
+            int id,
+            boolean meteorite,
+            Phase light,
+            Phase bullet,
+            Phase explode
+    ) {
+        /** One light, bullet, or explode animation phase. */
+        public record Phase(List<Integer> icons, int dx, int dy, int delay) {
+            public Phase {
+                icons = List.copyOf(icons);
+            }
+        }
+    }
+
+    /** Immutable initial state used to create an independent Monster for each Zone. */
+    public record Spawn(
+            int type,
+            int templateId,
+            int id,
+            int level,
+            int levelStatus,
+            int x,
+            int y,
+            long maxHp,
+            long hp,
+            int status
+    ) {
+    }
 }

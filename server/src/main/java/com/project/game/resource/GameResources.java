@@ -1,8 +1,8 @@
 package com.project.game.resource;
 
 import com.project.game.map.MapTemplate;
-import com.project.game.monster.MonsterDart;
-import com.project.game.monster.MonsterSpawn;
+import com.project.game.monster.MonsterTemplate.Dart;
+import com.project.game.monster.MonsterTemplate.Spawn;
 import com.project.game.monster.MonsterTemplate;
 import com.project.game.persistence.monster.MonsterRepository;
 import com.project.game.resource.loader.GameResourcesLoader;
@@ -36,9 +36,9 @@ public final class GameResources {
     private final List<LevelTemplate> levels;
     private final List<EffectImage> effects;
     private final int monsterVersion;
-    private final List<MonsterDart> monsterDarts;
+    private final List<Dart> monsterDarts;
     private final List<MonsterTemplate> monsterTemplates;
-    private final Map<Integer, List<MonsterSpawn>> monsterSpawns;
+    private final Map<Integer, List<Spawn>> monsterSpawns;
 
     public GameResources(
             IconCatalog iconCatalog,
@@ -49,9 +49,9 @@ public final class GameResources {
             List<LevelTemplate> levels,
             List<EffectImage> effects,
             int monsterVersion,
-            List<MonsterDart> monsterDarts,
+            List<Dart> monsterDarts,
             List<MonsterTemplate> monsterTemplates,
-            Map<Integer, List<MonsterSpawn>> monsterSpawns) {
+            Map<Integer, List<Spawn>> monsterSpawns) {
         this.iconCatalog = iconCatalog;
         this.imageVersion = imageVersion;
         this.frames = List.copyOf(Objects.requireNonNull(frames, "frames"));
@@ -189,7 +189,7 @@ public final class GameResources {
         return monsterVersion;
     }
 
-    public List<MonsterDart> monsterDarts() {
+    public List<Dart> monsterDarts() {
         return monsterDarts;
     }
 
@@ -197,7 +197,7 @@ public final class GameResources {
         return monsterTemplates;
     }
 
-    public List<MonsterSpawn> monstersForMap(int mapId) {
+    public List<Spawn> monstersForMap(int mapId) {
         return monsterSpawns.getOrDefault(mapId, List.of());
     }
 

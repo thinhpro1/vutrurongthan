@@ -18,7 +18,7 @@ remaining JSON resource families are composed into `GameResources`.
 
 `monster_template` và `monster_spawn` trong database là nguồn runtime duy nhất
 cho monster templates và map spawns. `MonsterDartTemplate.json` là nguồn static
-duy nhất cho danh sách `MonsterDart` và animation dart. Runtime không có fallback
+duy nhất cho danh sách `MonsterTemplate.Dart` và animation dart. Runtime không có fallback
 về các bootstrap monster JSON legacy.
 
 Thư mục hiện cũng có `Dart.json`, `SkillEffect.json` và `SkillPaint.json`. Các

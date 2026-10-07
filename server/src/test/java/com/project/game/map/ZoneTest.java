@@ -337,12 +337,12 @@ class ZoneTest {
     void runtimeStartsFrozenWithoutCreatingAnActiveWorker() {
         Zone zone = zone(1, 0, 10, List.of());
 
-        assertEquals(Zone.RuntimeState.FROZEN, zone.runtimeState());
+        assertEquals(ZoneWriter.State.FROZEN, zone.runtimeState());
     }
 
     @Test
     void lifecycleControlsStayPackagePrivateExceptSubmitBoundary() throws Exception {
-        assertFalse(Modifier.isPublic(Zone.RuntimeState.class.getModifiers()));
+        assertFalse(Modifier.isPublic(ZoneWriter.State.class.getModifiers()));
         assertFalse(Modifier.isPublic(
                 Zone.class.getDeclaredMethod("runtimeState").getModifiers()));
         assertFalse(Modifier.isPublic(
@@ -394,7 +394,7 @@ class ZoneTest {
             }
         }));
         assertTrue(firstStarted.await(5, TimeUnit.SECONDS));
-        assertEquals(Zone.RuntimeState.ACTIVE, zone.runtimeState());
+        assertEquals(ZoneWriter.State.ACTIVE, zone.runtimeState());
 
         assertTrue(zone.submit(() -> {
             Thread current = Thread.currentThread();
@@ -413,7 +413,7 @@ class ZoneTest {
 
         releaseFirst.countDown();
         assertTrue(finished.await(5, TimeUnit.SECONDS));
-        awaitRuntimeState(zone, Zone.RuntimeState.FROZEN);
+        awaitRuntimeState(zone, ZoneWriter.State.FROZEN);
 
         assertEquals(List.of(1, 2, 3), order);
         assertTrue(allVirtual.get());
@@ -458,7 +458,7 @@ class ZoneTest {
         assertTrue(finished.await(5, TimeUnit.SECONDS));
         submitterOne.join();
         submitterTwo.join();
-        awaitRuntimeState(zone, Zone.RuntimeState.FROZEN);
+        awaitRuntimeState(zone, ZoneWriter.State.FROZEN);
 
         assertTrue(oneWriter.get());
     }
@@ -470,7 +470,7 @@ class ZoneTest {
 
         assertTrue(zone.submit(completed::countDown));
         assertTrue(completed.await(5, TimeUnit.SECONDS));
-        awaitRuntimeState(zone, Zone.RuntimeState.FROZEN);
+        awaitRuntimeState(zone, ZoneWriter.State.FROZEN);
     }
 
     @Test
@@ -528,7 +528,7 @@ class ZoneTest {
         }));
 
         assertTrue(finished.await(5, TimeUnit.SECONDS));
-        awaitRuntimeState(zone, Zone.RuntimeState.FROZEN);
+        awaitRuntimeState(zone, ZoneWriter.State.FROZEN);
         assertEquals(42, result.get());
     }
 
@@ -605,7 +605,7 @@ class ZoneTest {
         caller.join();
         assertNull(failure.get());
         assertEquals(42, result.get());
-        awaitRuntimeState(zone, Zone.RuntimeState.FROZEN);
+        awaitRuntimeState(zone, ZoneWriter.State.FROZEN);
     }
 
     @Test
@@ -682,7 +682,7 @@ class ZoneTest {
         caller.join();
 
         assertTrue(failure.get() instanceof RejectedExecutionException);
-        awaitRuntimeState(zone, Zone.RuntimeState.STOPPED);
+        awaitRuntimeState(zone, ZoneWriter.State.STOPPED);
     }
 
     @Test
@@ -708,7 +708,7 @@ class ZoneTest {
 
         releaseFirst.countDown();
         assertTrue(secondRan.await(5, TimeUnit.SECONDS));
-        awaitRuntimeState(zone, Zone.RuntimeState.FROZEN);
+        awaitRuntimeState(zone, ZoneWriter.State.FROZEN);
         assertFalse(rejectedActionRan.get());
     }
 
@@ -758,7 +758,7 @@ class ZoneTest {
         caller.join();
 
         assertTrue(failure.get() instanceof RejectedExecutionException);
-        awaitRuntimeState(zone, Zone.RuntimeState.STOPPED);
+        awaitRuntimeState(zone, ZoneWriter.State.STOPPED);
     }
 
     @Test
@@ -769,16 +769,16 @@ class ZoneTest {
         CountDownLatch woke = new CountDownLatch(1);
 
         assertTrue(zone.submit(() -> {
-            zone.damageMonster(monster.id(), 1, 10, 0);
+            monster.injure(1, 10, 0, zone.size());
             damaged.countDown();
         }));
         assertTrue(damaged.await(5, TimeUnit.SECONDS));
-        awaitRuntimeState(zone, Zone.RuntimeState.FROZEN);
+        awaitRuntimeState(zone, ZoneWriter.State.FROZEN);
         assertEquals(290, monster.snapshot().hp());
 
         assertTrue(zone.submit(woke::countDown));
         assertTrue(woke.await(5, TimeUnit.SECONDS));
-        awaitRuntimeState(zone, Zone.RuntimeState.FROZEN);
+        awaitRuntimeState(zone, ZoneWriter.State.FROZEN);
         assertEquals(290, monster.snapshot().hp());
     }
 
@@ -812,7 +812,7 @@ class ZoneTest {
         assertTrue(elapsed < TimeUnit.SECONDS.toNanos(1));
         releaseFirst.countDown();
         assertTrue(secondRan.await(5, TimeUnit.SECONDS));
-        awaitRuntimeState(zone, Zone.RuntimeState.FROZEN);
+        awaitRuntimeState(zone, ZoneWriter.State.FROZEN);
     }
 
     @Test
@@ -826,7 +826,7 @@ class ZoneTest {
         assertTrue(zone.submit(continued::countDown));
 
         assertTrue(continued.await(5, TimeUnit.SECONDS));
-        awaitRuntimeState(zone, Zone.RuntimeState.FROZEN);
+        awaitRuntimeState(zone, ZoneWriter.State.FROZEN);
     }
 
     @Test
@@ -851,13 +851,13 @@ class ZoneTest {
         assertTrue(zone.submit(() -> pendingRan.set(true)));
 
         zone.stopRuntime();
-        assertEquals(Zone.RuntimeState.STOPPED, zone.runtimeState());
+        assertEquals(ZoneWriter.State.STOPPED, zone.runtimeState());
         assertFalse(zone.submit(() -> {
             throw new AssertionError("stopped action must not run");
         }));
 
         releaseFirst.countDown();
-        awaitRuntimeState(zone, Zone.RuntimeState.STOPPED);
+        awaitRuntimeState(zone, ZoneWriter.State.STOPPED);
         assertFalse(pendingRan.get());
     }
 
@@ -909,7 +909,7 @@ class ZoneTest {
         }
     }
 
-    private static void awaitRuntimeState(Zone zone, Zone.RuntimeState expected) {
+    private static void awaitRuntimeState(Zone zone, ZoneWriter.State expected) {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
         while (zone.runtimeState() != expected && System.nanoTime() < deadline) {
             Thread.onSpinWait();

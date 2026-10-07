@@ -4,6 +4,8 @@ import com.project.game.testsupport.TestPlayers;
 import com.project.game.testsupport.TestServices;
 
 import com.project.game.testsupport.GameplayServices;
+import com.project.game.testsupport.MutableClock;
+import com.project.game.map.Zone;
 import com.project.game.map.ZoneTestHooks;
 import com.project.game.testsupport.MapTestSupport;
 import com.project.game.network.handler.MessageHandler;
@@ -18,8 +20,17 @@ import com.project.game.network.SessionServices;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Path;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.util.Random;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static com.project.game.network.MessageHandlerTestSupport.*;
 
 class MessageHandlerCombatTest {
@@ -168,6 +179,64 @@ class MessageHandlerCombatTest {
         assertEquals(0, context.session().player().mapId());
     }
 
+    @Test
+    void impactSamplesClockBeforeWaitingForZoneWriter() throws Exception {
+        long sample = 1_000_000L;
+        SampleClock clock = new SampleClock(sample);
+        CombatContext context = combatContext(clock);
+        Zone zone = context.session().zone();
+        for (int hit = 0; hit < 29; hit++) {
+            assertTrue(context.maps().attackMonster(context.session(), 101));
+            drainMessages(context.session());
+        }
+        context.handler().onMessage(prepareMonster(7, 101));
+
+        CountDownLatch writerStarted = new CountDownLatch(1);
+        CountDownLatch releaseWriter = new CountDownLatch(1);
+        assertTrue(ZoneTestHooks.submit(zone, () -> {
+            writerStarted.countDown();
+            try {
+                releaseWriter.await();
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                throw new AssertionError(exception);
+            }
+        }));
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+        Thread impact = null;
+        try {
+            assertTrue(writerStarted.await(5, TimeUnit.SECONDS));
+            clock.watchSample = true;
+            impact = Thread.ofVirtual().start(() -> {
+                try {
+                    context.handler().onMessage(monsterImpact(101));
+                } catch (Throwable exception) {
+                    failure.set(exception);
+                }
+            });
+            assertTrue(clock.sampled.await(5, TimeUnit.SECONDS));
+            clock.time.advanceMillis(60_000L);
+            releaseWriter.countDown();
+            impact.join(5_000L);
+            assertFalse(impact.isAlive());
+            if (failure.get() != null) {
+                throw new AssertionError("impact failed", failure.get());
+            }
+
+            assertEquals(0L, zone.monsterSnapshots().getFirst().hp());
+            assertEquals(11L, context.session().player().potential());
+            zone.updateMonsters(sample + 9_000L, new Random(1L));
+            assertEquals(0L, zone.monsterSnapshots().getFirst().hp());
+            zone.updateMonsters(sample + 9_001L, new Random(1L));
+            assertEquals(300L, zone.monsterSnapshots().getFirst().hp());
+        } finally {
+            releaseWriter.countDown();
+            if (impact != null) {
+                impact.join(5_000L);
+            }
+        }
+    }
+
     private static Message prepareMonster(int skillId, int monsterId) {
         return new Message(
                 MessageName.PLAYER_START_USE_ULTIMATE,
@@ -181,11 +250,15 @@ class MessageHandlerCombatTest {
     }
 
     private static CombatContext combatContext() {
+        return combatContext(Clock.systemUTC());
+    }
+
+    private static CombatContext combatContext(Clock clock) {
         GameResources resources = GameResources.fromFrameRoot(
                 Path.of("resources", "json"), MapTestSupport.canonicalMaps(), 2,
                 com.project.game.testsupport.MonsterTestSupport.canonicalRepository());
         GameplayServices maps = new GameplayServices(new PlayerPacketWriter(), new MonsterPacketWriter(),
-                new MonsterManager(resources));
+                new MonsterManager(resources), clock);
         SessionServices services = TestServices.serverServices(TestServices.auth(), resources, maps);
         Session session = inGameSession(services,
                 TestPlayers.at(TestPlayers.initial(1L, 7, "alpha1", 0), 1, 0, 90, 1008));
@@ -200,5 +273,39 @@ class MessageHandlerCombatTest {
     }
 
     private record CombatContext(Session session, MessageHandler handler, GameplayServices maps) {
+    }
+
+    private static final class SampleClock extends Clock {
+        private final MutableClock time;
+        private final CountDownLatch sampled = new CountDownLatch(1);
+        private volatile boolean watchSample;
+
+        private SampleClock(long initialMillis) {
+            time = new MutableClock(initialMillis);
+        }
+
+        @Override
+        public ZoneId getZone() {
+            return time.getZone();
+        }
+
+        @Override
+        public Clock withZone(ZoneId zone) {
+            return time.withZone(zone);
+        }
+
+        @Override
+        public Instant instant() {
+            return Instant.ofEpochMilli(millis());
+        }
+
+        @Override
+        public long millis() {
+            long sample = time.millis();
+            if (watchSample) {
+                sampled.countDown();
+            }
+            return sample;
+        }
     }
 }

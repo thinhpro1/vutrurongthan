@@ -4,8 +4,8 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonParseException;
 import com.google.gson.JsonParser;
 import com.project.game.map.MapTemplate;
-import com.project.game.monster.MonsterDart;
-import com.project.game.monster.MonsterSpawn;
+import com.project.game.monster.MonsterTemplate.Dart;
+import com.project.game.monster.MonsterTemplate.Spawn;
 import com.project.game.monster.MonsterTemplate;
 import com.project.game.persistence.monster.MonsterRepository;
 
@@ -42,8 +42,8 @@ final class MonsterCatalogLoader {
                 repository.findAllTemplates(), "monster template rows");
         List<MonsterRepository.SpawnRow> spawnRows = requireRows(
                 repository.findAllSpawns(), "monster spawn rows");
-        List<MonsterDart> darts = MonsterDartLoader.load(jsonRoot, true);
-        Map<Integer, MonsterDart> dartsById = indexDarts(darts);
+        List<Dart> darts = MonsterDartLoader.load(jsonRoot, true);
+        Map<Integer, Dart> dartsById = indexDarts(darts);
 
         Map<Integer, MonsterTemplate> templatesById = new TreeMap<>();
         for (MonsterRepository.TemplateRow row : templateRows) {
@@ -57,16 +57,16 @@ final class MonsterCatalogLoader {
         }
 
         Set<Integer> spawnIds = new HashSet<>();
-        Map<Integer, List<MonsterSpawn>> spawnsByMap = new TreeMap<>();
+        Map<Integer, List<Spawn>> spawnsByMap = new TreeMap<>();
         spawnRows.stream()
                 .sorted(java.util.Comparator.comparingInt(MonsterRepository.SpawnRow::id))
                 .forEach(row -> {
-                    MonsterSpawn spawn = readSpawn(row, templatesById, maps, spawnIds);
+                    Spawn spawn = readSpawn(row, templatesById, maps, spawnIds);
                     spawnsByMap.computeIfAbsent(row.mapId(), ignored -> new ArrayList<>())
                             .add(spawn);
                 });
 
-        Map<Integer, List<MonsterSpawn>> immutableSpawns = new TreeMap<>();
+        Map<Integer, List<Spawn>> immutableSpawns = new TreeMap<>();
         spawnsByMap.forEach((mapId, spawns) -> immutableSpawns.put(mapId, List.copyOf(spawns)));
         return new LoadedMonsters(
                 monsterVersion,
@@ -75,9 +75,9 @@ final class MonsterCatalogLoader {
                 Collections.unmodifiableMap(immutableSpawns));
     }
 
-    private static Map<Integer, MonsterDart> indexDarts(List<MonsterDart> darts) {
-        Map<Integer, MonsterDart> result = new HashMap<>();
-        for (MonsterDart dart : darts) {
+    private static Map<Integer, Dart> indexDarts(List<Dart> darts) {
+        Map<Integer, Dart> result = new HashMap<>();
+        for (Dart dart : darts) {
             if (result.put(dart.id(), dart) != null) {
                 throw new IllegalArgumentException("duplicate monster dart id: " + dart.id());
             }
@@ -87,7 +87,7 @@ final class MonsterCatalogLoader {
 
     private static MonsterTemplate readTemplate(
             MonsterRepository.TemplateRow row,
-            Map<Integer, MonsterDart> dartsById) {
+            Map<Integer, Dart> dartsById) {
         if (row == null) {
             throw new IllegalArgumentException("monster template row must not be null");
         }
@@ -164,7 +164,7 @@ final class MonsterCatalogLoader {
         return List.copyOf(result);
     }
 
-    private static MonsterSpawn readSpawn(
+    private static Spawn readSpawn(
             MonsterRepository.SpawnRow row,
             Map<Integer, MonsterTemplate> templatesById,
             Map<Integer, MapTemplate> maps,
@@ -196,7 +196,7 @@ final class MonsterCatalogLoader {
             throw new IllegalArgumentException(
                     "monster spawn coordinate is outside map bounds: " + row.id());
         }
-        return new MonsterSpawn(
+        return new Spawn(
                 0,
                 template.id(),
                 row.id(),
@@ -225,9 +225,9 @@ final class MonsterCatalogLoader {
 
     record LoadedMonsters(
             int version,
-            List<MonsterDart> darts,
+            List<Dart> darts,
             List<MonsterTemplate> templates,
-            Map<Integer, List<MonsterSpawn>> spawns
+            Map<Integer, List<Spawn>> spawns
     ) {
     }
 }

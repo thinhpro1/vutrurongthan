@@ -2,6 +2,7 @@ package com.project.game.monster;
 
 import com.project.game.map.MapManager;
 import com.project.game.map.Zone;
+import com.project.game.monster.MonsterTemplate.Spawn;
 import com.project.game.resource.GameResources;
 
 import java.time.Clock;
@@ -53,9 +54,9 @@ public final class MonsterManager {
 
     /** Creates independent runtime Monsters for every spawn on a Map. */
     public List<Monster> createForMap(int mapId) {
-        List<MonsterSpawn> spawns = resources.monstersForMap(mapId);
+        List<Spawn> spawns = resources.monstersForMap(mapId);
         List<Monster> monsters = new ArrayList<>(spawns.size());
-        for (MonsterSpawn spawn : spawns) {
+        for (Spawn spawn : spawns) {
             MonsterTemplate template = findTemplate(spawn.templateId());
             if (template == null) {
                 throw new IllegalStateException("missing monster template " + spawn.templateId());

@@ -1,8 +1,9 @@
 package com.project.game.monster;
 
+import com.project.game.monster.MonsterTemplate.Spawn;
 import com.project.game.player.Player;
 
-import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.random.RandomGenerator;
@@ -25,18 +26,18 @@ public final class Monster {
     private final int levelStatus;
     private final int xFirst;
     private final int yFirst;
+    private final long maxHp;
 
     private int x;
     private int y;
-    private long maxHp;
     private long hp;
     private int status;
     private long respawnAtMillis = NO_RESPAWN;
     private int moveDir = INITIAL_MOVE_DIR;
-    private final LinkedHashMap<Integer, Long> enemies = new LinkedHashMap<>();
+    private final LinkedHashSet<Integer> enemies = new LinkedHashSet<>();
     private long lastAttackAtMillis;
 
-    Monster(MonsterSpawn spawn, MonsterTemplate template) {
+    Monster(Spawn spawn, MonsterTemplate template) {
         Objects.requireNonNull(spawn, "spawn");
         this.template = Objects.requireNonNull(template, "template");
         if (template.id() != spawn.templateId()) {
@@ -78,10 +79,6 @@ public final class Monster {
         return updateAttack(hostilePlayers, nowMillis, random);
     }
 
-    public boolean isAlive() {
-        return status == STATUS_LIVE && hp > 0L;
-    }
-
     /** Applies Player damage and captures the respawn deadline on the lethal hit. */
     public Damage injure(int attackerPlayerId, long damage, long nowMillis, int playerCount) {
         if (damage <= 0L || !isAlive()) {
@@ -99,7 +96,7 @@ public final class Monster {
         }
 
         hp = hpAfter;
-        enemies.merge(attackerPlayerId, damage, Monster::saturatingAdd);
+        enemies.add(attackerPlayerId);
         if (killed) {
             status = STATUS_DIE;
             respawnAtMillis = respawnAt;
@@ -126,6 +123,10 @@ public final class Monster {
         return true;
     }
 
+    private static long respawnDelayMillis(int playerCount) {
+        return Math.max(10_000L - 1_000L * playerCount, 5_000L);
+    }
+
     /** Chooses patrol or chase movement from the hostile Players supplied by its Zone. */
     boolean updateMove(List<Player> hostilePlayers) {
         Objects.requireNonNull(hostilePlayers, "hostilePlayers");
@@ -133,16 +134,16 @@ public final class Monster {
             return false;
         }
 
-        for (Player player : hostilePlayers) {
-            if (player != null && isWithinAttackRange(player)) {
-                return false;
-            }
-        }
-
         Player target = null;
         long targetDistance = Long.MAX_VALUE;
         for (Player player : hostilePlayers) {
-            if (player == null || Math.abs((long) player.x() - xFirst) > CHASE_LEASH) {
+            if (player == null) {
+                continue;
+            }
+            if (isWithinAttackRange(player)) {
+                return false;
+            }
+            if (Math.abs((long) player.x() - xFirst) > CHASE_LEASH) {
                 continue;
             }
             long distance = squaredDistance(player);
@@ -154,118 +155,6 @@ public final class Monster {
             }
         }
         return target == null ? patrol() : moveTo(target.x());
-    }
-
-    /** Attacks one valid in-range hostile Player when cooldown is strictly due. */
-    Attack updateAttack(
-            List<Player> hostilePlayers, long nowMillis, RandomGenerator random) {
-        Objects.requireNonNull(hostilePlayers, "hostilePlayers");
-        Objects.requireNonNull(random, "random");
-        if (!isAlive() || enemies.isEmpty() || !attackDue(nowMillis)) {
-            return null;
-        }
-
-        lastAttackAtMillis = nowMillis;
-        Player target = findTarget(hostilePlayers, random);
-        if (target == null) {
-            return null;
-        }
-        int hpAfter = target.injure(damage());
-        return new Attack(id, target.id(), damage(), hpAfter, hpAfter == 0L);
-    }
-
-    /** Finds a current living hostile Player inside the strict attack range. */
-    Player findTarget(List<Player> hostilePlayers, RandomGenerator random) {
-        int targetCount = 0;
-        for (Player player : hostilePlayers) {
-            if (player != null && isWithinAttackRange(player)) {
-                targetCount++;
-            }
-        }
-        if (targetCount == 0) {
-            return null;
-        }
-
-        int targetIndex = random.nextInt(targetCount);
-        for (Player player : hostilePlayers) {
-            if (player == null || !isWithinAttackRange(player)) {
-                continue;
-            }
-            if (targetIndex == 0) {
-                return player;
-            }
-            targetIndex--;
-        }
-        return null;
-    }
-
-    public int id() {
-        return id;
-    }
-
-    public long damage() {
-        return template.damage();
-    }
-
-    public long hp() {
-        return hp;
-    }
-
-    public int x() {
-        return x;
-    }
-
-    public int y() {
-        return y;
-    }
-
-    public int levelStatus() {
-        return levelStatus;
-    }
-
-    int rangeMove() {
-        return template.rangeMove();
-    }
-
-    int speed() {
-        return template.speed();
-    }
-
-    int moveType() {
-        return template.type();
-    }
-
-    public int moveDir() {
-        return moveDir;
-    }
-
-    public int xFirst() {
-        return xFirst;
-    }
-
-    public List<Integer> enemyPlayerIds() {
-        return List.copyOf(enemies.keySet());
-    }
-
-    public int enemyCount() {
-        return enemies.size();
-    }
-
-    public boolean hasEnemy(int playerId) {
-        return enemies.containsKey(playerId);
-    }
-
-    public boolean removeEnemy(int playerId) {
-        return enemies.remove(playerId) != null;
-    }
-
-    public long attackDelay() {
-        return Math.max(2_000L - 400L * enemies.size(), 500L);
-    }
-
-    public MonsterSnapshot snapshot() {
-        return new MonsterSnapshot(
-                type, template.id(), id, level, levelStatus, x, y, maxHp, hp, status);
     }
 
     private boolean moveTo(int targetX) {
@@ -321,9 +210,61 @@ public final class Monster {
         return x != beforeX || y != beforeY;
     }
 
-    private boolean attackDue(long nowMillis) {
-        return lastAttackAtMillis == 0L
-                || nowMillis > deadlineAfter(lastAttackAtMillis, attackDelay());
+    private int movementStep() {
+        return Math.multiplyExact(template.speed(), MOVEMENT_STEP_MULTIPLIER);
+    }
+
+    private long squaredDistance(Player player) {
+        long dx = (long) x - player.x();
+        long dy = (long) y - player.y();
+        try {
+            return Math.addExact(Math.multiplyExact(dx, dx), Math.multiplyExact(dy, dy));
+        } catch (ArithmeticException ignored) {
+            return Long.MAX_VALUE;
+        }
+    }
+
+    /** Attacks one valid in-range hostile Player when cooldown is strictly due. */
+    Attack updateAttack(
+            List<Player> hostilePlayers, long nowMillis, RandomGenerator random) {
+        Objects.requireNonNull(hostilePlayers, "hostilePlayers");
+        Objects.requireNonNull(random, "random");
+        if (!isAlive() || enemies.isEmpty() || !attackDue(nowMillis)) {
+            return null;
+        }
+
+        lastAttackAtMillis = nowMillis;
+        Player target = findTarget(hostilePlayers, random);
+        if (target == null) {
+            return null;
+        }
+        int hpAfter = target.injure(damage());
+        return new Attack(id, target.id(), damage(), hpAfter, hpAfter == 0L);
+    }
+
+    /** Finds a current living hostile Player inside the strict attack range. */
+    Player findTarget(List<Player> hostilePlayers, RandomGenerator random) {
+        int targetCount = 0;
+        for (Player player : hostilePlayers) {
+            if (player != null && isWithinAttackRange(player)) {
+                targetCount++;
+            }
+        }
+        if (targetCount == 0) {
+            return null;
+        }
+
+        int targetIndex = random.nextInt(targetCount);
+        for (Player player : hostilePlayers) {
+            if (player == null || !isWithinAttackRange(player)) {
+                continue;
+            }
+            if (targetIndex == 0) {
+                return player;
+            }
+            targetIndex--;
+        }
+        return null;
     }
 
     private boolean isWithinAttackRange(Player player) {
@@ -335,34 +276,13 @@ public final class Monster {
         return dx * dx + dy * dy < (long) ATTACK_RANGE * ATTACK_RANGE;
     }
 
-    private long squaredDistance(Player player) {
-        long dx = (long) x - player.x();
-        long dy = (long) y - player.y();
-        return saturatingSquare(dx, dy);
+    private boolean attackDue(long nowMillis) {
+        return lastAttackAtMillis == 0L
+                || nowMillis > deadlineAfter(lastAttackAtMillis, delayAttack());
     }
 
-    private static long respawnDelayMillis(int playerCount) {
-        return Math.max(10_000L - 1_000L * playerCount, 5_000L);
-    }
-
-    private static long saturatingAdd(long current, long delta) {
-        try {
-            return Math.addExact(current, delta);
-        } catch (ArithmeticException ignored) {
-            return Long.MAX_VALUE;
-        }
-    }
-
-    private static long saturatingSquare(long first, long second) {
-        try {
-            return Math.addExact(Math.multiplyExact(first, first), Math.multiplyExact(second, second));
-        } catch (ArithmeticException ignored) {
-            return Long.MAX_VALUE;
-        }
-    }
-
-    private int movementStep() {
-        return Math.multiplyExact(template.speed(), MOVEMENT_STEP_MULTIPLIER);
+    private long delayAttack() {
+        return Math.max(2_000L - 400L * enemies.size(), 500L);
     }
 
     private static long deadlineAfter(long start, long delay) {
@@ -370,6 +290,82 @@ public final class Monster {
             throw new IllegalArgumentException("delay must be non-negative");
         }
         return start > Long.MAX_VALUE - delay ? Long.MAX_VALUE : start + delay;
+    }
+
+    public boolean isAlive() {
+        return status == STATUS_LIVE && hp > 0L;
+    }
+
+    public int id() {
+        return id;
+    }
+
+    public long damage() {
+        return template.damage();
+    }
+
+    public long hp() {
+        return hp;
+    }
+
+    public int x() {
+        return x;
+    }
+
+    public int y() {
+        return y;
+    }
+
+    public int levelStatus() {
+        return levelStatus;
+    }
+
+    int rangeMove() {
+        return template.rangeMove();
+    }
+
+    int speed() {
+        return template.speed();
+    }
+
+    int moveType() {
+        return template.type();
+    }
+
+    public int moveDir() {
+        return moveDir;
+    }
+
+    public List<Integer> enemyPlayerIds() {
+        return List.copyOf(enemies);
+    }
+
+    public boolean hasEnemy(int playerId) {
+        return enemies.contains(playerId);
+    }
+
+    public boolean removeEnemy(int playerId) {
+        return enemies.remove(playerId);
+    }
+
+    public Snapshot snapshot() {
+        return new Snapshot(
+                type, template.id(), id, level, levelStatus, x, y, maxHp, hp, status);
+    }
+
+    /** Immutable copy of current state for MAP_INFO encoding. */
+    public record Snapshot(
+            int type,
+            int templateId,
+            int id,
+            int level,
+            int levelStatus,
+            int x,
+            int y,
+            long maxHp,
+            long hp,
+            int status
+    ) {
     }
 
     public record Damage(int monsterId, long damage, long hpAfter, boolean killed, long potentialReward) {

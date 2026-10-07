@@ -4,7 +4,7 @@ import com.project.game.map.MapManager;
 import com.project.game.map.MapTemplate;
 import com.project.game.map.Waypoint;
 import com.project.game.map.Zone;
-import com.project.game.monster.MonsterSnapshot;
+import com.project.game.monster.Monster.Snapshot;
 import com.project.game.network.Session;
 import com.project.game.network.SessionState;
 import com.project.game.network.message.Message;
@@ -13,7 +13,6 @@ import com.project.game.network.packet.MapPacketWriter;
 import com.project.game.network.packet.PlayerPacketWriter;
 import com.project.game.persistence.player.PlayerRepositoryException;
 import com.project.game.player.Player;
-import com.project.game.player.PlayerManager;
 import com.project.game.player.PlayerSaveData;
 import com.project.game.resource.GameResources;
 
@@ -28,16 +27,13 @@ final class MapHandler {
     private static final Logger LOGGER = Logger.getLogger(MapHandler.class.getName());
     private final Session session;
     private final MapManager mapManager;
-    private final PlayerManager playerManager;
     private final GameResources resources;
     private final PlayerPacketWriter playerPackets = new PlayerPacketWriter();
     private final MapPacketWriter mapPackets = new MapPacketWriter();
 
-    MapHandler(Session session, MapManager mapManager,
-               PlayerManager playerManager, GameResources resources) {
+    MapHandler(Session session, MapManager mapManager, GameResources resources) {
         this.session = session;
         this.mapManager = mapManager;
-        this.playerManager = playerManager;
         this.resources = resources;
     }
 
@@ -111,7 +107,7 @@ final class MapHandler {
 
     private void save(PlayerSaveData player) {
         try {
-            playerManager.save(player);
+            session.savePlayer(player);
         } catch (PlayerRepositoryException exception) {
             LOGGER.log(Level.WARNING, "PLAYER transition save failed playerId=" + player.id(), exception);
         }
@@ -129,7 +125,7 @@ final class MapHandler {
                             "waypoint target map unavailable: " + waypoint.goMap()));
             waypointTargetNames.add(target.name());
         }
-        List<MonsterSnapshot> monsters;
+        List<Snapshot> monsters;
         try {
             Zone zone = mapManager.getMap(map.id()).findZone(zoneId);
             if (zone == null) {

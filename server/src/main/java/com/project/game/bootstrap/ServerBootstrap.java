@@ -1,7 +1,6 @@
 package com.project.game.bootstrap;
 
 import com.project.game.account.AccountAuth;
-import com.project.game.combat.Combat;
 import com.project.game.map.MapManager;
 import com.project.game.monster.MonsterManager;
 import com.project.game.network.ClientConfig;
@@ -28,6 +27,7 @@ import com.project.game.network.SessionServices;
 
 import javax.net.ssl.SSLContext;
 import java.io.IOException;
+import java.time.Clock;
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 import java.util.Objects;
@@ -115,7 +115,7 @@ public final class ServerBootstrap {
             MonsterPacketWriter monsterPackets = new MonsterPacketWriter();
             AreaService area = new AreaService(playerPackets, monsterPackets);
             MapManager maps = new MapManager(mapCatalog, monsterManager, area);
-            Combat combat = new Combat(java.time.Clock.systemUTC());
+            Clock clock = Clock.systemUTC();
 
             JdbcAccountRepository accountRepository =
                     new JdbcAccountRepository(databaseManager.dataSource());
@@ -127,7 +127,7 @@ public final class ServerBootstrap {
 
             AccountAuth auth = new AccountAuth(accountRepository);
             SessionServices services = new SessionServices(
-                    auth, resources, maps, combat, monsterManager, playerManager);
+                    auth, resources, maps, clock, monsterManager, playerManager);
             NetworkServer server = new NetworkServer(
                     properties.getProperty("game.network.host", "127.0.0.1"),
                     integer(properties, "game.network.port", 1707),

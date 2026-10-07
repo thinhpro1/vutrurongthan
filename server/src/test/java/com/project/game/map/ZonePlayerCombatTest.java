@@ -1,47 +1,32 @@
-package com.project.game.combat;
+package com.project.game.map;
 
-import com.project.game.map.*;
-import com.project.game.monster.*;
-import com.project.game.network.*;
-import com.project.game.network.message.*;
-import com.project.game.network.packet.*;
-import com.project.game.network.codec.*;
-import com.project.game.network.transport.*;
-import com.project.game.player.*;
-import com.project.game.account.*;
-import com.project.game.resource.*;
+import com.project.game.network.Session;
+import com.project.game.network.message.Message;
+import com.project.game.network.message.MessageName;
+import com.project.game.player.Player;
+import com.project.game.resource.GameResources;
 import com.project.game.testsupport.MutableClock;
 import com.project.game.testsupport.GameplayServices;
-import com.project.game.service.AreaService;
 import org.junit.jupiter.api.Test;
 
-import java.io.*;
-import java.lang.reflect.Field;
-import java.nio.file.Path;
-import java.time.Clock;
-import java.util.*;
-import java.util.concurrent.*;
-import java.util.concurrent.atomic.*;
-import java.util.random.RandomGenerator;
+import java.util.List;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static com.project.game.testsupport.GameplayTestSupport.*;
-import com.project.game.testsupport.GameplayTestSupport.BlockingOfferQueue;
-import com.project.game.testsupport.GameplayTestSupport.BlockingRandom;
 import static org.junit.jupiter.api.Assertions.*;
 
-class CombatTest {
+class ZonePlayerCombatTest {
     @Test
     void targetingAndAttackingDoNotCreateAbsentZones() {
-        PlayerPacketWriter playerPackets = new PlayerPacketWriter();
-        AreaService area = new AreaService(playerPackets, new MonsterPacketWriter());
-        MapManager zones = new MapManager(
+        GameplayServices maps = new GameplayServices(
                 com.project.game.testsupport.MapTestSupport.canonicalMaps(),
-                new MonsterManager(GameResources.unavailable()), area);
-        Combat combat = new Combat(Clock.systemUTC());
+                GameResources.unavailable());
 
-        assertFalse(combat.canTargetMonster(null, 101));
-        assertFalse(combat.attackMonster(null, 101));
-        assertNull(zones.findMap(1).findZone(3));
+        assertFalse(maps.canTargetMonster(null, 101));
+        assertFalse(maps.attackMonster(null, 101));
+        assertNull(maps.findZone(1, 3));
     }
 
     @Test
@@ -50,8 +35,8 @@ class CombatTest {
         Session session = session(player(1, 1, 0), maps);
 
         assertEquals(4, zoneRegistrySize(maps));
-        assertFalse(maps.combat().canTargetMonster(session, 101));
-        assertFalse(maps.combat().attackMonster(session, 101));
+        assertFalse(maps.canTargetMonster(session, 101));
+        assertFalse(maps.attackMonster(session, 101));
         assertEquals(4, zoneRegistrySize(maps));
     }
 
@@ -62,8 +47,8 @@ class CombatTest {
         Session session = session(player(1, 1, 0), maps);
 
         assertEquals(0, maps.memberCount(1, 0));
-        assertFalse(maps.combat().canTargetMonster(session, 101));
-        assertFalse(maps.combat().attackMonster(session, 101));
+        assertFalse(maps.canTargetMonster(session, 101));
+        assertFalse(maps.attackMonster(session, 101));
         assertEquals(300L, maps.monsterSnapshots(1, 0).getFirst().hp());
     }
 
@@ -74,8 +59,8 @@ class CombatTest {
         maps.mapManager().finishLoad(dead);
         drain(dead);
 
-        assertFalse(maps.combat().canTargetMonster(dead, 101));
-        assertFalse(maps.combat().attackMonster(dead, 101));
+        assertFalse(maps.canTargetMonster(dead, 101));
+        assertFalse(maps.attackMonster(dead, 101));
         assertEquals(300L, maps.monsterSnapshots(1, 0).getFirst().hp());
         assertEquals(List.of(), drain(dead));
     }
@@ -87,8 +72,8 @@ class CombatTest {
         maps.mapManager().finishLoad(attacker);
         drain(attacker);
 
-        assertTrue(maps.combat().canTargetMonster(attacker, 101));
-        assertTrue(maps.combat().attackMonster(attacker, 101));
+        assertTrue(maps.canTargetMonster(attacker, 101));
+        assertTrue(maps.attackMonster(attacker, 101));
         List<Message> messages = drain(attacker);
         assertEquals(List.of(MessageName.MONSTER_INJURE), commands(messages));
         var reader = messages.getFirst().reader();
@@ -109,7 +94,7 @@ class CombatTest {
         long powerBefore = attacker.player().power();
         long potentialBefore = attacker.player().potential();
 
-        assertTrue(maps.combat().attackMonster(attacker, 101));
+        assertTrue(maps.attackMonster(attacker, 101));
 
         assertEquals(powerBefore, attacker.player().power());
         assertEquals(potentialBefore, attacker.player().potential());
@@ -126,7 +111,7 @@ class CombatTest {
         long powerBefore = attacker.player().power();
         long potentialBefore = attacker.player().potential();
 
-        killMonster(maps.combat(), attacker);
+        killMonster(maps, attacker);
 
         assertEquals(powerBefore, attacker.player().power());
         assertEquals(potentialBefore + 10L, attacker.player().potential());
@@ -153,7 +138,7 @@ class CombatTest {
         maps.mapManager().finishLoad(attacker);
         drain(attacker);
 
-        killMonster(maps.combat(), attacker);
+        killMonster(maps, attacker);
 
         assertEquals(Long.MAX_VALUE, attacker.player().potential());
         assertEquals(nearMax.power(), attacker.player().power());
@@ -182,11 +167,11 @@ class CombatTest {
         long observerPotential = observer.player().potential();
 
         for (int hit = 0; hit < 29; hit++) {
-            assertTrue(maps.combat().attackMonster(killer, 101));
+            assertTrue(maps.attackMonster(killer, 101));
             drain(killer);
             drain(observer);
         }
-        assertTrue(maps.combat().attackMonster(killer, 101));
+        assertTrue(maps.attackMonster(killer, 101));
 
         assertEquals(
                 List.of(MessageName.MONSTER_START_DIE, MessageName.PLAYER_INFO),
@@ -204,11 +189,11 @@ class CombatTest {
         maps.mapManager().finishLoad(attacker);
         drain(attacker);
 
-        killMonster(maps.combat(), attacker);
+        killMonster(maps, attacker);
         drain(attacker);
         long afterKill = attacker.player().potential();
 
-        assertFalse(maps.combat().attackMonster(attacker, 101));
+        assertFalse(maps.attackMonster(attacker, 101));
 
         assertEquals(afterKill, attacker.player().potential());
         assertEquals(List.of(), drain(attacker));
@@ -224,7 +209,7 @@ class CombatTest {
 
         long before = attacker.player().potential();
 
-        killMonster(maps.combat(), attacker);
+        killMonster(maps, attacker);
         drain(attacker);
         assertEquals(before + 10L, attacker.player().potential());
 
@@ -233,7 +218,7 @@ class CombatTest {
         assertEquals(List.of(MessageName.MONSTER_RESPAWN),
                 commands(withoutMonsterMoves(drain(attacker))));
 
-        killMonster(maps.combat(), attacker);
+        killMonster(maps, attacker);
         assertEquals(before + 20L, attacker.player().potential());
         assertEquals(
                 List.of(MessageName.MONSTER_START_DIE, MessageName.PLAYER_INFO),
@@ -247,7 +232,7 @@ class CombatTest {
         maps.mapManager().finishLoad(attacker);
         drain(attacker);
 
-        killMonster(maps.combat(), attacker);
+        killMonster(maps, attacker);
         drain(attacker);
         long rewarded = attacker.player().potential();
 
@@ -271,7 +256,7 @@ class CombatTest {
         drain(attacker);
         drain(peer);
 
-        assertTrue(maps.combat().attackMonster(attacker, 101));
+        assertTrue(maps.attackMonster(attacker, 101));
         List<Message> attackerMessages = drain(attacker);
         List<Message> peerMessages = drain(peer);
         assertEquals(List.of(MessageName.MONSTER_INJURE), commands(attackerMessages));
@@ -289,7 +274,7 @@ class CombatTest {
         drain(attacker);
         drain(otherZone);
 
-        assertTrue(maps.combat().attackMonster(attacker, 101));
+        assertTrue(maps.attackMonster(attacker, 101));
         assertEquals(List.of(MessageName.MONSTER_INJURE), commands(drain(attacker)));
         assertEquals(List.of(), drain(otherZone));
         assertEquals(300L, maps.monsterSnapshots(1, 1).getFirst().hp());
@@ -305,7 +290,7 @@ class CombatTest {
         drain(first);
         drain(second);
         for (int i = 0; i < 29; i++) {
-            assertTrue(maps.combat().attackMonster(first, 101));
+            assertTrue(maps.attackMonster(first, 101));
             drain(first);
             drain(second);
         }
@@ -348,11 +333,11 @@ class CombatTest {
         assertEquals(1L, rewardPackets);
     }
 
-    private static void killMonster(Combat combat, Session session) throws Exception {
+    private static void killMonster(GameplayServices maps, Session session) throws Exception {
         for (int hit = 0; hit < 29; hit++) {
-            assertTrue(combat.attackMonster(session, 101));
+            assertTrue(maps.attackMonster(session, 101));
             drain(session);
         }
-        assertTrue(combat.attackMonster(session, 101));
+        assertTrue(maps.attackMonster(session, 101));
     }
 }

@@ -41,11 +41,14 @@ public final class Session implements AutoCloseable {
     private final MapManager mapManager;
     private final PlayerManager playerManager;
     private final Object writeLock = new Object();
+    private final Object checkpointLock = new Object();
     private final MessageHandler handler;
     private final Set<Integer> sentMapTemplates = ConcurrentHashMap.newKeySet();
     private volatile String accountName;
     private volatile long accountId;
+    // SessionManager reads/writes both lifecycle flags under the Session monitor.
     private boolean accountAdmissionPending;
+    private boolean accountReleaseReady;
     private volatile Player player;
     private volatile Zone zone;
     private int protocolViolations;
@@ -126,6 +129,14 @@ public final class Session implements AutoCloseable {
 
     void clearAccountAdmissionPending() {
         accountAdmissionPending = false;
+    }
+
+    boolean accountReleaseReady() {
+        return accountReleaseReady;
+    }
+
+    void markAccountReleaseReady() {
+        accountReleaseReady = true;
     }
 
     public void bindPlayer(Player player) {
@@ -216,12 +227,26 @@ public final class Session implements AutoCloseable {
         return transitioned;
     }
 
+    /** Ghi checkpoint ổn định ngoài Zone; CLOSED chặn lượt ghi đến muộn. */
+    public boolean savePlayer(PlayerSaveData player) {
+        Zone.requireOutsideRuntimeWorker("savePlayer");
+        Objects.requireNonNull(player, "player");
+        synchronized (checkpointLock) {
+            if (state() == SessionState.CLOSED) {
+                return false;
+            }
+            playerManager.save(player);
+            return true;
+        }
+    }
+
     @Override
     public void close() {
         close("requested");
     }
 
     private void close(String reason) {
+        Zone.requireOutsideRuntimeWorker("close");
         Thread currentThread = Thread.currentThread();
         synchronized (this) {
             if (!closed.compareAndSet(false, true)) {
@@ -245,21 +270,24 @@ public final class Session implements AutoCloseable {
         }
         Player currentPlayer = player;
         try {
-            if (finalSave != null && finalSave.id() > 0 && accountId > 0L) {
-                boolean interruptedBeforeCheckpoint = Thread.interrupted();
-                try {
-                    playerManager.save(finalSave);
-                } catch (PlayerRepositoryException exception) {
-                    LOGGER.log(Level.WARNING, "Player checkpoint failed for session id=" + id, exception);
-                } catch (RuntimeException exception) {
-                    LOGGER.log(Level.WARNING, "Player checkpoint failed for session id=" + id, exception);
-                } finally {
-                    if (interruptedBeforeCheckpoint) {
-                        Thread.currentThread().interrupt();
+            // Drain any already-started checkpoint even when final capture failed.
+            synchronized (checkpointLock) {
+                if (finalSave != null && finalSave.id() > 0 && accountId > 0L) {
+                    boolean interruptedBeforeCheckpoint = Thread.interrupted();
+                    try {
+                        playerManager.save(finalSave);
+                    } catch (PlayerRepositoryException exception) {
+                        LOGGER.log(Level.WARNING, "Player checkpoint failed for session id=" + id, exception);
+                    } catch (RuntimeException exception) {
+                        LOGGER.log(Level.WARNING, "Player checkpoint failed for session id=" + id, exception);
+                    } finally {
+                        if (interruptedBeforeCheckpoint) {
+                            Thread.currentThread().interrupt();
+                        }
                     }
+                } else if (currentPlayer != null && currentPlayer.id() > 0 && accountId > 0L) {
+                    LOGGER.warning("Không lưu Player vì chưa detach được khỏi Zone: session id=" + id);
                 }
-            } else if (currentPlayer != null && currentPlayer.id() > 0 && accountId > 0L) {
-                LOGGER.warning("Không lưu Player vì chưa detach được khỏi Zone: session id=" + id);
             }
         } finally {
             manager.unbindAccount(this);

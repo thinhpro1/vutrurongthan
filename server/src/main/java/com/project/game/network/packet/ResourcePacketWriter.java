@@ -1,7 +1,7 @@
 package com.project.game.network.packet;
 
-import com.project.game.monster.MonsterDart;
-import com.project.game.monster.MonsterDart.Phase;
+import com.project.game.monster.MonsterTemplate.Dart;
+import com.project.game.monster.MonsterTemplate.Dart.Phase;
 import com.project.game.monster.MonsterTemplate;
 import com.project.game.network.message.Message;
 import com.project.game.network.message.MessageName;
@@ -80,7 +80,7 @@ public final class ResourcePacketWriter {
 
     public Message monsterResource(
             int version,
-            List<MonsterDart> darts,
+            List<Dart> darts,
             List<MonsterTemplate> templates) throws IOException {
         Objects.requireNonNull(darts, "darts");
         Objects.requireNonNull(templates, "templates");
@@ -90,7 +90,7 @@ public final class ResourcePacketWriter {
                 .writeByte(4)
                 .writeByte(version)
                 .writeShort(darts.size());
-        for (MonsterDart dart : darts) {
+        for (Dart dart : darts) {
             Objects.requireNonNull(dart, "dart");
             writer.writeShort(dart.id()).writeBoolean(dart.meteorite());
             writeMonsterDartPhase(writer, dart.light());
@@ -118,7 +118,7 @@ public final class ResourcePacketWriter {
     }
 
     private static void writeMonsterDartPhase(MessageWriter writer,
-                                                MonsterDart.Phase phase)
+                                                Dart.Phase phase)
             throws IOException {
         Objects.requireNonNull(phase, "phase");
         requireByteCount(phase.icons().size(), "monster dart phase icons");

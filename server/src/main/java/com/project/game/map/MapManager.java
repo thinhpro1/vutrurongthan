@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.TreeMap;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
@@ -25,6 +26,8 @@ public final class MapManager {
     static final int HOME_Y = 648;
 
     private final java.util.Map<Integer, Map> maps;
+    // Routing bookkeeping only; destination Zone owns the actual reservation.
+    private final java.util.Map<Session, Handoff> pendingDestinations = new ConcurrentHashMap<>();
 
     public MapManager(java.util.Map<Integer, MapTemplate> catalog,
                       MonsterManager monsterManager,
@@ -92,36 +95,91 @@ public final class MapManager {
             return false;
         }
 
-        return zone.enter(session);
+        return zone.enter(session, () -> finishHandoff(session, zone));
     }
 
-    /** Tách Session và trả về bản PlayerSaveData được chụp trong Zone owner. */
+    private void finishHandoff(Session session, Zone zone) {
+        // Admission consumes the current reservation before another trip can start.
+        Handoff handoff = pendingDestinations.get(session);
+        if (handoff != null && handoff.destination == zone) {
+            pendingDestinations.remove(session, handoff);
+        }
+    }
+
+    /** Drain nguồn/đích, detach rồi mới chụp trạng thái cuối cho disconnect. */
     public PlayerSaveData leave(Session session) {
+        Zone.requireOutsideRuntimeWorker("leave");
         if (session == null || session.player() == null) {
             return null;
         }
-        Zone zone = session.zone();
-        if (zone == null) {
-            Zone pendingZone = findZone(session.player().mapId(), session.player().zoneId());
-            if (pendingZone != null) {
-                try {
-                    pendingZone.cancel(session);
-                } catch (RejectedExecutionException exception) {
-                    LOGGER.log(Level.FINE,
-                            "Không thể hủy reservation vì Zone đã dừng: session=" + session.id(),
-                            exception);
-                }
-            }
-            return PlayerSaveData.capture(session.player());
-        }
-
+        List<Zone> owners = new ArrayList<>();
+        addOwner(owners, session.zone());
+        addOwner(owners, pendingDestination(session));
+        addOwner(owners, findZone(session.player().mapId(), session.player().zoneId()));
+        List<Session> rejected = new ArrayList<>();
+        boolean detached = true;
         try {
-            return zone.leave(session);
+            for (int index = 0; index < owners.size(); index++) {
+                if (!leaveZone(owners.get(index), session, rejected)) {
+                    detached = false;
+                }
+                // Commit/enter may have finished while the preceding owner was draining.
+                addOwner(owners, pendingDestination(session));
+                addOwner(owners, session.zone());
+                addOwner(owners, findZone(session.player().mapId(), session.player().zoneId()));
+            }
+            if (!detached || session.zone() != null) {
+                return null;
+            }
+            pendingDestinations.remove(session);
+            if (owners.isEmpty()) {
+                return captureAfterLeave(session);
+            }
+            Zone lastOwner = owners.getLast();
+            return lastOwner.call(() -> captureAfterLeave(session));
+        } catch (RejectedExecutionException exception) {
+            LOGGER.log(Level.WARNING,
+                    "Không thể chụp Player vì Zone đã dừng: session=" + session.id(), exception);
+            return null;
+        } finally {
+            closeRejected(rejected);
+        }
+    }
+
+    private boolean leaveZone(Zone zone, Session session, List<Session> rejected) {
+        try {
+            zone.leave(session, rejected);
+            return true;
         } catch (RejectedExecutionException exception) {
             LOGGER.log(Level.WARNING,
                     "Không thể detach Player vì Zone đã dừng: session=" + session.id(), exception);
-            return null;
+            return false;
+        } catch (RuntimeException exception) {
+            LOGGER.log(Level.WARNING,
+                    "Zone leave failed: session=" + session.id(), exception);
+            // A delivery failure after detach must not skip the other owner or final save.
+            return !zone.hasPlayer(session) && !zone.hasReservation(session)
+                    && session.zone() != zone;
         }
+    }
+
+    private static void addOwner(List<Zone> owners, Zone zone) {
+        if (zone != null && !owners.contains(zone)) {
+            owners.add(zone);
+        }
+    }
+
+    private Zone pendingDestination(Session session) {
+        Handoff handoff = pendingDestinations.get(session);
+        return handoff == null ? null : handoff.destination;
+    }
+
+    private static PlayerSaveData captureAfterLeave(Session session) {
+        Player player = session.player();
+        if (session.state() == SessionState.CLOSED && player.isDead()) {
+            player.revive(HOME_MAP_ID, HOME_ZONE_ID, HOME_X, HOME_Y);
+        }
+        return PlayerSaveData.capture(player);
     }
 
     /** Chọn waypoint và chuyển Player sau khi Zone nguồn xác nhận trạng thái. */
@@ -196,14 +254,18 @@ public final class MapManager {
     /** Reserve ở destination rồi revalidate/commit trên source; không chờ hai writer lồng nhau. */
     private MapChange changeZone(Session session, Zone source, Zone destination,
                                  Map sourceMap, ChangeState state) {
-        boolean reserved = source != destination && reserveDestination(destination, session);
-        if (source != destination && !reserved) {
+        Handoff handoff = new Handoff(destination);
+        if (pendingDestinations.putIfAbsent(session, handoff) != null) {
             return null;
         }
-
+        boolean reserved = false;
         AtomicBoolean committed = new AtomicBoolean();
         List<Session> rejected = new ArrayList<>();
         try {
+            reserved = source != destination && reserveDestination(destination, session);
+            if (source != destination && !reserved) {
+                return null;
+            }
             MapChange change = source.call(() -> {
                 Player player = session.player();
                 Waypoint waypoint = state.waypoint();
@@ -237,8 +299,13 @@ public final class MapManager {
         } catch (RejectedExecutionException exception) {
             return null;
         } finally {
-            if (reserved && !committed.get()) {
-                cancelReservation(destination, session);
+            if (!committed.get()) {
+                if (reserved) {
+                    cancelReservation(destination, session);
+                }
+                pendingDestinations.remove(session, handoff);
+            } else if (source == destination) {
+                pendingDestinations.remove(session, handoff);
             }
         }
     }
@@ -253,6 +320,15 @@ public final class MapManager {
     /** Source state bất biến; waypoint null biểu thị yêu cầu death-return về home. */
     private record ChangeState(Player player, int mapId, int zoneId, int x, int y,
                                Waypoint waypoint) {
+    }
+
+    /** Identity distinguishes repeated trips to the same destination from old finishLoad calls. */
+    private static final class Handoff {
+        private final Zone destination;
+
+        private Handoff(Zone destination) {
+            this.destination = destination;
+        }
     }
 
     private boolean reserveDestination(Zone zone, Session session) {

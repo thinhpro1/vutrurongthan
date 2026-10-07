@@ -1,7 +1,7 @@
 package com.project.game.network.packet;
 
-import com.project.game.monster.MonsterDart;
-import com.project.game.monster.MonsterDart.Phase;
+import com.project.game.monster.MonsterTemplate.Dart;
+import com.project.game.monster.MonsterTemplate.Dart.Phase;
 import com.project.game.monster.MonsterTemplate;
 import com.project.game.network.message.Message;
 import com.project.game.network.message.MessageName;
@@ -37,9 +37,9 @@ class ResourcePacketWriterTest {
 
     @Test
     void rejectsMonsterDartPhaseIconCountThatWouldBeTruncated() {
-        MonsterDart.Phase overflowing = new MonsterDart.Phase(
+        Dart.Phase overflowing = new Dart.Phase(
                 Collections.nCopies(Byte.MAX_VALUE + 1, 1), 0, 0, 0);
-        MonsterDart dart = new MonsterDart(
+        Dart dart = new Dart(
                 1, false, overflowing, validPhase(), validPhase());
 
         assertThrows(IOException.class, () -> writer.monsterResource(1, List.of(dart), List.of()));
@@ -149,10 +149,10 @@ class ResourcePacketWriterTest {
 
     @Test
     void serializesMonsterDartsAndTemplatesInV2Shape() throws Exception {
-        MonsterDart.Phase light = new MonsterDart.Phase(List.of(1), 2, 3, 4);
-        MonsterDart.Phase bullet = new MonsterDart.Phase(List.of(5, 6), 7, 8, 9);
-        MonsterDart.Phase explode = new MonsterDart.Phase(List.of(10), 11, 12, 13);
-        MonsterDart dart = new MonsterDart(4, true, light, bullet, explode);
+        Dart.Phase light = new Dart.Phase(List.of(1), 2, 3, 4);
+        Dart.Phase bullet = new Dart.Phase(List.of(5, 6), 7, 8, 9);
+        Dart.Phase explode = new Dart.Phase(List.of(10), 11, 12, 13);
+        Dart dart = new Dart(4, true, light, bullet, explode);
         MonsterTemplate template = new MonsterTemplate(
                 8, "bat", 3, 100L, 10L, 4L, 50, 6, 2, 4,
                 List.of(20, 21), List.of(30, 31, 32),
@@ -250,7 +250,7 @@ class ResourcePacketWriterTest {
     }
 
     private static void assertPhase(com.project.game.network.message.MessageReader reader,
-                                     MonsterDart.Phase phase) throws Exception {
+                                     Dart.Phase phase) throws Exception {
         assertEquals(phase.icons().size(), reader.readByte());
         for (int icon : phase.icons()) {
             assertEquals(icon, reader.readShort());
@@ -260,12 +260,12 @@ class ResourcePacketWriterTest {
         assertEquals(phase.delay(), reader.readShort());
     }
 
-    private static MonsterDart validDart() {
-        return new MonsterDart(1, false, validPhase(), validPhase(), validPhase());
+    private static Dart validDart() {
+        return new Dart(1, false, validPhase(), validPhase(), validPhase());
     }
 
-    private static MonsterDart.Phase validPhase() {
-        return new MonsterDart.Phase(List.of(1), 0, 0, 0);
+    private static Dart.Phase validPhase() {
+        return new Dart.Phase(List.of(1), 0, 0, 0);
     }
 
     private static MonsterTemplate validTemplate() {

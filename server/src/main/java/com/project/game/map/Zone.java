@@ -15,6 +15,8 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.function.Supplier;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import java.util.random.RandomGenerator;
 
 /**
@@ -34,6 +36,7 @@ import java.util.random.RandomGenerator;
  */
 public final class Zone {
     static final long UPDATE_PERIOD_MILLIS = 100L;
+    private static final Logger LOGGER = Logger.getLogger(Zone.class.getName());
     private final int mapId;
     private final int zoneId;
     private final int maxPlayer;
@@ -231,18 +234,22 @@ public final class Zone {
 
     /** Nhịp update do chính writer gọi: không được đóng Session tại đây nên giao cho thread khác. */
     private void updateOnWriter(long nowMillis, RandomGenerator random) {
-        List<Session> toClose;
-        synchronized (this) {
-            try {
-                updateMonsters(nowMillis, random);
-            } finally {
-                toClose = List.copyOf(kicked);
-                kicked.clear();
+        List<Session> toClose = new ArrayList<>();
+        try {
+            synchronized (this) {
+                try {
+                    updateMonsters(nowMillis, random);
+                } finally {
+                    toClose.addAll(kicked);
+                    kicked.clear();
+                }
             }
-        }
-        if (!toClose.isEmpty()) {
-            Thread.ofVirtual().name("zone-kick-" + mapId + "-" + zoneId)
-                    .start(() -> closeAll(toClose));
+        } finally {
+            // Kể cả khi nhịp lỗi: Session đã bị kick vẫn phải được đóng (ngoài writer, ngoài monitor).
+            if (!toClose.isEmpty()) {
+                Thread.ofVirtual().name("zone-kick-" + mapId + "-" + zoneId)
+                        .start(() -> closeAll(toClose));
+            }
         }
     }
 
@@ -523,9 +530,14 @@ public final class Zone {
         }
     }
 
+    /** Đóng từng Session; lỗi của một Session không bỏ qua các Session còn lại. */
     private static void closeAll(List<Session> sessions) {
         for (Session session : sessions) {
-            session.close();
+            try {
+                session.close();
+            } catch (RuntimeException exception) {
+                LOGGER.log(Level.WARNING, "Kick close failed: session=" + session.id(), exception);
+            }
         }
     }
 

@@ -11,23 +11,14 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 import java.util.random.RandomGenerator;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
-/** Owns Monster templates, runtime creation, and the public-world lifecycle. */
+/** Giữ template Monster, tạo Monster cho Map, và bật/tắt vòng update của các Zone public. */
 public final class MonsterManager {
-    private static final long LIFECYCLE_PERIOD_MILLIS = 100L;
-    private static final Logger LOGGER = Logger.getLogger(MonsterManager.class.getName());
-
     private final GameResources resources;
     private final Map<Integer, MonsterTemplate> templates;
     private final Clock clock;
     private final RandomGenerator random;
-    private ScheduledExecutorService executor;
 
     public MonsterManager(GameResources resources) {
         this(resources, Clock.systemUTC(), RandomGenerator.getDefault());
@@ -66,7 +57,7 @@ public final class MonsterManager {
         return List.copyOf(monsters);
     }
 
-    /** Updates every public Zone; each Zone remains the mutation owner. */
+    /** Một nhịp update cho mọi Zone public, chạy từ bên ngoài (test, công cụ). */
     public void update(MapManager maps) {
         Objects.requireNonNull(maps, "maps");
         long nowMillis = clock.millis();
@@ -77,40 +68,23 @@ public final class MonsterManager {
         }
     }
 
-    /** Starts the 100 ms public-world trigger once. */
-    public synchronized void start(MapManager maps) {
+    /** Bật vòng update của mọi Zone public; mỗi Zone tự chạy trên virtual thread của nó. */
+    public void start(MapManager maps) {
         Objects.requireNonNull(maps, "maps");
-        if (executor != null && !executor.isShutdown()) {
-            return;
+        for (com.project.game.map.Map map : maps.maps()) {
+            for (Zone zone : map.zones()) {
+                zone.startUpdate(clock, random);
+            }
         }
-
-        executor = Executors.newSingleThreadScheduledExecutor(runnable -> {
-            Thread thread = new Thread(runnable, "monster-lifecycle");
-            thread.setDaemon(true);
-            return thread;
-        });
-        executor.scheduleAtFixedRate(
-                () -> runSafely(maps),
-                LIFECYCLE_PERIOD_MILLIS,
-                LIFECYCLE_PERIOD_MILLIS,
-                TimeUnit.MILLISECONDS);
     }
 
-    /** Stops the lifecycle trigger and allows a later start. */
-    public synchronized void stop() {
-        ScheduledExecutorService current = executor;
-        if (current == null) {
-            return;
-        }
-        executor = null;
-        current.shutdownNow();
-    }
-
-    private void runSafely(MapManager maps) {
-        try {
-            update(maps);
-        } catch (RuntimeException exception) {
-            LOGGER.log(Level.WARNING, "Monster lifecycle tick failed", exception);
+    /** Tắt vòng update của mọi Zone public; có thể start lại sau. */
+    public void stop(MapManager maps) {
+        Objects.requireNonNull(maps, "maps");
+        for (com.project.game.map.Map map : maps.maps()) {
+            for (Zone zone : map.zones()) {
+                zone.stopUpdate();
+            }
         }
     }
 }

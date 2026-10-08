@@ -131,7 +131,7 @@ public final class NetworkServer {
             }
         } catch (IOException ignored) {
         }
-        services.monsterManager().stop();
+        services.monsterManager().stop(services.maps());
         sessions.closeAll();
     }
 

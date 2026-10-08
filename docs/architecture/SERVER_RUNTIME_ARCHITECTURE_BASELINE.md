@@ -33,12 +33,25 @@ Central rule:
 destination reservations, entity collections, gameplay execution, area delivery,
 and stable save capture. Each Zone owns one package-private `ZoneWriter`, which
 contains only the bounded input queue, virtual-thread execution, caller waits,
-interruption handling, and execution lifecycle. Gameplay entry points and their
-writer-side actions are placed together in `Zone.java`.
+interruption handling, the update period, and execution lifecycle. Each gameplay
+action is one method in `Zone.java` whose body runs on the writer
+(`tryRun(() -> { ... })` / `call(...)`); send failures are collected in the
+writer-owned kick list and those Sessions are closed after leaving the writer.
 
-The current writer drains queued work and returns to `FROZEN` when the queue is
-empty. It is not a periodic game loop; the existing `MonsterManager` lifecycle
-trigger still submits Monster updates. This extraction preserves overload,
+Update loop (2026-10-08): once started, the writer is the Zone's own game loop,
+the virtual-thread equivalent of legacy `Zone.run() → update()`:
+
+```text
+while (input queued or Zone has a Player):
+    update due  → Zone.update (every 100 ms; Monster.update for each Monster)
+    input queued → run input
+→ FROZEN (thread ends; the next input wakes it)
+```
+
+An empty Zone does not tick. Monster respawn/attack use timestamps, so the first
+tick after waking applies everything that became due while frozen. The wait
+between ticks uses the queue's timed poll rather than `Object.wait`, so a parked
+Zone does not pin a carrier thread. This preserves overload,
 stop/cancellation, same-writer calls, and the guard against entering high-level
 operations from any Zone writer. Public cross-Map coordination remains in
 `MapManager` under the existing reservation/revalidation/commit contract.
@@ -153,18 +166,17 @@ Monster lifecycle now follows the normalized N2 responsibility shape.
 CURRENT IMPLEMENTATION (after N2 Monster normalization):
 
 ```text
-MonsterManager scheduled lifecycle
-→ MonsterManager.update(MapManager)
-→ MapManager.maps
-→ Map.zones
-→ Zone.updateMonsters(now, random)
-→ Zone writer
+NetworkServer.start
+→ MonsterManager.start(MapManager)      // gives each public Zone the clock/random
+→ Zone.startUpdate(clock, random)
+→ Zone writer (virtual thread) every 100 ms while the Zone has Players
 → for each Monster: Monster.update(...)
 → AreaService packets
 ```
 
-`MonsterManager` owns the scheduled lifecycle trigger and public-world
-traversal only; the scheduler does not mutate Monster state directly. `Zone`
+`MonsterManager` only turns the public Zone loops on/off (`start`/`stop`) and
+offers `update(MapManager)` as a one-shot manual tick for tests/tools; it does
+not own a thread and does not mutate Monster state directly. `Zone`
 remains the sole writer and owns the current Monster collection, membership
 candidates, cross-Monster death cleanup, and execution ordering. `Monster`
 owns its mutable combat, movement, cooldown, enemy, respawn, and update

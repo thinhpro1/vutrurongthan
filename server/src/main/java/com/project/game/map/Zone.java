@@ -8,6 +8,7 @@ import com.project.game.player.Player;
 import com.project.game.player.PlayerSaveData;
 import com.project.game.service.AreaService;
 
+import java.time.Clock;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -32,6 +33,7 @@ import java.util.random.RandomGenerator;
  * Cơ chế writer nằm ở cuối file và trong {@link ZoneWriter}; không cần đọc nó để hiểu gameplay.
  */
 public final class Zone {
+    static final long UPDATE_PERIOD_MILLIS = 100L;
     private final int mapId;
     private final int zoneId;
     private final int maxPlayer;
@@ -200,16 +202,54 @@ public final class Zone {
     // Monster
     // ------------------------------------------------------------------
 
-    /** Một nhịp của Zone: mỗi Monster tự update, Zone chỉ báo kết quả cho khu vực. */
+    /**
+     * Bật vòng update của Zone trên virtual thread riêng (giống {@code Zone.run()} của rongthan):
+     * mỗi 100 ms gọi update khi Zone còn Player, Zone trống thì nghỉ cho tới khi có input mới.
+     */
+    public void startUpdate(Clock clock, RandomGenerator random) {
+        Objects.requireNonNull(clock, "clock");
+        Objects.requireNonNull(random, "random");
+        writer.startUpdate(() -> updateOnWriter(clock.millis(), random),
+                () -> size() > 0, UPDATE_PERIOD_MILLIS);
+    }
+
+    /** Tắt vòng update; Zone vẫn nhận hành động của Player. */
+    public void stopUpdate() {
+        writer.stopUpdate();
+    }
+
+    /** Một nhịp update chạy từ bên ngoài (test, công cụ); thường do vòng update tự gọi. */
     public void update(long nowMillis, RandomGenerator random) {
         requireOutsideRuntimeWorker("update");
         Objects.requireNonNull(random, "random");
         call(() -> {
-            for (Monster monster : monsters.values()) {
-                updateMonster(monster, nowMillis, random);
-            }
+            updateMonsters(nowMillis, random);
             return null;
         });
+    }
+
+    /** Nhịp update do chính writer gọi: không được đóng Session tại đây nên giao cho thread khác. */
+    private void updateOnWriter(long nowMillis, RandomGenerator random) {
+        List<Session> toClose;
+        synchronized (this) {
+            try {
+                updateMonsters(nowMillis, random);
+            } finally {
+                toClose = List.copyOf(kicked);
+                kicked.clear();
+            }
+        }
+        if (!toClose.isEmpty()) {
+            Thread.ofVirtual().name("zone-kick-" + mapId + "-" + zoneId)
+                    .start(() -> closeAll(toClose));
+        }
+    }
+
+    /** Mỗi Monster tự update; Zone chỉ báo kết quả cho khu vực. */
+    private void updateMonsters(long nowMillis, RandomGenerator random) {
+        for (Monster monster : monsters.values()) {
+            updateMonster(monster, nowMillis, random);
+        }
     }
 
     private void updateMonster(Monster monster, long nowMillis, RandomGenerator random) {
@@ -478,9 +518,13 @@ public final class Zone {
         try {
             return required ? writer.call(onWriter) : writer.tryCall(onWriter);
         } finally {
-            for (Session session : toClose) {
-                session.close();
-            }
+            closeAll(toClose);
+        }
+    }
+
+    private static void closeAll(List<Session> sessions) {
+        for (Session session : sessions) {
+            session.close();
         }
     }
 

@@ -72,7 +72,7 @@ public final class MonsterManager {
         long nowMillis = clock.millis();
         for (com.project.game.map.Map map : maps.maps()) {
             for (Zone zone : map.zones()) {
-                zone.updateMonsters(nowMillis, random);
+                zone.update(nowMillis, random);
             }
         }
     }

@@ -225,9 +225,9 @@ class MessageHandlerCombatTest {
 
             assertEquals(0L, zone.monsterSnapshots().getFirst().hp());
             assertEquals(11L, context.session().player().potential());
-            zone.updateMonsters(sample + 9_000L, new Random(1L));
+            zone.update(sample + 9_000L, new Random(1L));
             assertEquals(0L, zone.monsterSnapshots().getFirst().hp());
-            zone.updateMonsters(sample + 9_001L, new Random(1L));
+            zone.update(sample + 9_001L, new Random(1L));
             assertEquals(300L, zone.monsterSnapshots().getFirst().hp());
         } finally {
             releaseWriter.countDown();

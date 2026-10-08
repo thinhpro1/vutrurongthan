@@ -8,16 +8,28 @@ import com.project.game.player.PlayerSaveData;
 import com.project.game.service.AreaService;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Supplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-/** Quản lý registry Map public và điều phối chuyển Player giữa các Map public. */
+/**
+ * Giữ các Map public và điều phối Player đi giữa các Zone.
+ *
+ * <p>Chuyển map luôn theo một luồng, không bao giờ chờ hai Zone lồng nhau:
+ * <pre>
+ * 1. plan    : trên Zone nguồn, Player còn đứng đúng chỗ không → tạo Trip
+ * 2. reserve : Zone đích giữ chỗ
+ * 3. commit  : trên Zone nguồn, kiểm tra lại Trip → Player đổi vị trí → rời Zone nguồn
+ * 4. enter   : client gửi FINISH_LOAD_MAP → {@link #finishLoad} → Zone đích nhận Player
+ * </pre>
+ */
 public final class MapManager {
     private static final Logger LOGGER = Logger.getLogger(MapManager.class.getName());
     static final int HOME_MAP_ID = 0;
@@ -26,8 +38,8 @@ public final class MapManager {
     static final int HOME_Y = 648;
 
     private final java.util.Map<Integer, Map> maps;
-    // Routing bookkeeping only; destination Zone owns the actual reservation.
-    private final java.util.Map<Session, Handoff> pendingDestinations = new ConcurrentHashMap<>();
+    // Chuyến đi đang chờ FINISH_LOAD_MAP. Chỗ thật sự được giữ ở Zone đích.
+    private final java.util.Map<Session, Trip> trips = new ConcurrentHashMap<>();
 
     public MapManager(java.util.Map<Integer, MapTemplate> catalog,
                       MonsterManager monsterManager,
@@ -50,15 +62,15 @@ public final class MapManager {
                 runtimeMaps.put(mapId, new Map(template, monsterManager, area));
             }
         }
-        this.maps = java.util.Collections.unmodifiableMap(runtimeMaps);
+        this.maps = Collections.unmodifiableMap(runtimeMaps);
     }
 
-    /** Tìm runtime Map đang mở mà không tạo Map mới. */
+    /** Tìm Map đang mở mà không tạo Map mới. */
     public Map findMap(int mapId) {
         return maps.get(mapId);
     }
 
-    /** Lấy runtime Map đang mở hoặc báo lỗi nếu Map không hợp lệ. */
+    /** Lấy Map đang mở hoặc báo lỗi nếu Map không hợp lệ. */
     public Map getMap(int mapId) {
         Map map = findMap(mapId);
         if (map == null) {
@@ -67,100 +79,229 @@ public final class MapManager {
         return map;
     }
 
-    /** Trả về các Map public đã đăng ký theo thứ tự id ổn định. */
+    /** Các Map public theo thứ tự id. */
     public List<Map> maps() {
         return List.copyOf(maps.values());
     }
 
-    /** Gia nhập Zone sau khi client hoàn tất tải bản đồ. */
+    // ------------------------------------------------------------------
+    // Vào Zone sau khi client tải xong map
+    // ------------------------------------------------------------------
+
+    /** FINISH_LOAD_MAP: Player vào Zone theo vị trí hiện tại (lúc login hoặc cuối chuyến đi). */
     public boolean finishLoad(Session session) {
         if (session == null || session.state() == SessionState.CLOSED) {
             return false;
         }
         Player player = session.player();
-        Zone currentZone = session.zone();
         if (player == null) {
             return false;
         }
-        if (currentZone != null) {
-            // A joined Session must be present in its Zone; Player location only
-            // participates in checking that joined invariant.
-            return currentZone.mapId() == player.mapId()
-                    && currentZone.zoneId() == player.zoneId()
-                    && currentZone.hasPlayer(session);
+        Zone current = session.zone();
+        if (current != null) {
+            // Đã ở trong Zone: chỉ xác nhận vị trí khớp, không vào lại.
+            return current.mapId() == player.mapId()
+                    && current.zoneId() == player.zoneId()
+                    && current.hasPlayer(session);
         }
-        // A detached Session uses Player location to route the pending handoff.
         Zone zone = findZone(player.mapId(), player.zoneId());
         if (zone == null) {
             return false;
         }
-
-        return zone.enter(session, () -> finishHandoff(session, zone));
+        return zone.enter(session, () -> finishTrip(session, zone));
     }
 
-    private void finishHandoff(Session session, Zone zone) {
-        // Admission consumes the current reservation before another trip can start.
-        Handoff handoff = pendingDestinations.get(session);
-        if (handoff != null && handoff.destination == zone) {
-            pendingDestinations.remove(session, handoff);
+    /** Chạy trên writer của Zone đích khi Player được nhận: chuyến đi kết thúc. */
+    private void finishTrip(Session session, Zone zone) {
+        Trip trip = trips.get(session);
+        if (trip != null && trip.destination == zone) {
+            trips.remove(session, trip);
         }
     }
 
-    /** Drain nguồn/đích, detach rồi mới chụp trạng thái cuối cho disconnect. */
+    // ------------------------------------------------------------------
+    // Chuyển map
+    // ------------------------------------------------------------------
+
+    /** REQUEST_CHANGE_MAP: Player đứng ở waypoint thì đi sang map của waypoint. */
+    public MapChange changeMap(Session session) {
+        Zone source = joinedZone(session);
+        if (source == null) {
+            return null;
+        }
+        Zone.requireOutsideRuntimeWorker("changeMap");
+        Map sourceMap = findMap(source.mapId());
+        if (sourceMap == null) {
+            return null;
+        }
+        Trip trip = plan(source, () -> {
+            Player player = session.player();
+            if (!canLeave(session, source, player) || player.isDead()) {
+                return null;
+            }
+            Waypoint waypoint = sourceMap.findWaypoint(player.x(), player.y());
+            if (waypoint == null) {
+                return null;
+            }
+            Zone destination = findZone(waypoint.goMap(), 0);
+            return destination == null ? null : new Trip(player, waypoint, destination);
+        });
+        return trip == null ? null : changeZone(session, source, sourceMap, trip);
+    }
+
+    /** RETURN_TOWN_FROM_DIE: chỉ Player đã chết được hồi sinh và đưa về nhà. */
+    public MapChange returnHomeFromDeath(Session session) {
+        Zone source = joinedZone(session);
+        if (source == null) {
+            return null;
+        }
+        Zone.requireOutsideRuntimeWorker("returnHomeFromDeath");
+        Zone home = findZone(HOME_MAP_ID, HOME_ZONE_ID);
+        if (home == null) {
+            return null;
+        }
+        Trip trip = plan(source, () -> {
+            Player player = session.player();
+            if (!canLeave(session, source, player) || !player.isDead()) {
+                return null;
+            }
+            return new Trip(player, null, home);
+        });
+        return trip == null ? null : changeZone(session, source, null, trip);
+    }
+
+    /** Bước 2–3: giữ chỗ ở đích, rồi kiểm tra lại và commit trên Zone nguồn. */
+    private MapChange changeZone(Session session, Zone source, Map sourceMap, Trip trip) {
+        if (trips.putIfAbsent(session, trip) != null) {
+            return null; // Đang có một chuyến đi khác.
+        }
+        Zone destination = trip.destination;
+        boolean sameZone = source == destination;
+        boolean reserved = false;
+        AtomicBoolean committed = new AtomicBoolean();
+        try {
+            if (!sameZone) {
+                reserved = reserve(destination, session);
+                if (!reserved) {
+                    return null;
+                }
+            }
+            return source.call(() -> {
+                Player player = session.player();
+                if (!canLeave(session, source, player) || !trip.isStillValid(player, sourceMap)) {
+                    return null;
+                }
+                if (!sameZone && !source.removePlayer(session)) {
+                    return null;
+                }
+                trip.apply(player);
+                // Commit trước khi gửi packet: lỗi gửi không được hủy chỗ ở Zone đích.
+                committed.set(true);
+                if (!sameZone) {
+                    source.detach(session);
+                }
+                return new MapChange(PlayerSaveData.capture(player), destination.zoneId());
+            });
+        } catch (RejectedExecutionException exception) {
+            return null;
+        } finally {
+            if (!committed.get() && reserved) {
+                cancel(destination, session);
+            }
+            if (!committed.get() || sameZone) {
+                trips.remove(session, trip);
+            }
+        }
+    }
+
+    /** Một lần đi: vị trí Player lúc yêu cầu (để kiểm tra lại khi commit) và Zone đích. */
+    private static final class Trip {
+        private final Player player;
+        private final int mapId;
+        private final int zoneId;
+        private final int x;
+        private final int y;
+        private final Waypoint waypoint; // null = về nhà khi chết
+        private final Zone destination;
+
+        private Trip(Player player, Waypoint waypoint, Zone destination) {
+            this.player = player;
+            this.mapId = player.mapId();
+            this.zoneId = player.zoneId();
+            this.x = player.x();
+            this.y = player.y();
+            this.waypoint = waypoint;
+            this.destination = destination;
+        }
+
+        private boolean isHome() {
+            return waypoint == null;
+        }
+
+        /** Player vẫn là người đó, vẫn đứng đúng chỗ và vẫn đúng trạng thái sống/chết. */
+        private boolean isStillValid(Player current, Map sourceMap) {
+            if (current != player || current.isDead() != isHome()) {
+                return false;
+            }
+            if (current.mapId() != mapId || current.zoneId() != zoneId
+                    || current.x() != x || current.y() != y) {
+                return false;
+            }
+            return isHome() || waypoint.equals(sourceMap.findWaypoint(x, y));
+        }
+
+        /** Player tự đổi vị trí: hồi sinh ở nhà hoặc ra cửa waypoint. */
+        private void apply(Player current) {
+            if (isHome()) {
+                current.revive(destination.mapId(), destination.zoneId(), HOME_X, HOME_Y);
+            } else {
+                current.changeMap(destination.mapId(), destination.zoneId(),
+                        waypoint.goX(), waypoint.goY());
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Rời game (disconnect)
+    // ------------------------------------------------------------------
+
+    /** Dọn Session khỏi mọi Zone có thể đang giữ nó, rồi mới chụp bản lưu cuối. */
     public PlayerSaveData leave(Session session) {
         Zone.requireOutsideRuntimeWorker("leave");
         if (session == null || session.player() == null) {
             return null;
         }
         List<Zone> owners = new ArrayList<>();
-        addOwner(owners, session.zone());
-        addOwner(owners, pendingDestination(session));
-        addOwner(owners, findZone(session.player().mapId(), session.player().zoneId()));
-        List<Session> rejected = new ArrayList<>();
+        addOwners(owners, session);
         boolean detached = true;
         try {
             for (int index = 0; index < owners.size(); index++) {
-                if (!leaveZone(owners.get(index), session, rejected)) {
+                if (!drop(owners.get(index), session)) {
                     detached = false;
                 }
-                // Commit/enter may have finished while the preceding owner was draining.
-                addOwner(owners, pendingDestination(session));
-                addOwner(owners, session.zone());
-                addOwner(owners, findZone(session.player().mapId(), session.player().zoneId()));
+                // Một chuyến đi / enter có thể vừa xong trong lúc Zone trước đang được dọn.
+                addOwners(owners, session);
             }
             if (!detached || session.zone() != null) {
                 return null;
             }
-            pendingDestinations.remove(session);
+            trips.remove(session);
             if (owners.isEmpty()) {
                 return captureAfterLeave(session);
             }
-            Zone lastOwner = owners.getLast();
-            return lastOwner.call(() -> captureAfterLeave(session));
+            return owners.getLast().call(() -> captureAfterLeave(session));
         } catch (RejectedExecutionException exception) {
             LOGGER.log(Level.WARNING,
                     "Không thể chụp Player vì Zone đã dừng: session=" + session.id(), exception);
             return null;
-        } finally {
-            closeRejected(rejected);
         }
     }
 
-    private boolean leaveZone(Zone zone, Session session, List<Session> rejected) {
-        try {
-            zone.leave(session, rejected);
-            return true;
-        } catch (RejectedExecutionException exception) {
-            LOGGER.log(Level.WARNING,
-                    "Không thể detach Player vì Zone đã dừng: session=" + session.id(), exception);
-            return false;
-        } catch (RuntimeException exception) {
-            LOGGER.log(Level.WARNING,
-                    "Zone leave failed: session=" + session.id(), exception);
-            // A delivery failure after detach must not skip the other owner or final save.
-            return !zone.hasPlayer(session) && !zone.hasReservation(session)
-                    && session.zone() != zone;
-        }
+    /** Zone hiện tại, Zone đích của chuyến đi đang chờ và Zone theo vị trí Player. */
+    private void addOwners(List<Zone> owners, Session session) {
+        addOwner(owners, session.zone());
+        addOwner(owners, tripDestination(session));
+        addOwner(owners, findZone(session.player().mapId(), session.player().zoneId()));
     }
 
     private static void addOwner(List<Zone> owners, Zone zone) {
@@ -169,11 +310,23 @@ public final class MapManager {
         }
     }
 
-    private Zone pendingDestination(Session session) {
-        Handoff handoff = pendingDestinations.get(session);
-        return handoff == null ? null : handoff.destination;
+    private boolean drop(Zone zone, Session session) {
+        try {
+            zone.drop(session);
+            return true;
+        } catch (RejectedExecutionException exception) {
+            LOGGER.log(Level.WARNING,
+                    "Không thể detach Player vì Zone đã dừng: session=" + session.id(), exception);
+            return false;
+        } catch (RuntimeException exception) {
+            LOGGER.log(Level.WARNING, "Zone leave failed: session=" + session.id(), exception);
+            // Lỗi gửi packet sau khi đã tách không được bỏ qua Zone khác hoặc bản lưu cuối.
+            return !zone.hasPlayer(session) && !zone.hasReservation(session)
+                    && session.zone() != zone;
+        }
     }
 
+    /** Chết rồi thoát game: hồi sinh về nhà trước khi lưu. */
     private static PlayerSaveData captureAfterLeave(Session session) {
         Player player = session.player();
         if (session.state() == SessionState.CLOSED && player.isDead()) {
@@ -182,132 +335,15 @@ public final class MapManager {
         return PlayerSaveData.capture(player);
     }
 
-    /** Chọn waypoint và chuyển Player sau khi Zone nguồn xác nhận trạng thái. */
-    public MapChange changeMap(Session session) {
+    // ------------------------------------------------------------------
+    // Tiện ích
+    // ------------------------------------------------------------------
+
+    private static Zone joinedZone(Session session) {
         if (session == null || session.state() == SessionState.CLOSED) {
             return null;
         }
-        Zone sourceZone = session.zone();
-        if (sourceZone == null) {
-            return null;
-        }
-        Zone.requireOutsideRuntimeWorker("changeMap");
-        Map sourceMap = findMap(sourceZone.mapId());
-        if (sourceMap == null) {
-            return null;
-        }
-
-        ChangeState state;
-        try {
-            state = sourceZone.call(() -> {
-                Player player = session.player();
-                if (!canLeave(session, sourceZone, player) || player.isDead()) {
-                    return null;
-                }
-                Waypoint waypoint = sourceMap.findWaypoint(player.x(), player.y());
-                return waypoint == null ? null : new ChangeState(player,
-                        player.mapId(), player.zoneId(), player.x(), player.y(), waypoint);
-            });
-        } catch (RejectedExecutionException exception) {
-            return null;
-        }
-        if (state == null) {
-            return null;
-        }
-
-        Zone destination = findZone(state.waypoint().goMap(), 0);
-        return destination == null ? null
-                : changeZone(session, sourceZone, destination, sourceMap, state);
-    }
-
-    /** Protocol death-return: chỉ Player chết được hồi sinh và chuyển về home. */
-    public MapChange returnHomeFromDeath(Session session) {
-        if (session == null || session.state() == SessionState.CLOSED) {
-            return null;
-        }
-        Zone sourceZone = session.zone();
-        if (sourceZone == null) {
-            return null;
-        }
-        Zone.requireOutsideRuntimeWorker("returnHomeFromDeath");
-        Zone home = findZone(HOME_MAP_ID, HOME_ZONE_ID);
-        if (home == null) {
-            return null;
-        }
-
-        ChangeState state;
-        try {
-            state = sourceZone.call(() -> {
-                Player player = session.player();
-                if (!canLeave(session, sourceZone, player) || !player.isDead()) {
-                    return null;
-                }
-                return new ChangeState(player, player.mapId(), player.zoneId(),
-                        player.x(), player.y(), null);
-            });
-        } catch (RejectedExecutionException exception) {
-            return null;
-        }
-        return state == null ? null : changeZone(session, sourceZone, home, null, state);
-    }
-
-    /** Reserve ở destination rồi revalidate/commit trên source; không chờ hai writer lồng nhau. */
-    private MapChange changeZone(Session session, Zone source, Zone destination,
-                                 Map sourceMap, ChangeState state) {
-        Handoff handoff = new Handoff(destination);
-        if (pendingDestinations.putIfAbsent(session, handoff) != null) {
-            return null;
-        }
-        boolean reserved = false;
-        AtomicBoolean committed = new AtomicBoolean();
-        List<Session> rejected = new ArrayList<>();
-        try {
-            reserved = source != destination && reserveDestination(destination, session);
-            if (source != destination && !reserved) {
-                return null;
-            }
-            MapChange change = source.call(() -> {
-                Player player = session.player();
-                Waypoint waypoint = state.waypoint();
-                boolean home = waypoint == null;
-                if (!canLeave(session, source, player)
-                        || player != state.player()
-                        || player.isDead() != home
-                        || player.mapId() != state.mapId()
-                        || player.zoneId() != state.zoneId()
-                        || player.x() != state.x() || player.y() != state.y()
-                        || (!home && !waypoint.equals(sourceMap.findWaypoint(state.x(), state.y())))) {
-                    return null;
-                }
-                if (source != destination && !source.removePlayer(session)) {
-                    return null;
-                }
-                if (home) {
-                    player.revive(HOME_MAP_ID, HOME_ZONE_ID, HOME_X, HOME_Y);
-                } else {
-                    player.changeMap(waypoint.goMap(), 0, waypoint.goX(), waypoint.goY());
-                }
-                // Handoff đã commit trước delivery: lỗi packet không được hủy slot đích.
-                committed.set(true);
-                if (source != destination) {
-                    source.detach(session, rejected);
-                }
-                return new MapChange(PlayerSaveData.capture(player), destination.zoneId());
-            });
-            closeRejected(rejected);
-            return change;
-        } catch (RejectedExecutionException exception) {
-            return null;
-        } finally {
-            if (!committed.get()) {
-                if (reserved) {
-                    cancelReservation(destination, session);
-                }
-                pendingDestinations.remove(session, handoff);
-            } else if (source == destination) {
-                pendingDestinations.remove(session, handoff);
-            }
-        }
+        return session.zone();
     }
 
     private static boolean canLeave(Session session, Zone source, Player player) {
@@ -317,21 +353,20 @@ public final class MapManager {
                 && source.hasPlayer(session);
     }
 
-    /** Source state bất biến; waypoint null biểu thị yêu cầu death-return về home. */
-    private record ChangeState(Player player, int mapId, int zoneId, int x, int y,
-                               Waypoint waypoint) {
-    }
-
-    /** Identity distinguishes repeated trips to the same destination from old finishLoad calls. */
-    private static final class Handoff {
-        private final Zone destination;
-
-        private Handoff(Zone destination) {
-            this.destination = destination;
+    private static Trip plan(Zone source, Supplier<Trip> plan) {
+        try {
+            return source.call(plan);
+        } catch (RejectedExecutionException exception) {
+            return null;
         }
     }
 
-    private boolean reserveDestination(Zone zone, Session session) {
+    private Zone tripDestination(Session session) {
+        Trip trip = trips.get(session);
+        return trip == null ? null : trip.destination;
+    }
+
+    private static boolean reserve(Zone zone, Session session) {
         try {
             Zone.ReserveStatus status = zone.reserve(session);
             return status == Zone.ReserveStatus.RESERVED
@@ -341,28 +376,20 @@ public final class MapManager {
         }
     }
 
-    private void cancelReservation(Zone zone, Session session) {
+    private static void cancel(Zone zone, Session session) {
         try {
             zone.cancel(session);
         } catch (RejectedExecutionException ignored) {
-            // A stopped destination cannot have an active runtime admission.
+            // Zone đích đã dừng thì không còn chỗ nào được giữ.
         }
     }
 
     private Zone findZone(int mapId, int zoneId) {
         Map map = findMap(mapId);
-        if (map == null) {
-            return null;
-        }
-        return map.findZone(zoneId);
+        return map == null ? null : map.findZone(zoneId);
     }
 
-    private static void closeRejected(List<Session> rejectedObservers) {
-        for (Session rejectedObserver : rejectedObservers) {
-            rejectedObserver.close();
-        }
-    }
-
+    /** Kết quả chuyển map để Handler lưu checkpoint và gửi MAP_INFO. */
     public record MapChange(PlayerSaveData saveData, int zoneId) {
         public MapChange {
             Objects.requireNonNull(saveData, "saveData");
@@ -371,5 +398,4 @@ public final class MapManager {
             }
         }
     }
-
 }

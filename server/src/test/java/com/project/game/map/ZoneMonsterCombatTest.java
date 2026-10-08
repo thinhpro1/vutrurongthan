@@ -95,11 +95,11 @@ class ZoneMonsterCombatTest {
         assertTrue(zone.attackMonster(player, 101, NOW));
         assertEquals(0L, zone.monsterSnapshots().getFirst().hp());
         drain(player);
-        zone.updateMonsters(NOW + 9_000, new Random(1L));
+        zone.update(NOW + 9_000, new Random(1L));
         assertTrue(commands(drain(player)).stream()
                 .noneMatch(command -> command == MessageName.MONSTER_RESPAWN));
 
-        zone.updateMonsters(NOW + 9_001, new Random(1L));
+        zone.update(NOW + 9_001, new Random(1L));
         assertTrue(commands(drain(player)).contains(MessageName.MONSTER_RESPAWN));
         assertEquals(300L, zone.monsterSnapshots().getFirst().hp());
         assertEquals(0, zone.monsterSnapshots().getFirst().status());
@@ -267,7 +267,7 @@ class ZoneMonsterCombatTest {
         Thread lifecycle = Thread.ofVirtual().start(() -> {
             lifecycleStarted.countDown();
             try {
-                zone.updateMonsters(NOW, new Random(1L));
+                zone.update(NOW, new Random(1L));
             } finally {
                 lifecycleFinished.countDown();
             }
@@ -300,7 +300,7 @@ class ZoneMonsterCombatTest {
         drain(target);
         target.transition(SessionState.CONNECTED, SessionState.CLOSED);
 
-        zone.updateMonsters(NOW + 1, new Random(1L));
+        zone.update(NOW + 1, new Random(1L));
 
         assertFalse(commands(drain(target)).contains(MessageName.MONSTER_ATTACK));
     }
@@ -320,7 +320,7 @@ class ZoneMonsterCombatTest {
             return null;
         });
 
-        zone.updateMonsters(NOW + 1, new Random(1L));
+        zone.update(NOW + 1, new Random(1L));
 
         assertEquals(0L, player.hp());
         assertTrue(monsters.stream().noneMatch(monster -> monster.hasEnemy(player.id())));

@@ -22,7 +22,6 @@ import java.nio.file.Path;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Random;
-import java.util.random.RandomGenerator;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -576,7 +575,7 @@ class GameplayIntegrationTest {
         GameplayServices maps = new GameplayServices(
                 new com.project.game.network.packet.PlayerPacketWriter(),
                 new MonsterPacketWriter(),
-                new MonsterManager(resources, clock, RandomGenerator.getDefault()),
+                new MonsterManager(resources, clock, new Random()),
                 clock);
         NetworkServer server = new NetworkServer(
                 "127.0.0.1", 0, 4, 262_144, 16, 1_000,
@@ -1124,7 +1123,7 @@ class GameplayIntegrationTest {
         }
     }
 
-    private static final class BlockingLifecycleRandom implements RandomGenerator {
+    private static final class BlockingLifecycleRandom extends Random {
         private final CountDownLatch entered = new CountDownLatch(1);
         private final CountDownLatch release = new CountDownLatch(1);
 

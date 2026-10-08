@@ -4,11 +4,25 @@ import java.util.Objects;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-/** Writer nội bộ của một Zone; chỉ quản lý thực thi, không giữ state gameplay. */
+/**
+ * Writer nội bộ của một Zone: một virtual thread chạy tuần tự input và nhịp update.
+ *
+ * <pre>
+ * run():                                   // giống Zone.run() → update() của rongthan
+ *     while (có input hoặc Zone còn Player):
+ *         đến nhịp  → update()
+ *         input đến → chạy input
+ *     → FROZEN (thread kết thúc, input mới sẽ đánh thức)
+ * </pre>
+ * Nhịp kế tiếp tính từ lúc nhịp trước <b>kết thúc</b>: update chậm không bao giờ chạy nối
+ * đuôi nhau, input luôn có lượt chạy và nhịp trễ không bị dồn lại. Không giữ state gameplay.
+ */
 final class ZoneWriter {
     static final int DEFAULT_INPUT_CAPACITY = 1024;
     private static final Logger LOGGER = Logger.getLogger(ZoneWriter.class.getName());
@@ -20,6 +34,13 @@ final class ZoneWriter {
     private final Object lock = new Object();
     private State state = State.FROZEN;
     private Thread worker;
+    // Nhịp update; chỉ worker đọc ngoài lock. null = Zone chỉ chạy khi có input.
+    private volatile Runnable update;
+    private volatile BooleanSupplier awake;
+    private volatile long periodNanos;
+    private long nextUpdateNanos;
+    // startUpdate đã chạy sau lần worker xét nhịp gần nhất: worker sắp nghỉ phải chạy lại.
+    private boolean updateChanged;
 
     ZoneWriter(int mapId, int zoneId, int inputCapacity) {
         if (inputCapacity <= 0) {
@@ -52,6 +73,42 @@ final class ZoneWriter {
             }
             startIfNeededLocked();
             return true;
+        }
+    }
+
+    /**
+     * Bật nhịp update: worker gọi {@code update} mỗi {@code periodMillis} khi {@code awake}
+     * còn đúng, và nghỉ (FROZEN) khi không còn input lẫn việc cần update.
+     */
+    void startUpdate(Runnable update, BooleanSupplier awake, long periodMillis) {
+        Objects.requireNonNull(update, "update");
+        Objects.requireNonNull(awake, "awake");
+        if (periodMillis <= 0) {
+            throw new IllegalArgumentException("periodMillis must be positive");
+        }
+        synchronized (lock) {
+            if (state == State.STOPPED) {
+                return;
+            }
+            this.periodNanos = TimeUnit.MILLISECONDS.toNanos(periodMillis);
+            this.awake = awake;
+            this.update = update;
+            updateChanged = true;
+            startIfNeededLocked();
+        }
+    }
+
+    /** Tắt nhịp update và chờ nhịp đang chạy (nếu có) xong; input vẫn được chạy như trước. */
+    void stopUpdate() {
+        update = null;
+        if (isCurrent()) {
+            return;
+        }
+        try {
+            // Một input rỗng xếp sau nhịp đang chạy: khi nó xong, không còn nhịp nào chạy nữa.
+            call(() -> null);
+        } catch (RejectedExecutionException ignored) {
+            // Writer đã dừng hẳn thì cũng không còn nhịp nào.
         }
     }
 
@@ -124,6 +181,7 @@ final class ZoneWriter {
      * các lời gọi đang xếp hàng bị từ chối và đánh thức bên gọi, các tác vụ khác bị loại bỏ.
      */
     void stop() {
+        update = null;
         synchronized (lock) {
             state = State.STOPPED;
             for (Runnable action : inputs) {
@@ -154,17 +212,9 @@ final class ZoneWriter {
         try {
             try {
                 while (true) {
-                    Runnable action;
-                    synchronized (lock) {
-                        if (state == State.STOPPED) {
-                            inputs.clear();
-                            return;
-                        }
-                        action = inputs.poll();
-                        if (action == null) {
-                            return;
-                        }
-                        lock.notifyAll();
+                    Runnable action = nextAction();
+                    if (action == null) {
+                        return;
                     }
                     try {
                         action.run();
@@ -181,7 +231,7 @@ final class ZoneWriter {
                         worker = null;
                         if (state == State.STOPPED) {
                             inputs.clear();
-                        } else if (inputs.isEmpty()) {
+                        } else if (inputs.isEmpty() && !updateChanged) {
                             state = State.FROZEN;
                         } else {
                             startLocked();
@@ -192,6 +242,74 @@ final class ZoneWriter {
         } finally {
             CURRENT_WRITER.remove();
         }
+    }
+
+    /** Nhịp update khi đến hạn, hoặc input kế tiếp; null khi Zone được nghỉ hoặc đã dừng. */
+    private Runnable nextAction() {
+        while (true) {
+            synchronized (lock) {
+                if (state == State.STOPPED) {
+                    inputs.clear();
+                    return null;
+                }
+                updateChanged = false;
+            }
+            boolean ticking = update != null && awake.getAsBoolean();
+            long now = System.nanoTime();
+            if (ticking && now - nextUpdateNanos >= 0) {
+                return this::runUpdate;
+            }
+            synchronized (lock) {
+                Runnable input = inputs.poll();
+                if (input != null) {
+                    lock.notifyAll();
+                    return input;
+                }
+            }
+            if (!ticking) {
+                return null;
+            }
+            Runnable input = waitForInput(nextUpdateNanos - now);
+            if (input != null) {
+                return input;
+            }
+        }
+    }
+
+    /** Một nhịp update; nhịp kế tiếp được hẹn từ lúc nhịp này kết thúc. */
+    private void runUpdate() {
+        try {
+            Runnable tick = update;
+            if (tick != null) {
+                tick.run();
+            }
+        } finally {
+            nextUpdateNanos = System.nanoTime() + periodNanos;
+        }
+    }
+
+    /** Chờ input tới hạn nhịp kế tiếp; dùng hàng đợi (không pin carrier của virtual thread). */
+    private Runnable waitForInput(long waitNanos) {
+        Runnable input;
+        try {
+            input = inputs.poll(waitNanos, TimeUnit.NANOSECONDS);
+        } catch (InterruptedException exception) {
+            return null;
+        }
+        if (input == null) {
+            return null;
+        }
+        synchronized (lock) {
+            if (state == State.STOPPED) {
+                // stop() đã chạy sau khi input rời hàng đợi: báo cho bên gọi thay vì bỏ rơi.
+                if (input instanceof Call<?> call) {
+                    call.cancel();
+                }
+                return null;
+            }
+            lock.notifyAll();
+        }
+        return input;
     }
 
     private static final class Call<T> implements Runnable {

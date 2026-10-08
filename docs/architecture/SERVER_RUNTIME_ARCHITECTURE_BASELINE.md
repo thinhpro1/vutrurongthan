@@ -51,7 +51,22 @@ while (input queued or Zone has a Player):
 An empty Zone does not tick. Monster respawn/attack use timestamps, so the first
 tick after waking applies everything that became due while frozen. The wait
 between ticks uses the queue's timed poll rather than `Object.wait`, so a parked
-Zone does not pin a carrier thread. This preserves overload,
+Zone does not pin a carrier thread.
+
+Loop rules (review 2026-10-08, FINDING-01/02/03):
+
+- **Fairness:** the next tick is scheduled from the end of the previous tick
+  (fixed delay). A slow tick never runs back-to-back and queued input always
+  gets a turn; late ticks are skipped, not accumulated. Effective cadence is
+  `100 ms + tick time`; gameplay timing uses timestamps, not tick counts.
+- **Restart:** `startUpdate` marks the loop as changed under the writer lock; a
+  worker that was about to freeze sees the mark and restarts, so a Zone with
+  Players never stays FROZEN without an input to wake it.
+- **Stop:** `stopUpdate` returns only after any tick already running finishes;
+  no tick starts afterwards.
+- **Random:** each Zone gets its own `RandomGenerator` (production) because
+  Zones tick in parallel. Tests that need reproducible results pass one
+  `java.util.Random`, which the JDK guarantees is safe to share. This preserves overload,
 stop/cancellation, same-writer calls, and the guard against entering high-level
 operations from any Zone writer. Public cross-Map coordination remains in
 `MapManager` under the existing reservation/revalidation/commit contract.

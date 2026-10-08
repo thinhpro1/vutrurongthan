@@ -16,10 +16,16 @@ import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.IdentityHashMap;
+import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.random.RandomGenerator;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -94,7 +100,7 @@ class MonsterManagerLifecycleTest {
         });
         MonsterManager manager = new MonsterManager(resources(), clock, new java.util.Random(1L));
         MapManager maps = mapManager(manager);
-        Session session = joinHome(maps);
+        joinHome(maps);
 
         manager.start(maps);
         manager.start(maps);
@@ -109,11 +115,36 @@ class MonsterManagerLifecycleTest {
 
         restarted.set(true);
         manager.start(maps);
-        // Một input mới đánh thức Zone đang nghỉ.
-        maps.findMap(0).findZone(0).move(session, 1260, 648);
+        // Không gửi input nào: Zone còn Player phải tự update lại.
         assertTrue(restartedTick.await(2, TimeUnit.SECONDS));
         manager.stop(maps);
         assertTrue(calls.get() >= 2);
+    }
+
+    @Test
+    void eachZoneGetsItsOwnRandomGenerator() {
+        List<RandomGenerator> created = new ArrayList<>();
+        MonsterManager manager = new MonsterManager(resources(), Clock.systemUTC(), () -> {
+            RandomGenerator random = new java.util.Random(created.size());
+            created.add(random);
+            return random;
+        });
+        MapManager maps = mapManager(manager);
+        int zoneCount = 0;
+        for (com.project.game.map.Map map : maps.maps()) {
+            zoneCount += map.zones().size();
+        }
+
+        try {
+            manager.start(maps);
+
+            assertEquals(zoneCount, created.size());
+            Set<RandomGenerator> distinct = Collections.newSetFromMap(new IdentityHashMap<>());
+            distinct.addAll(created);
+            assertEquals(zoneCount, distinct.size(), "Zones ticking in parallel must not share a generator");
+        } finally {
+            manager.stop(maps);
+        }
     }
 
     private static Session joinHome(MapManager maps) {

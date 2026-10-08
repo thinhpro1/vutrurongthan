@@ -33,7 +33,6 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.random.RandomGenerator;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -103,7 +102,7 @@ public static void joinAtBarrier(CyclicBarrier start, GameplayServices maps,
                 MonsterTestSupport.canonicalRepository()), clock);
     }
 
-    public static GameplayServices mapsWithMonsters(Clock clock, java.util.random.RandomGenerator random) {
+    public static GameplayServices mapsWithMonsters(Clock clock, java.util.Random random) {
         return new GameplayServices(GameResources.fromFrameRoot(
                 Path.of("resources", "json"), MapTestSupport.publicGameplayMaps(), 2,
                 MonsterTestSupport.canonicalRepository()), clock, random);
@@ -252,7 +251,7 @@ public static void joinAtBarrier(CyclicBarrier start, GameplayServices maps,
         }
     }
 
-    public static final class BlockingRandom implements RandomGenerator {
+    public static final class BlockingRandom extends java.util.Random {
         public final CountDownLatch entered = new CountDownLatch(1);
         public final CountDownLatch release = new CountDownLatch(1);
 

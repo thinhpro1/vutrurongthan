@@ -16,7 +16,6 @@ import java.time.Clock;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.random.RandomGenerator;
 
 /** Test-only composition of public Map, Zone combat, and lifecycle services. */
 public final class GameplayServices {
@@ -40,14 +39,14 @@ public final class GameplayServices {
     }
 
     public GameplayServices(GameResources resources) {
-        this(resources, Clock.systemUTC(), RandomGenerator.getDefault());
+        this(resources, Clock.systemUTC(), new java.util.Random());
     }
 
     public GameplayServices(GameResources resources, Clock clock) {
-        this(resources, clock, RandomGenerator.getDefault());
+        this(resources, clock, new java.util.Random());
     }
 
-    public GameplayServices(GameResources resources, Clock clock, RandomGenerator random) {
+    public GameplayServices(GameResources resources, Clock clock, java.util.Random random) {
         PlayerPacketWriter playerPackets = new PlayerPacketWriter();
         MonsterPacketWriter monsterPackets = new MonsterPacketWriter();
         Map<Integer, MapTemplate> catalog = resources.maps().isEmpty()

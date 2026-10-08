@@ -16,11 +16,12 @@ import java.util.logging.Logger;
  * <pre>
  * run():                                   // giống Zone.run() → update() của rongthan
  *     while (có input hoặc Zone còn Player):
- *         input đến → chạy input
  *         đến nhịp  → update()
+ *         input đến → chạy input
  *     → FROZEN (thread kết thúc, input mới sẽ đánh thức)
  * </pre>
- * Không giữ state gameplay.
+ * Nhịp kế tiếp tính từ lúc nhịp trước <b>kết thúc</b>: update chậm không bao giờ chạy nối
+ * đuôi nhau, input luôn có lượt chạy và nhịp trễ không bị dồn lại. Không giữ state gameplay.
  */
 final class ZoneWriter {
     static final int DEFAULT_INPUT_CAPACITY = 1024;
@@ -38,6 +39,8 @@ final class ZoneWriter {
     private volatile BooleanSupplier awake;
     private volatile long periodNanos;
     private long nextUpdateNanos;
+    // startUpdate đã chạy sau lần worker xét nhịp gần nhất: worker sắp nghỉ phải chạy lại.
+    private boolean updateChanged;
 
     ZoneWriter(int mapId, int zoneId, int inputCapacity) {
         if (inputCapacity <= 0) {
@@ -90,13 +93,23 @@ final class ZoneWriter {
             this.periodNanos = TimeUnit.MILLISECONDS.toNanos(periodMillis);
             this.awake = awake;
             this.update = update;
+            updateChanged = true;
             startIfNeededLocked();
         }
     }
 
-    /** Tắt nhịp update; input vẫn được chạy như trước. */
+    /** Tắt nhịp update và chờ nhịp đang chạy (nếu có) xong; input vẫn được chạy như trước. */
     void stopUpdate() {
         update = null;
+        if (isCurrent()) {
+            return;
+        }
+        try {
+            // Một input rỗng xếp sau nhịp đang chạy: khi nó xong, không còn nhịp nào chạy nữa.
+            call(() -> null);
+        } catch (RejectedExecutionException ignored) {
+            // Writer đã dừng hẳn thì cũng không còn nhịp nào.
+        }
     }
 
     /** Chạy tác vụ trên writer và từ chối ngay khi hàng đợi giới hạn đã đầy. */
@@ -218,7 +231,7 @@ final class ZoneWriter {
                         worker = null;
                         if (state == State.STOPPED) {
                             inputs.clear();
-                        } else if (inputs.isEmpty()) {
+                        } else if (inputs.isEmpty() && !updateChanged) {
                             state = State.FROZEN;
                         } else {
                             startLocked();
@@ -239,13 +252,12 @@ final class ZoneWriter {
                     inputs.clear();
                     return null;
                 }
+                updateChanged = false;
             }
-            Runnable tick = update;
-            boolean ticking = tick != null && awake.getAsBoolean();
+            boolean ticking = update != null && awake.getAsBoolean();
             long now = System.nanoTime();
             if (ticking && now - nextUpdateNanos >= 0) {
-                nextUpdateNanos = now + periodNanos;
-                return tick;
+                return this::runUpdate;
             }
             synchronized (lock) {
                 Runnable input = inputs.poll();
@@ -261,6 +273,18 @@ final class ZoneWriter {
             if (input != null) {
                 return input;
             }
+        }
+    }
+
+    /** Một nhịp update; nhịp kế tiếp được hẹn từ lúc nhịp này kết thúc. */
+    private void runUpdate() {
+        try {
+            Runnable tick = update;
+            if (tick != null) {
+                tick.run();
+            }
+        } finally {
+            nextUpdateNanos = System.nanoTime() + periodNanos;
         }
     }
 

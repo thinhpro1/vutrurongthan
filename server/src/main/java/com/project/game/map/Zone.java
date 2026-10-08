@@ -213,8 +213,9 @@ public final class Zone {
                 () -> size() > 0, UPDATE_PERIOD_MILLIS);
     }
 
-    /** Tắt vòng update; Zone vẫn nhận hành động của Player. */
+    /** Tắt vòng update và chờ nhịp đang chạy xong; Zone vẫn nhận hành động của Player. */
     public void stopUpdate() {
+        requireOutsideRuntimeWorker("stopUpdate");
         writer.stopUpdate();
     }
 

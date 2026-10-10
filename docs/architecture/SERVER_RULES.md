@@ -19,6 +19,39 @@ Quyết định và lý do nằm ở `docs/architecture/DECISIONS.md`. File này
 
 ---
 
+## 0.1 Người đọc chính là người mới học Java
+
+Chủ dự án không chuyên code. Mọi code gameplay phải đọc được như đọc kịch bản game:
+
+- **Mở đúng một file là sửa được.** Tên file = tên thứ trong game.
+- **Tên hàm là hành động trong game**: `attack`, `injure`, `die`, `respawn`, `pickItem`. Đọc tên là đoán được nó làm gì.
+- **Mỗi hàm làm một việc, ngắn** (thường dưới ~30 dòng). Dài hơn thì tách thành hàm con có tên game.
+- **Công thức để lộ ra một chỗ.** Ví dụ sát thương: `damage()` trong `Player.java`; hồi sinh quái: `respawnDelayMillis()` trong `Monster.java`. Không giấu công thức trong Service/Handler.
+- **Không bắt người đọc hiểu thread.** Phần thread/hàng đợi nằm trong `ZoneWriter`; file gameplay không có `synchronized`, `lock`, `Future`, lambda lồng.
+- **Comment tiếng Việt ngắn** ở đầu mỗi hàm gameplay không hiển nhiên: nó làm gì trong game.
+- Code đúng nhưng người mới đọc không hiểu thì **chưa đạt**.
+
+### Muốn sửa gì thì mở file nào
+
+| Muốn sửa | Mở file | Hàm |
+|---|---|---|
+| Sát thương, chỉ số, HP/MP của người chơi | `player/Player.java` | `damage()`, `injure()`, `revive()` |
+| Người chơi di chuyển, chọn mục tiêu, đánh | `player/Player.java` | `move()`, `useSkill()`, `attack()` |
+| Chuyển map, về nhà, dịch chuyển | `player/Player.java` | `requestChangeMap()`, `returnTownFromDead()`, `teleport()` |
+| Quái: đi lại, đuổi, đánh, chọn mục tiêu | `monster/Monster.java` | `update()`, `updateMove()`, `updateAttack()`, `findTarget()` |
+| Quái: bị đánh, chết, thưởng, hồi sinh | `monster/Monster.java` | `injure()`, `die()`, `respawn()` |
+| Dữ liệu quái (máu, dame, tốc độ) | DB / `monster/MonsterTemplate.java` | — |
+| Trong một khu vực có gì, chạy theo nhịp nào | `map/Zone.java` | `update()`, `enter()`, `leave()` |
+| Map có những khu vực nào, waypoint | `map/Map.java` | `findZone()`, `findWaypoint()` |
+| Gói tin gửi cho người chơi khi có sự kiện | `service/AreaService.java` | `monsterAttack()`, `playerMove()`… |
+| Bytes của gói tin | `network/packet/*PacketWriter.java` | — |
+| Đọc gói tin client gửi lên | `network/handler/*Handler.java` | `handleXxx()` |
+| Lưu/đọc DB | `persistence/**/Jdbc*Repository.java` | — |
+
+Thêm tính năng mới thì thêm một dòng vào bảng này.
+
+---
+
 ## 1. Mười hai nguyên tắc
 
 1. **Nhân vật là trung tâm.** Hành động của người chơi nằm trong `Player` (hoặc phần con của Player). Mở `Player.java` là biết người chơi làm được gì.

@@ -1,5 +1,6 @@
 package com.project.game.network;
 
+import com.project.game.testsupport.TestPlayers;
 import com.project.game.testsupport.TestServices;
 import com.project.game.network.codec.LegacyPacketCodec;
 import com.project.game.network.codec.LegacyCipher;
@@ -63,7 +64,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class SessionTest {
     @Test
-    void clearZoneRequiresTheExpectedZoneIdentity() {
+    void zoneIsReadThroughThePlayerAndLeaveNeedsTheExpectedZone() {
         SessionManager manager = new SessionManager();
         Session session = new Session(manager.nextId(), new TestTransport(), manager,
                 new LegacyPacketCodec(1024), "abc".getBytes(StandardCharsets.US_ASCII), 4,
@@ -72,14 +73,17 @@ class SessionTest {
                 new AreaService(new PlayerPacketWriter(), new MonsterPacketWriter()));
         Zone second = new Zone(0, 1, 10, List.of(),
                 new AreaService(new PlayerPacketWriter(), new MonsterPacketWriter()));
+        Player player = TestPlayers.initial(1L, 7, "alpha1", 0);
+        session.bindPlayer(player);
+        assertSame(session, player.session());
 
-        session.bindZone(first);
-
-        session.clearZone(second);
+        player.enterZone(first);
         assertSame(first, session.zone());
-        assertThrows(NullPointerException.class, () -> session.clearZone(null));
 
-        session.clearZone(first);
+        player.leaveZone(second);
+        assertSame(first, session.zone());
+
+        player.leaveZone(first);
         assertNull(session.zone());
     }
 
@@ -273,7 +277,7 @@ class SessionTest {
             assertEquals(11L, attacker.player().potential());
             assertEquals(0L, zone.monsterSnapshots().getFirst().hp());
             assertEquals(SessionState.CLOSED, attacker.state());
-            assertFalse(zone.hasPlayer(attacker));
+            assertFalse(zone.hasPlayer(attacker.player()));
             assertNull(attacker.zone());
             assertSame(attacker, attacker.manager().findByAccount("user01"));
             assertTrue(attack.isAlive());
@@ -664,7 +668,7 @@ class SessionTest {
             assertTrue(close.isAlive(), "final save must wait for the earlier checkpoint");
             assertEquals(1, repository.checkpointCalls.get());
             assertSame(session, session.manager().findByAccount("user01"));
-            assertFalse(owner.hasPlayer(session));
+            assertFalse(owner.hasPlayer(session.player()));
             assertNull(session.zone());
             CountDownLatch writerAvailable = new CountDownLatch(1);
             assertTrue(ZoneTestHooks.submit(owner, writerAvailable::countDown));
@@ -714,7 +718,7 @@ class SessionTest {
             assertEquals(0, repository.checkpointCalls.get());
             assertEquals(SessionState.IN_GAME, session.state());
             assertSame(owner, session.zone());
-            assertTrue(owner.hasPlayer(session));
+            assertTrue(owner.hasPlayer(session.player()));
         } finally {
             session.close();
         }
@@ -791,7 +795,7 @@ class SessionTest {
         assertEquals(648, loaded.y());
         assertEquals(450, loaded.hp());
         assertEquals(320, loaded.mp());
-        assertFalse(owner.hasPlayer(session));
+        assertFalse(owner.hasPlayer(session.player()));
         assertNull(session.zone());
         assertNull(session.manager().findByAccount("user01"));
     }
@@ -896,7 +900,7 @@ class SessionTest {
             assertEquals(200, delegate.requireByAccountId(101L).hp());
             assertNull(session.manager().findByAccount("user01"));
             assertEquals(0, session.manager().onlineCount());
-            assertFalse(owner.hasPlayer(session));
+            assertFalse(owner.hasPlayer(session.player()));
             assertNull(session.zone());
         } finally {
             repository.allowFirstSave.countDown();
@@ -940,7 +944,7 @@ class SessionTest {
 
             assertTrue(close.isAlive(), "failed final capture still drains the earlier checkpoint");
             assertSame(owner, session.zone(), "stopped writer cannot detach or capture a final save");
-            assertTrue(owner.hasPlayer(session));
+            assertTrue(owner.hasPlayer(session.player()));
             assertSame(session, session.manager().findByAccount("user01"));
             assertEquals(1, repository.checkpointCalls.get());
 
@@ -1025,7 +1029,7 @@ class SessionTest {
                     .map(PlayerSaveData::hp).toList());
             assertEquals(170, delegate.requireByAccountId(101L).hp());
             assertNull(session.manager().findByAccount("user01"));
-            assertFalse(owner.hasPlayer(session));
+            assertFalse(owner.hasPlayer(session.player()));
             assertNull(session.zone());
         } finally {
             repository.allowFirstSave.countDown();
@@ -1105,7 +1109,7 @@ class SessionTest {
             if (close.getState() == Thread.State.TERMINATED) {
                 return;
             }
-            if (session.zone() == null && !owner.hasPlayer(session)
+            if (session.zone() == null && !owner.hasPlayer(session.player())
                     && close.getState() == Thread.State.BLOCKED) {
                 return;
             }

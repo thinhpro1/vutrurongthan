@@ -44,7 +44,7 @@ class MapManagerTest {
         assertEquals(waypoint.goY(), change.saveData().y());
         assertNull(source.zone());
         assertTrue(maps.mapManager().finishLoad(source));
-        assertTrue(source.zone().move(source, waypoint.goX() + 1, waypoint.goY()));
+        assertTrue(ZoneTestHooks.move(source.zone(), source, waypoint.goX() + 1, waypoint.goY()));
         assertEquals(waypoint.goX(), change.saveData().x());
     }
 
@@ -68,7 +68,7 @@ class MapManagerTest {
 
         assertNotNull(change);
         assertSame(source, moving.zone());
-        assertTrue(source.hasPlayer(moving));
+        assertTrue(source.hasPlayer(moving.player()));
         assertEquals(2, source.size());
         assertEquals(0, source.reservedCount());
         assertEquals(1250, change.saveData().x());
@@ -440,12 +440,12 @@ class MapManagerTest {
         });
 
         assertFalse(leaveFinished.await(100, TimeUnit.MILLISECONDS));
-        assertTrue(zone.hasPlayer(leaving));
+        assertTrue(zone.hasPlayer(leaving.player()));
         releasePrior.countDown();
         assertTrue(leaveFinished.await(5, TimeUnit.SECONDS));
         leave.join();
 
-        assertFalse(zone.hasPlayer(leaving));
+        assertFalse(zone.hasPlayer(leaving.player()));
         assertEquals(0, maps.memberCount(0, 0));
     }
 
@@ -495,8 +495,8 @@ class MapManagerTest {
         assertFalse(maps.mapManager().finishLoad(conflicting));
         assertEquals(1, maps.memberCount(0, 0));
         Zone zone = zoneFor(maps, 0, 0);
-        assertTrue(zone.hasPlayer(first));
-        assertFalse(zone.hasPlayer(conflicting));
+        assertTrue(zone.hasPlayer(first.player()));
+        assertFalse(zone.hasPlayer(conflicting.player()));
         assertEquals(List.of(), drain(first));
         assertEquals(List.of(), drain(conflicting));
     }
@@ -1000,8 +1000,8 @@ class MapManagerTest {
         assertNotNull(change);
         assertNull(source.zone());
         Zone destination = maps.findZone(1, 0);
-        assertFalse(maps.findZone(0, 0).hasPlayer(source));
-        assertFalse(destination.hasPlayer(source));
+        assertFalse(maps.findZone(0, 0).hasPlayer(source.player()));
+        assertFalse(destination.hasPlayer(source.player()));
         assertEquals(1, source.player().mapId());
         assertEquals(0, source.player().zoneId());
         assertEquals(1, destination.reservedCount());
@@ -1069,7 +1069,7 @@ class MapManagerTest {
         Session loser = firstChange.get() == null ? first : second;
         assertEquals(0, loser.player().mapId());
         assertEquals(loser == first ? 0 : 1, loser.player().zoneId());
-        assertTrue(loser.zone().hasPlayer(loser));
+        assertTrue(loser.zone().hasPlayer(loser.player()));
         assertEquals(0, maps.memberCount(1, 0));
         assertEquals(1, maps.findZone(1, 0).reservedCount());
     }
@@ -1125,9 +1125,9 @@ class MapManagerTest {
         assertNotNull(change.get(), "source revalidation already accepted the handoff");
         assertEquals(SessionState.CLOSED, moving.state());
         assertNull(moving.zone());
-        assertFalse(source.hasPlayer(moving));
-        assertFalse(destination.hasPlayer(moving));
-        assertFalse(destination.hasReservation(moving));
+        assertFalse(source.hasPlayer(moving.player()));
+        assertFalse(destination.hasPlayer(moving.player()));
+        assertFalse(destination.hasReservation(moving.player()));
 
         // A fresh Session for the same Player must be able to reuse the only slot.
         Session replacement = session(at(player(1, 0, 0), 4464, 936), maps);
@@ -1147,7 +1147,7 @@ class MapManagerTest {
         Session joining = session(player(1, 1, 0), maps);
         Zone destination = maps.findZone(1, 0);
         BlockingMembers members = new BlockingMembers();
-        replaceZoneField(destination, "members", members);
+        replaceZoneField(destination, "players", members);
         BlockingQueue<?> destinationInputs = zoneInputs(destination);
         AtomicReference<Throwable> failure = new AtomicReference<>();
         Thread enter = startTask(failure, () -> maps.mapManager().finishLoad(joining));
@@ -1168,8 +1168,8 @@ class MapManagerTest {
         assertNull(failure.get());
         assertEquals(SessionState.CLOSED, joining.state());
         assertNull(joining.zone());
-        assertFalse(destination.hasPlayer(joining));
-        assertFalse(destination.hasReservation(joining));
+        assertFalse(destination.hasPlayer(joining.player()));
+        assertFalse(destination.hasReservation(joining.player()));
         Session replacement = session(player(1, 1, 0), maps);
         try {
             assertTrue(maps.mapManager().finishLoad(replacement));
@@ -1237,9 +1237,9 @@ class MapManagerTest {
 
         assertNull(failure.get());
         assertNull(change.get());
-        assertFalse(source.hasPlayer(moving));
-        assertFalse(destination.hasPlayer(moving));
-        assertFalse(destination.hasReservation(moving));
+        assertFalse(source.hasPlayer(moving.player()));
+        assertFalse(destination.hasPlayer(moving.player()));
+        assertFalse(destination.hasReservation(moving.player()));
         assertNull(moving.zone());
     }
 
@@ -1295,12 +1295,12 @@ class MapManagerTest {
         assertEquals(1, (firstChange.get() == null ? 0 : 1)
                 + (duplicateChange.get() == null ? 0 : 1));
         assertNull(moving.zone());
-        assertFalse(source.hasPlayer(moving));
+        assertFalse(source.hasPlayer(moving.player()));
         Session competing = session(player(2, 1, 0), maps);
         try {
             assertFalse(maps.mapManager().finishLoad(competing),
                     "the losing duplicate released the winning handoff's only destination slot");
-            assertTrue(destination.hasReservation(moving));
+            assertTrue(destination.hasReservation(moving.player()));
             assertTrue(maps.mapManager().finishLoad(moving));
             assertSame(destination, moving.zone());
             assertEquals(1, destination.size());
@@ -1362,15 +1362,15 @@ class MapManagerTest {
                     "first enter did not close its rejected observer after admission");
             joinTasks(second);
             assertTrue(secondEntered.get());
-            assertTrue(destination.hasPlayer(moving));
-            assertFalse(destination.hasPlayer(observer));
+            assertTrue(destination.hasPlayer(moving.player()));
+            assertFalse(destination.hasPlayer(observer.player()));
             assertTrue(maps.mapManager().finishLoad(remaining));
 
             // Return to the original source, then prepare a fresh handoff to the same Zone.
-            assertTrue(destination.move(moving, 0, 1008));
+            assertTrue(ZoneTestHooks.move(destination, moving, 0, 1008));
             assertNotNull(maps.mapManager().changeMap(moving));
             assertTrue(maps.mapManager().finishLoad(moving));
-            assertTrue(source.move(moving, 4464, 936));
+            assertTrue(ZoneTestHooks.move(source, moving, 4464, 936));
             assertTrue(destination.submit(() -> {
                 reserveStarted.countDown();
                 awaitRelease(releaseReserve);
@@ -1415,7 +1415,7 @@ class MapManagerTest {
         try {
             assertFalse(maps.mapManager().finishLoad(competing),
                     "old finishLoad cleared the new handoff and allowed its slot to be canceled");
-            assertTrue(destination.hasReservation(moving));
+            assertTrue(destination.hasReservation(moving.player()));
             assertTrue(maps.mapManager().finishLoad(moving));
             assertSame(destination, moving.zone());
         } finally {
@@ -1470,8 +1470,8 @@ class MapManagerTest {
             awaitCondition(() -> moving.state() == SessionState.CLOSED
                             && moving.zone() == null && !destinationInputs.isEmpty(),
                     "source delivery failure prevented pending destination cleanup");
-            assertFalse(source.hasPlayer(moving));
-            assertTrue(source.hasPlayer(observer));
+            assertFalse(source.hasPlayer(moving.player()));
+            assertTrue(source.hasPlayer(observer.player()));
         } finally {
             reservations.release.countDown();
             joinTasks(transition, close);
@@ -1481,9 +1481,9 @@ class MapManagerTest {
         assertNull(change.get());
         assertEquals(SessionState.CLOSED, moving.state());
         assertNull(moving.zone());
-        assertFalse(source.hasPlayer(moving));
-        assertFalse(destination.hasPlayer(moving));
-        assertFalse(destination.hasReservation(moving));
+        assertFalse(source.hasPlayer(moving.player()));
+        assertFalse(destination.hasPlayer(moving.player()));
+        assertFalse(destination.hasReservation(moving.player()));
         assertFalse(moving.player().isDead());
         assertEquals(moving.player().currentStats().maxHp(), moving.player().hp());
         assertEquals(0, moving.player().mapId());
@@ -1544,7 +1544,7 @@ class MapManagerTest {
             throw new AssertionError("source revalidation failed", failure.get());
         }
         assertNull(change.get());
-        assertTrue(sourceZone.hasPlayer(source));
+        assertTrue(sourceZone.hasPlayer(source.player()));
         assertSame(sourceZone, source.zone());
         assertEquals(0, source.player().mapId());
         assertEquals(0, source.player().zoneId());
@@ -1596,7 +1596,7 @@ class MapManagerTest {
         assertNull(failure.get());
         assertNull(change.get());
         assertSame(source, dead.zone());
-        assertTrue(source.hasPlayer(dead));
+        assertTrue(source.hasPlayer(dead.player()));
         assertTrue(dead.player().isDead());
         assertEquals(1, dead.player().mapId());
         assertEquals(500, dead.player().x());
@@ -1672,7 +1672,7 @@ class MapManagerTest {
             return null;
         }));
 
-        assertTrue(sourceZone.hasPlayer(source));
+        assertTrue(sourceZone.hasPlayer(source.player()));
         assertSame(sourceZone, source.zone());
         assertEquals(before, PlayerSaveData.capture(source.player()));
         assertEquals(0, destination.reservedCount());
@@ -1695,7 +1695,7 @@ class MapManagerTest {
         }));
 
         assertTrue(dead.player().isDead());
-        assertTrue(sourceZone.hasPlayer(dead));
+        assertTrue(sourceZone.hasPlayer(dead.player()));
         assertSame(sourceZone, dead.zone());
         assertEquals(before, PlayerSaveData.capture(dead.player()));
         assertEquals(0, town.reservedCount());
@@ -1718,7 +1718,7 @@ class MapManagerTest {
             return null;
         }));
 
-        assertTrue(sourceZone.hasPlayer(source));
+        assertTrue(sourceZone.hasPlayer(source.player()));
         assertSame(sourceZone, source.zone());
         assertEquals(before, PlayerSaveData.capture(source.player()));
         assertEquals(0, destination.reservedCount());
@@ -1743,7 +1743,7 @@ class MapManagerTest {
         }));
 
         assertTrue(dead.player().isDead());
-        assertTrue(sourceZone.hasPlayer(dead));
+        assertTrue(sourceZone.hasPlayer(dead.player()));
         assertSame(sourceZone, dead.zone());
         assertEquals(before, PlayerSaveData.capture(dead.player()));
         assertEquals(0, town.reservedCount());
@@ -1776,22 +1776,22 @@ class MapManagerTest {
             assertNull(moving.zone());
             // A different caller admits the Player, then completes an entire round trip.
             assertTrue(maps.mapManager().finishLoad(moving));
-            assertTrue(destination.move(moving, 0, 1008));
+            assertTrue(ZoneTestHooks.move(destination, moving, 0, 1008));
             assertNotNull(maps.mapManager().changeMap(moving));
             assertTrue(maps.mapManager().finishLoad(moving));
-            assertTrue(source.move(moving, 4464, 936));
+            assertTrue(ZoneTestHooks.move(source, moving, 4464, 936));
             assertNotNull(maps.mapManager().changeMap(moving));
-            assertTrue(destination.hasReservation(moving));
+            assertTrue(destination.hasReservation(moving.player()));
 
             // Old route selection now admits the fresh handoff, regardless of its old read.
             route.release.countDown();
             joinTasks(oldFinish);
             assertNull(failure.get());
             assertTrue(entered.get());
-            assertTrue(destination.hasPlayer(moving));
-            assertFalse(destination.hasReservation(moving));
+            assertTrue(destination.hasPlayer(moving.player()));
+            assertFalse(destination.hasReservation(moving.player()));
             assertTrue(maps.mapManager().finishLoad(moving));
-            assertTrue(destination.move(moving, 0, 1008));
+            assertTrue(ZoneTestHooks.move(destination, moving, 0, 1008));
             assertNotNull(maps.mapManager().changeMap(moving),
                     "successful admission left a stale handoff guard blocking valid travel");
             assertTrue(maps.mapManager().finishLoad(moving));
@@ -1985,15 +1985,15 @@ class MapManagerTest {
         }
     }
 
-    /** Holds enter after the membership insert, before Session.bindZone. */
-    private static final class BlockingMembers extends LinkedHashMap<Integer, Session> {
+    /** Holds enter after the membership insert, before Player.enterZone. */
+    private static final class BlockingMembers extends LinkedHashMap<Integer, Player> {
         private final AtomicBoolean first = new AtomicBoolean(true);
         private final CountDownLatch entered = new CountDownLatch(1);
         private final CountDownLatch release = new CountDownLatch(1);
 
         @Override
-        public Session put(Integer id, Session session) {
-            Session previous = super.put(id, session);
+        public Player put(Integer id, Player player) {
+            Player previous = super.put(id, player);
             if (first.compareAndSet(true, false)) {
                 entered.countDown();
                 awaitRelease(release);
@@ -2003,13 +2003,13 @@ class MapManagerTest {
     }
 
     /** Holds a newly reserved slot before the reserve call can submit source commit. */
-    private static final class BlockingReservations extends LinkedHashMap<Integer, Session> {
+    private static final class BlockingReservations extends LinkedHashMap<Integer, Player> {
         private final CountDownLatch entered = new CountDownLatch(1);
         private final CountDownLatch release = new CountDownLatch(1);
 
         @Override
-        public Session put(Integer id, Session session) {
-            Session previous = super.put(id, session);
+        public Player put(Integer id, Player player) {
+            Player previous = super.put(id, player);
             entered.countDown();
             awaitRelease(release);
             return previous;

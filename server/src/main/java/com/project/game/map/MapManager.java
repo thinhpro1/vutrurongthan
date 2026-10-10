@@ -102,13 +102,13 @@ public final class MapManager {
             // Đã ở trong Zone: chỉ xác nhận vị trí khớp, không vào lại.
             return current.mapId() == player.mapId()
                     && current.zoneId() == player.zoneId()
-                    && current.hasPlayer(session);
+                    && current.hasPlayer(player);
         }
         Zone zone = findZone(player.mapId(), player.zoneId());
         if (zone == null) {
             return false;
         }
-        return zone.enter(session, () -> finishTrip(session, zone));
+        return zone.enter(player, () -> finishTrip(session, zone));
     }
 
     /** Chạy trên writer của Zone đích khi Player được nhận: chuyến đi kết thúc. */
@@ -191,14 +191,14 @@ public final class MapManager {
                 if (!canLeave(session, source, player) || !trip.isStillValid(player, sourceMap)) {
                     return null;
                 }
-                if (!sameZone && !source.removePlayer(session)) {
+                if (!sameZone && !source.removePlayer(player)) {
                     return null;
                 }
                 trip.apply(player);
                 // Commit trước khi gửi packet: lỗi gửi không được hủy chỗ ở Zone đích.
                 committed.set(true);
                 if (!sameZone) {
-                    source.detach(session);
+                    source.detach(player);
                 }
                 return new MapChange(PlayerSaveData.capture(player), destination.zoneId());
             });
@@ -312,7 +312,7 @@ public final class MapManager {
 
     private boolean drop(Zone zone, Session session) {
         try {
-            zone.drop(session);
+            zone.drop(session.player());
             return true;
         } catch (RejectedExecutionException exception) {
             LOGGER.log(Level.WARNING,
@@ -321,7 +321,7 @@ public final class MapManager {
         } catch (RuntimeException exception) {
             LOGGER.log(Level.WARNING, "Zone leave failed: session=" + session.id(), exception);
             // Lỗi gửi packet sau khi đã tách không được bỏ qua Zone khác hoặc bản lưu cuối.
-            return !zone.hasPlayer(session) && !zone.hasReservation(session)
+            return !zone.hasPlayer(session.player()) && !zone.hasReservation(session.player())
                     && session.zone() != zone;
         }
     }
@@ -350,7 +350,7 @@ public final class MapManager {
         return session.state() != SessionState.CLOSED
                 && player != null
                 && session.zone() == source
-                && source.hasPlayer(session);
+                && source.hasPlayer(player);
     }
 
     private static Trip plan(Zone source, Supplier<Trip> plan) {
@@ -368,7 +368,7 @@ public final class MapManager {
 
     private static boolean reserve(Zone zone, Session session) {
         try {
-            Zone.ReserveStatus status = zone.reserve(session);
+            Zone.ReserveStatus status = zone.reserve(session.player());
             return status == Zone.ReserveStatus.RESERVED
                     || status == Zone.ReserveStatus.ALREADY_RESERVED;
         } catch (RejectedExecutionException exception) {
@@ -378,7 +378,7 @@ public final class MapManager {
 
     private static void cancel(Zone zone, Session session) {
         try {
-            zone.cancel(session);
+            zone.cancel(session.player());
         } catch (RejectedExecutionException ignored) {
             // Zone đích đã dừng thì không còn chỗ nào được giữ.
         }

@@ -73,8 +73,8 @@ class MapManagerCatalogTest {
         Session attacker = GameplayTestSupport.session(
                 TestPlayers.at(TestPlayers.initial(1L, 1, "alpha1", 0), 1, 0, 975, 936),
                 TestServices.serverServices());
-        assertTrue(first.enter(attacker));
-        assertTrue(first.attackMonster(attacker, 101, 0L));
+        assertTrue(first.enter(attacker.player()));
+        assertTrue(ZoneTestHooks.attackMonster(first, attacker, 101, 0L));
 
         assertEquals(290L, first.monsterSnapshots().getFirst().hp());
         assertEquals(300L, second.monsterSnapshots().getFirst().hp());

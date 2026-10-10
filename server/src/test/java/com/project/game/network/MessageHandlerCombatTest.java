@@ -222,6 +222,7 @@ class MessageHandlerCombatTest {
             if (failure.get() != null) {
                 throw new AssertionError("impact failed", failure.get());
             }
+            ZoneTestHooks.drain(zone);
 
             assertEquals(0L, zone.monsterSnapshots().getFirst().hp());
             assertEquals(11L, context.session().player().potential());

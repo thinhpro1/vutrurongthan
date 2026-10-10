@@ -1,14 +1,19 @@
 package com.project.game.monster;
 
+import com.project.game.map.Zone;
 import com.project.game.monster.MonsterTemplate.Spawn;
 import com.project.game.player.Player;
 
+import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.random.RandomGenerator;
 
-/** Mutable Monster gameplay state. Zone owns when this behavior runs. */
+/**
+ * Quái: tự hồi sinh, di chuyển, đánh, bị thương, chết và tự báo cho khu vực qua {@code zone.service()}.
+ * Chạy trên writer của Zone nên không cần lock.
+ */
 public final class Monster {
     private static final int STATUS_LIVE = 0;
     private static final int STATUS_DIE = 1;
@@ -36,6 +41,7 @@ public final class Monster {
     private int moveDir = INITIAL_MOVE_DIR;
     private final LinkedHashSet<Integer> enemies = new LinkedHashSet<>();
     private long lastAttackAtMillis;
+    private Zone zone;
 
     Monster(Spawn spawn, MonsterTemplate template) {
         Objects.requireNonNull(spawn, "spawn");
@@ -65,49 +71,63 @@ public final class Monster {
         status = spawn.status();
     }
 
-    /** Runs this Monster's own respawn, movement, and attack decisions. */
-    public Attack update(
-            List<Player> hostilePlayers, long nowMillis, RandomGenerator random) {
-        Objects.requireNonNull(hostilePlayers, "hostilePlayers");
+    public Zone zone() {
+        return zone;
+    }
+
+    /** Chỉ Zone gọi khi nhận Monster. */
+    public void enterZone(Zone zone) {
+        this.zone = Objects.requireNonNull(zone, "zone");
+    }
+
+    /** Một nhịp của Monster: chết thì chờ hồi sinh; sống thì di chuyển rồi đánh. */
+    public void update(long nowMillis, RandomGenerator random) {
         Objects.requireNonNull(random, "random");
         if (!isAlive()) {
-            updateRespawn(nowMillis);
-            return null;
+            respawn(nowMillis);
+            return;
         }
-
-        updateMove(hostilePlayers);
-        return updateAttack(hostilePlayers, nowMillis, random);
+        List<Player> enemyPlayers = enemyPlayers();
+        updateMove(enemyPlayers);
+        updateAttack(enemyPlayers, nowMillis, random);
     }
 
-    /** Applies Player damage and captures the respawn deadline on the lethal hit. */
-    public Damage injure(int attackerPlayerId, long damage, long nowMillis, int playerCount) {
-        if (damage <= 0L || !isAlive()) {
-            return null;
+    /** Player đánh trúng: trừ HP, ghi thù; HP về 0 thì chết. */
+    public void injure(Player attacker, long damage, long nowMillis) {
+        Objects.requireNonNull(attacker, "attacker");
+        if (damage <= 0L) {
+            return;
         }
-        if (playerCount < 0) {
-            throw new IllegalArgumentException("playerCount must be non-negative");
+        if (!isAlive()) {
+            return; // Writer tuần tự: chỉ một đòn đưa HP về 0.
         }
-
         long hpAfter = Math.max(0L, hp - damage);
-        boolean killed = hpAfter == 0L;
-        long respawnAt = NO_RESPAWN;
-        if (killed) {
-            respawnAt = Math.addExact(nowMillis, respawnDelayMillis(playerCount));
+        if (hpAfter == 0L) {
+            die(attacker, damage, nowMillis);
+            return;
         }
-
         hp = hpAfter;
-        enemies.add(attackerPlayerId);
-        if (killed) {
-            status = STATUS_DIE;
-            respawnAtMillis = respawnAt;
-        }
-
-        return new Damage(
-                id, damage, hp, killed, killed ? template.potentialReward() : 0L);
+        enemies.add(attacker.id());
+        zone.service().monsterInjure(this, damage);
     }
 
-    /** Restores a dead Monster only after its strict respawn deadline. */
-    boolean updateRespawn(long nowMillis) {
+    private void die(Player killer, long damage, long nowMillis) {
+        long respawnAt = Math.addExact(nowMillis, respawnDelayMillis(zone.playerCount()));
+        hp = 0L;
+        enemies.add(killer.id());
+        status = STATUS_DIE;
+        respawnAtMillis = respawnAt;
+        zone.service().monsterStartDie(this, damage);
+
+        long reward = template.potentialReward();
+        if (reward > 0L) {
+            killer.addPotential(reward);
+            zone.service().playerPotential(killer);
+        }
+    }
+
+    /** Hồi sinh tại chỗ xuất phát khi đã qua hạn (so sánh nghiêm ngặt). */
+    boolean respawn(long nowMillis) {
         if (status != STATUS_DIE || respawnAtMillis == NO_RESPAWN || nowMillis <= respawnAtMillis) {
             return false;
         }
@@ -120,14 +140,31 @@ public final class Monster {
         enemies.clear();
         lastAttackAtMillis = 0L;
         moveDir = INITIAL_MOVE_DIR;
+        zone.service().monsterRespawn(this);
         return true;
+    }
+
+    /** Các Player còn sống trong Zone mà Monster đang thù. */
+    private List<Player> enemyPlayers() {
+        List<Player> players = new ArrayList<>();
+        for (int playerId : enemies) {
+            Player player = zone.findPlayer(playerId);
+            if (player == null) {
+                continue;
+            }
+            if (player.isDead()) {
+                continue;
+            }
+            players.add(player);
+        }
+        return players;
     }
 
     private static long respawnDelayMillis(int playerCount) {
         return Math.max(10_000L - 1_000L * playerCount, 5_000L);
     }
 
-    /** Chooses patrol or chase movement from the hostile Players supplied by its Zone. */
+    /** Đuổi theo kẻ thù gần nhất trong tầm đuổi, không có thì đi tuần. */
     boolean updateMove(List<Player> hostilePlayers) {
         Objects.requireNonNull(hostilePlayers, "hostilePlayers");
         if (!isAlive() || template.type() != MOVE_TYPE_RUN) {
@@ -154,7 +191,16 @@ public final class Monster {
                 targetDistance = distance;
             }
         }
-        return target == null ? patrol() : moveTo(target.x());
+        boolean moved;
+        if (target == null) {
+            moved = patrol();
+        } else {
+            moved = moveTo(target.x());
+        }
+        if (moved) {
+            zone.service().monsterMove(this);
+        }
+        return moved;
     }
 
     private boolean moveTo(int targetX) {
@@ -224,22 +270,31 @@ public final class Monster {
         }
     }
 
-    /** Attacks one valid in-range hostile Player when cooldown is strictly due. */
-    Attack updateAttack(
-            List<Player> hostilePlayers, long nowMillis, RandomGenerator random) {
+    /** Đánh một kẻ thù trong tầm khi đã hết thời gian chờ. */
+    boolean updateAttack(List<Player> hostilePlayers, long nowMillis, RandomGenerator random) {
         Objects.requireNonNull(hostilePlayers, "hostilePlayers");
         Objects.requireNonNull(random, "random");
-        if (!isAlive() || enemies.isEmpty() || !attackDue(nowMillis)) {
-            return null;
+        if (!isAlive()) {
+            return false;
+        }
+        if (enemies.isEmpty()) {
+            return false;
+        }
+        if (!attackDue(nowMillis)) {
+            return false;
         }
 
         lastAttackAtMillis = nowMillis;
         Player target = findTarget(hostilePlayers, random);
         if (target == null) {
-            return null;
+            return false;
         }
-        int hpAfter = target.injure(damage());
-        return new Attack(id, target.id(), damage(), hpAfter, hpAfter == 0L);
+        target.injure(damage());
+        zone.service().monsterAttack(this, target, damage());
+        if (target.isDead()) {
+            zone.forgetPlayer(target.id());
+        }
+        return true;
     }
 
     /** Finds a current living hostile Player inside the strict attack range. */
@@ -366,17 +421,5 @@ public final class Monster {
             long hp,
             int status
     ) {
-    }
-
-    public record Damage(int monsterId, long damage, long hpAfter, boolean killed, long potentialReward) {
-    }
-
-    public record Move(int monsterId, int x, int y, int dir) {
-    }
-
-    public record Respawn(int monsterId, int levelStatus, long hp) {
-    }
-
-    public record Attack(int monsterId, int playerId, long damage, long hpAfter, boolean killed) {
     }
 }

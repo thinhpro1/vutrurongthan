@@ -7,6 +7,7 @@ import com.project.game.persistence.monster.MonsterRepository;
 import com.project.game.testsupport.MapTestSupport;
 import com.project.game.testsupport.MonsterTestSupport;
 import org.junit.jupiter.api.Test;
+import com.project.game.testsupport.TestPlayers;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
@@ -15,6 +16,7 @@ import java.nio.file.Files;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -86,9 +88,13 @@ class MonsterManagerCreationTest {
         Monster monster = manager.createForMap(1).getFirst();
         Snapshot captured = monster.snapshot();
 
-        Monster.Damage death = monster.injure(7, 500L, 1_000_000L, 0);
+        new com.project.game.map.Zone(1, 0, 10, java.util.List.of(monster),
+                new com.project.game.service.AreaService(
+                        new com.project.game.network.packet.PlayerPacketWriter(),
+                        new com.project.game.network.packet.MonsterPacketWriter()));
+        monster.injure(TestPlayers.initial(7L, 7, "player7", 1), 500L, 1_000_000L);
 
-        assertTrue(death.killed());
+        assertFalse(monster.isAlive());
         assertEquals(0L, monster.snapshot().hp());
         assertEquals(1, monster.snapshot().status());
         assertEquals(300L, captured.hp());

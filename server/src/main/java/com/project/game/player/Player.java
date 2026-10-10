@@ -1,12 +1,17 @@
 package com.project.game.player;
 
+import com.project.game.map.Zone;
 import com.project.game.monster.Monster;
+import com.project.game.network.Session;
 
 import java.util.Locale;
 import java.util.Objects;
 import java.util.regex.Pattern;
 
-/** Mutable Player runtime state and Player-local behavior. Zone decides when it runs. */
+/**
+ * Nhân vật của người chơi: mọi hành động của người chơi bắt đầu ở đây.
+ * Các method gameplay chạy trên writer của Zone (qua {@code zone.post}), nên không cần lock.
+ */
 public final class Player {
     private static final Pattern NAME = Pattern.compile("^[a-z0-9]{5,10}$");
 
@@ -34,6 +39,11 @@ public final class Player {
     private int zoneId;
     private int x;
     private int y;
+
+    // Runtime, không lưu DB. volatile vì Handler/MapManager đọc từ thread khác.
+    private volatile Session session;
+    private volatile Zone zone;
+    private Monster focus; // Monster đã chọn bằng useSkill, chờ attack
 
     public static Player create(long accountId, String name, int gender) {
         return createWithId(0, accountId, name, gender);
@@ -162,6 +172,34 @@ public final class Player {
     public int x() { return x; }
     public int y() { return y; }
 
+    public Session session() {
+        return session;
+    }
+
+    /** Session gắn Player lúc đăng nhập; Player dùng nó để nhận packet riêng. */
+    public void bindSession(Session session) {
+        this.session = Objects.requireNonNull(session, "session");
+    }
+
+    /** Zone Player đang ở; null khi chưa vào hoặc đang đi giữa hai Zone. */
+    public Zone zone() {
+        return zone;
+    }
+
+    /** Chỉ Zone gọi, trên writer của nó. */
+    public void enterZone(Zone zone) {
+        this.zone = Objects.requireNonNull(zone, "zone");
+        focus = null;
+    }
+
+    /** Chỉ Zone gọi, trên writer của nó. */
+    public void leaveZone(Zone expected) {
+        if (zone == expected) {
+            zone = null;
+            focus = null;
+        }
+    }
+
     public boolean isDead() {
         return hp <= 0;
     }
@@ -172,6 +210,7 @@ public final class Player {
         }
         this.x = x;
         this.y = y;
+        zone.service().playerMove(this);
         return true;
     }
 
@@ -181,6 +220,33 @@ public final class Player {
         }
         hp = (int) Math.max(0L, (long) hp - damage);
         return hp;
+    }
+
+    /** Packet -72: chọn skill và Monster làm mục tiêu cho lần attack kế tiếp. */
+    public boolean useSkill(int skillId, int monsterId) {
+        focus = null;
+        if (monsterId < 0) {
+            return false;
+        }
+        Monster monster = zone.findMonster(monsterId);
+        if (!canTarget(monster)) {
+            return false;
+        }
+        focus = monster;
+        return true;
+    }
+
+    /** Packet -108: đánh Monster đã chọn ở useSkill. */
+    public boolean attack(int monsterId, long nowMillis) {
+        Monster target = focus;
+        focus = null;
+        if (target == null) {
+            return false;
+        }
+        if (target.id() != monsterId) {
+            return false;
+        }
+        return attackMonster(target, nowMillis);
     }
 
     public boolean canTarget(Monster monster) {
@@ -193,24 +259,17 @@ public final class Player {
         return monster.isAlive();
     }
 
-    /** Applies this Player's attack and reward; the caller owns both runtime entities. */
-    public Monster.Damage attackMonster(Monster monster, long nowMillis, int playerCount) {
+    /** Một đòn đánh vào Monster; Monster tự xử lý bị thương, chết và thưởng. */
+    public boolean attackMonster(Monster monster, long nowMillis) {
         if (!canTarget(monster)) {
-            return null;
+            return false;
         }
         long damage = currentStats.damage();
         if (damage <= 0L) {
-            return null;
+            return false;
         }
-
-        Monster.Damage result = monster.injure(id, damage, nowMillis, playerCount);
-        if (result == null) {
-            return null;
-        }
-        if (result.killed() && result.potentialReward() > 0L) {
-            addPotential(result.potentialReward());
-        }
-        return result;
+        monster.injure(this, damage, nowMillis);
+        return true;
     }
 
     public long addPotential(long amount) {
@@ -227,6 +286,7 @@ public final class Player {
 
     /** Changes logical location/handoff fields only; it does not join a Zone. */
     public void changeMap(int mapId, int zoneId, int x, int y) {
+        focus = null;
         this.mapId = mapId;
         this.zoneId = zoneId;
         this.x = x;

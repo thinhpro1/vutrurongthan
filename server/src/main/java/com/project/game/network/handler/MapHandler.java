@@ -95,10 +95,11 @@ final class MapHandler {
             throw new IOException("trailing PLAYER_MOVE payload bytes");
         }
 
-        Zone zone = session.zone();
-        if (zone != null) {
-            zone.move(session, x, y);
+        Zone zone = player.zone();
+        if (zone == null) {
+            return;
         }
+        zone.post(player, () -> player.move(x, y));
     }
 
     void sendMapInfo(Player player) throws IOException {

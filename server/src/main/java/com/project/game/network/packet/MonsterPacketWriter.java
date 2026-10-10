@@ -4,74 +4,71 @@ import com.project.game.monster.Monster;
 import com.project.game.network.message.Message;
 import com.project.game.network.message.MessageName;
 import com.project.game.network.message.MessageWriter;
+import com.project.game.player.Player;
 
 import java.util.Objects;
 
+/** Bytes của các packet Monster; gameplay quyết định chuyện gì xảy ra, file này chỉ đóng gói. */
 public final class MonsterPacketWriter {
-    public Message injure(Monster.Damage result) {
-        Objects.requireNonNull(result, "result");
-        if (result.killed()) {
-            throw new IllegalArgumentException("killed result requires startDie");
-        }
+    public Message injure(Monster monster, long damage) {
+        Objects.requireNonNull(monster, "monster");
         return new Message(
                 MessageName.MONSTER_INJURE,
                 new MessageWriter()
-                        .writeInt(result.monsterId())
-                        .writeLong(result.damage())
-                        .writeLong(result.hpAfter())
+                        .writeInt(monster.id())
+                        .writeLong(damage)
+                        .writeLong(monster.hp())
                         .writeBoolean(false)
                         .toByteArray());
     }
 
-    public Message startDie(Monster.Damage result) {
-        Objects.requireNonNull(result, "result");
-        if (!result.killed()) {
-            throw new IllegalArgumentException("live result requires injure");
-        }
+    public Message startDie(Monster monster, long damage) {
+        Objects.requireNonNull(monster, "monster");
         return new Message(
                 MessageName.MONSTER_START_DIE,
                 new MessageWriter()
-                        .writeInt(result.monsterId())
-                        .writeLong(result.damage())
+                        .writeInt(monster.id())
+                        .writeLong(damage)
                         .writeBoolean(false)
                         .toByteArray());
     }
 
-    public Message respawn(Monster.Respawn result) {
-        Objects.requireNonNull(result, "result");
+    public Message respawn(Monster monster) {
+        Objects.requireNonNull(monster, "monster");
         return new Message(
                 MessageName.MONSTER_RESPAWN,
                 new MessageWriter()
-                        .writeInt(result.monsterId())
-                        .writeByte(result.levelStatus())
-                        .writeLong(result.hp())
+                        .writeInt(monster.id())
+                        .writeByte(monster.levelStatus())
+                        .writeLong(monster.hp())
                         .toByteArray());
     }
 
-    public Message attackPlayer(Monster.Attack result) {
-        Objects.requireNonNull(result, "result");
+    public Message attackPlayer(Monster monster, Player target, long damage) {
+        Objects.requireNonNull(monster, "monster");
+        Objects.requireNonNull(target, "target");
         return new Message(
                 MessageName.MONSTER_ATTACK,
                 new MessageWriter()
-                        .writeInt(result.monsterId())
+                        .writeInt(monster.id())
                         .writeByte(0)
-                        .writeInt(result.playerId())
-                        .writeLong(result.damage())
+                        .writeInt(target.id())
+                        .writeLong(damage)
                         .toByteArray());
     }
 
-    public Message move(Monster.Move result) {
-        Objects.requireNonNull(result, "result");
-        if (result.dir() != -1 && result.dir() != 1) {
+    public Message move(Monster monster) {
+        Objects.requireNonNull(monster, "monster");
+        if (monster.moveDir() != -1 && monster.moveDir() != 1) {
             throw new IllegalArgumentException("monster move dir must be -1 or 1");
         }
         return new Message(
                 MessageName.MONSTER_MOVE,
                 new MessageWriter()
-                        .writeInt(result.monsterId())
-                        .writeShort(result.x())
-                        .writeShort(result.y())
-                        .writeByte(result.dir())
+                        .writeInt(monster.id())
+                        .writeShort(monster.x())
+                        .writeShort(monster.y())
+                        .writeByte(monster.moveDir())
                         .toByteArray());
     }
 }

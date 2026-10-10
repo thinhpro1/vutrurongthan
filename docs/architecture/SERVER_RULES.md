@@ -24,7 +24,7 @@ Quyết định và lý do nằm ở `docs/architecture/DECISIONS.md`. File này
 1. **Nhân vật là trung tâm.** Hành động của người chơi nằm trong `Player` (hoặc phần con của Player). Mở `Player.java` là biết người chơi làm được gì.
 2. **Zone quyết định KHI NÀO, entity quyết định LÀM GÌ.** Zone chỉ chạy tuần tự; không chứa luật chơi của Player/Monster.
 3. **Handler chỉ đọc packet rồi chuyển việc.** Không có quyết định gameplay trong Handler.
-4. **Entity báo kết quả bằng từ ngữ game qua `zone.service`.** Service đóng gói và gửi; PacketWriter lo bytes.
+4. **Entity báo kết quả bằng từ ngữ game qua `zone.service()`.** Service đóng gói và gửi; PacketWriter lo bytes.
 5. **Mỗi trạng thái có một chủ.** HP, vị trí, membership, cooldown… chỉ một nơi được sửa.
 6. **Không chờ chéo giữa các Zone.** Gửi việc sang Zone khác bằng `post` (không chờ), không bao giờ `call` lồng.
 7. **Không I/O chặn trên writer.** JDBC, socket, file, HTTP chạy ngoài Zone.
@@ -52,7 +52,7 @@ Quyết định và lý do nằm ở `docs/architecture/DECISIONS.md`. File này
 | `MapManager` | danh sách Map public, `findMap`, bật/tắt vòng update, `travel(...)` | hành động khác của Player |
 | `Dungeon` | lượt chơi riêng: các Map riêng, thời gian, người tham gia, `update`, `close` | — |
 | `XxxManager` | `init/load`, catalog template, `find/create`, mở/đóng nhiều instance | gameplay của một instance |
-| `AreaService` (`zone.service`) | tên hàm theo sự kiện game, gửi cho người trong Zone | quyết định gameplay |
+| `AreaService` (`zone.service()`) | tên hàm theo sự kiện game, gửi cho người trong Zone | quyết định gameplay |
 | `XxxPacketWriter` | bytes của packet | gameplay |
 | `XxxRepository` | đọc/ghi DB | gameplay |
 | `Session` | kết nối, hàng đợi gửi, trạng thái đăng nhập, lưu checkpoint ngoài Zone | là đối tượng gameplay |
@@ -61,70 +61,87 @@ Quyết định và lý do nằm ở `docs/architecture/DECISIONS.md`. File này
 
 ## 3. Luồng mẫu: Player đánh Monster
 
-Mọi tính năng mới viết theo đúng hình dạng này.
+Mọi tính năng mới viết theo đúng hình dạng này. Code thật: `CombatHandler`, `Player`, `Monster`, `AreaService`.
 
 ```java
 // CombatHandler: đọc packet, chuyển việc. Lambda duy nhất của luồng nằm ở đây.
-void handleAttackMonster(Message message) throws IOException {
-    MessageReader reader = message.reader();
-    int monsterId = reader.readInt();
-    if (reader.remaining() != 0) {
-        throw new IOException("trailing attack payload");
-    }
+void handleAttack(Message message) throws IOException {
+    ... // đọc targetType, targetId, kiểm tra không thừa byte
     Player player = session.player();
     Zone zone = player.zone();
     if (zone == null) {
         return; // đang đi giữa hai Zone
     }
-    zone.post(player, () -> player.attackMonster(monsterId));
+    int monsterId = targetType == TARGET_MONSTER ? targetId : -1;
+    long now = clock.millis();
+    zone.post(player, () -> player.attack(monsterId, now));
 }
 
 // Player.java: chạy trên writer của Zone, không cần lock
-public void attackMonster(int monsterId) {
-    if (isDead()) {
-        return;
+public boolean useSkill(int skillId, int monsterId) {   // packet -72: chọn mục tiêu
+    focus = null;
+    if (monsterId < 0) {
+        return false;
     }
     Monster monster = zone.findMonster(monsterId);
-    if (monster == null) {
-        return;
+    if (!canTarget(monster)) {
+        return false;
     }
-    if (!isInRange(monster)) {
-        return;
+    focus = monster;
+    return true;
+}
+
+public boolean attack(int monsterId, long nowMillis) {  // packet -108: ra đòn
+    Monster target = focus;
+    focus = null;
+    if (target == null) {
+        return false;
     }
-    if (!skill.isReady(now())) {
-        return;
+    if (target.id() != monsterId) {
+        return false;
     }
-    skill.use(now());
-    monster.injure(this, damage());
+    return attackMonster(target, nowMillis);
+}
+
+public boolean attackMonster(Monster monster, long nowMillis) {
+    if (!canTarget(monster)) {
+        return false;
+    }
+    monster.injure(this, damage(), nowMillis);
+    return true;
 }
 
 // Monster.java
-public void injure(Player attacker, long damage) {
-    if (isDead()) {
-        return; // single writer: chỉ một người kết liễu
+public void injure(Player attacker, long damage, long nowMillis) {
+    if (!isAlive()) {
+        return; // writer tuần tự: chỉ một đòn đưa HP về 0
     }
-    hp = Math.max(0, hp - damage);
-    addEnemy(attacker);
-    zone.service.monsterInjure(this, attacker, damage);
-    if (hp == 0) {
-        die(attacker);
+    long hpAfter = Math.max(0L, hp - damage);
+    if (hpAfter == 0L) {
+        die(attacker, damage, nowMillis);
+        return;
     }
+    hp = hpAfter;
+    enemies.add(attacker.id());
+    zone.service().monsterInjure(this, damage);
 }
 
-private void die(Player killer) {
-    status = DIE;
-    respawnAt = zone.now() + respawnDelay();
-    zone.service.monsterDie(this, killer);
+private void die(Player killer, long damage, long nowMillis) {
+    status = STATUS_DIE;
+    respawnAtMillis = nowMillis + respawnDelayMillis(zone.playerCount());
+    zone.service().monsterStartDie(this, damage);
     killer.addPotential(template.potentialReward());
+    zone.service().playerPotential(killer);
 }
 
-// AreaService.java
-public void monsterInjure(Monster monster, Player attacker, long damage) {
-    sendToAll(monsterPackets.injure(monster, attacker, damage));
+// AreaService.java: gửi cho mọi người trong Zone của Monster; ai đầy hàng đợi thì zone.kick
+public void monsterInjure(Monster monster, long damage) {
+    sendToAll(monster.zone(), monsterPackets.injure(monster, damage), null);
 }
 ```
 
 Đọc luồng: **4 file** (Handler → Player → Monster → AreaService), không record trung gian, không lock.
+Thời gian (`now`) do Handler lấy một lần và truyền vào, để test điều khiển được bằng `Clock`.
 
 ---
 
@@ -159,7 +176,7 @@ public void monsterInjure(Monster monster, Player attacker, long damage) {
   - xem lại khi `Player.java` vượt khoảng 1.000–1.500 dòng.
 - **Không tách** bằng cách đưa hành động sang Zone, Manager, Service hay Handler.
 - `Player.move(x, y)` kiểm tra tường (`map.isWall`) và quãng đường theo thời gian; sai thì kéo về vị trí cũ.
-- Player giữ `session` để gửi riêng cho mình (`zone.service.xxx(player)` dùng `player.session()`). Gameplay không đọc trạng thái kết nối của Session.
+- Player giữ `session` để gửi riêng cho mình (`zone.service().xxx(player)` dùng `player.session()`). Gameplay không đọc trạng thái kết nối của Session.
 
 ## 6. Character, Boss, đệ tử
 
@@ -173,7 +190,7 @@ public void monsterInjure(Monster monster, Player attacker, long damage) {
 ## 7. Monster
 
 - `Monster.update(now)`: chết thì xét hồi sinh; sống thì `effects.update` → `updateMove` → `updateAttack` → `findTarget`.
-- Monster tự báo qua `zone.service` (`monsterMove`, `monsterAttack`, `monsterInjure`, `monsterDie`, `monsterRespawn`). Zone không so trạng thái trước/sau để đoán Monster vừa làm gì.
+- Monster tự báo qua `zone.service()` (`monsterMove`, `monsterAttack`, `monsterInjure`, `monsterDie`, `monsterRespawn`). Zone không so trạng thái trước/sau để đoán Monster vừa làm gì.
 - Quái tinh anh/thủ lĩnh là **field** (`levelBoss`), không phải class con.
 - Hằng số AI (tầm đánh, tầm đuổi, tốc độ) đi dần vào `MonsterTemplate`.
 - `MonsterManager`: load template, `findTemplate`, `createForMap`. Không chạy vòng lặp, không gameplay.
@@ -240,7 +257,7 @@ if (!map.isWall(x, y)) {
     this.x = x;
     this.y = y;
 }
-zone.service.move(this);
+zone.service().playerMove(this);
 
 // Tránh: gộp kiểm tra và thay đổi trong một điều kiện
 if (player == null || player.isDead() || !player.move(x, y)) { ... }
@@ -296,8 +313,8 @@ Code chạy đúng nhưng khó đọc hơn src cũ mà không có lý do correct
 
 | Hiện tại | Đích | Mục |
 |---|---|---|
-| `Zone` giữ `Session`; mỗi hành động là một method trên Zone (`move`, `attackMonster`, `canTargetMonster`) | `Zone` giữ `Player`; Handler → `zone.post` → method của Player | 2, 3, 4 |
-| `Monster` trả `Damage/Attack/Move/Respawn`; Zone so trước/sau để gửi packet | Monster gọi `zone.service` | 7 |
+| ~~`Zone` giữ `Session`; mỗi hành động là một method trên Zone~~ | **Đã chuyển (2026-10-10):** Zone giữ `Player`; Handler → `zone.post` → `Player.move/useSkill/attack` | 2, 3, 4 |
+| ~~`Monster` trả `Damage/Attack/Move/Respawn`; Zone so trước/sau để gửi packet~~ | **Đã chuyển (2026-10-10):** Monster gọi `zone.service()` | 7 |
 | `MAP_INFO` gửi từ Handler, đọc Monster qua `Monster.Snapshot` | `Zone.enter` gửi `MAP_INFO` từ dữ liệu sống; bỏ `Snapshot` | 8 |
 | Chuyển map: giữ chỗ ở đích + `Trip` + vào Zone lúc `FINISH_LOAD_MAP` | `travel`: leave nguồn → `post(enter)` đích | 8 |
 | `MapManager.changeMap/returnHomeFromDeath` | `Player.requestChangeMap/returnTownFromDead` → `maps.travel` | 5, 8 |
@@ -306,4 +323,4 @@ Code chạy đúng nhưng khó đọc hơn src cũ mà không có lý do correct
 | `Player.move` nhận mọi tọa độ; đánh không kiểm tra tầm/cooldown | kiểm tra tường, quãng đường, tầm, cooldown | 5, 3 |
 | Chưa có `Character`, `Boss`, `Effects`, `Dungeon`, `goBack`, `teleport`, `findOrRandomZone` | theo mục 5–9 | — |
 
-Thứ tự đề xuất: luồng mẫu (move + attack monster, Zone giữ Player) → travel + `MAP_INFO` khi enter → Monster gọi service → kiểm tra di chuyển/tầm/cooldown → `Character` + `Effects` → Boss → Dungeon.
+Thứ tự đề xuất: ~~luồng mẫu (move + attack monster, Zone giữ Player)~~ (xong) → travel + `MAP_INFO` khi enter → kiểm tra di chuyển/tầm/cooldown → `Character` + `Effects` → Boss → Dungeon.

@@ -85,16 +85,16 @@ class ZoneUpdateLoopTest {
                 new AreaService(new PlayerPacketWriter(), new MonsterPacketWriter()));
         Session observer = GameplayTestSupport.session(playerAt(1, 975, 936));
         Session fighter = GameplayTestSupport.session(playerAt(2, 1348, 936));
-        assertTrue(zone.enter(observer));
-        assertTrue(zone.enter(fighter));
+        assertTrue(zone.enter(observer.player()));
+        assertTrue(zone.enter(fighter.player()));
 
         // Monster 101 chết và đến hạn hồi sinh; Monster 102 thù fighter nên sẽ chọn mục tiêu.
         for (int hit = 0; hit < 30; hit++) {
-            assertTrue(zone.attackMonster(observer, 101, now));
+            assertTrue(ZoneTestHooks.attackMonster(zone, observer, 101, now));
             drain(observer);
             drain(fighter);
         }
-        assertTrue(zone.attackMonster(fighter, 102, now));
+        assertTrue(ZoneTestHooks.attackMonster(zone, fighter, 102, now));
         drain(observer);
         drain(fighter);
 
@@ -119,7 +119,7 @@ class ZoneUpdateLoopTest {
             assertTrue(awaitClosed(observer), "Session kicked before the failure must still be closed");
 
             // Writer vẫn sống: input sau nhịp lỗi vẫn được chạy.
-            assertTrue(zone.move(fighter, 1350, 936));
+            assertTrue(ZoneTestHooks.move(zone, fighter, 1350, 936));
         } finally {
             zone.stopUpdate();
         }

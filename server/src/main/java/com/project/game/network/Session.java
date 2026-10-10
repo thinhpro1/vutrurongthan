@@ -50,7 +50,6 @@ public final class Session implements AutoCloseable {
     private boolean accountAdmissionPending;
     private boolean accountReleaseReady;
     private volatile Player player;
-    private volatile Zone zone;
     private int protocolViolations;
     private volatile InputStream input;
     private volatile OutputStream output;
@@ -145,27 +144,14 @@ public final class Session implements AutoCloseable {
         if (current != null && current != player) {
             throw new IllegalStateException("Session player identity cannot be replaced");
         }
+        player.bindSession(this);
         this.player = player;
     }
 
+    /** Zone mà Player của Session đang ở (đọc qua Player, không lưu riêng). */
     public Zone zone() {
-        return zone;
-    }
-
-    public void bindZone(Zone zone) {
-        Objects.requireNonNull(zone, "zone");
-        Zone current = this.zone;
-        if (current != null && current != zone) {
-            throw new IllegalStateException("Session Zone identity cannot be replaced while joined");
-        }
-        this.zone = zone;
-    }
-
-    public void clearZone(Zone expected) {
-        Objects.requireNonNull(expected, "expected");
-        if (zone == expected) {
-            zone = null;
-        }
+        Player current = player;
+        return current == null ? null : current.zone();
     }
 
     public boolean hasSentMapTemplate(int mapId) {

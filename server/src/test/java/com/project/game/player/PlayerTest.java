@@ -1,16 +1,16 @@
 package com.project.game.player;
 
 import com.project.game.monster.Monster;
-import com.project.game.monster.MonsterManager;
-import com.project.game.resource.GameResources;
+import com.project.game.network.message.MessageName;
+import com.project.game.testsupport.TestPlayers;
+import com.project.game.testsupport.TestZone;
 import org.junit.jupiter.api.Test;
 
-import java.nio.file.Path;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -33,29 +33,34 @@ class PlayerTest {
     }
 
     @Test
-    void moveMutatesSamePlayerAndPreservesOtherState() {
-        Player player = Player.createWithId(7, 101L, "alpha1", 0);
-        player.changeMap(1, 2, 90, 1008);
+    void moveMutatesSamePlayerAndTellsOthers() {
+        TestZone area = new TestZone();
+        Player player = area.join(7, 90, 1008);
+        Player observer = area.join(8, 90, 1008);
+        area.commands(player);
         player.injure(77);
         long potential = player.addPotential(99);
 
-        assertTrue(player.move(1337, 611));
+        assertTrue(area.run(player, () -> player.move(1337, 611)));
         assertEquals(1337, player.x());
         assertEquals(611, player.y());
         assertEquals(1, player.mapId());
-        assertEquals(2, player.zoneId());
+        assertEquals(0, player.zoneId());
         assertEquals(123, player.hp());
         assertEquals(potential, player.potential());
+        assertEquals(List.of(), area.commands(player));
+        assertEquals(List.of(MessageName.PLAYER_MOVE), area.commands(observer));
     }
 
     @Test
     void deadPlayerCannotMove() {
-        Player player = Player.createWithId(1, 101L, "alpha1", 0);
+        TestZone area = new TestZone();
+        Player player = area.join(1, 90, 1008);
         player.injure(Long.MAX_VALUE);
 
-        assertFalse(player.move(1, 2));
-        assertEquals(1250, player.x());
-        assertEquals(648, player.y());
+        assertFalse(area.run(player, () -> player.move(1, 2)));
+        assertEquals(90, player.x());
+        assertEquals(1008, player.y());
     }
 
     @Test
@@ -122,7 +127,7 @@ class PlayerTest {
         Player player = Player.createWithId(1, 101L, "alpha1", 0);
         PlayerSaveData saved = PlayerSaveData.capture(player);
 
-        player.move(1, 2);
+        player.changeMap(0, 0, 1, 2);
         player.injure(50);
         player.addPotential(20);
 
@@ -139,91 +144,129 @@ class PlayerTest {
         Player player = Player.createWithId(7, 101L, "alpha1", 0);
 
         assertFalse(player.canTarget(null));
-        assertNull(player.attackMonster(null, 1_000_000L, 1));
     }
 
     @Test
     void deadMonsterCannotBeTargetedOrAttacked() {
-        Player player = Player.createWithId(7, 101L, "alpha1", 0);
-        Monster monster = map1Monster();
-        monster.injure(8, 300L, 1_000_000L, 1);
+        TestZone area = new TestZone();
+        Player killer = area.join(withDamage(TestPlayers.at(
+                TestPlayers.initial(8L, 8, "player8", 1), 1, 0, 975, 936), 300));
+        Player player = area.join(7, 975, 936);
+        Monster monster = area.monster(101);
+        assertTrue(area.run(killer, () -> killer.attackMonster(monster, 1_000_000L)));
 
         assertFalse(player.canTarget(monster));
-        assertNull(player.attackMonster(monster, 1_000_001L, 1));
+        assertFalse(area.run(player, () -> player.attackMonster(monster, 1_000_001L)));
         assertEquals(1L, player.potential());
     }
 
     @Test
     void deadPlayerCannotTargetOrAttackLiveMonster() {
-        Player player = Player.createWithId(7, 101L, "alpha1", 0);
-        Monster monster = map1Monster();
+        TestZone area = new TestZone();
+        Player player = area.join(7, 975, 936);
+        Monster monster = area.monster(101);
         player.injure(200L);
 
         assertFalse(player.canTarget(monster));
-        assertNull(player.attackMonster(monster, 1_000_000L, 1));
+        assertFalse(area.run(player, () -> player.attackMonster(monster, 1_000_000L)));
         assertEquals(300L, monster.hp());
         assertEquals(1L, player.potential());
     }
 
     @Test
     void zeroDamageCanTargetButCannotAttack() {
-        Player player = playerWithDamage(0);
-        Monster monster = map1Monster();
+        TestZone area = new TestZone();
+        Player player = area.join(playerWithDamage(0));
+        Monster monster = area.monster(101);
 
         assertTrue(player.canTarget(monster));
-        assertNull(player.attackMonster(monster, 1_000_000L, 1));
+        assertFalse(area.run(player, () -> player.attackMonster(monster, 1_000_000L)));
         assertEquals(300L, monster.hp());
         assertEquals(1L, player.potential());
     }
 
     @Test
     void attackUsesPlayerDamageWithoutRewardingNonlethalHit() {
-        Player player = Player.createWithId(7, 101L, "alpha1", 0);
-        Monster monster = map1Monster();
+        TestZone area = new TestZone();
+        Player player = area.join(7, 975, 936);
+        Monster monster = area.monster(101);
 
-        assertTrue(player.canTarget(monster));
-        assertEquals(new Monster.Damage(101, 10L, 290L, false, 0L),
-                player.attackMonster(monster, 1_000_000L, 1));
+        assertTrue(area.run(player, () -> player.attackMonster(monster, 1_000_000L)));
+        assertEquals(290L, monster.hp());
         assertEquals(1L, player.potential());
-        assertEquals(java.util.List.of(7), monster.enemyPlayerIds());
+        assertEquals(List.of(7), monster.enemyPlayerIds());
+        assertEquals(List.of(MessageName.MONSTER_INJURE), area.commands(player));
     }
 
     @Test
     void killingHitRewardsPlayerExactlyOnce() {
-        Player player = Player.createWithId(7, 101L, "alpha1", 0);
-        Monster monster = map1Monster();
+        TestZone area = new TestZone();
+        Player player = area.join(7, 975, 936);
+        Monster monster = area.monster(101);
         for (int hit = 0; hit < 29; hit++) {
-            assertFalse(player.attackMonster(monster, 1_000_000L, 1).killed());
+            assertTrue(area.run(player, () -> player.attackMonster(monster, 1_000_000L)));
+            assertTrue(monster.isAlive());
             assertEquals(1L, player.potential());
+            area.commands(player);
         }
 
-        assertEquals(new Monster.Damage(101, 10L, 0L, true, 10L),
-                player.attackMonster(monster, 1_000_000L, 1));
+        assertTrue(area.run(player, () -> player.attackMonster(monster, 1_000_000L)));
+        assertFalse(monster.isAlive());
         assertEquals(11L, player.potential());
-        assertNull(player.attackMonster(monster, 1_000_001L, 1));
+        assertEquals(List.of(MessageName.MONSTER_START_DIE, MessageName.PLAYER_INFO),
+                area.commands(player));
+        assertFalse(area.run(player, () -> player.attackMonster(monster, 1_000_001L)));
         assertEquals(11L, player.potential());
     }
 
     @Test
     void lethalRewardSaturatesPotential() {
-        Player player = playerWithDamage(300);
-        Monster monster = map1Monster();
+        TestZone area = new TestZone();
+        Player player = area.join(playerWithDamage(300));
+        Monster monster = area.monster(101);
         player.addPotential(Long.MAX_VALUE - 5L - player.potential());
 
-        assertTrue(player.attackMonster(monster, 1_000_000L, 1).killed());
+        assertTrue(area.run(player, () -> player.attackMonster(monster, 1_000_000L)));
+        assertFalse(monster.isAlive());
         assertEquals(Long.MAX_VALUE, player.potential());
     }
 
-    private static Monster map1Monster() {
-        MonsterManager monsters = new MonsterManager(GameResources.fromFrameRoot(
-                Path.of("resources", "json"),
-                com.project.game.testsupport.MapTestSupport.canonicalMaps(), 2,
-                com.project.game.testsupport.MonsterTestSupport.canonicalRepository()));
-        return monsters.createForMap(1).getFirst();
+    @Test
+    void attackHitsOnlyTheMonsterChosenByUseSkill() {
+        TestZone area = new TestZone();
+        Player player = area.join(7, 975, 936);
+        Monster monster = area.monster(101);
+
+        assertFalse(area.run(player, () -> player.attack(101, 1_000_000L)));
+        assertTrue(area.run(player, () -> player.useSkill(0, 101)));
+        assertFalse(area.run(player, () -> player.attack(102, 1_000_000L)));
+        assertFalse(area.run(player, () -> player.attack(101, 1_000_000L)));
+        assertEquals(300L, monster.hp());
+
+        assertTrue(area.run(player, () -> player.useSkill(0, 101)));
+        assertTrue(area.run(player, () -> player.attack(101, 1_000_000L)));
+        assertFalse(area.run(player, () -> player.attack(101, 1_000_000L)));
+        assertEquals(290L, monster.hp());
+    }
+
+    @Test
+    void changingMapForgetsChosenMonster() {
+        TestZone area = new TestZone();
+        Player player = area.join(7, 975, 936);
+
+        assertTrue(area.run(player, () -> player.useSkill(0, 101)));
+        area.runOnWriter(() -> player.changeMap(1, 0, 975, 936));
+
+        assertFalse(area.run(player, () -> player.attack(101, 1_000_000L)));
+        assertEquals(300L, area.monster(101).hp());
     }
 
     private static Player playerWithDamage(int damage) {
-        Player player = Player.createWithId(7, 101L, "alpha1", 0);
+        return withDamage(TestPlayers.at(
+                TestPlayers.initial(7L, 7, "alpha1", 1), 1, 0, 975, 936), damage);
+    }
+
+    private static Player withDamage(Player player, int damage) {
         Player.CurrentStats stats = player.currentStats();
         Player.CurrentStats current = new Player.CurrentStats(
                 stats.maxHp(), stats.maxMp(), damage, stats.armor(), stats.critical(),

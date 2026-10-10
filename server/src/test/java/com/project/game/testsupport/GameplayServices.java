@@ -3,6 +3,7 @@ package com.project.game.testsupport;
 import com.project.game.map.MapManager;
 import com.project.game.map.MapTemplate;
 import com.project.game.map.Zone;
+import com.project.game.map.ZoneTestHooks;
 import com.project.game.monster.MonsterManager;
 import com.project.game.monster.Monster.Snapshot;
 import com.project.game.network.Session;
@@ -108,7 +109,7 @@ public final class GameplayServices {
     }
     public boolean movePlayer(Session session, int x, int y) {
         Zone zone = session == null ? null : session.zone();
-        return zone != null && zone.move(session, x, y);
+        return zone != null && ZoneTestHooks.move(zone, session, x, y);
     }
     public int memberCount(int mapId, int zoneId) {
         com.project.game.map.Map map = maps.findMap(mapId);
@@ -123,14 +124,14 @@ public final class GameplayServices {
         if (zone == null || session.state() == SessionState.CLOSED) {
             return false;
         }
-        return zone.canTargetMonster(session, monsterId);
+        return ZoneTestHooks.useSkill(zone, session, monsterId);
     }
     public boolean attackMonster(Session session, int monsterId) {
         Zone zone = session == null ? null : session.zone();
         if (zone == null || session.state() == SessionState.CLOSED) {
             return false;
         }
-        return zone.attackMonster(session, monsterId, clock.millis());
+        return ZoneTestHooks.attackMonster(zone, session, monsterId, clock.millis());
     }
     public void tickMonsterLifecycle() { monsterManager.update(maps); }
     public List<Snapshot> monsterSnapshots(int mapId, int zoneId) {
@@ -138,6 +139,7 @@ public final class GameplayServices {
         if (zone == null) {
             throw new IllegalArgumentException("unknown zone " + mapId + "/" + zoneId);
         }
+        ZoneTestHooks.drain(zone); // mọi lệnh đã post trước đó chạy xong rồi mới đọc
         return zone.monsterSnapshots();
     }
     public Zone findZone(int mapId, int zoneId) {

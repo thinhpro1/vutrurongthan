@@ -5,134 +5,134 @@ import com.project.game.network.Session;
 import com.project.game.network.SessionState;
 import com.project.game.network.message.Message;
 import com.project.game.network.message.MessageName;
-import com.project.game.network.packet.MonsterPacketWriter;
-import com.project.game.network.packet.PlayerPacketWriter;
-import com.project.game.testsupport.GameplayTestSupport;
-import com.project.game.testsupport.TestPlayers;
+import com.project.game.player.Player;
+import com.project.game.testsupport.TestZone;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
 
-import static com.project.game.testsupport.GameplayTestSupport.commands;
 import static com.project.game.testsupport.GameplayTestSupport.drain;
 import static com.project.game.testsupport.GameplayTestSupport.replaceSendQueue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class AreaServiceTest {
     @Test
-    void addPlayerExchangesPresenceWithExistingMembers() throws Exception {
-        AreaService area = new AreaService(new PlayerPacketWriter(), new MonsterPacketWriter());
-        Session existing = GameplayTestSupport.session(TestPlayers.initial(1L, 1, "player1", 0));
-        Session joining = GameplayTestSupport.session(TestPlayers.initial(2L, 2, "player2", 0));
+    void joiningPlayerAndExistingMembersSeeEachOther() throws Exception {
+        TestZone area = new TestZone();
+        Player existing = area.join(1, 975, 936);
 
-        List<Session> rejected = area.addPlayer(joining, joining.player(), List.of(existing));
+        area.join(2, 975, 936);
 
-        assertEquals(List.of(), rejected);
-        assertEquals(List.of(MessageName.ADD_PLAYER), commands(drain(existing)));
-        assertEquals(List.of(MessageName.ADD_PLAYER), commands(drain(joining)));
+        assertEquals(List.of(MessageName.ADD_PLAYER), area.commands(existing));
     }
 
     @Test
-    void removePlayerNotifiesRemainingMembers() throws Exception {
-        AreaService area = new AreaService(new PlayerPacketWriter(), new MonsterPacketWriter());
-        Session leaving = GameplayTestSupport.session(TestPlayers.initial(1L, 1, "player1", 0));
-        Session remaining = GameplayTestSupport.session(TestPlayers.initial(2L, 2, "player2", 0));
+    void leavingNotifiesRemainingMembersOnly() throws Exception {
+        TestZone area = new TestZone();
+        Player leaving = area.join(1, 975, 936);
+        Player remaining = area.join(2, 975, 936);
+        area.commands(leaving);
+        area.commands(remaining);
 
-        List<Session> rejected = area.removePlayer(
-                leaving, leaving.player().id(), List.of(leaving, remaining));
+        area.zone().leave(leaving);
 
-        assertEquals(List.of(), rejected);
-        assertEquals(List.of(MessageName.REMOVE_PLAYER), commands(drain(remaining)));
-        assertEquals(List.of(), drain(leaving));
+        assertEquals(List.of(MessageName.REMOVE_PLAYER), area.commands(remaining));
+        assertEquals(List.of(), area.commands(leaving));
     }
 
     @Test
-    void moveDoesNotSendBackToMover() throws Exception {
-        AreaService area = new AreaService(new PlayerPacketWriter(), new MonsterPacketWriter());
-        Session mover = GameplayTestSupport.session(TestPlayers.initial(1L, 1, "player1", 0));
-        Session observer = GameplayTestSupport.session(TestPlayers.initial(2L, 2, "player2", 0));
-        mover.player().move(1300, 648);
+    void moveIsNotSentBackToMover() throws Exception {
+        TestZone area = new TestZone();
+        Player mover = area.join(1, 975, 936);
+        Player observer = area.join(2, 975, 936);
+        area.commands(mover);
+        area.commands(observer);
 
-        List<Session> rejected = area.move(mover, mover.player(), List.of(mover, observer));
+        area.runOnWriter(() -> area.zone().service().playerMove(mover));
 
-        assertEquals(List.of(), rejected);
-        assertEquals(List.of(), drain(mover));
-        assertEquals(List.of(MessageName.PLAYER_MOVE), commands(drain(observer)));
+        assertEquals(List.of(), area.commands(mover));
+        assertEquals(List.of(MessageName.PLAYER_MOVE), area.commands(observer));
     }
 
     @Test
-    void failedTrySendIsReturnedWithoutClosingSession() throws Exception {
-        AreaService area = new AreaService(new PlayerPacketWriter(), new MonsterPacketWriter());
-        Session mover = GameplayTestSupport.session(TestPlayers.initial(1L, 1, "player1", 0));
-        Session observer = GameplayTestSupport.session(TestPlayers.initial(2L, 2, "player2", 0));
-        ArrayBlockingQueue<Message> fullQueue = new ArrayBlockingQueue<>(1);
-        assertTrue(fullQueue.offer(new Message(MessageName.DIALOG_OK)));
-        replaceSendQueue(observer, fullQueue);
+    void fullSendQueueKicksTheReceiverAfterLeavingTheWriter() throws Exception {
+        TestZone area = new TestZone();
+        Player mover = area.join(1, 975, 936);
+        Player observer = area.join(2, 975, 936);
+        fillSendQueue(observer.session());
 
-        List<Session> rejected = area.move(mover, mover.player(), List.of(mover, observer));
+        area.runOnWriter(() -> area.zone().service().playerMove(mover));
 
-        assertEquals(List.of(observer), rejected);
-        assertSame(observer, rejected.getFirst());
-        assertNotEquals(SessionState.CLOSED, observer.state());
+        assertEquals(SessionState.CLOSED, observer.session().state());
+        assertNotEquals(SessionState.CLOSED, mover.session().state());
     }
 
     @Test
-    void broadcastsMonsterDamageMoveAndRespawnToCurrentMembers() throws Exception {
-        AreaService area = new AreaService(new PlayerPacketWriter(), new MonsterPacketWriter());
-        Session first = GameplayTestSupport.session(TestPlayers.initial(1L, 1, "player1", 0));
-        Session second = GameplayTestSupport.session(TestPlayers.initial(2L, 2, "player2", 0));
+    void broadcastsMonsterInjureMoveAndRespawnToMembers() throws Exception {
+        TestZone area = new TestZone();
+        Player first = area.join(1, 975, 936);
+        Player second = area.join(2, 975, 936);
+        area.commands(first);
+        area.commands(second);
+        Monster monster = area.monster(101);
 
-        assertEquals(List.of(), area.monsterDamage(
-                new Monster.Damage(101, 10, 290, false, 0), List.of(first, second)));
-        assertEquals(List.of(MessageName.MONSTER_INJURE), commands(drain(first)));
-        assertEquals(List.of(MessageName.MONSTER_INJURE), commands(drain(second)));
+        area.runOnWriter(() -> {
+            area.zone().service().monsterInjure(monster, 10);
+            area.zone().service().monsterMove(monster);
+            area.zone().service().monsterRespawn(monster);
+        });
 
-        area.monsterMove(new Monster.Move(101, 979, 936, 1), List.of(first, second));
-        area.monsterRespawn(new Monster.Respawn(101, 0, 300), List.of(first, second));
-        assertEquals(List.of(MessageName.MONSTER_MOVE, MessageName.MONSTER_RESPAWN),
-                commands(drain(first)));
-        assertEquals(List.of(MessageName.MONSTER_MOVE, MessageName.MONSTER_RESPAWN),
-                commands(drain(second)));
+        List<Integer> expected = List.of(
+                MessageName.MONSTER_INJURE, MessageName.MONSTER_MOVE, MessageName.MONSTER_RESPAWN);
+        assertEquals(expected, area.commands(first));
+        assertEquals(expected, area.commands(second));
     }
 
     @Test
     void lethalMonsterAttackSendsAttackBeforeSelfAndObservedDeath() throws Exception {
-        AreaService area = new AreaService(new PlayerPacketWriter(), new MonsterPacketWriter());
-        Session victim = GameplayTestSupport.session(TestPlayers.initial(1L, 1, "player1", 0));
-        Session observer = GameplayTestSupport.session(TestPlayers.initial(2L, 2, "player2", 0));
+        TestZone area = new TestZone();
+        Player victim = area.join(1, 975, 936);
+        Player observer = area.join(2, 975, 936);
+        area.commands(victim);
+        area.commands(observer);
+        Monster monster = area.monster(101);
 
-        List<Session> rejected = area.monsterAttack(
-                new Monster.Attack(101, victim.player().id(), 10, 0, true),
-                List.of(victim, observer));
+        area.runOnWriter(() -> {
+            victim.injure(Long.MAX_VALUE);
+            area.zone().service().monsterAttack(monster, victim, 10);
+        });
 
-        assertEquals(List.of(), rejected);
-        assertEquals(List.of(MessageName.MONSTER_ATTACK, MessageName.ME_DIE),
-                commands(drain(victim)));
+        assertEquals(List.of(MessageName.MONSTER_ATTACK, MessageName.ME_DIE), area.commands(victim));
         assertEquals(List.of(MessageName.MONSTER_ATTACK, MessageName.PLAYER_DIE),
-                commands(drain(observer)));
+                area.commands(observer));
     }
 
     @Test
-    void monsterBroadcastSkipsClosedMembersAndReturnsFailedSendsWithoutClosing() throws Exception {
-        AreaService area = new AreaService(new PlayerPacketWriter(), new MonsterPacketWriter());
-        Session open = GameplayTestSupport.session(TestPlayers.initial(1L, 1, "player1", 0));
-        Session closed = GameplayTestSupport.session(TestPlayers.initial(2L, 2, "player2", 0));
-        closed.transition(SessionState.IN_GAME, SessionState.CLOSED);
-        Session full = GameplayTestSupport.session(TestPlayers.initial(3L, 3, "player3", 0));
+    void monsterBroadcastSkipsClosedMembersAndKicksFullOnes() throws Exception {
+        TestZone area = new TestZone();
+        Player open = area.join(1, 975, 936);
+        Player closed = area.join(2, 975, 936);
+        Player full = area.join(3, 975, 936);
+        area.commands(open);
+        area.commands(closed);
+        closed.session().transition(SessionState.IN_GAME, SessionState.CLOSED);
+        fillSendQueue(full.session());
+        Monster monster = area.monster(101);
+
+        area.runOnWriter(() -> area.zone().service().monsterMove(monster));
+
+        // "full" bị kick rồi rời Zone, nên "open" nhận thêm REMOVE_PLAYER sau gói di chuyển.
+        assertEquals(MessageName.MONSTER_MOVE, (int) area.commands(open).getFirst());
+        assertEquals(List.of(), drain(closed.session()));
+        assertEquals(SessionState.CLOSED, full.session().state());
+    }
+
+    private static void fillSendQueue(Session session) throws Exception {
         ArrayBlockingQueue<Message> fullQueue = new ArrayBlockingQueue<>(1);
         assertTrue(fullQueue.offer(new Message(MessageName.DIALOG_OK)));
-        replaceSendQueue(full, fullQueue);
-
-        List<Session> rejected = area.monsterMove(
-                new Monster.Move(101, 979, 936, 1), List.of(open, closed, full));
-
-        assertEquals(List.of(full), rejected);
-        assertEquals(List.of(MessageName.MONSTER_MOVE), commands(drain(open)));
-        assertEquals(List.of(), drain(closed));
-        assertNotEquals(SessionState.CLOSED, full.state());
+        replaceSendQueue(session, fullQueue);
     }
 }

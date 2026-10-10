@@ -28,7 +28,7 @@ Giữ Session buộc mọi hành động kiểm tra lại trạng thái kết n�
 **#7. Một cửa vào `zone.post(player, action)`; kiểm tra membership một lần ở cửa.**
 Thay cho mỗi hành động một method trên Zone với khối kiểm tra lặp lại. Lambda chỉ xuất hiện ở đây.
 
-**#8. Entity gọi `zone.service.xxx(...)` bằng từ ngữ game.**
+**#8. Entity gọi `zone.service().xxx(...)` bằng từ ngữ game.**
 Bỏ các record `Monster.Damage/Attack/Move/Respawn`. Packet vẫn đóng gói trong PacketWriter, nên entity vẫn không biết bytes.
 
 **#9. Tách Player theo mảng gameplay, không theo tầng kỹ thuật.**

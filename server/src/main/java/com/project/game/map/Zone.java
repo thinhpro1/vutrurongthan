@@ -14,46 +14,41 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.random.RandomGenerator;
 
 /**
- * Một khu vực của Map: giữ Player, Monster và quyết định THỨ TỰ mọi thay đổi gameplay.
+ * Một khu vực của Map: giữ Player và Monster, quyết định KHI NÀO chúng được chạy.
  *
- * <p>Mỗi hành động public có cùng một khuôn:
- * <pre>
- * public boolean move(session, x, y) {
- *     return tryRun(() -> {            // chạy trên writer (virtual thread) của Zone
- *         Player player = joinedPlayer(session);
- *         ...                          // Zone chọn lúc chạy, Player/Monster quyết định làm gì
- *         area.move(...)               // gửi packet; observer đầy hàng đợi bị kick
- *     });
- * }
- * </pre>
- * Cơ chế writer nằm ở cuối file và trong {@link ZoneWriter}; không cần đọc nó để hiểu gameplay.
+ * <p>Mọi hành động đi vào qua {@link #post}: Handler đọc packet rồi
+ * {@code zone.post(player, () -> player.move(x, y))}. Zone chỉ kiểm tra Player còn ở đây rồi chạy
+ * hành động trên writer (một virtual thread), nên Player/Monster không cần lock.
+ * Phần cơ chế writer nằm ở cuối file và trong {@link ZoneWriter}.
  */
 public final class Zone {
     static final long UPDATE_PERIOD_MILLIS = 100L;
     private static final Logger LOGGER = Logger.getLogger(Zone.class.getName());
+
     private final int mapId;
     private final int zoneId;
     private final int maxPlayer;
-    private final AreaService area;
-    private final LinkedHashMap<Integer, Session> members = new LinkedHashMap<>();
-    private final LinkedHashMap<Integer, Session> reservedPlayers = new LinkedHashMap<>();
+    private final AreaService service;
+    private final LinkedHashMap<Integer, Player> players = new LinkedHashMap<>();
+    private final LinkedHashMap<Integer, Player> reservedPlayers = new LinkedHashMap<>();
     private final LinkedHashMap<Integer, Monster> monsters = new LinkedHashMap<>();
     private final ZoneWriter writer;
-    // Observer gửi packet thất bại trong writer; được đóng sau khi rời writer.
-    private final List<Session> kicked = new ArrayList<>();
+    // Người nhận bị đầy hàng đợi gửi; Session của họ được đóng sau khi rời writer.
+    private final List<Player> kicked = new ArrayList<>();
 
-    public Zone(int mapId, int zoneId, int maxPlayer, List<Monster> monsters, AreaService area) {
-        this(mapId, zoneId, maxPlayer, monsters, ZoneWriter.DEFAULT_INPUT_CAPACITY, area);
+    public Zone(int mapId, int zoneId, int maxPlayer, List<Monster> monsters, AreaService service) {
+        this(mapId, zoneId, maxPlayer, monsters, ZoneWriter.DEFAULT_INPUT_CAPACITY, service);
     }
 
     Zone(int mapId, int zoneId, int maxPlayer, List<Monster> monsters,
-         int inputCapacity, AreaService area) {
+         int inputCapacity, AreaService service) {
         if (maxPlayer <= 0) {
             throw new IllegalArgumentException("maxPlayer must be positive");
         }
@@ -61,7 +56,7 @@ public final class Zone {
         this.zoneId = zoneId;
         this.maxPlayer = maxPlayer;
         this.writer = new ZoneWriter(mapId, zoneId, inputCapacity);
-        this.area = Objects.requireNonNull(area, "area");
+        this.service = Objects.requireNonNull(service, "service");
         Objects.requireNonNull(monsters, "monsters");
         for (Monster monster : monsters) {
             addMonster(Objects.requireNonNull(monster, "monster"));
@@ -80,129 +75,148 @@ public final class Zone {
         return maxPlayer;
     }
 
+    public AreaService service() {
+        return service;
+    }
+
+    // ------------------------------------------------------------------
+    // Cửa vào duy nhất cho hành động của Player
+    // ------------------------------------------------------------------
+
+    /**
+     * Xếp một hành động của Player vào hàng đợi, không chờ. Hành động chỉ chạy nếu lúc đó Player
+     * vẫn ở Zone này; hàng đợi đầy thì bỏ (trả về false).
+     */
+    public boolean post(Player player, Runnable action) {
+        Objects.requireNonNull(player, "player");
+        Objects.requireNonNull(action, "action");
+        return writer.submit(() -> runOnWriter(() -> {
+            if (players.get(player.id()) == player) {
+                action.run();
+            }
+        }));
+    }
+
+    /** Như {@link #post} nhưng chờ kết quả; dùng ở biên hạ tầng và test. */
+    boolean run(Player player, BooleanSupplier action) {
+        requireOutsideRuntimeWorker("run");
+        try {
+            return tryCall(() -> players.get(player.id()) == player && action.getAsBoolean());
+        } catch (RejectedExecutionException exception) {
+            return false;
+        }
+    }
+
     // ------------------------------------------------------------------
     // Player vào / ra Zone
     // ------------------------------------------------------------------
 
     /** Player vào Zone sau FINISH_LOAD_MAP và trao đổi hiện diện với người đang ở đây. */
-    public boolean enter(Session session) {
-        return enter(session, null);
+    public boolean enter(Player player) {
+        return enter(player, null);
     }
 
     /** {@code admitted} chạy trên writer ngay khi Player được nhận, trước khi gửi packet. */
-    boolean enter(Session session, Runnable admitted) {
+    boolean enter(Player player, Runnable admitted) {
         requireOutsideRuntimeWorker("enter");
-        if (!canEnter(session)) {
+        if (!canEnter(player)) {
             return false;
         }
-        return tryRun(() -> {
-            if (!canEnter(session)) {
-                return false;
-            }
-            if (session.zone() != null) {
-                return session.zone() == this && hasPlayer(session);
-            }
-            JoinResult join = addPlayer(session);
-            if (join.status() == JoinStatus.FULL || join.status() == JoinStatus.PLAYER_ID_CONFLICT) {
-                return false;
-            }
-            session.bindZone(this);
-            if (join.status() == JoinStatus.ALREADY_PRESENT) {
+        try {
+            return tryCall(() -> {
+                if (!canEnter(player)) {
+                    return false;
+                }
+                if (player.zone() != null) {
+                    return player.zone() == this && hasPlayer(player);
+                }
+                JoinResult join = addPlayer(player);
+                if (join.status() == JoinStatus.FULL) {
+                    return false;
+                }
+                if (join.status() == JoinStatus.PLAYER_ID_CONFLICT) {
+                    return false;
+                }
+                player.enterZone(this);
+                if (join.status() == JoinStatus.ALREADY_PRESENT) {
+                    return true;
+                }
+                if (admitted != null) {
+                    admitted.run();
+                }
+                service.addPlayer(this, player, join.existing());
                 return true;
-            }
-            if (admitted != null) {
-                admitted.run();
-            }
-            kick(area.addPlayer(session, session.player(), join.existing()));
-            return true;
-        });
+            });
+        } catch (RejectedExecutionException exception) {
+            return false;
+        }
     }
 
-    /** Player rời Zone (disconnect); trả về bản lưu ổn định nếu đã tách hẳn khỏi Zone. */
-    public PlayerSaveData leave(Session session) {
+    /** Player rời Zone (thoát game); trả về bản lưu ổn định nếu đã tách hẳn khỏi Zone. */
+    public PlayerSaveData leave(Player player) {
         requireOutsideRuntimeWorker("leave");
-        if (session == null || session.player() == null) {
+        if (player == null) {
             return null;
         }
         return call(() -> {
-            removeFromZone(session);
-            return session.zone() == null ? PlayerSaveData.capture(session.player()) : null;
+            removeFromZone(player);
+            if (player.zone() != null) {
+                return null;
+            }
+            return PlayerSaveData.capture(player);
         });
     }
 
-    /** MapManager dọn Session khỏi Zone này mà không chụp Player (có thể đã thuộc Zone khác). */
-    void drop(Session session) {
+    /** MapManager dọn Player khỏi Zone này mà không chụp (Player có thể đã thuộc Zone khác). */
+    void drop(Player player) {
         requireOutsideRuntimeWorker("drop");
         call(() -> {
-            removeFromZone(session);
+            removeFromZone(player);
             return null;
         });
     }
 
-    private void removeFromZone(Session session) {
-        Player player = session.player();
-        if (player == null) {
-            return;
-        }
-        cancelReservation(session);
-        boolean removed = removePlayer(session);
-        session.clearZone(this);
+    private void removeFromZone(Player player) {
+        cancelReservation(player);
+        boolean removed = removePlayer(player);
+        player.leaveZone(this);
         if (removed) {
-            kick(area.removePlayer(session, player.id(), members()));
+            service.removePlayer(this, player);
         }
     }
 
     // ------------------------------------------------------------------
-    // Hành động của Player
+    // Tra cứu cho Player / Monster / AreaService (gọi trên writer)
     // ------------------------------------------------------------------
 
-    /** Player di chuyển trong Zone rồi báo cho người khác. */
-    public boolean move(Session session, int x, int y) {
-        requireOutsideRuntimeWorker("move");
-        return tryRun(() -> {
-            Player player = joinedPlayer(session);
-            if (player == null || player.isDead() || !player.move(x, y)) {
-                return false;
-            }
-            kick(area.move(session, player, members()));
-            return true;
-        });
+    public Player findPlayer(int playerId) {
+        return players.get(playerId);
     }
 
-    /** Player có thể nhắm Monster này không (dùng khi client chuẩn bị đòn đánh). */
-    public boolean canTargetMonster(Session session, int monsterId) {
-        requireOutsideRuntimeWorker("canTargetMonster");
-        return tryRun(() -> {
-            Player player = joinedPlayer(session);
-            return player != null && player.canTarget(monsters.get(monsterId));
-        });
+    public Monster findMonster(int monsterId) {
+        return monsters.get(monsterId);
     }
 
-    /** Player đánh Monster; damage, chết và thưởng tiềm năng đều do Player/Monster quyết định. */
-    public boolean attackMonster(Session session, int monsterId, long nowMillis) {
-        requireOutsideRuntimeWorker("attackMonster");
-        return tryRun(() -> {
-            Player player = joinedPlayer(session);
-            Monster monster = monsters.get(monsterId);
-            if (player == null || monster == null) {
-                return false;
-            }
-            Monster.Damage damage = player.attackMonster(monster, nowMillis, members.size());
-            if (damage == null) {
-                return false;
-            }
-            kick(area.monsterDamage(damage, members()));
-            if (damage.killed() && damage.potentialReward() > 0L
-                    && session.state() != SessionState.CLOSED
-                    && !area.potential(session, player.potential())) {
-                kicked.add(session);
-            }
-            return true;
-        });
+    public int playerCount() {
+        return players.size();
+    }
+
+    /** Monster thôi thù Player đã chết hoặc đã rời Zone. */
+    public void forgetPlayer(int playerId) {
+        for (Monster monster : monsters.values()) {
+            monster.removeEnemy(playerId);
+        }
+    }
+
+    /** Gửi packet cho Player thất bại: đóng Session của họ sau khi rời writer. */
+    public void kick(Player player) {
+        if (!kicked.contains(player)) {
+            kicked.add(player);
+        }
     }
 
     // ------------------------------------------------------------------
-    // Monster
+    // Vòng update
     // ------------------------------------------------------------------
 
     /**
@@ -212,7 +226,7 @@ public final class Zone {
     public void startUpdate(Clock clock, RandomGenerator random) {
         Objects.requireNonNull(clock, "clock");
         Objects.requireNonNull(random, "random");
-        writer.startUpdate(() -> updateOnWriter(clock.millis(), random),
+        writer.startUpdate(() -> runOnWriter(() -> updateMonsters(clock.millis(), random)),
                 () -> size() > 0, UPDATE_PERIOD_MILLIS);
     }
 
@@ -232,77 +246,9 @@ public final class Zone {
         });
     }
 
-    /** Nhịp update do chính writer gọi: không được đóng Session tại đây nên giao cho thread khác. */
-    private void updateOnWriter(long nowMillis, RandomGenerator random) {
-        List<Session> toClose = new ArrayList<>();
-        try {
-            synchronized (this) {
-                try {
-                    updateMonsters(nowMillis, random);
-                } finally {
-                    toClose.addAll(kicked);
-                    kicked.clear();
-                }
-            }
-        } finally {
-            // Kể cả khi nhịp lỗi: Session đã bị kick vẫn phải được đóng (ngoài writer, ngoài monitor).
-            if (!toClose.isEmpty()) {
-                Thread.ofVirtual().name("zone-kick-" + mapId + "-" + zoneId)
-                        .start(() -> closeAll(toClose));
-            }
-        }
-    }
-
-    /** Mỗi Monster tự update; Zone chỉ báo kết quả cho khu vực. */
     private void updateMonsters(long nowMillis, RandomGenerator random) {
         for (Monster monster : monsters.values()) {
-            updateMonster(monster, nowMillis, random);
-        }
-    }
-
-    private void updateMonster(Monster monster, long nowMillis, RandomGenerator random) {
-        boolean wasAlive = monster.isAlive();
-        int oldX = monster.x();
-        int oldY = monster.y();
-        Monster.Attack attack = monster.update(livingEnemies(monster), nowMillis, random);
-
-        if (!wasAlive && monster.isAlive()) {
-            kick(area.monsterRespawn(
-                    new Monster.Respawn(monster.id(), monster.levelStatus(), monster.hp()), members()));
-        } else if (oldX != monster.x() || oldY != monster.y()) {
-            kick(area.monsterMove(
-                    new Monster.Move(monster.id(), monster.x(), monster.y(), monster.moveDir()), members()));
-        }
-
-        if (attack == null) {
-            return;
-        }
-        if (attack.killed()) {
-            forgetPlayer(attack.playerId());
-        }
-        kick(area.monsterAttack(attack, members()));
-    }
-
-    /** Các Player còn sống trong Zone mà Monster đang thù. */
-    private List<Player> livingEnemies(Monster monster) {
-        List<Player> players = new ArrayList<>();
-        for (int playerId : monster.enemyPlayerIds()) {
-            Session member = members.get(playerId);
-            if (member == null || member.state() == SessionState.CLOSED) {
-                continue;
-            }
-            Player player = member.player();
-            if (player != null && !player.isDead()) {
-                players.add(player);
-            }
-        }
-        return List.copyOf(players);
-    }
-
-    /** Monster không còn thù Player đã chết hoặc đã rời Zone. */
-    private void forgetPlayer(int playerId) {
-        for (Monster monster : monsters.values()) {
-            monster.removeEnemy(playerId);
+            monster.update(nowMillis, random);
         }
     }
 
@@ -320,64 +266,63 @@ public final class Zone {
             throw new IllegalArgumentException("duplicate monster runtime id " + monster.id()
                     + " in map " + mapId + " zone " + zoneId);
         }
+        monster.enterZone(this);
     }
 
     // ------------------------------------------------------------------
     // Thành viên và đặt chỗ (MapManager dùng khi chuyển map)
     // ------------------------------------------------------------------
 
-    /** Giữ một chỗ cho Session trước khi MapManager tách Player khỏi Zone nguồn. */
-    ReserveStatus reserve(Session session) {
+    /** Giữ một chỗ cho Player trước khi MapManager tách Player khỏi Zone nguồn. */
+    ReserveStatus reserve(Player player) {
         requireOutsideRuntimeWorker("reserve");
-        return call(() -> reservePlayer(session));
+        return call(() -> reservePlayer(player));
     }
 
     /** Trả lại chỗ đã giữ khi chuyển map không thành công. */
-    boolean cancel(Session session) {
+    boolean cancel(Player player) {
         requireOutsideRuntimeWorker("cancel");
-        return call(() -> cancelReservation(session));
+        return call(() -> cancelReservation(player));
     }
 
-    /** Thêm Session vào members (dùng chỗ đã giữ nếu có) và trả về những người đã ở trước. */
-    synchronized JoinResult addPlayer(Session session) {
-        Objects.requireNonNull(session, "session");
-        Player player = requirePlayer(session);
-        Session member = members.get(player.id());
-        if (member == session) {
+    /** Thêm Player vào Zone (dùng chỗ đã giữ nếu có) và trả về những người đã ở trước. */
+    synchronized JoinResult addPlayer(Player player) {
+        Objects.requireNonNull(player, "player");
+        Player member = players.get(player.id());
+        if (member == player) {
             return new JoinResult(JoinStatus.ALREADY_PRESENT, List.of());
         }
         if (member != null) {
             return new JoinResult(JoinStatus.PLAYER_ID_CONFLICT, List.of());
         }
-        Session reserved = reservedPlayers.get(player.id());
-        if (reserved != null && reserved != session) {
+        Player reserved = reservedPlayers.get(player.id());
+        if (reserved != null && reserved != player) {
             return new JoinResult(JoinStatus.PLAYER_ID_CONFLICT, List.of());
         }
-        if (reserved == session) {
-            reservedPlayers.remove(player.id(), session);
+        if (reserved == player) {
+            reservedPlayers.remove(player.id(), player);
         } else if (isFull()) {
             return new JoinResult(JoinStatus.FULL, List.of());
         }
-        List<Session> existing = List.copyOf(members.values());
-        members.put(player.id(), session);
+        List<Player> existing = List.copyOf(players.values());
+        players.put(player.id(), player);
         return new JoinResult(JoinStatus.ADDED, existing);
     }
 
-    synchronized ReserveStatus reservePlayer(Session session) {
-        Objects.requireNonNull(session, "session");
-        if (session.state() == SessionState.CLOSED) {
+    synchronized ReserveStatus reservePlayer(Player player) {
+        Objects.requireNonNull(player, "player");
+        if (isClosed(player)) {
             return ReserveStatus.CLOSED;
         }
-        Player player = requirePlayer(session);
-        Session member = members.get(player.id());
-        if (member == session) {
+        Player member = players.get(player.id());
+        if (member == player) {
             return ReserveStatus.ALREADY_PRESENT;
         }
         if (member != null) {
             return ReserveStatus.PLAYER_ID_CONFLICT;
         }
-        Session reserved = reservedPlayers.get(player.id());
-        if (reserved == session) {
+        Player reserved = reservedPlayers.get(player.id());
+        if (reserved == player) {
             return ReserveStatus.ALREADY_RESERVED;
         }
         if (reserved != null) {
@@ -386,32 +331,31 @@ public final class Zone {
         if (isFull()) {
             return ReserveStatus.FULL;
         }
-        reservedPlayers.put(player.id(), session);
+        reservedPlayers.put(player.id(), player);
         return ReserveStatus.RESERVED;
     }
 
-    synchronized boolean cancelReservation(Session session) {
-        if (session == null || session.player() == null) {
+    synchronized boolean cancelReservation(Player player) {
+        if (player == null) {
             return false;
         }
-        return reservedPlayers.remove(session.player().id(), session);
+        return reservedPlayers.remove(player.id(), player);
     }
 
-    synchronized boolean hasReservation(Session session) {
-        if (session == null || session.player() == null) {
+    synchronized boolean hasReservation(Player player) {
+        if (player == null) {
             return false;
         }
-        return reservedPlayers.get(session.player().id()) == session;
+        return reservedPlayers.get(player.id()) == player;
     }
 
     synchronized int reservedCount() {
         return reservedPlayers.size();
     }
 
-    synchronized boolean removePlayer(Session session) {
-        Objects.requireNonNull(session, "session");
-        Player player = requirePlayer(session);
-        boolean removed = members.remove(player.id(), session);
+    synchronized boolean removePlayer(Player player) {
+        Objects.requireNonNull(player, "player");
+        boolean removed = players.remove(player.id(), player);
         if (removed) {
             forgetPlayer(player.id());
         }
@@ -419,59 +363,47 @@ public final class Zone {
     }
 
     /** Bước cuối khi MapManager chuyển Player đi: gỡ backlink và báo cho người còn lại. */
-    synchronized void detach(Session session) {
+    synchronized void detach(Player player) {
         if (!writer.isCurrent()) {
             throw new IllegalStateException("detach requires this Zone writer");
         }
-        session.clearZone(this);
-        kick(area.removePlayer(session, session.player().id(), members()));
+        player.leaveZone(this);
+        service.removePlayer(this, player);
     }
 
-    public synchronized boolean hasPlayer(Session session) {
-        if (session == null || session.player() == null) {
+    public synchronized boolean hasPlayer(Player player) {
+        if (player == null) {
             return false;
         }
-        return members.get(session.player().id()) == session;
+        return players.get(player.id()) == player;
     }
 
     public synchronized int size() {
-        return members.size();
+        return players.size();
     }
 
-    public synchronized List<Session> members() {
-        return List.copyOf(members.values());
+    /** Bản sao danh sách Player hiện tại. */
+    public synchronized List<Player> players() {
+        return List.copyOf(players.values());
     }
 
     private boolean isFull() {
-        return members.size() + reservedPlayers.size() >= maxPlayer;
+        return players.size() + reservedPlayers.size() >= maxPlayer;
     }
 
-    /** Player của Session nếu Session đang thật sự ở trong Zone này, ngược lại null. */
-    private Player joinedPlayer(Session session) {
-        if (session == null || session.state() == SessionState.CLOSED || session.zone() != this) {
-            return null;
-        }
-        Player player = session.player();
-        if (player == null || members.get(player.id()) != session) {
-            return null;
-        }
-        return player;
-    }
-
-    private boolean canEnter(Session session) {
-        if (session == null || session.state() == SessionState.CLOSED) {
+    private boolean canEnter(Player player) {
+        if (player == null) {
             return false;
         }
-        Player player = session.player();
-        return player != null && player.mapId() == mapId && player.zoneId() == zoneId;
+        if (isClosed(player)) {
+            return false;
+        }
+        return player.mapId() == mapId && player.zoneId() == zoneId;
     }
 
-    private static Player requirePlayer(Session session) {
-        Player player = session.player();
-        if (player == null) {
-            throw new IllegalStateException("zone membership requires a bound player");
-        }
-        return player;
+    private static boolean isClosed(Player player) {
+        Session session = player.session();
+        return session == null || session.state() == SessionState.CLOSED;
     }
 
     // ------------------------------------------------------------------
@@ -483,17 +415,26 @@ public final class Zone {
         ZoneWriter.requireOutsideWriter(action);
     }
 
-    /** Đánh dấu observer gửi thất bại; Session được đóng sau khi rời writer. */
-    private void kick(List<Session> sessions) {
-        kicked.addAll(sessions);
-    }
-
-    /** Chạy hành động trên writer; hàng đợi đầy hoặc Zone đã dừng thì coi như không làm gì. */
-    private boolean tryRun(Supplier<Boolean> action) {
+    /**
+     * Chạy việc đã nằm trên writer (post, nhịp update): giữ monitor của Zone trong lúc chạy,
+     * rồi giao các Session bị kick cho một virtual thread khác đóng, kể cả khi việc đó lỗi.
+     */
+    private void runOnWriter(Runnable action) {
+        List<Player> toClose = new ArrayList<>();
         try {
-            return tryCall(action);
-        } catch (RejectedExecutionException exception) {
-            return false;
+            synchronized (this) {
+                try {
+                    action.run();
+                } finally {
+                    toClose.addAll(kicked);
+                    kicked.clear();
+                }
+            }
+        } finally {
+            if (!toClose.isEmpty()) {
+                Thread.ofVirtual().name("zone-kick-" + mapId + "-" + zoneId)
+                        .start(() -> closeAll(toClose));
+            }
         }
     }
 
@@ -502,6 +443,7 @@ public final class Zone {
         return execute(action, true);
     }
 
+    /** Chờ kết quả nhưng từ chối ngay nếu hàng đợi đầy. */
     <T> T tryCall(Supplier<T> action) {
         return execute(action, false);
     }
@@ -511,9 +453,9 @@ public final class Zone {
             // Lời gọi lồng trên chính writer: lời gọi ngoài cùng sẽ đóng các Session bị kick.
             return action.get();
         }
-        List<Session> toClose = new ArrayList<>();
+        List<Player> toClose = new ArrayList<>();
         Supplier<T> onWriter = () -> {
-            // synchronized để các truy vấn từ thread khác (hasPlayer, members...) thấy state nhất quán.
+            // synchronized để các truy vấn từ thread khác (hasPlayer, players...) thấy state nhất quán.
             synchronized (this) {
                 try {
                     return action.get();
@@ -524,15 +466,22 @@ public final class Zone {
             }
         };
         try {
-            return required ? writer.call(onWriter) : writer.tryCall(onWriter);
+            if (required) {
+                return writer.call(onWriter);
+            }
+            return writer.tryCall(onWriter);
         } finally {
             closeAll(toClose);
         }
     }
 
-    /** Đóng từng Session; lỗi của một Session không bỏ qua các Session còn lại. */
-    private static void closeAll(List<Session> sessions) {
-        for (Session session : sessions) {
+    /** Đóng Session của từng Player; lỗi của một người không bỏ qua những người còn lại. */
+    private static void closeAll(List<Player> players) {
+        for (Player player : players) {
+            Session session = player.session();
+            if (session == null) {
+                continue;
+            }
             try {
                 session.close();
             } catch (RuntimeException exception) {
@@ -569,7 +518,7 @@ public final class Zone {
         PLAYER_ID_CONFLICT
     }
 
-    record JoinResult(JoinStatus status, List<Session> existing) {
+    record JoinResult(JoinStatus status, List<Player> existing) {
         JoinResult {
             Objects.requireNonNull(status, "status");
             existing = List.copyOf(Objects.requireNonNull(existing, "existing"));

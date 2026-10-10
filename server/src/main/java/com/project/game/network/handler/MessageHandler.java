@@ -55,22 +55,12 @@ public final class MessageHandler {
                 case MessageName.REGISTER_USER -> authHandler.handleRegister(message);
                 case MessageName.CREATE_PLAYER -> playerHandler.handleCreatePlayer(message);
                 case MessageName.FINISH_LOAD_MAP -> mapHandler.handleFinishLoadMap(message);
-                case MessageName.RETURN_TOWN_FROM_DIE -> {
-                    combatHandler.clearPendingAttack();
-                    mapHandler.handleReturnTownFromDie(message);
-                }
-                case MessageName.WAKE_UP_FROM_DIE -> {
-                    combatHandler.clearPendingAttack();
-                    mapHandler.handleUnsupportedWakeUpFromDie(message);
-                }
-                case MessageName.REQUEST_CHANGE_MAP -> {
-                    combatHandler.clearPendingAttack();
-                    mapHandler.handleRequestChangeMap(message);
-                }
+                case MessageName.RETURN_TOWN_FROM_DIE -> mapHandler.handleReturnTownFromDie(message);
+                case MessageName.WAKE_UP_FROM_DIE -> mapHandler.handleUnsupportedWakeUpFromDie(message);
+                case MessageName.REQUEST_CHANGE_MAP -> mapHandler.handleRequestChangeMap(message);
                 case MessageName.PLAYER_MOVE -> mapHandler.handlePlayerMove(message);
-                case MessageName.PLAYER_START_USE_ULTIMATE ->
-                        combatHandler.handlePrepareMonsterAttack(message);
-                case MessageName.USE_SKILL -> combatHandler.handleMonsterAttackImpact(message);
+                case MessageName.PLAYER_START_USE_ULTIMATE -> combatHandler.handleUseSkill(message);
+                case MessageName.USE_SKILL -> combatHandler.handleAttack(message);
                 default -> LOGGER.fine(() -> "RX cmd=" + message.command()
                         + " len=" + message.payload().length);
             }

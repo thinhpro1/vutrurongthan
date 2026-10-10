@@ -265,6 +265,7 @@ class MessageHandlerMapTest {
         drainMessages(second);
 
         secondHandler.onMessage(moveMessage(1260, 640));
+        ZoneTestHooks.drain(second.zone());
         assertEquals(1, first.queuedMessages());
         assertEquals(0, second.queuedMessages());
         Message movement = drainMessages(first).get(0);
@@ -289,6 +290,8 @@ class MessageHandlerMapTest {
         handler.onMessage(moveMessage(1260, 648));
         handler.onMessage(moveMessage(1284, 620));
         handler.onMessage(moveMessage(1312, 648));
+        // Handler chỉ post vào Zone; chờ writer chạy xong các lệnh đã xếp.
+        ZoneTestHooks.drain(session.zone());
 
         assertEquals(SessionState.IN_GAME, session.state());
         assertEquals(1312, session.player().x());
@@ -377,8 +380,8 @@ class MessageHandlerMapTest {
         assertEquals(SessionState.IN_GAME, first.state());
         assertEquals(SessionState.CLOSED, conflicting.state());
         assertEquals(1, gameplay.memberCount(0, 0));
-        assertTrue(gameplay.findZone(0, 0).hasPlayer(first));
-        assertFalse(gameplay.findZone(0, 0).hasPlayer(conflicting));
+        assertTrue(gameplay.findZone(0, 0).hasPlayer(first.player()));
+        assertFalse(gameplay.findZone(0, 0).hasPlayer(conflicting.player()));
         assertEquals(0, first.queuedMessages());
     }
 

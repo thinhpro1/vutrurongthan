@@ -1,5 +1,6 @@
 package com.project.game.network.handler;
 
+import com.project.game.map.MapManager;
 import com.project.game.persistence.player.DuplicatePlayerException;
 import com.project.game.persistence.player.PlayerRepositoryException;
 import com.project.game.network.Session;
@@ -26,15 +27,15 @@ final class PlayerHandler {
     private final Session session;
     private final PlayerManager playerManager;
     private final GameResources resources;
-    private final MapHandler mapHandler;
+    private final MapManager maps;
     private final PlayerPacketWriter playerPackets = new PlayerPacketWriter();
 
     PlayerHandler(Session session, PlayerManager playerManager, GameResources resources,
-                  MapHandler mapHandler) {
+                  MapManager maps) {
         this.session = session;
         this.playerManager = playerManager;
         this.resources = resources;
-        this.mapHandler = mapHandler;
+        this.maps = maps;
     }
 
     void handleCreatePlayer(Message message) throws IOException {
@@ -114,7 +115,8 @@ final class PlayerHandler {
                     "legacy player skill bootstrap unavailable for gender " + player.gender());
         }
         session.send(playerPackets.playerInfo(player, skills));
-        mapHandler.sendMapInfo(player);
+        maps.enterGame(player); // Zone gửi MAP_INFO
+
     }
 
     private void sendDialog(String text) throws IOException {

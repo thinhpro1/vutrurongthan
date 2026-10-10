@@ -62,7 +62,10 @@ class MessageHandlerMapTest {
         maps.finishLoad(session);
         drainMessages(session);
 
+        Zone source = session.zone();
         handler.onMessage(new Message(MessageName.REQUEST_CHANGE_MAP));
+        ZoneTestHooks.drain(source);
+        ZoneTestHooks.awaitTravel(start);
 
         assertEquals(SessionState.IN_GAME, session.state());
         assertSame(start, session.player());
@@ -111,10 +114,11 @@ class MessageHandlerMapTest {
         assertEquals(0, reader.readUnsignedShort());
         assertFalse(reader.readBoolean());
         assertEquals(0, reader.remaining());
-        assertEquals(0, maps.memberCount(1, 0));
+        assertTrue(start.isLoading(), "đã vào Zone mới nhưng client chưa tải xong map");
 
         handler.onMessage(new Message(MessageName.FINISH_LOAD_MAP));
-        assertEquals(1, maps.memberCount(1, 0));
+        assertEquals(1, maps.memberCount(1, 0)); // memberCount chờ Zone chạy xong
+        assertFalse(start.isLoading());
     }
 
     @Test
@@ -173,11 +177,11 @@ class MessageHandlerMapTest {
             session.player().injure(110);
         }));
         assertTrue(priorStarted.await(5, java.util.concurrent.TimeUnit.SECONDS));
-        Thread transition = Thread.ofVirtual().start(() ->
-                handler.onMessage(new Message(MessageName.REQUEST_CHANGE_MAP)));
-        awaitBlocked(transition);
+        // Lệnh đổi map xếp hàng sau việc đang chạy, nên thấy HP đã bị trừ.
+        handler.onMessage(new Message(MessageName.REQUEST_CHANGE_MAP));
         releasePrior.countDown();
-        transition.join();
+        ZoneTestHooks.drain(sourceZone);
+        ZoneTestHooks.awaitTravel(session.player());
 
         assertEquals(90L, session.player().hp());
         assertEquals(1, session.player().mapId());
@@ -217,14 +221,17 @@ class MessageHandlerMapTest {
         drainMessages(session);
 
         handler.onMessage(new Message(MessageName.REQUEST_CHANGE_MAP));
+        ZoneTestHooks.drain(zoneFor(maps, 0, 0));
+        ZoneTestHooks.arrive(session.player());
         drainMessages(session);
-        maps.finishLoad(session);
-        drainMessages(session);
-        ZoneTestHooks.call(zoneFor(maps, 1, 0), () -> {
-            session.player().changeMap(1, 0, 20, 1008);
+        ZoneTestHooks.call(session.zone(), () -> {
+            session.player().changeMap(1, session.player().zoneId(), 20, 1008);
             return null;
         });
+        Zone mapOne = session.zone();
         handler.onMessage(new Message(MessageName.REQUEST_CHANGE_MAP));
+        ZoneTestHooks.drain(mapOne);
+        ZoneTestHooks.awaitTravel(session.player());
         Message mapInfo = drainMessages(session).getFirst();
 
         var reader = mapInfo.reader();
@@ -256,9 +263,12 @@ class MessageHandlerMapTest {
         Session second = inGameSession(services, TestPlayers.initial(2L, 2, "beta22", 0));
         MessageHandler firstHandler = newHandler(first, services, ClientConfig.defaults());
         MessageHandler secondHandler = newHandler(second, services, ClientConfig.defaults());
+        login(maps, first);
+        login(maps, second);
 
         firstHandler.onMessage(new Message(MessageName.FINISH_LOAD_MAP));
         secondHandler.onMessage(new Message(MessageName.FINISH_LOAD_MAP));
+        ZoneTestHooks.drain(second.zone());
         assertEquals(1, first.queuedMessages());
         assertEquals(1, second.queuedMessages());
         drainMessages(first);
@@ -300,13 +310,13 @@ class MessageHandlerMapTest {
     }
 
     @Test
-    void finishLoadMapIsAcceptedInGameWithoutConsumingViolationBudget() {
-        Session session = newSession(TestServices.auth());
-        session.bindPlayer(TestPlayers.initial(1L, 7, "alpha1", 0));
-        session.transition(SessionState.CONNECTED, SessionState.HANDSHAKE_DONE);
-        session.transition(SessionState.HANDSHAKE_DONE, SessionState.AUTHENTICATED);
-        session.transition(SessionState.AUTHENTICATED, SessionState.IN_GAME);
-        MessageHandler handler = newHandler(session, TestServices.auth());
+    void finishLoadMapIsAcceptedInGameWithoutConsumingViolationBudget() throws Exception {
+        GameplayServices maps = new GameplayServices(GameResources.unavailable());
+        SessionServices services = TestServices.serverServices(
+                TestServices.auth(), GameResources.unavailable(), maps);
+        Session session = inGameSession(services, TestPlayers.initial(1L, 7, "alpha1", 0));
+        MessageHandler handler = newHandler(session, services, ClientConfig.defaults());
+        login(maps, session);
 
         handler.onMessage(new Message(MessageName.FINISH_LOAD_MAP));
         handler.onMessage(new Message(MessageName.FINISH_LOAD_MAP));
@@ -332,7 +342,7 @@ class MessageHandlerMapTest {
     }
 
     @Test
-    void finishLoadMapClosesSessionWhenZoneIsFull() throws Exception {
+    void fullZoneStillAcceptsLoginSoNobodyIsStuck() throws Exception {
         Map<Integer, MapTemplate> mapCatalog = policyMaps("ONLINE", "ONLINE", 1, 1);
         GameResources resources = GameResources.fromFrameRoot(
                 Path.of("resources", "json"), mapCatalog, 2,
@@ -345,15 +355,12 @@ class MessageHandlerMapTest {
         Session second = inGameSession(services,
                 TestPlayers.initial(2L, 2, "beta22", 0));
 
-        newHandler(first, services, ClientConfig.defaults())
-                .onMessage(new Message(MessageName.FINISH_LOAD_MAP));
-        drainMessages(first);
-        newHandler(second, services, ClientConfig.defaults())
-                .onMessage(new Message(MessageName.FINISH_LOAD_MAP));
+        assertTrue(gameplay.finishLoad(first));
+        assertTrue(gameplay.finishLoad(second));
 
         assertEquals(SessionState.IN_GAME, first.state());
-        assertEquals(SessionState.CLOSED, second.state());
-        assertEquals(1, gameplay.memberCount(0, 0));
+        assertEquals(SessionState.IN_GAME, second.state());
+        assertEquals(2, gameplay.memberCount(0, 0));
     }
 
     @Test
@@ -373,9 +380,13 @@ class MessageHandlerMapTest {
         MessageHandler conflictingHandler = newHandler(
                 conflicting, services, ClientConfig.defaults());
 
+        login(gameplay, first);
         firstHandler.onMessage(new Message(MessageName.FINISH_LOAD_MAP));
+        ZoneTestHooks.drain(first.zone());
         drainMessages(first);
-        conflictingHandler.onMessage(new Message(MessageName.FINISH_LOAD_MAP));
+        gameplay.mapManager().enterGame(conflicting.player());
+        ZoneTestHooks.drain(gameplay.findZone(0, 0));
+        awaitClosed(conflicting);
 
         assertEquals(SessionState.IN_GAME, first.state());
         assertEquals(SessionState.CLOSED, conflicting.state());
@@ -482,6 +493,20 @@ class MessageHandlerMapTest {
         newHandler(session, auth).onMessage(moveMessage(1260, 648));
 
         assertEquals(SessionState.CLOSED, session.state());
+    }
+
+    /** Như đăng nhập xong: vào Zone, nhận MAP_INFO (đã bỏ khỏi hàng đợi), chưa tải xong map. */
+    private static void login(GameplayServices maps, Session session) throws Exception {
+        maps.mapManager().enterGame(session.player());
+        ZoneTestHooks.awaitTravel(session.player());
+        drainMessages(session);
+    }
+
+    private static void awaitClosed(Session session) throws InterruptedException {
+        long deadline = System.nanoTime() + Duration.ofSeconds(5).toNanos();
+        while (session.state() != SessionState.CLOSED && System.nanoTime() < deadline) {
+            Thread.sleep(5);
+        }
     }
 
     private static void awaitBlocked(Thread thread) throws InterruptedException {

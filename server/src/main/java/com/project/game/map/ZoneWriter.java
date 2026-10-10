@@ -1,5 +1,7 @@
 package com.project.game.map;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.CountDownLatch;
@@ -20,7 +22,10 @@ import java.util.logging.Logger;
  *         input đến → chạy input
  *     → FROZEN (thread kết thúc, input mới sẽ đánh thức)
  * </pre>
- * Nhịp kế tiếp tính từ lúc nhịp trước <b>kết thúc</b>: update chậm không bao giờ chạy nối
+ * Việc cần làm ngoài writer (ví dụ đóng Session bị kick) được gom bằng {@link #later} và chạy sau
+ * khi việc hiện tại xong: bên gọi {@code call} tự chạy, còn lại chạy trên một virtual thread mới.
+ *
+ * <p>Nhịp kế tiếp tính từ lúc nhịp trước <b>kết thúc</b>: update chậm không bao giờ chạy nối
  * đuôi nhau, input luôn có lượt chạy và nhịp trễ không bị dồn lại. Không giữ state gameplay.
  */
 final class ZoneWriter {
@@ -41,6 +46,8 @@ final class ZoneWriter {
     private long nextUpdateNanos;
     // startUpdate đã chạy sau lần worker xét nhịp gần nhất: worker sắp nghỉ phải chạy lại.
     private boolean updateChanged;
+    // Việc phải chạy ngoài writer, gom trong lúc một việc đang chạy (chỉ worker đụng tới).
+    private final List<Runnable> later = new ArrayList<>();
 
     ZoneWriter(int mapId, int zoneId, int inputCapacity) {
         if (inputCapacity <= 0) {
@@ -54,6 +61,39 @@ final class ZoneWriter {
     /** Nhận diện đúng writer đang sở hữu tác vụ trên thread hiện tại. */
     boolean isCurrent() {
         return CURRENT_WRITER.get() == this;
+    }
+
+    /**
+     * Hẹn một việc chạy ngoài writer, sau khi việc hiện tại xong (ví dụ đóng Session).
+     * Gọi từ thread khác thì chạy luôn.
+     */
+    void later(Runnable task) {
+        Objects.requireNonNull(task, "task");
+        if (!isCurrent()) {
+            runLater(List.of(task));
+            return;
+        }
+        later.add(task);
+    }
+
+    private List<Runnable> takeLater() {
+        if (later.isEmpty()) {
+            return List.of();
+        }
+        List<Runnable> tasks = List.copyOf(later);
+        later.clear();
+        return tasks;
+    }
+
+    private void runLater(List<Runnable> tasks) {
+        for (Runnable task : tasks) {
+            try {
+                task.run();
+            } catch (RuntimeException exception) {
+                LOGGER.log(Level.WARNING,
+                        "Zone later task failed for map " + mapId + " zone " + zoneId, exception);
+            }
+        }
     }
 
     /** Entry point bên ngoài không được chờ từ bất kỳ Zone writer nào. */
@@ -136,7 +176,7 @@ final class ZoneWriter {
             return action.get();
         }
 
-        Call<T> call = new Call<>(action, mapId, zoneId);
+        Call<T> call = new Call<>(action);
         if (required) {
             boolean interruptedWhileAdmitting = submitRequired(call);
             return call.await(interruptedWhileAdmitting);
@@ -223,6 +263,13 @@ final class ZoneWriter {
                                 Level.WARNING,
                                 "Zone runtime action failed for map " + mapId + " zone " + zoneId,
                                 exception);
+                    } finally {
+                        // Việc kiểu call đã tự lấy phần của mình; còn lại giao cho thread khác.
+                        List<Runnable> tasks = takeLater();
+                        if (!tasks.isEmpty()) {
+                            Thread.ofVirtual().name("zone-later-" + mapId + "-" + zoneId)
+                                    .start(() -> runLater(tasks));
+                        }
                     }
                 }
             } finally {
@@ -312,17 +359,15 @@ final class ZoneWriter {
         return input;
     }
 
-    private static final class Call<T> implements Runnable {
+    private final class Call<T> implements Runnable {
         private final Supplier<T> action;
-        private final String rejectionMessage;
         private final CountDownLatch completed = new CountDownLatch(1);
         private T result;
         private Throwable failure;
+        private List<Runnable> laterTasks = List.of();
 
-        private Call(Supplier<T> action, int mapId, int zoneId) {
+        private Call(Supplier<T> action) {
             this.action = Objects.requireNonNull(action, "action");
-            this.rejectionMessage =
-                    "Zone runtime stopped for map " + mapId + " zone " + zoneId;
         }
 
         @Override
@@ -333,12 +378,14 @@ final class ZoneWriter {
                 failure = exception;
                 throw exception;
             } finally {
+                laterTasks = takeLater();
                 completed.countDown();
             }
         }
 
         private void cancel() {
-            failure = new RejectedExecutionException(rejectionMessage);
+            failure = new RejectedExecutionException(
+                    "Zone runtime stopped for map " + mapId + " zone " + zoneId);
             completed.countDown();
         }
 
@@ -354,6 +401,8 @@ final class ZoneWriter {
             if (interrupted) {
                 Thread.currentThread().interrupt();
             }
+            // Bên gọi tự chạy việc ngoài writer, kể cả khi hành động lỗi.
+            runLater(laterTasks);
 
             Throwable exception = failure;
             if (exception instanceof RuntimeException runtimeException) {

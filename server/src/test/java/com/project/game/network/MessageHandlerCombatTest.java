@@ -224,12 +224,12 @@ class MessageHandlerCombatTest {
             }
             ZoneTestHooks.drain(zone);
 
-            assertEquals(0L, zone.monsterSnapshots().getFirst().hp());
+            assertEquals(0L, ZoneTestHooks.monsterSnapshots(zone).getFirst().hp());
             assertEquals(11L, context.session().player().potential());
-            zone.update(sample + 9_000L, new Random(1L));
-            assertEquals(0L, zone.monsterSnapshots().getFirst().hp());
-            zone.update(sample + 9_001L, new Random(1L));
-            assertEquals(300L, zone.monsterSnapshots().getFirst().hp());
+            zone.tick(sample + 9_000L, new Random(1L));
+            assertEquals(0L, ZoneTestHooks.monsterSnapshots(zone).getFirst().hp());
+            zone.tick(sample + 9_001L, new Random(1L));
+            assertEquals(300L, ZoneTestHooks.monsterSnapshots(zone).getFirst().hp());
         } finally {
             releaseWriter.countDown();
             if (impact != null) {

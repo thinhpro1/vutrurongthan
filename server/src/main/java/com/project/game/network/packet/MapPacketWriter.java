@@ -5,7 +5,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.Gson;
 import com.project.game.map.MapData;
 import com.project.game.map.MapTemplate;
-import com.project.game.monster.Monster.Snapshot;
+import com.project.game.monster.Monster;
 import com.project.game.network.message.Message;
 import com.project.game.network.message.MessageName;
 import com.project.game.network.message.MessageWriter;
@@ -25,7 +25,7 @@ public final class MapPacketWriter {
             MapTemplate map,
             boolean includeTemplate,
             List<String> waypointTargetNames,
-            List<Snapshot> monsters) throws IOException {
+            List<Monster> monsters) throws IOException {
         Objects.requireNonNull(map, "map");
         Objects.requireNonNull(waypointTargetNames, "waypointTargetNames");
         Objects.requireNonNull(monsters, "monsters");
@@ -60,7 +60,7 @@ public final class MapPacketWriter {
 
         writer.writeByte(0)
                 .writeByte(monsters.size());
-        for (Snapshot monster : monsters) {
+        for (Monster monster : monsters) {
             Objects.requireNonNull(monster, "monster");
             writer.writeByte(monster.type())
                     .writeShort(monster.templateId())

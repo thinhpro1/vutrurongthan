@@ -1,10 +1,12 @@
 package com.project.game.map;
 
+import com.project.game.testsupport.MonsterSnapshot;
 import com.project.game.monster.Monster;
 import com.project.game.monster.MonsterManager;
 import com.project.game.resource.GameResources;
 import com.project.game.testsupport.MapTestSupport;
 import com.project.game.testsupport.MonsterTestSupport;
+import com.project.game.testsupport.TestMaps;
 import com.project.game.testsupport.TestPlayers;
 
 import com.project.game.testsupport.TestServices;
@@ -50,193 +52,90 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ZoneTest {
     @Test
-    void zoneOwnsPlayerEnterMoveAndLeaveFlow() {
+    void playerEntersMovesAndLeaves() {
         Zone zone = zone(1, 0, Integer.MAX_VALUE, List.of());
         Session session = session(TestPlayers.at(
                 TestPlayers.initial(1L, 7, "alpha1", 1), 1, 0, 100, 100));
+        Player player = session.player();
 
-        assertTrue(zone.enter(session.player()));
+        assertTrue(ZoneTestHooks.join(zone, player));
         assertSame(zone, session.zone());
-        assertTrue(zone.hasPlayer(session.player()));
+        assertTrue(zone.hasPlayer(player));
 
         assertTrue(ZoneTestHooks.move(zone, session, 1260, 640));
-        assertEquals(1260, session.player().x());
-        assertEquals(640, session.player().y());
+        assertEquals(1260, player.x());
+        assertEquals(640, player.y());
 
-        PlayerSaveData saved = zone.leave(session.player());
-        assertNotNull(saved);
-        assertEquals(1260, saved.x());
-        assertEquals(640, saved.y());
-        assertFalse(zone.hasPlayer(session.player()));
+        zone.call(() -> {
+            zone.leave(player);
+            return null;
+        });
+        assertFalse(zone.hasPlayer(player));
         assertNull(session.zone());
+        assertEquals(0, zone.playerCount());
     }
 
     @Test
-    void enterRejectsPlayerLocationMismatchBeforeMembershipMutation() {
+    void playerStillLoadingTheMapCannotAct() {
         Zone zone = zone(1, 0, Integer.MAX_VALUE, List.of());
-        Session session = session(TestPlayers.initial(1L, 7, "alpha1", 0));
-
-        assertFalse(zone.enter(session.player()));
-        assertFalse(zone.hasPlayer(session.player()));
-        assertNull(session.zone());
-        assertEquals(0, zone.reservedCount());
-
-        session.player().changeMap(1, 0, 1260, 640);
-
-        assertTrue(zone.enter(session.player()));
-        assertTrue(zone.hasPlayer(session.player()));
-        assertSame(zone, session.zone());
-    }
-
-    @Test
-    void highLevelPlayerFlowRejectsZoneWriterReentry() {
-        Zone zone = zone(1, 0, Integer.MAX_VALUE, List.of());
-        Session joined = session(TestPlayers.at(
+        Session session = session(TestPlayers.at(
                 TestPlayers.initial(1L, 7, "alpha1", 1), 1, 0, 100, 100));
-        Session other = session(TestPlayers.at(
-                TestPlayers.initial(2L, 8, "beta22", 1), 1, 0, 100, 100));
+        Player player = session.player();
+        zone.call(() -> {
+            zone.enter(player);
+            return null;
+        });
 
-        assertTrue(zone.enter(joined.player()));
-        int originalX = joined.player().x();
-        int originalY = joined.player().y();
+        assertTrue(player.isLoading());
+        assertFalse(ZoneTestHooks.move(zone, session, 1260, 640));
+
+        zone.finishLoadMap(player);
+        ZoneTestHooks.drain(zone);
+
+        assertFalse(player.isLoading());
+        assertTrue(ZoneTestHooks.move(zone, session, 1260, 640));
+    }
+
+    @Test
+    void postIgnoresPlayersThatAreNotInTheZone() {
+        Zone zone = zone(1, 0, Integer.MAX_VALUE, List.of());
+        Player member = TestPlayers.at(TestPlayers.initial(1L, 7, "alpha1", 1), 1, 0, 100, 100);
+        Player samePlayerId = TestPlayers.at(TestPlayers.initial(2L, 7, "alpha2", 1), 1, 0, 100, 100);
+        session(member);
+        session(samePlayerId);
+        assertTrue(ZoneTestHooks.join(zone, member));
+        AtomicBoolean ran = new AtomicBoolean();
+
+        assertTrue(zone.post(samePlayerId, () -> ran.set(true)));
+        ZoneTestHooks.drain(zone);
+
+        assertFalse(ran.get(), "a different Player object with the same id is not a member");
+        assertFalse(zone.hasPlayer(samePlayerId));
+        assertEquals(1, zone.playerCount());
+    }
+
+    @Test
+    void closedSessionDoesNotEnter() {
+        Zone zone = zone(1, 0, Integer.MAX_VALUE, List.of());
+        Session session = session(TestPlayers.at(
+                TestPlayers.initial(1L, 7, "alpha1", 1), 1, 0, 100, 100));
+        session.close();
+
+        assertFalse(ZoneTestHooks.join(zone, session.player()));
+        assertEquals(0, zone.playerCount());
+    }
+
+    @Test
+    void blockingZoneCallsAreRejectedFromInsideAZoneThread() {
+        Zone zone = zone(1, 0, Integer.MAX_VALUE, List.of());
+        Player player = TestPlayers.at(TestPlayers.initial(1L, 7, "alpha1", 1), 1, 0, 100, 100);
 
         zone.call(() -> {
-            assertThrows(IllegalStateException.class, () -> ZoneTestHooks.move(zone, joined, 1260, 640));
-            assertThrows(IllegalStateException.class, () -> zone.leave(joined.player()));
-            assertThrows(IllegalStateException.class, () -> zone.enter(other.player()));
+            assertThrows(IllegalStateException.class, () -> zone.tick(0L, new java.util.Random(1L)));
+            assertThrows(IllegalStateException.class, () -> zone.logout(player));
+            assertThrows(IllegalStateException.class, zone::stopUpdate);
             return null;
         });
-
-        assertSame(zone, joined.zone());
-        assertEquals(originalX, joined.player().x());
-        assertEquals(originalY, joined.player().y());
-        assertTrue(zone.hasPlayer(joined.player()));
-        assertFalse(zone.hasPlayer(other.player()));
-        assertNull(other.zone());
-    }
-
-    @Test
-    void highLevelReservationUsesZoneWriterAndPreservesSemantics() {
-        Zone zone = zone(0, 0, 2, List.of());
-        Session session = session(TestPlayers.initial(1L, 1, "alpha1", 0));
-
-        assertEquals(Zone.ReserveStatus.RESERVED, zone.reserve(session.player()));
-        assertEquals(1, zone.reservedCount());
-        assertEquals(Zone.ReserveStatus.ALREADY_RESERVED, zone.reserve(session.player()));
-
-        assertTrue(zone.cancel(session.player()));
-        assertFalse(zone.hasReservation(session.player()));
-        assertEquals(0, zone.reservedCount());
-    }
-
-    @Test
-    void highLevelReservationRejectsZoneWriterReentry() {
-        Zone zone = zone(0, 0, 2, List.of());
-        Session session = session(TestPlayers.initial(1L, 1, "alpha1", 0));
-
-        zone.call(() -> {
-            assertThrows(IllegalStateException.class, () -> zone.reserve(session.player()));
-            assertThrows(IllegalStateException.class, () -> zone.cancel(session.player()));
-            return null;
-        });
-
-        assertEquals(0, zone.reservedCount());
-        assertFalse(zone.hasReservation(session.player()));
-    }
-
-    @Test
-    void highLevelPlayerAndReservationFlowRejectsAnyZoneWriter() {
-        Zone writerZone = zone(0, 0, Integer.MAX_VALUE, List.of());
-        Zone targetZone = zone(0, 1, Integer.MAX_VALUE, List.of());
-        Session joined = session(TestPlayers.at(
-                TestPlayers.initial(1L, 1, "alpha1", 0), 0, 1, 100, 100));
-        Session other = session(TestPlayers.at(
-                TestPlayers.initial(2L, 2, "beta22", 0), 0, 1, 100, 100));
-
-        assertTrue(targetZone.enter(joined.player()));
-        int originalX = joined.player().x();
-        int originalY = joined.player().y();
-
-        writerZone.call(() -> {
-            assertThrows(IllegalStateException.class, () -> targetZone.enter(other.player()));
-            assertThrows(IllegalStateException.class, () -> ZoneTestHooks.move(targetZone, joined, 1260, 640));
-            assertThrows(IllegalStateException.class, () -> targetZone.leave(joined.player()));
-            assertThrows(IllegalStateException.class, () -> targetZone.reserve(other.player()));
-            assertThrows(IllegalStateException.class, () -> targetZone.cancel(other.player()));
-            return null;
-        });
-
-        assertSame(targetZone, joined.zone());
-        assertTrue(targetZone.hasPlayer(joined.player()));
-        assertEquals(originalX, joined.player().x());
-        assertEquals(originalY, joined.player().y());
-        assertFalse(targetZone.hasReservation(other.player()));
-        assertEquals(0, targetZone.reservedCount());
-        assertNull(other.zone());
-    }
-
-    @Test
-    void startsEmptyAndTracksBoundPlayer() {
-        Zone zone = zone(0, 0, Integer.MAX_VALUE, List.of());
-        Session session = session(TestPlayers.initial(1L, 7, "alpha1", 0));
-
-        assertEquals(0, zone.size());
-        assertEquals(Zone.JoinStatus.ADDED, zone.addPlayer(session.player()).status());
-        assertEquals(1, zone.size());
-        assertTrue(zone.hasPlayer(session.player()));
-        assertTrue(zone.removePlayer(session.player()));
-        assertFalse(zone.hasPlayer(session.player()));
-        assertEquals(0, zone.size());
-    }
-
-    @Test
-    void duplicateSameSessionIsIdempotent() {
-        Zone zone = zone(0, 0, Integer.MAX_VALUE, List.of());
-        Session session = session(TestPlayers.initial(1L, 7, "alpha1", 0));
-
-        assertEquals(Zone.JoinStatus.ADDED, zone.addPlayer(session.player()).status());
-        assertEquals(Zone.JoinStatus.ALREADY_PRESENT, zone.addPlayer(session.player()).status());
-        assertEquals(1, zone.size());
-    }
-
-    @Test
-    void differentSessionCannotReplaceSamePlayerId() {
-        Zone zone = zone(0, 0, Integer.MAX_VALUE, List.of());
-        Session first = session(TestPlayers.initial(1L, 7, "alpha1", 0));
-        Session second = session(TestPlayers.initial(2L, 7, "alpha2", 0));
-
-        assertEquals(Zone.JoinStatus.ADDED, zone.addPlayer(first.player()).status());
-        assertEquals(Zone.JoinStatus.PLAYER_ID_CONFLICT, zone.addPlayer(second.player()).status());
-        assertEquals(List.of(first.player()), zone.players());
-    }
-
-    @Test
-    void differentSessionWithSamePlayerIdIsAnIdentityConflict() {
-        Zone zone = zone(0, 0, 2, List.of());
-        Session first = session(TestPlayers.initial(1L, 7, "alpha1", 0));
-        Session second = session(TestPlayers.initial(2L, 7, "alpha2", 0));
-
-        assertEquals(Zone.JoinStatus.ADDED, zone.addPlayer(first.player()).status());
-        assertEquals(Zone.JoinStatus.PLAYER_ID_CONFLICT, zone.addPlayer(second.player()).status());
-        assertEquals(1, zone.size());
-        assertEquals(List.of(first.player()), zone.players());
-        assertTrue(zone.hasPlayer(first.player()));
-        assertFalse(zone.hasPlayer(second.player()));
-    }
-
-    @Test
-    void snapshotIsImmutable() {
-        Zone zone = zone(0, 0, Integer.MAX_VALUE, List.of());
-        zone.addPlayer(session(TestPlayers.initial(1L, 7, "alpha1", 0)).player());
-
-        List<Player> snapshot = zone.players();
-        assertThrows(UnsupportedOperationException.class, snapshot::clear);
-    }
-
-    @Test
-    void requiresBoundPlayer() {
-        Zone zone = zone(0, 0, Integer.MAX_VALUE, List.of());
-        assertThrows(NullPointerException.class, () -> zone.addPlayer(null));
     }
 
     @Test
@@ -244,93 +143,6 @@ class ZoneTest {
         assertThrows(
                 NoSuchMethodException.class,
                 () -> Zone.class.getConstructor(int.class, int.class));
-    }
-
-    @Test
-    void atomicallyReturnsExistingMembersWhileAddingNewMember() {
-        Zone zone = zone(0, 0, Integer.MAX_VALUE, List.of());
-        Session first = session(TestPlayers.initial(1L, 1, "alpha1", 0));
-        Session second = session(TestPlayers.initial(2L, 2, "beta22", 0));
-        zone.addPlayer(first.player());
-
-        Zone.JoinResult result = zone.addPlayer(second.player());
-
-        assertEquals(Zone.JoinStatus.ADDED, result.status());
-        assertEquals(List.of(first.player()), result.existing());
-        assertEquals(2, zone.size());
-        assertTrue(zone.players().containsAll(List.of(first.player(), second.player())));
-    }
-
-    @Test
-    void maxPlayerDistinguishesDuplicateFromFull() {
-        Zone zone = zone(0, 0, 1, List.of());
-        Session first = session(TestPlayers.initial(1L, 1, "alpha1", 0));
-        Session second = session(TestPlayers.initial(2L, 2, "beta22", 0));
-
-        assertEquals(Zone.JoinStatus.ADDED, zone.addPlayer(first.player()).status());
-        assertEquals(Zone.JoinStatus.ALREADY_PRESENT, zone.addPlayer(first.player()).status());
-        assertEquals(Zone.JoinStatus.FULL, zone.addPlayer(second.player()).status());
-        assertEquals(1, zone.size());
-        assertEquals(1, zone.maxPlayer());
-    }
-
-    @Test
-    void reservedSlotCannotBeStolenBeforeFinishLoad() {
-        Zone zone = zone(0, 0, 1, List.of());
-        Session first = session(TestPlayers.initial(1L, 1, "alpha1", 0));
-        Session second = session(TestPlayers.initial(2L, 2, "beta22", 0));
-
-        assertEquals(Zone.ReserveStatus.RESERVED, zone.reservePlayer(first.player()));
-        assertEquals(1, zone.reservedCount());
-        assertEquals(Zone.ReserveStatus.FULL, zone.reservePlayer(second.player()));
-        assertEquals(0, zone.size());
-
-        assertEquals(Zone.JoinStatus.ADDED, zone.addPlayer(first.player()).status());
-        assertEquals(0, zone.reservedCount());
-        assertEquals(1, zone.size());
-        assertEquals(Zone.JoinStatus.ALREADY_PRESENT, zone.addPlayer(first.player()).status());
-    }
-
-    @Test
-    void reservationIsIdempotentAndCancelOnlyRemovesItsSession() {
-        Zone zone = zone(0, 0, 2, List.of());
-        Session first = session(TestPlayers.initial(1L, 1, "alpha1", 0));
-        Session second = session(TestPlayers.initial(2L, 2, "beta22", 0));
-
-        assertEquals(Zone.ReserveStatus.RESERVED, zone.reservePlayer(first.player()));
-        assertEquals(Zone.ReserveStatus.ALREADY_RESERVED, zone.reservePlayer(first.player()));
-        assertFalse(zone.cancelReservation(second.player()));
-        assertTrue(zone.hasReservation(first.player()));
-        assertTrue(zone.cancelReservation(first.player()));
-        assertFalse(zone.cancelReservation(first.player()));
-        assertFalse(zone.hasReservation(first.player()));
-        assertEquals(0, zone.reservedCount());
-    }
-
-    @Test
-    void concurrentAdmissionNeverExceedsMaxPlayer() throws Exception {
-        Zone zone = zone(0, 0, 1, List.of());
-        Session first = session(TestPlayers.initial(1L, 1, "alpha1", 0));
-        Session second = session(TestPlayers.initial(2L, 2, "beta22", 0));
-        CyclicBarrier start = new CyclicBarrier(3);
-        AtomicInteger admitted = new AtomicInteger();
-        AtomicReference<Throwable> failure = new AtomicReference<>();
-
-        Thread firstJoin = Thread.ofVirtual().start(() -> admitAtBarrier(
-                start, zone, first, admitted, failure));
-        Thread secondJoin = Thread.ofVirtual().start(() -> admitAtBarrier(
-                start, zone, second, admitted, failure));
-
-        start.await();
-        firstJoin.join();
-        secondJoin.join();
-
-        if (failure.get() != null) {
-            throw new AssertionError("concurrent admission failed", failure.get());
-        }
-        assertEquals(1, admitted.get());
-        assertEquals(1, zone.size());
-        assertEquals(1, zone.maxPlayer());
     }
 
     @Test
@@ -349,8 +161,6 @@ class ZoneTest {
                 Zone.class.getDeclaredMethod("stopRuntime").getModifiers()));
         assertFalse(Modifier.isPublic(
                 Zone.class.getDeclaredMethod("call", Supplier.class).getModifiers()));
-        assertFalse(Modifier.isPublic(
-                Zone.class.getDeclaredMethod("tryCall", Supplier.class).getModifiers()));
         assertFalse(Modifier.isPublic(
                 Zone.class.getDeclaredMethod("submit", Runnable.class).getModifiers()));
     }
@@ -774,12 +584,12 @@ class ZoneTest {
         }));
         assertTrue(damaged.await(5, TimeUnit.SECONDS));
         awaitRuntimeState(zone, ZoneWriter.State.FROZEN);
-        assertEquals(290, monster.snapshot().hp());
+        assertEquals(290, MonsterSnapshot.of(monster).hp());
 
         assertTrue(zone.submit(woke::countDown));
         assertTrue(woke.await(5, TimeUnit.SECONDS));
         awaitRuntimeState(zone, ZoneWriter.State.FROZEN);
-        assertEquals(290, monster.snapshot().hp());
+        assertEquals(290, MonsterSnapshot.of(monster).hp());
     }
 
     @Test
@@ -873,7 +683,7 @@ class ZoneTest {
     }
 
     private static Zone zone(int mapId, int zoneId, int maxPlayer, List<Monster> monsters) {
-        return new Zone(mapId, zoneId, maxPlayer, monsters, area());
+        return new Zone(TestMaps.emptyMap(mapId, maxPlayer), zoneId, monsters, area());
     }
 
     private static Zone zone(
@@ -882,7 +692,7 @@ class ZoneTest {
             int maxPlayer,
             List<Monster> monsters,
             int inputCapacity) {
-        return new Zone(mapId, zoneId, maxPlayer, monsters, inputCapacity, area());
+        return new Zone(TestMaps.emptyMap(mapId, maxPlayer), zoneId, monsters, inputCapacity, area());
     }
 
     private static AreaService area() {
@@ -924,22 +734,6 @@ class ZoneTest {
                 2,
                 MonsterTestSupport.canonicalRepository()));
         return factory.createForMap(1).getFirst();
-    }
-
-    private static void admitAtBarrier(
-            CyclicBarrier start,
-            Zone zone,
-            Session session,
-            AtomicInteger admitted,
-            AtomicReference<Throwable> failure) {
-        try {
-            start.await();
-            if (zone.addPlayer(session.player()).status() == Zone.JoinStatus.ADDED) {
-                admitted.incrementAndGet();
-            }
-        } catch (Throwable exception) {
-            failure.compareAndSet(null, exception);
-        }
     }
 
     private static Session session(Player player) {

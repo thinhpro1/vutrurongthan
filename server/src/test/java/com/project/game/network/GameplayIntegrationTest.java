@@ -357,7 +357,7 @@ class GameplayIntegrationTest {
                 ParsedMapInfo firstMap1 = first.readMapInfo();
                 assertEquals(1, firstMap1.mapId());
                 assertMap1MonsterShape(firstMap1.monsters());
-                assertEquals(0, maps.memberCount(1, 0));
+                assertEquals(1, maps.memberCount(1, 0)); // đã vào Zone, đang tải map
                 assertEquals(MessageName.REMOVE_PLAYER, second.readServerMessage().command());
                 first.finishLoadMap();
 
@@ -371,7 +371,7 @@ class GameplayIntegrationTest {
                 ParsedMapInfo secondMap1 = second.readMapInfo();
                 assertEquals(1, secondMap1.mapId());
                 assertMap1MonsterShape(secondMap1.monsters());
-                assertEquals(1, maps.memberCount(1, 0));
+                assertEquals(2, maps.memberCount(1, 0));
                 second.finishLoadMap();
                 assertAddPlayerId(first.readServerMessage(), second.playerInfo().id());
                 assertAddPlayerId(second.readServerMessage(), first.playerInfo().id());

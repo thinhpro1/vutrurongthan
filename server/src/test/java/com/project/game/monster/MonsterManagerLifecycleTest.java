@@ -150,7 +150,7 @@ class MonsterManagerLifecycleTest {
     private static Session joinHome(MapManager maps) {
         Session session = GameplayTestSupport.session(
                 TestPlayers.at(TestPlayers.initial(1L, 7, "alpha1", 0), 0, 0, 1250, 648));
-        assertTrue(maps.finishLoad(session));
+        assertTrue(com.project.game.map.ZoneTestHooks.joinGame(maps, session));
         return session;
     }
 

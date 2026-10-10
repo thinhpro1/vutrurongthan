@@ -1,7 +1,7 @@
 package com.project.game.monster;
 
 import com.project.game.map.Zone;
-import com.project.game.monster.Monster.Snapshot;
+import com.project.game.testsupport.MonsterSnapshot;
 import com.project.game.testsupport.GameplayServices;
 import org.junit.jupiter.api.Test;
 
@@ -18,10 +18,10 @@ class MonsterSnapshotTest {
     void snapshotsReadExistingPublicZonesWithoutJoiningAPlayer() {
         GameplayServices maps = mapsWithMonsters();
 
-        List<Snapshot> monsters = maps.monsterSnapshots(1, 0);
+        List<MonsterSnapshot> monsters = maps.monsterSnapshots(1, 0);
 
         assertEquals(List.of(101, 102, 103, 104, 105, 106),
-                monsters.stream().map(Snapshot::id).toList());
+                monsters.stream().map(MonsterSnapshot::id).toList());
         assertEquals(0, maps.memberCount(1, 0));
     }
 

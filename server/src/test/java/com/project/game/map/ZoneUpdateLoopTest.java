@@ -15,6 +15,7 @@ import com.project.game.testsupport.MapTestSupport;
 import com.project.game.testsupport.MonsterTestSupport;
 import com.project.game.testsupport.GameplayServices;
 import com.project.game.testsupport.MutableClock;
+import com.project.game.testsupport.TestMaps;
 import com.project.game.testsupport.TestPlayers;
 import org.junit.jupiter.api.Test;
 
@@ -78,15 +79,15 @@ class ZoneUpdateLoopTest {
     @Test
     void sessionKickedEarlierInAFailingUpdateIsStillClosed() throws Exception {
         long now = 1_000_000L;
-        Zone zone = new Zone(1, 0, Integer.MAX_VALUE,
+        Zone zone = new Zone(TestMaps.emptyMap(1, Integer.MAX_VALUE), 0,
                 new MonsterManager(GameResources.fromFrameRoot(
                         Path.of("resources", "json"), MapTestSupport.canonicalMaps(), 2,
                         MonsterTestSupport.canonicalRepository())).createForMap(1),
                 new AreaService(new PlayerPacketWriter(), new MonsterPacketWriter()));
         Session observer = GameplayTestSupport.session(playerAt(1, 975, 936));
         Session fighter = GameplayTestSupport.session(playerAt(2, 1348, 936));
-        assertTrue(zone.enter(observer.player()));
-        assertTrue(zone.enter(fighter.player()));
+        assertTrue(ZoneTestHooks.join(zone, observer.player()));
+        assertTrue(ZoneTestHooks.join(zone, fighter.player()));
 
         // Monster 101 chết và đến hạn hồi sinh; Monster 102 thù fighter nên sẽ chọn mục tiêu.
         for (int hit = 0; hit < 30; hit++) {

@@ -1,11 +1,12 @@
 package com.project.game.network.packet;
 
+import com.project.game.testsupport.TestZone;
+import com.project.game.monster.Monster;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.project.game.map.MapData;
 import com.project.game.map.MapTemplate;
 import com.project.game.map.Waypoint;
-import com.project.game.monster.Monster.Snapshot;
 import com.project.game.network.message.Message;
 import com.project.game.network.message.MessageName;
 import com.project.game.player.Player;
@@ -269,11 +270,7 @@ class MapPacketWriterTest {
         Player player = TestPlayers.initial(1L, 7, "alpha1", 0);
         player.changeMap(4, 0, 1, 2);
         List<String> names = waypoints.stream().map(ignored -> "target").toList();
-        List<Snapshot> monsters = new ArrayList<>();
-        for (int index = 0; index < 128; index++) {
-            monsters.add(new Snapshot(0, 1, index, 1, 0,
-                    1, 2, 3L, 2L, 0));
-        }
+        List<Monster> monsters = java.util.Collections.nCopies(128, new TestZone().monster(101));
 
         assertThrows(IOException.class, () ->
                 new MapPacketWriter().mapInfo(player.zoneId(), player.x(), player.y(), map, false, names, List.of()));

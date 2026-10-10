@@ -155,6 +155,9 @@ public final class Monster {
             if (player.isDead()) {
                 continue;
             }
+            if (player.isLoading()) {
+                continue; // đang tải map: chưa đánh
+            }
             players.add(player);
         }
         return players;
@@ -403,23 +406,24 @@ public final class Monster {
         return enemies.remove(playerId);
     }
 
-    public Snapshot snapshot() {
-        return new Snapshot(
-                type, template.id(), id, level, levelStatus, x, y, maxHp, hp, status);
+    // Dữ liệu gửi trong MAP_INFO
+    public int type() {
+        return type;
     }
 
-    /** Immutable copy of current state for MAP_INFO encoding. */
-    public record Snapshot(
-            int type,
-            int templateId,
-            int id,
-            int level,
-            int levelStatus,
-            int x,
-            int y,
-            long maxHp,
-            long hp,
-            int status
-    ) {
+    public int templateId() {
+        return template.id();
+    }
+
+    public int level() {
+        return level;
+    }
+
+    public long maxHp() {
+        return maxHp;
+    }
+
+    public int status() {
+        return status;
     }
 }

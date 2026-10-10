@@ -44,7 +44,7 @@ Dùng chung logic choáng/trói/DoT mà không bắt Monster kế thừa `Charac
 Giống `Zone.enter → setMapInfo` của src cũ; bytes không đổi nên Unity không phải sửa.
 
 **#13. Chuyển map = rời Zone nguồn rồi `post(enter)` sang Zone đích; bỏ cơ chế giữ chỗ.**
-Thay reserve/revalidate/commit + `Trip`. Zone đích đầy thì chọn Zone khác của cùng Map. Player đánh dấu `loading` tới `FINISH_LOAD_MAP` để Monster bỏ qua. Mọi kiểu đi lại (waypoint, về nhà, goBack, teleport) dùng chung `MapManager.travel`.
+Thay reserve/revalidate/commit + `Trip`. Sức chứa là mềm (xem #16). Player đánh dấu `loading` tới `FINISH_LOAD_MAP` để Monster bỏ qua. Mọi kiểu đi lại (waypoint, về nhà, goBack, teleport) dùng chung `MapManager.travel`.
 
 **#14. Dungeon theo kiểu `Expansion` của src cũ, có writer riêng.**
 Dungeon tự giữ các Map riêng, thời hạn, người tham gia. Trạng thái chung của nhiều Zone có writer riêng và chỉ nhận việc qua `post`, giữ đúng #1.
@@ -53,3 +53,9 @@ Dungeon tự giữ các Map riêng, thời hạn, người tham gia. Trạng th�
 Bộ tài liệu cũ (~9.700 dòng) dài gấp ~4 lần code gameplay, và có chỗ mâu thuẫn nhau (`01_SERVER_PLAN` mô tả `@Service MapService`, trong khi rule V2.2 cấm). AI làm theo nghi thức báo cáo thay vì viết code dễ đọc.
 Đã chuyển vào archive: `SERVER_RULES_V2.2.md`, `SERVER_RUNTIME_ARCHITECTURE_BASELINE.md`, `2026-10-04-server-refactor-review.md`, `01_SERVER_PLAN_V7_4.md`.
 Chưa xử lý: `03_IMPLEMENTATION_TEST_SCHEDULE_V5_4.md`, `04_NETWORK_IMPLEMENTATION_PLAN_V2_4.md`, `review/NETWORK_REVIEW_ACTION_PLAN_AFTER_0633E423.md`. Nếu mâu thuẫn với rule V3 thì rule thắng.
+
+**#16. Sức chứa Zone là mềm, chọn Zone như `findOrRandomZone(-1)` của src cũ.**
+Zone đầu tiên còn chỗ; tất cả đầy thì Zone ít người nhất. Không từ chối người chơi vì đầy: cơ chế giữ chỗ cũ có thể làm người chơi kẹt giữa hai map (đã thoát Zone nguồn nhưng không vào được đích).
+
+**#17. Checkpoint khi đổi map chạy ngoài writer, đúng thứ tự (`Session.saveLater`).**
+Mỗi Session có một hàng lưu riêng (một virtual thread). Writer chỉ chụp `PlayerSaveData` rồi đi tiếp; lần lưu cuối của `close()` chờ lần lưu đang chạy, lần lưu đến muộn sau khi đóng bị bỏ.

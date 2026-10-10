@@ -1,5 +1,6 @@
 package com.project.game.service;
 
+import com.project.game.map.ZoneTestHooks;
 import com.project.game.monster.Monster;
 import com.project.game.network.Session;
 import com.project.game.network.SessionState;
@@ -37,7 +38,7 @@ class AreaServiceTest {
         area.commands(leaving);
         area.commands(remaining);
 
-        area.zone().leave(leaving);
+        ZoneTestHooks.leave(area.zone(), leaving);
 
         assertEquals(List.of(MessageName.REMOVE_PLAYER), area.commands(remaining));
         assertEquals(List.of(), area.commands(leaving));

@@ -1,5 +1,7 @@
 package com.project.game.player;
 
+import com.project.game.map.MapManager;
+import com.project.game.map.Waypoint;
 import com.project.game.map.Zone;
 import com.project.game.monster.Monster;
 import com.project.game.network.Session;
@@ -43,7 +45,10 @@ public final class Player {
     // Runtime, không lưu DB. volatile vì Handler/MapManager đọc từ thread khác.
     private volatile Session session;
     private volatile Zone zone;
-    private Monster focus; // Monster đã chọn bằng useSkill, chờ attack
+    private volatile Zone travelingTo; // Zone đang đi tới (đã rời Zone cũ, chưa vào Zone mới)
+    private boolean loading;           // đã vào Zone nhưng client chưa tải xong map
+    private boolean wakeUpFromDie;     // gửi WAKE_UP_FROM_DIE sau MAP_INFO ở Zone mới
+    private Monster focus;             // Monster đã chọn bằng useSkill, chờ attack
 
     public static Player create(long accountId, String name, int gender) {
         return createWithId(0, accountId, name, gender);
@@ -186,9 +191,28 @@ public final class Player {
         return zone;
     }
 
-    /** Chỉ Zone gọi, trên writer của nó. */
+    /** Zone đang đi tới, null nếu không đi đâu. */
+    public Zone travelingTo() {
+        return travelingTo;
+    }
+
+    /** Chỉ Zone gọi: Player bắt đầu đi tới Zone này. */
+    public void startTravel(Zone destination) {
+        travelingTo = Objects.requireNonNull(destination, "destination");
+    }
+
+    /** Chỉ Zone gọi: chuyến đi tới Zone này kết thúc (đã vào, hoặc thoát game giữa đường). */
+    public void stopTravel(Zone destination) {
+        if (travelingTo == destination) {
+            travelingTo = null;
+        }
+    }
+
+    /** Chỉ Zone gọi, trên writer của nó: Player đã ở trong Zone, client đang tải map. */
     public void enterZone(Zone zone) {
         this.zone = Objects.requireNonNull(zone, "zone");
+        travelingTo = null;
+        loading = true;
         focus = null;
     }
 
@@ -202,6 +226,60 @@ public final class Player {
 
     public boolean isDead() {
         return hp <= 0;
+    }
+
+    public boolean isLoading() {
+        return loading;
+    }
+
+    /** FINISH_LOAD_MAP: client tải xong map, Player bắt đầu nhận lệnh. */
+    public void finishLoadMap() {
+        loading = false;
+    }
+
+    /** Mỗi nhịp của Zone. Chỗ thêm hồi HP/MP, hết hạn buff/effect sau này. */
+    public void update(long now) {
+    }
+
+    /** Sát thương một đòn đánh thường. Sửa công thức dame ở đây. */
+    public long damage() {
+        return currentStats.damage();
+    }
+
+    // ------------------------------------------------------------------
+    // Đi lại giữa các map
+    // ------------------------------------------------------------------
+
+    /** REQUEST_CHANGE_MAP: đứng trên waypoint thì sang map của waypoint đó. */
+    public void requestChangeMap() {
+        if (isDead()) {
+            return;
+        }
+        Waypoint waypoint = zone.map().findWaypoint(x, y);
+        if (waypoint == null) {
+            return;
+        }
+        MapManager maps = zone.map().manager();
+        maps.travel(this, waypoint.goMap(), waypoint.goX(), waypoint.goY());
+    }
+
+    /** RETURN_TOWN_FROM_DIE: đang chết thì hồi đầy máu và về nhà. */
+    public void returnTownFromDead() {
+        if (!isDead()) {
+            return;
+        }
+        hp = currentStats.maxHp();
+        mp = currentStats.maxMp();
+        wakeUpFromDie = true;
+        MapManager maps = zone.map().manager();
+        maps.travel(this, MapManager.HOME_MAP_ID, MapManager.HOME_X, MapManager.HOME_Y);
+    }
+
+    /** Zone gọi sau khi gửi MAP_INFO: có cần báo hồi sinh không (chỉ một lần). */
+    public boolean takeWakeUpFromDie() {
+        boolean pending = wakeUpFromDie;
+        wakeUpFromDie = false;
+        return pending;
     }
 
     public boolean move(int x, int y) {
@@ -264,7 +342,7 @@ public final class Player {
         if (!canTarget(monster)) {
             return false;
         }
-        long damage = currentStats.damage();
+        long damage = damage();
         if (damage <= 0L) {
             return false;
         }

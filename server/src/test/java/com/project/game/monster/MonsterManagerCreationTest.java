@@ -1,6 +1,7 @@
 package com.project.game.monster;
 
-import com.project.game.monster.Monster.Snapshot;
+import com.project.game.testsupport.TestMaps;
+import com.project.game.testsupport.MonsterSnapshot;
 import com.project.game.monster.MonsterTemplate.Spawn;
 import com.project.game.resource.GameResources;
 import com.project.game.persistence.monster.MonsterRepository;
@@ -38,15 +39,15 @@ class MonsterManagerCreationTest {
         List<Monster> map1 = manager.createForMap(1);
         assertEquals(6, map1.size());
 
-        List<Snapshot> snapshots =
-                map1.stream().map(Monster::snapshot).toList();
+        List<MonsterSnapshot> snapshots =
+                map1.stream().map(MonsterSnapshot::of).toList();
 
         assertEquals(
                 List.of(101, 102, 103, 104, 105, 106),
-                snapshots.stream().map(Snapshot::id).toList());
+                snapshots.stream().map(MonsterSnapshot::id).toList());
         assertEquals(
                 List.of(975, 1348, 1800, 2250, 2600, 2950),
-                snapshots.stream().map(Snapshot::x).toList());
+                snapshots.stream().map(MonsterSnapshot::x).toList());
         assertTrue(snapshots.stream().allMatch(monster ->
                 monster.type() == 0
                         && monster.templateId() == 1
@@ -72,8 +73,8 @@ class MonsterManagerCreationTest {
         List<Monster> second = manager.createForMap(1);
 
         assertEquals(
-                first.stream().map(Monster::snapshot).toList(),
-                second.stream().map(Monster::snapshot).toList());
+                first.stream().map(MonsterSnapshot::of).toList(),
+                second.stream().map(MonsterSnapshot::of).toList());
 
         for (int i = 0; i < first.size(); i++) {
             assertNotSame(first.get(i), second.get(i));
@@ -86,22 +87,20 @@ class MonsterManagerCreationTest {
         MonsterManager manager = new MonsterManager(resources);
         Spawn spawn = resources.monstersForMap(1).getFirst();
         Monster monster = manager.createForMap(1).getFirst();
-        Snapshot captured = monster.snapshot();
+        MonsterSnapshot captured = MonsterSnapshot.of(monster);
 
-        new com.project.game.map.Zone(1, 0, 10, java.util.List.of(monster),
-                new com.project.game.service.AreaService(
-                        new com.project.game.network.packet.PlayerPacketWriter(),
-                        new com.project.game.network.packet.MonsterPacketWriter()));
+        new com.project.game.map.Zone(TestMaps.emptyMap(1, 10), 0, java.util.List.of(monster),
+                TestMaps.area());
         monster.injure(TestPlayers.initial(7L, 7, "player7", 1), 500L, 1_000_000L);
 
         assertFalse(monster.isAlive());
-        assertEquals(0L, monster.snapshot().hp());
-        assertEquals(1, monster.snapshot().status());
+        assertEquals(0L, MonsterSnapshot.of(monster).hp());
+        assertEquals(1, MonsterSnapshot.of(monster).status());
         assertEquals(300L, captured.hp());
         assertEquals(0, captured.status());
         assertEquals(300L, spawn.hp());
         assertEquals(0, spawn.status());
-        assertEquals(captured, manager.createForMap(1).getFirst().snapshot());
+        assertEquals(captured, MonsterSnapshot.of(manager.createForMap(1).getFirst()));
     }
 
     @Test

@@ -1,67 +1,42 @@
 package com.project.game.network.handler;
 
-import com.project.game.map.MapManager;
-import com.project.game.map.MapTemplate;
-import com.project.game.map.Waypoint;
 import com.project.game.map.Zone;
-import com.project.game.monster.Monster.Snapshot;
 import com.project.game.network.Session;
-import com.project.game.network.SessionState;
 import com.project.game.network.message.Message;
 import com.project.game.network.message.MessageReader;
-import com.project.game.network.packet.MapPacketWriter;
-import com.project.game.network.packet.PlayerPacketWriter;
-import com.project.game.persistence.player.PlayerRepositoryException;
 import com.project.game.player.Player;
-import com.project.game.player.PlayerSaveData;
-import com.project.game.resource.GameResources;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.logging.Level;
-import java.util.logging.Logger;
+import java.util.function.Consumer;
 
-/** Xử lý hiện diện, di chuyển, chuyển Map, hồi sinh và packet MAP_INFO. */
+/** Đọc packet di chuyển / chuyển map / tải map xong rồi chuyển cho Player trên thread của Zone. */
 final class MapHandler {
-    private static final Logger LOGGER = Logger.getLogger(MapHandler.class.getName());
     private final Session session;
-    private final MapManager mapManager;
-    private final GameResources resources;
-    private final PlayerPacketWriter playerPackets = new PlayerPacketWriter();
-    private final MapPacketWriter mapPackets = new MapPacketWriter();
 
-    MapHandler(Session session, MapManager mapManager, GameResources resources) {
+    MapHandler(Session session) {
         this.session = session;
-        this.mapManager = mapManager;
-        this.resources = resources;
     }
 
     void handleFinishLoadMap(Message message) throws IOException {
         if (message.payload().length != 0) {
             throw new IOException("trailing FINISH_LOAD_MAP payload bytes");
         }
-        if (!mapManager.finishLoad(session)) {
-            throw new IOException("cannot join map zone");
+        Player player = session.player();
+        if (player == null) {
+            throw new IOException("FINISH_LOAD_MAP without bound player");
         }
+        Zone zone = player.zone();
+        if (zone == null) {
+            throw new IOException("FINISH_LOAD_MAP before MAP_INFO");
+        }
+        zone.finishLoadMap(player);
     }
 
     void handleReturnTownFromDie(Message message) throws IOException {
         if (message.payload().length != 0) {
             throw new IOException("trailing RETURN_TOWN_FROM_DIE payload bytes");
         }
-        MapManager.MapChange change = mapManager.returnHomeFromDeath(session);
-        if (change == null) {
-            return;
-        }
-
-        save(change.saveData());
-        sendMapInfo(change.saveData(), change.zoneId());
-        if (session.state() != SessionState.CLOSED) {
-            PlayerSaveData player = change.saveData();
-            session.send(playerPackets.wakeUpFromDie(
-                    player.id(), player.x(), player.y(), player.hp(), player.mp()));
-        }
+        post(player -> player.returnTownFromDead());
     }
 
     void handleUnsupportedWakeUpFromDie(Message message) throws IOException {
@@ -74,72 +49,29 @@ final class MapHandler {
         if (message.payload().length != 0) {
             throw new IOException("trailing REQUEST_CHANGE_MAP payload bytes");
         }
-        MapManager.MapChange change = mapManager.changeMap(session);
-        if (change == null) {
-            return;
-        }
-        save(change.saveData());
-        sendMapInfo(change.saveData(), change.zoneId());
+        post(player -> player.requestChangeMap());
     }
 
     void handlePlayerMove(Message message) throws IOException {
-        Player player = session.player();
-        if (player == null) {
-            throw new IOException("PLAYER_MOVE without bound player");
-        }
-
         MessageReader reader = message.reader();
         int x = reader.readShort();
         int y = reader.readShort();
         if (reader.remaining() != 0) {
             throw new IOException("trailing PLAYER_MOVE payload bytes");
         }
+        post(player -> player.move(x, y));
+    }
 
+    /** Xếp lệnh vào Zone của người chơi; đang đi giữa hai Zone thì bỏ lệnh. */
+    private void post(Consumer<Player> action) throws IOException {
+        Player player = session.player();
+        if (player == null) {
+            throw new IOException("map command without bound player");
+        }
         Zone zone = player.zone();
         if (zone == null) {
             return;
         }
-        zone.post(player, () -> player.move(x, y));
-    }
-
-    void sendMapInfo(Player player) throws IOException {
-        sendMapInfo(PlayerSaveData.capture(player), player.zoneId());
-    }
-
-    private void save(PlayerSaveData player) {
-        try {
-            session.savePlayer(player);
-        } catch (PlayerRepositoryException exception) {
-            LOGGER.log(Level.WARNING, "PLAYER transition save failed playerId=" + player.id(), exception);
-        }
-    }
-
-    private void sendMapInfo(PlayerSaveData player, int zoneId) throws IOException {
-        MapTemplate map = resources.map(player.mapId())
-                .orElseThrow(() -> new IOException(
-                        "map unavailable: " + player.mapId()));
-        boolean sendTemplate = !session.hasSentMapTemplate(map.id());
-        List<String> waypointTargetNames = new ArrayList<>(map.waypoints().size());
-        for (Waypoint waypoint : map.waypoints()) {
-            MapTemplate target = resources.map(waypoint.goMap())
-                    .orElseThrow(() -> new IOException(
-                            "waypoint target map unavailable: " + waypoint.goMap()));
-            waypointTargetNames.add(target.name());
-        }
-        List<Snapshot> monsters;
-        try {
-            Zone zone = mapManager.getMap(map.id()).findZone(zoneId);
-            if (zone == null) {
-                throw new IllegalArgumentException("unknown zone " + zoneId);
-            }
-            monsters = zone.monsterSnapshots();
-        } catch (IllegalArgumentException exception) {
-            throw new IOException("invalid map zone: " + map.id() + "/" + zoneId, exception);
-        }
-        Message packet = mapPackets.mapInfo(
-                zoneId, player.x(), player.y(), map, sendTemplate, waypointTargetNames, monsters);
-        if (session.send(packet) && sendTemplate) {
-            session.markMapTemplateSent(map.id());
-        }
+        zone.post(player, () -> action.accept(player));
     }
 }

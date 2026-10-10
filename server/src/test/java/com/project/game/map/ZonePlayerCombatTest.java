@@ -56,7 +56,7 @@ class ZonePlayerCombatTest {
     void deadPlayerCannotTargetOrAttackMonster() throws Exception {
         GameplayServices maps = mapsWithMonsters();
         Session dead = session(hp(player(1, 1, 0), 0), maps);
-        maps.mapManager().finishLoad(dead);
+        maps.finishLoad(dead);
         drain(dead);
 
         assertFalse(maps.canTargetMonster(dead, 101));
@@ -69,7 +69,7 @@ class ZonePlayerCombatTest {
     void postFinishAttackSendsAuthoritativeInjureToAttacker() throws Exception {
         GameplayServices maps = mapsWithMonsters();
         Session attacker = session(player(1, 1, 0), maps);
-        maps.mapManager().finishLoad(attacker);
+        maps.finishLoad(attacker);
         drain(attacker);
 
         assertTrue(maps.canTargetMonster(attacker, 101));
@@ -88,7 +88,7 @@ class ZonePlayerCombatTest {
     void nonKillingHitDoesNotAwardPotential() throws Exception {
         GameplayServices maps = mapsWithMonsters();
         Session attacker = session(player(1, 1, 0), maps);
-        maps.mapManager().finishLoad(attacker);
+        maps.finishLoad(attacker);
         drain(attacker);
 
         long powerBefore = attacker.player().power();
@@ -105,7 +105,7 @@ class ZonePlayerCombatTest {
     void killingHitAwardsConfiguredPotentialOnlyToKiller() throws Exception {
         GameplayServices maps = mapsWithMonsters();
         Session attacker = session(player(1, 1, 0), maps);
-        maps.mapManager().finishLoad(attacker);
+        maps.finishLoad(attacker);
         drain(attacker);
 
         long powerBefore = attacker.player().power();
@@ -135,7 +135,7 @@ class ZonePlayerCombatTest {
         nearMax.addPotential(Long.MAX_VALUE - 5L - nearMax.potential());
         Session attacker = session(nearMax, maps);
 
-        maps.mapManager().finishLoad(attacker);
+        maps.finishLoad(attacker);
         drain(attacker);
 
         killMonster(maps, attacker);
@@ -159,8 +159,8 @@ class ZonePlayerCombatTest {
         GameplayServices maps = mapsWithMonsters();
         Session killer = session(player(1, 1, 0), maps);
         Session observer = session(player(2, 1, 0), maps);
-        maps.mapManager().finishLoad(killer);
-        maps.mapManager().finishLoad(observer);
+        maps.finishLoad(killer);
+        maps.finishLoad(observer);
         drain(killer);
         drain(observer);
 
@@ -186,7 +186,7 @@ class ZonePlayerCombatTest {
     void deadMonsterCannotAwardDuplicatePotential() throws Exception {
         GameplayServices maps = mapsWithMonsters();
         Session attacker = session(player(1, 1, 0), maps);
-        maps.mapManager().finishLoad(attacker);
+        maps.finishLoad(attacker);
         drain(attacker);
 
         killMonster(maps, attacker);
@@ -204,7 +204,7 @@ class ZonePlayerCombatTest {
         MutableClock clock = new MutableClock(1_000_000L);
         GameplayServices maps = mapsWithMonsters(clock);
         Session attacker = session(player(1, 1, 0), maps);
-        maps.mapManager().finishLoad(attacker);
+        maps.finishLoad(attacker);
         drain(attacker);
 
         long before = attacker.player().potential();
@@ -229,7 +229,7 @@ class ZonePlayerCombatTest {
     void movementAndMapChangePreserveRewardedPotential() throws Exception {
         GameplayServices maps = mapsWithMonsters();
         Session attacker = session(player(1, 1, 0), maps);
-        maps.mapManager().finishLoad(attacker);
+        maps.finishLoad(attacker);
         drain(attacker);
 
         killMonster(maps, attacker);
@@ -240,7 +240,7 @@ class ZonePlayerCombatTest {
         assertEquals(rewarded, attacker.player().potential());
 
         assertTrue(maps.movePlayer(attacker, 0, 1008));
-        assertNotNull(maps.mapManager().changeMap(attacker));
+        assertTrue(maps.changeMap(attacker));
 
         assertEquals(rewarded, attacker.player().potential());
         assertEquals(rewarded, attacker.player().potential());
@@ -251,8 +251,8 @@ class ZonePlayerCombatTest {
         GameplayServices maps = mapsWithMonsters();
         Session attacker = session(player(1, 1, 0), maps);
         Session peer = session(player(2, 1, 0), maps);
-        maps.mapManager().finishLoad(attacker);
-        maps.mapManager().finishLoad(peer);
+        maps.finishLoad(attacker);
+        maps.finishLoad(peer);
         drain(attacker);
         drain(peer);
 
@@ -269,8 +269,8 @@ class ZonePlayerCombatTest {
         GameplayServices maps = mapsWithMonsters();
         Session attacker = session(player(1, 1, 0), maps);
         Session otherZone = session(player(2, 1, 1), maps);
-        maps.mapManager().finishLoad(attacker);
-        maps.mapManager().finishLoad(otherZone);
+        maps.finishLoad(attacker);
+        maps.finishLoad(otherZone);
         drain(attacker);
         drain(otherZone);
 
@@ -285,8 +285,8 @@ class ZonePlayerCombatTest {
         GameplayServices maps = mapsWithMonsters();
         Session first = session(player(1, 1, 0), maps);
         Session second = session(player(2, 1, 0), maps);
-        maps.mapManager().finishLoad(first);
-        maps.mapManager().finishLoad(second);
+        maps.finishLoad(first);
+        maps.finishLoad(second);
         drain(first);
         drain(second);
         for (int i = 0; i < 29; i++) {

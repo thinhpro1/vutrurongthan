@@ -1,8 +1,9 @@
 package com.project.game.map;
 
+import com.project.game.testsupport.TestMaps;
 import com.project.game.monster.Monster;
 import com.project.game.monster.MonsterManager;
-import com.project.game.monster.Monster.Snapshot;
+import com.project.game.testsupport.MonsterSnapshot;
 import com.project.game.network.ClientConfig;
 import com.project.game.network.Session;
 import com.project.game.network.SessionManager;
@@ -51,7 +52,7 @@ class ZoneMonsterCombatTest {
     void ownsOrderedMonsterSnapshotsAndDamageInvariant() throws Exception {
         Zone zone = map1Zone();
         Session attacker = session(playerAt(7, 975, 936));
-        assertTrue(zone.enter(attacker.player()));
+        assertTrue(ZoneTestHooks.join(zone, attacker.player()));
         drain(attacker);
 
         assertTrue(ZoneTestHooks.attackMonster(zone, attacker, 101, NOW));
@@ -59,8 +60,8 @@ class ZoneMonsterCombatTest {
         assertFalse(ZoneTestHooks.useSkill(zone, attacker, 99));
         assertFalse(ZoneTestHooks.attackMonster(zone, attacker, 99, NOW));
         assertEquals(List.of(101, 102, 103, 104, 105, 106),
-                zone.monsterSnapshots().stream().map(Snapshot::id).toList());
-        assertEquals(290L, zone.monsterSnapshots().getFirst().hp());
+                ZoneTestHooks.monsterSnapshots(zone).stream().map(MonsterSnapshot::id).toList());
+        assertEquals(290L, ZoneTestHooks.monsterSnapshots(zone).getFirst().hp());
         List<Message> messages = drain(attacker);
         assertEquals(List.of(MessageName.MONSTER_INJURE), commands(messages));
         MessageReader injury = messages.getFirst().reader();
@@ -76,12 +77,12 @@ class ZoneMonsterCombatTest {
         Zone zone = map1Zone();
         Session attacker = session(playerAt(7, 975, 936));
 
-        assertTrue(zone.enter(attacker.player()));
+        assertTrue(ZoneTestHooks.join(zone, attacker.player()));
         drain(attacker);
 
         assertTrue(ZoneTestHooks.useSkill(zone, attacker, 101));
         assertTrue(ZoneTestHooks.attackMonster(zone, attacker, 101, NOW));
-        assertEquals(290L, zone.monsterSnapshots().getFirst().hp());
+        assertEquals(290L, ZoneTestHooks.monsterSnapshots(zone).getFirst().hp());
         assertEquals(List.of(MessageName.MONSTER_INJURE), commands(drain(attacker)));
     }
 
@@ -89,33 +90,33 @@ class ZoneMonsterCombatTest {
     void damageCapturesCurrentMemberCountForRespawnDeadline() throws Exception {
         Zone zone = map1Zone();
         Session player = session(playerAt(1, 975, 936, 500));
-        assertTrue(zone.enter(player.player()));
+        assertTrue(ZoneTestHooks.join(zone, player.player()));
         drain(player);
 
         assertTrue(ZoneTestHooks.attackMonster(zone, player, 101, NOW));
-        assertEquals(0L, zone.monsterSnapshots().getFirst().hp());
+        assertEquals(0L, ZoneTestHooks.monsterSnapshots(zone).getFirst().hp());
         drain(player);
-        zone.update(NOW + 9_000, new Random(1L));
+        zone.tick(NOW + 9_000, new Random(1L));
         assertTrue(commands(drain(player)).stream()
                 .noneMatch(command -> command == MessageName.MONSTER_RESPAWN));
 
-        zone.update(NOW + 9_001, new Random(1L));
+        zone.tick(NOW + 9_001, new Random(1L));
         assertTrue(commands(drain(player)).contains(MessageName.MONSTER_RESPAWN));
-        assertEquals(300L, zone.monsterSnapshots().getFirst().hp());
-        assertEquals(0, zone.monsterSnapshots().getFirst().status());
+        assertEquals(300L, ZoneTestHooks.monsterSnapshots(zone).getFirst().hp());
+        assertEquals(0, ZoneTestHooks.monsterSnapshots(zone).getFirst().status());
     }
 
     @Test
     void zeroDamagePrepareAndImpactKeepExistingSemantics() throws Exception {
         Zone zone = map1Zone();
         Session attacker = session(playerAt(7, 975, 936, 0));
-        assertTrue(zone.enter(attacker.player()));
+        assertTrue(ZoneTestHooks.join(zone, attacker.player()));
         drain(attacker);
 
         assertTrue(ZoneTestHooks.useSkill(zone, attacker, 101));
         assertFalse(ZoneTestHooks.attackMonster(zone, attacker, 101, NOW));
 
-        assertEquals(300L, zone.monsterSnapshots().getFirst().hp());
+        assertEquals(300L, ZoneTestHooks.monsterSnapshots(zone).getFirst().hp());
         assertEquals(1L, attacker.player().potential());
         assertTrue(drain(attacker).isEmpty());
     }
@@ -124,7 +125,7 @@ class ZoneMonsterCombatTest {
     void combatRejectsStaleBacklinkAndDifferentSessionWithSamePlayerId() throws Exception {
         Zone zone = map1Zone();
         Session member = session(playerAt(7, 975, 936));
-        assertTrue(zone.enter(member.player()));
+        assertTrue(ZoneTestHooks.join(zone, member.player()));
         drain(member);
         Session staleBacklink = session(playerAt(8, 975, 936));
         Session samePlayerId = session(playerAt(7, 975, 936));
@@ -133,7 +134,7 @@ class ZoneMonsterCombatTest {
         samePlayerId.player().enterZone(zone);
 
         for (Session nonMember : List.of(staleBacklink, samePlayerId)) {
-            assertFalse(zone.hasPlayer(nonMember.player()));
+            assertFalse(ZoneTestHooks.players(zone).contains(nonMember.player()));
             assertFalse(ZoneTestHooks.useSkill(zone, nonMember, 101));
             assertFalse(ZoneTestHooks.attackMonster(zone, nonMember, 101, NOW));
             assertEquals(1L, nonMember.player().potential());
@@ -141,7 +142,7 @@ class ZoneMonsterCombatTest {
         }
 
         assertTrue(zone.hasPlayer(member.player()));
-        assertEquals(300L, zone.monsterSnapshots().getFirst().hp());
+        assertEquals(300L, ZoneTestHooks.monsterSnapshots(zone).getFirst().hp());
         assertEquals(1L, member.player().potential());
         assertTrue(drain(member).isEmpty());
     }
@@ -150,7 +151,7 @@ class ZoneMonsterCombatTest {
     void queuedAttackRevalidatesMembershipAfterDetach() throws Exception {
         Zone zone = map1Zone();
         Session attacker = session(playerAt(7, 975, 936));
-        assertTrue(zone.enter(attacker.player()));
+        assertTrue(ZoneTestHooks.join(zone, attacker.player()));
         drain(attacker);
         CountDownLatch writerStarted = new CountDownLatch(1);
         CountDownLatch releaseWriter = new CountDownLatch(1);
@@ -164,7 +165,8 @@ class ZoneMonsterCombatTest {
         AtomicBoolean attacked = new AtomicBoolean();
         Thread detach = Thread.ofVirtual().start(() -> {
             try {
-                detached.set(zone.leave(attacker.player()));
+                zone.logout(attacker.player());
+                detached.set(PlayerSaveData.capture(attacker.player()));
             } catch (Throwable exception) {
                 failure.compareAndSet(null, exception);
             }
@@ -191,7 +193,7 @@ class ZoneMonsterCombatTest {
             assertFalse(attacked.get());
             assertFalse(zone.hasPlayer(attacker.player()));
             assertNull(attacker.zone());
-            assertEquals(300L, zone.monsterSnapshots().getFirst().hp());
+            assertEquals(300L, ZoneTestHooks.monsterSnapshots(zone).getFirst().hp());
             assertEquals(1L, attacker.player().potential());
             assertTrue(drain(attacker).isEmpty());
         } finally {
@@ -211,10 +213,10 @@ class ZoneMonsterCombatTest {
 
     @Test
     void combatRejectsFullOrStoppedWriterWithoutDelayedMutation() throws Exception {
-        Zone zone = new Zone(1, 0, Integer.MAX_VALUE, monsters(), 1,
+        Zone zone = new Zone(TestMaps.emptyMap(1, Integer.MAX_VALUE), 0, monsters(), 1,
                 new AreaService(new PlayerPacketWriter(), new MonsterPacketWriter()));
         Session attacker = session(playerAt(7, 975, 936));
-        assertTrue(zone.enter(attacker.player()));
+        assertTrue(ZoneTestHooks.join(zone, attacker.player()));
         drain(attacker);
         CountDownLatch writerStarted = new CountDownLatch(1);
         CountDownLatch releaseWriter = new CountDownLatch(1);
@@ -232,14 +234,15 @@ class ZoneMonsterCombatTest {
             releaseWriter.countDown();
             assertTrue(queuedAction.await(5, TimeUnit.SECONDS));
             ZoneTestHooks.call(zone, () -> null);
-            assertEquals(300L, zone.monsterSnapshots().getFirst().hp());
+            assertEquals(300L, ZoneTestHooks.monsterSnapshots(zone).getFirst().hp());
             assertEquals(1L, attacker.player().potential());
             assertTrue(drain(attacker).isEmpty());
 
             zone.stopRuntime();
             assertFalse(ZoneTestHooks.useSkill(zone, attacker, 101));
             assertFalse(ZoneTestHooks.attackMonster(zone, attacker, 101, NOW));
-            assertEquals(300L, zone.monsterSnapshots().getFirst().hp());
+            // Zone đã dừng hẳn: đọc thẳng Monster là an toàn.
+            assertEquals(300L, zone.findMonster(101).hp());
             assertEquals(1L, attacker.player().potential());
             assertTrue(drain(attacker).isEmpty());
         } finally {
@@ -250,7 +253,7 @@ class ZoneMonsterCombatTest {
     @Test
     void monsterLifecycleWaitsForAdmissionWhenZoneInputQueueIsFull() throws Exception {
         List<Monster> monsters = monsters();
-        Zone zone = new Zone(1, 0, Integer.MAX_VALUE, monsters, 1,
+        Zone zone = new Zone(TestMaps.emptyMap(1, Integer.MAX_VALUE), 0, monsters, 1,
                 new AreaService(new PlayerPacketWriter(), new MonsterPacketWriter()));
         CountDownLatch priorStarted = new CountDownLatch(1);
         CountDownLatch releasePrior = new CountDownLatch(1);
@@ -268,7 +271,7 @@ class ZoneMonsterCombatTest {
         Thread lifecycle = Thread.ofVirtual().start(() -> {
             lifecycleStarted.countDown();
             try {
-                zone.update(NOW, new Random(1L));
+                zone.tick(NOW, new Random(1L));
             } finally {
                 lifecycleFinished.countDown();
             }
@@ -284,7 +287,7 @@ class ZoneMonsterCombatTest {
             lifecycle.join();
 
             assertTrue(queuedAction.getCount() == 0);
-            assertEquals(979, zone.monsterSnapshots().getFirst().x());
+            assertEquals(979, ZoneTestHooks.monsterSnapshots(zone).getFirst().x());
         } finally {
             releasePrior.countDown();
             lifecycle.join(5_000);
@@ -295,13 +298,13 @@ class ZoneMonsterCombatTest {
     void lifecycleUsesOnlyExactLiveZoneMembersAsMonsterTargets() throws Exception {
         Zone zone = map1Zone();
         Session target = session(playerAt(7, 975, 936));
-        assertTrue(zone.enter(target.player()));
+        assertTrue(ZoneTestHooks.join(zone, target.player()));
         drain(target);
         assertTrue(ZoneTestHooks.attackMonster(zone, target, 101, NOW));
         drain(target);
         target.transition(SessionState.CONNECTED, SessionState.CLOSED);
 
-        zone.update(NOW + 1, new Random(1L));
+        zone.tick(NOW + 1, new Random(1L));
 
         assertFalse(commands(drain(target)).contains(MessageName.MONSTER_ATTACK));
     }
@@ -313,7 +316,7 @@ class ZoneMonsterCombatTest {
         Player player = playerAt(7, 975, 936);
         player.injure(190);
         Session victim = session(player);
-        assertTrue(zone.enter(victim.player()));
+        assertTrue(ZoneTestHooks.join(zone, victim.player()));
         drain(victim);
         ZoneTestHooks.call(zone, () -> {
             monsters.get(0).injure(player, 10, NOW);
@@ -322,7 +325,7 @@ class ZoneMonsterCombatTest {
         });
         drain(victim);
 
-        zone.update(NOW + 1, new Random(1L));
+        zone.tick(NOW + 1, new Random(1L));
 
         assertEquals(0L, player.hp());
         assertTrue(monsters.stream().noneMatch(monster -> monster.hasEnemy(player.id())));
@@ -342,7 +345,7 @@ class ZoneMonsterCombatTest {
         Zone zone = zone(1, 0, Integer.MAX_VALUE, List.of());
         Session first = session(playerAt(7, 975, 936));
         Session samePlayerId = session(playerAt(7, 975, 936));
-        assertTrue(zone.enter(first.player()));
+        assertTrue(ZoneTestHooks.join(zone, first.player()));
 
         assertTrue(zone.hasPlayer(first.player()));
         assertFalse(zone.hasPlayer(samePlayerId.player()));
@@ -361,7 +364,7 @@ class ZoneMonsterCombatTest {
     }
 
     private static Zone zone(int mapId, int zoneId, int maxPlayer, List<Monster> monsters) {
-        return new Zone(mapId, zoneId, maxPlayer, monsters,
+        return new Zone(TestMaps.emptyMap(mapId, maxPlayer), zoneId, monsters,
                 new AreaService(new PlayerPacketWriter(), new MonsterPacketWriter()));
     }
 
@@ -392,8 +395,8 @@ class ZoneMonsterCombatTest {
         });
         Session playerA = session(playerAt(7, 975, 936, 60));
         Session playerB = session(playerAt(8, 975, 936, 70));
-        assertTrue(zone.enter(playerA.player()));
-        assertTrue(zone.enter(playerB.player()));
+        assertTrue(ZoneTestHooks.join(zone, playerA.player()));
+        assertTrue(ZoneTestHooks.join(zone, playerB.player()));
         drain(playerA);
         drain(playerB);
         Session first = aFirst ? playerA : playerB;
@@ -425,7 +428,7 @@ class ZoneMonsterCombatTest {
             assertTrue(secondAttacked.get());
             assertEquals(aFirst ? 1L : 11L, playerA.player().potential());
             assertEquals(aFirst ? 11L : 1L, playerB.player().potential());
-            assertEquals(0L, zone.monsterSnapshots().getFirst().hp());
+            assertEquals(0L, ZoneTestHooks.monsterSnapshots(zone).getFirst().hp());
             assertEquals(List.of(MessageName.MONSTER_INJURE, MessageName.MONSTER_START_DIE),
                     commands(drain(first)));
             assertEquals(List.of(MessageName.MONSTER_INJURE, MessageName.MONSTER_START_DIE,

@@ -1,6 +1,6 @@
 package com.project.game.monster;
 
-import com.project.game.monster.Monster.Snapshot;
+import com.project.game.testsupport.MonsterSnapshot;
 import com.project.game.player.Player;
 import com.project.game.testsupport.TestPlayers;
 import com.project.game.testsupport.TestZone;
@@ -36,7 +36,7 @@ class MonsterTest {
         assertTrue(monster.isAlive());
         assertEquals(290L, monster.hp());
         assertEquals(List.of(7), monster.enemyPlayerIds());
-        assertEquals(290L, monster.snapshot().hp());
+        assertEquals(290L, MonsterSnapshot.of(monster).hp());
     }
 
     @Test
@@ -83,12 +83,12 @@ class MonsterTest {
     @Test
     void rejectsRespawnDeadlineOverflowWithoutChangingState() {
         monster.injure(attacker(7), 10, NOW);
-        Snapshot before = monster.snapshot();
+        MonsterSnapshot before = MonsterSnapshot.of(monster);
 
         assertThrows(ArithmeticException.class,
                 () -> monster.injure(attacker(8), 500, Long.MAX_VALUE - 10));
 
-        assertEquals(before, monster.snapshot());
+        assertEquals(before, MonsterSnapshot.of(monster));
         assertEquals(List.of(7), monster.enemyPlayerIds());
     }
 
@@ -103,8 +103,8 @@ class MonsterTest {
         monster.update(NOW + 10_002, new Random(1L));
         assertTrue(monster.isAlive());
 
-        assertEquals(975, monster.snapshot().x());
-        assertEquals(936, monster.snapshot().y());
+        assertEquals(975, MonsterSnapshot.of(monster).x());
+        assertEquals(936, MonsterSnapshot.of(monster).y());
         assertEquals(1, monster.moveDir());
         assertTrue(monster.enemyPlayerIds().isEmpty());
         assertFalse(monster.updateAttack(List.of(), NOW + 10_003, new Random(1L)));

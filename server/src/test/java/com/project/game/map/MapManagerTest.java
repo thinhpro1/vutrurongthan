@@ -1,2072 +1,377 @@
 package com.project.game.map;
 
-import com.project.game.monster.*;
-import com.project.game.network.*;
-import com.project.game.network.message.*;
-import com.project.game.network.packet.*;
-import com.project.game.network.codec.*;
-import com.project.game.network.transport.*;
-import com.project.game.player.*;
-import com.project.game.account.*;
-import com.project.game.resource.*;
-import com.project.game.testsupport.MutableClock;
+import com.project.game.network.Session;
+import com.project.game.network.SessionState;
+import com.project.game.network.message.MessageName;
+import com.project.game.player.Player;
+import com.project.game.player.PlayerSaveData;
+import com.project.game.resource.GameResources;
 import com.project.game.testsupport.GameplayServices;
 import com.project.game.testsupport.MapTestSupport;
 import org.junit.jupiter.api.Test;
 
-import java.io.*;
-import java.lang.reflect.Field;
-import java.nio.file.Path;
-import java.time.Clock;
-import java.util.*;
-import java.util.concurrent.*;
-import java.util.concurrent.atomic.*;
-import java.util.random.RandomGenerator;
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
-import static com.project.game.testsupport.GameplayTestSupport.*;
-import com.project.game.testsupport.GameplayTestSupport.BlockingOfferQueue;
-import com.project.game.testsupport.GameplayTestSupport.BlockingRandom;
-import static org.junit.jupiter.api.Assertions.*;
+import static com.project.game.testsupport.GameplayTestSupport.at;
+import static com.project.game.testsupport.GameplayTestSupport.commands;
+import static com.project.game.testsupport.GameplayTestSupport.drain;
+import static com.project.game.testsupport.GameplayTestSupport.mapsWithoutMonsters;
+import static com.project.game.testsupport.GameplayTestSupport.player;
+import static com.project.game.testsupport.GameplayTestSupport.session;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/** Vào game, đi map, về nhà, thoát game — theo luồng giống joinMap / teleport của rongthan. */
 class MapManagerTest {
+    private static final int WAYPOINT_X = 4464;
+    private static final int WAYPOINT_Y = 936;
+
+    // ------------------------------------------------------------------
+    // Vào game
+    // ------------------------------------------------------------------
+
     @Test
-    void changeMapCapturesStableDestinationState() {
+    void loginSendsMapInfoAndOthersSeePlayerOnlyAfterLoading() throws Exception {
         GameplayServices maps = mapsWithoutMonsters();
-        Session source = session(at(player(1, 0, 0), 4464, 936), maps);
-        assertTrue(maps.mapManager().finishLoad(source));
-        Waypoint waypoint = maps.mapManager().getMap(0).findWaypoint(4464, 936);
+        Session first = session(player(1, 0, 0), maps);
+        maps.finishLoad(first);
+        drain(first);
+        Session second = session(player(2, 0, 0), maps);
+        Zone zone = maps.findZone(0, 0);
 
-        MapManager.MapChange change = maps.mapManager().changeMap(source);
+        maps.mapManager().enterGame(second.player());
+        ZoneTestHooks.drain(zone);
 
-        assertNotNull(change);
-        assertEquals(waypoint.goMap(), change.saveData().mapId());
-        assertEquals(waypoint.goX(), change.saveData().x());
-        assertEquals(waypoint.goY(), change.saveData().y());
-        assertNull(source.zone());
-        assertTrue(maps.mapManager().finishLoad(source));
-        assertTrue(ZoneTestHooks.move(source.zone(), source, waypoint.goX() + 1, waypoint.goY()));
-        assertEquals(waypoint.goX(), change.saveData().x());
-    }
+        assertEquals(List.of(MessageName.MAP_INFO), commands(drain(second)));
+        assertEquals(List.of(), drain(first), "người khác chưa thấy người đang tải map");
+        assertTrue(second.player().isLoading());
 
-    @Test
-    void sameZoneWaypointKeepsMembershipWithoutRemovingPresence() throws Exception {
-        MapTemplate template = MapTestSupport.canonicalMaps().get(0);
-        Waypoint waypoint = new Waypoint(1, 0, 4464, 936, 1250, 648, 2);
-        MapTemplate local = new MapTemplate(template.id(), template.name(), "ONLINE",
-                template.planet(), 1, 1, 2, template.dataId(), template.data(), List.of(waypoint));
-        GameplayServices maps = new GameplayServices(java.util.Map.of(0, local),
-                GameResources.unavailable());
-        Session moving = session(at(player(1, 0, 0), 4464, 936), maps);
-        Session observer = session(player(2, 0, 0), maps);
-        assertTrue(maps.mapManager().finishLoad(moving));
-        assertTrue(maps.mapManager().finishLoad(observer));
-        drain(moving);
-        drain(observer);
-        Zone source = moving.zone();
+        zone.finishLoadMap(second.player());
+        ZoneTestHooks.drain(zone);
 
-        MapManager.MapChange change = maps.mapManager().changeMap(moving);
-
-        assertNotNull(change);
-        assertSame(source, moving.zone());
-        assertTrue(source.hasPlayer(moving.player()));
-        assertEquals(2, source.size());
-        assertEquals(0, source.reservedCount());
-        assertEquals(1250, change.saveData().x());
-        assertEquals(648, change.saveData().y());
-        assertEquals(List.of(), drain(observer));
-        assertTrue(maps.mapManager().finishLoad(moving));
-        assertEquals(List.of(), drain(observer));
-    }
-
-    @Test
-    void finishLoadExchangesPresenceOnlyWithExistingSameZoneMembers() throws Exception {
-        GameplayServices maps = mapsWithoutMonsters();
-        Session first = session(player(1, 0, 0));
-        Session second = session(player(2, 0, 0));
-
-        maps.mapManager().finishLoad(first);
-        assertEquals(List.of(), drain(first));
-
-        maps.mapManager().finishLoad(second);
         assertEquals(List.of(MessageName.ADD_PLAYER), commands(drain(second)));
         assertEquals(List.of(MessageName.ADD_PLAYER), commands(drain(first)));
         assertEquals(2, maps.memberCount(0, 0));
     }
 
     @Test
-    void differentZonesDoNotExchangePresence() throws Exception {
-        GameplayServices maps = policyMaps("ONLINE", "ONLINE", 10, 10);
-        Session first = session(player(1, 0, 0));
-        Session second = session(player(2, 0, 1));
+    void repeatedFinishLoadDoesNotDuplicatePresence() throws Exception {
+        GameplayServices maps = mapsWithoutMonsters();
+        Session first = session(player(1, 0, 0), maps);
+        Session second = session(player(2, 0, 0), maps);
+        maps.finishLoad(first);
+        maps.finishLoad(second);
+        drain(first);
+        drain(second);
 
-        maps.mapManager().finishLoad(first);
-        maps.mapManager().finishLoad(second);
+        Zone zone = second.zone();
+        zone.finishLoadMap(second.player());
+        ZoneTestHooks.drain(zone);
 
         assertEquals(List.of(), drain(first));
         assertEquals(List.of(), drain(second));
+    }
+
+    @Test
+    void differentZonesDoNotSeeEachOther() throws Exception {
+        GameplayServices maps = twoZoneMaps(10, 10);
+        Session first = session(player(1, 0, 0), maps);
+        Session second = session(player(2, 0, 1), maps);
+
+        maps.finishLoad(first);
+        maps.finishLoad(second);
+
+        assertEquals(List.of(MessageName.MAP_INFO), commands(drain(first)));
+        assertEquals(List.of(MessageName.MAP_INFO), commands(drain(second)));
         assertEquals(1, maps.memberCount(0, 0));
         assertEquals(1, maps.memberCount(0, 1));
     }
 
     @Test
-    void finishLoadRejectsAbsentPublicZoneWithoutGrowingRuntimeState() throws Exception {
-        GameplayServices maps = publicZoneRequestMaps();
+    void loginIntoMissingZoneUsesAnExistingOneWithoutCreatingZones() {
+        GameplayServices maps = twoZoneMaps(10, 10);
+        Session session = session(player(1, 1, 9), maps);
 
-        for (int zoneId : List.of(1, 2, 5, 9)) {
-            Session invalid = session(player(zoneId, 1, zoneId), maps);
+        maps.finishLoad(session);
 
-            assertFalse(maps.mapManager().finishLoad(invalid));
-            assertNull(invalid.zone());
-            assertNull(maps.findZone(1, zoneId));
-            assertEquals(2, zoneRegistrySize(maps));
-        }
+        assertEquals(1, session.player().mapId());
+        assertNotNull(session.zone());
+        assertNull(maps.findZone(1, 9));
     }
 
     @Test
-    void movementIsSentToOtherMembersWithoutMoverAck() throws Exception {
+    void loginIntoClosedMapGoesHome() {
         GameplayServices maps = mapsWithoutMonsters();
-        Session first = session(player(1, 0, 0));
-        Session second = session(player(2, 0, 0));
-        maps.mapManager().finishLoad(first);
-        maps.mapManager().finishLoad(second);
-        drain(first);
-        drain(second);
+        Session session = session(player(1, 77, 0), maps);
 
-        assertTrue(maps.movePlayer(second, 1260, 640));
-        assertEquals(1260, second.player().x());
-        assertEquals(640, second.player().y());
+        maps.finishLoad(session);
 
-        List<Message> firstMessages = drain(first);
-        assertEquals(List.of(MessageName.PLAYER_MOVE), commands(firstMessages));
-        var reader = firstMessages.get(0).reader();
-        assertEquals(2, reader.readInt());
-        assertEquals(1260, reader.readShort());
-        assertEquals(640, reader.readShort());
-        assertEquals(0, reader.remaining());
-        assertEquals(List.of(), drain(second));
+        assertEquals(MapManager.HOME_MAP_ID, session.player().mapId());
+        assertSame(maps.findZone(0, 0), session.zone());
     }
 
-    @Test
-    void movePlayerSerializesWithMonsterHpMutation() throws Exception {
-        MutableClock clock = new MutableClock(1_000_000L);
-        BlockingRandom random = new BlockingRandom();
-        GameplayServices maps = mapsWithMonsters(clock, random);
-        Session player = session(player(1, 1, 0), maps);
-        maps.mapManager().finishLoad(player);
-        drain(player);
-
-        assertTrue(maps.attackMonster(player, 101));
-        assertEquals(List.of(MessageName.MONSTER_INJURE), commands(drain(player)));
-        clock.advanceMillis(1L);
-
-        Thread lifecycle = Thread.ofVirtual().start(
-                () -> maps.monsterManager().update(maps.mapManager()));
-        assertTrue(random.entered.await(5, TimeUnit.SECONDS));
-
-        AtomicBoolean moved = new AtomicBoolean();
-        CountDownLatch movementStarted = new CountDownLatch(1);
-        CountDownLatch movementFinished = new CountDownLatch(1);
-        Thread movement = Thread.ofVirtual().start(() ->
-                moveAndSignal(maps, player, 1260, 640, moved,
-                        movementStarted, movementFinished));
-        assertTrue(movementStarted.await(5, TimeUnit.SECONDS));
-        assertFalse(movementFinished.await(100, TimeUnit.MILLISECONDS));
-
-        random.release.countDown();
-        lifecycle.join();
-        movement.join();
-
-        assertTrue(moved.get());
-        assertEquals(90L, player.player().hp());
-        assertEquals(1260, player.player().x());
-        assertEquals(640, player.player().y());
-        List<Integer> lifecycleCommands = commands(drain(player));
-        assertEquals(1, lifecycleCommands.stream()
-                .filter(command -> command == MessageName.MONSTER_ATTACK)
-                .count());
-        assertEquals(5, lifecycleCommands.stream()
-                .filter(command -> command == MessageName.MONSTER_MOVE)
-                .count());
-    }
+    // ------------------------------------------------------------------
+    // Trong khu vực
+    // ------------------------------------------------------------------
 
     @Test
-    void serializedLifecycleThenMovementChasesLatestPlayerPosition() throws Exception {
-        MutableClock clock = new MutableClock(1_000_000L);
-        BlockingRandom random = new BlockingRandom();
-        GameplayServices maps = mapsWithMonsters(clock, random);
-        Session player = session(player(1, 1, 0), maps);
-        maps.mapManager().finishLoad(player);
-        drain(player);
-
-        assertTrue(maps.attackMonster(player, 101));
-        drain(player);
-        clock.advanceMillis(1L);
-
-        Thread lifecycle = Thread.ofVirtual().start(
-                () -> maps.monsterManager().update(maps.mapManager()));
-        assertTrue(random.entered.await(5, TimeUnit.SECONDS));
-
-        AtomicBoolean moved = new AtomicBoolean();
-        CountDownLatch movementStarted = new CountDownLatch(1);
-        CountDownLatch movementFinished = new CountDownLatch(1);
-        Thread movement = Thread.ofVirtual().start(() ->
-                moveAndSignal(maps, player, 2_100, 936, moved,
-                        movementStarted, movementFinished));
-        assertTrue(movementStarted.await(5, TimeUnit.SECONDS));
-        assertFalse(movementFinished.await(100, TimeUnit.MILLISECONDS));
-
-        random.release.countDown();
-        lifecycle.join();
-        movement.join();
-
-        assertTrue(moved.get());
-        assertEquals(2_100, player.player().x());
-        assertEquals(936, player.player().y());
-        withoutMonsterMoves(drain(player));
-
-        clock.advanceMillis(1L);
-        maps.monsterManager().update(maps.mapManager());
-        List<Message> monsterMoves = drain(player).stream()
-                .filter(message -> message.command() == MessageName.MONSTER_MOVE)
-                .filter(message -> monsterMoveId(message) == 101)
-                .toList();
-        assertEquals(1, monsterMoves.size());
-        assertMonsterMove(monsterMoves.getFirst(), 101, 979, 936, 1);
-    }
-
-    @Test
-    void movementWaitsForPriorZoneActionAndBroadcastsAfterItRuns() throws Exception {
+    void movementIsSentToOthersButNotToMover() throws Exception {
         GameplayServices maps = mapsWithoutMonsters();
         Session mover = session(player(1, 0, 0), maps);
         Session observer = session(player(2, 0, 0), maps);
-        maps.mapManager().finishLoad(mover);
-        maps.mapManager().finishLoad(observer);
+        maps.finishLoad(mover);
+        maps.finishLoad(observer);
         drain(mover);
         drain(observer);
-        Zone zone = maps.findZone(0, 0);
-        Player before = mover.player();
 
-        CountDownLatch priorStarted = new CountDownLatch(1);
-        CountDownLatch releasePrior = new CountDownLatch(1);
-        assertTrue(zone.submit(() -> {
-            priorStarted.countDown();
-            try {
-                if (!releasePrior.await(5, TimeUnit.SECONDS)) {
-                    throw new AssertionError("prior Zone action was not released");
-                }
-            } catch (InterruptedException exception) {
-                Thread.currentThread().interrupt();
-                throw new AssertionError(exception);
-            }
-        }));
-        assertTrue(priorStarted.await(5, TimeUnit.SECONDS));
+        assertTrue(maps.movePlayer(mover, 1260, 640));
 
-        AtomicBoolean moved = new AtomicBoolean();
-        CountDownLatch movementStarted = new CountDownLatch(1);
-        CountDownLatch movementFinished = new CountDownLatch(1);
-        Thread movement = Thread.ofVirtual().start(() ->
-                moveAndSignal(maps, mover, 1260, 640, moved,
-                        movementStarted, movementFinished));
-        assertTrue(movementStarted.await(5, TimeUnit.SECONDS));
-        assertFalse(movementFinished.await(100, TimeUnit.MILLISECONDS));
-        assertEquals(before.x(), mover.player().x());
-        assertEquals(before.y(), mover.player().y());
-
-        releasePrior.countDown();
-        assertTrue(movementFinished.await(5, TimeUnit.SECONDS));
-        movement.join();
-
-        assertTrue(moved.get());
-        assertEquals(1260, mover.player().x());
-        assertEquals(640, mover.player().y());
+        assertEquals(List.of(), drain(mover));
         assertEquals(List.of(MessageName.PLAYER_MOVE), commands(drain(observer)));
     }
 
     @Test
-    void movementAdmissionBlocksConcurrentChangeMapUntilMovementPacketIsAdmitted()
-            throws Exception {
+    void leavingNotifiesOthersOnce() throws Exception {
         GameplayServices maps = mapsWithoutMonsters();
-        Session mover = session(player(1, 0, 0), maps);
+        Session leaving = session(player(1, 0, 0), maps);
         Session observer = session(player(2, 0, 0), maps);
-        maps.mapManager().finishLoad(mover);
-        maps.mapManager().finishLoad(observer);
-        drain(mover);
+        maps.finishLoad(leaving);
+        maps.finishLoad(observer);
         drain(observer);
 
-        BlockingOfferQueue observerQueue = new BlockingOfferQueue();
-        replaceSendQueue(observer, observerQueue);
-        AtomicBoolean moved = new AtomicBoolean();
-        Thread movement = Thread.ofVirtual().start(() ->
-                moved.set(maps.movePlayer(mover, 4464, 936)));
-        assertTrue(observerQueue.offerEntered.await(5, TimeUnit.SECONDS));
+        assertNotNull(maps.mapManager().leave(leaving));
+        maps.mapManager().leave(leaving);
 
-        AtomicBoolean changed = new AtomicBoolean();
-        CountDownLatch changeStarted = new CountDownLatch(1);
-        CountDownLatch changeFinished = new CountDownLatch(1);
-        Thread changeMap = Thread.ofVirtual().start(() -> {
-            changeStarted.countDown();
-            try {
-                changed.set(maps.mapManager().changeMap(mover) != null);
-            } finally {
-                changeFinished.countDown();
-            }
-        });
-        assertTrue(changeStarted.await(5, TimeUnit.SECONDS));
-
-        assertFalse(changeFinished.await(100, TimeUnit.MILLISECONDS));
-        assertEquals(0, mover.player().mapId());
-
-        observerQueue.releaseOffer.countDown();
-        movement.join(5_000);
-        changeMap.join(5_000);
-
-        assertFalse(movement.isAlive());
-        assertFalse(changeMap.isAlive());
-        assertTrue(moved.get());
-        assertTrue(changed.get());
+        assertEquals(List.of(MessageName.REMOVE_PLAYER), commands(drain(observer)));
+        assertNull(leaving.zone());
         assertEquals(1, maps.memberCount(0, 0));
+    }
+
+    // ------------------------------------------------------------------
+    // Đi map
+    // ------------------------------------------------------------------
+
+    @Test
+    void waypointMovesPlayerToTheNextMap() throws Exception {
+        GameplayServices maps = mapsWithoutMonsters();
+        Session moving = session(at(player(1, 0, 0), WAYPOINT_X, WAYPOINT_Y), maps);
+        Session observer = session(player(2, 0, 0), maps);
+        maps.finishLoad(moving);
+        maps.finishLoad(observer);
+        drain(moving);
+        drain(observer);
+        Waypoint waypoint = maps.mapManager().getMap(0).findWaypoint(WAYPOINT_X, WAYPOINT_Y);
+
+        assertTrue(maps.changeMap(moving));
+
+        Player player = moving.player();
+        assertEquals(waypoint.goMap(), player.mapId());
+        assertEquals(waypoint.goX(), player.x());
+        assertEquals(waypoint.goY(), player.y());
+        assertSame(maps.findZone(waypoint.goMap(), player.zoneId()), moving.zone());
+        assertEquals(List.of(MessageName.MAP_INFO), commands(drain(moving)));
+        assertEquals(List.of(MessageName.REMOVE_PLAYER), commands(drain(observer)));
+        assertEquals(1, maps.memberCount(0, 0));
+    }
+
+    @Test
+    void notStandingOnWaypointDoesNothing() {
+        GameplayServices maps = mapsWithoutMonsters();
+        Session session = session(player(1, 0, 0), maps);
+        maps.finishLoad(session);
+        Zone zone = session.zone();
+
+        assertFalse(maps.changeMap(session));
+
+        assertSame(zone, session.zone());
+        assertEquals(0, session.player().mapId());
+    }
+
+    @Test
+    void deadPlayerCannotUseWaypoint() {
+        GameplayServices maps = mapsWithoutMonsters();
+        Session session = session(at(player(1, 0, 0), WAYPOINT_X, WAYPOINT_Y), maps);
+        maps.finishLoad(session);
+        session.player().injure(Long.MAX_VALUE);
+
+        assertFalse(maps.changeMap(session));
+        assertEquals(0, session.player().mapId());
+    }
+
+    @Test
+    void fullZoneSendsNewcomerToTheLeastCrowdedZone() {
+        GameplayServices maps = twoZoneMaps(10, 1);
+        Session occupant = session(player(1, 1, 0), maps);
+        maps.finishLoad(occupant);
+        Session moving = session(at(player(2, 0, 0), WAYPOINT_X, WAYPOINT_Y), maps);
+        maps.finishLoad(moving);
+
+        assertTrue(maps.changeMap(moving));
+
+        assertEquals(1, moving.player().mapId());
+        assertEquals(1, moving.player().zoneId());
+        assertSame(maps.findZone(1, 1), moving.zone());
+    }
+
+    @Test
+    void whenEveryZoneIsFullPlayerStillArrives() {
+        GameplayServices maps = twoZoneMaps(10, 1);
+        maps.finishLoad(session(player(1, 1, 0), maps));
+        maps.finishLoad(session(player(2, 1, 1), maps));
+        Session moving = session(at(player(3, 0, 0), WAYPOINT_X, WAYPOINT_Y), maps);
+        maps.finishLoad(moving);
+
+        assertTrue(maps.changeMap(moving));
+
+        assertEquals(1, moving.player().mapId());
+        assertNotNull(moving.zone(), "không để người chơi kẹt giữa đường khi map đầy");
+    }
+
+    // ------------------------------------------------------------------
+    // Chết và về nhà
+    // ------------------------------------------------------------------
+
+    @Test
+    void returnTownFromDeadRevivesAtHomeAndSendsMapInfoThenWakeUp() throws Exception {
+        GameplayServices maps = mapsWithoutMonsters();
+        Session victim = session(player(1, 1, 0), maps);
+        Session observer = session(player(2, 1, 0), maps);
+        maps.finishLoad(victim);
+        maps.finishLoad(observer);
+        drain(victim);
+        drain(observer);
+        victim.player().injure(Long.MAX_VALUE);
+
+        assertTrue(maps.returnHomeFromDeath(victim));
+
+        Player player = victim.player();
+        assertEquals(MapManager.HOME_MAP_ID, player.mapId());
+        assertEquals(MapManager.HOME_X, player.x());
+        assertEquals(MapManager.HOME_Y, player.y());
+        assertEquals(player.currentStats().maxHp(), player.hp());
+        assertEquals(List.of(MessageName.MAP_INFO, MessageName.WAKE_UP_FROM_DIE),
+                commands(drain(victim)));
+        assertEquals(List.of(MessageName.REMOVE_PLAYER), commands(drain(observer)));
+    }
+
+    @Test
+    void returnTownFromDeadIgnoresLivingPlayer() {
+        GameplayServices maps = mapsWithoutMonsters();
+        Session session = session(player(1, 1, 0), maps);
+        maps.finishLoad(session);
+
+        assertFalse(maps.returnHomeFromDeath(session));
+        assertEquals(1, session.player().mapId());
+    }
+
+    // ------------------------------------------------------------------
+    // Thoát game
+    // ------------------------------------------------------------------
+
+    @Test
+    void deadThenDisconnectIsSavedRevivedAtHome() {
+        GameplayServices maps = mapsWithoutMonsters();
+        Session session = session(player(1, 1, 0), maps);
+        maps.finishLoad(session);
+        session.player().injure(Long.MAX_VALUE);
+        session.transition(SessionState.IN_GAME, SessionState.CLOSED);
+
+        PlayerSaveData saved = maps.mapManager().leave(session);
+
+        assertEquals(MapManager.HOME_MAP_ID, saved.mapId());
+        assertEquals(MapManager.HOME_X, saved.x());
+        assertEquals(session.player().currentStats().maxHp(), saved.hp());
         assertEquals(0, maps.memberCount(1, 0));
-        assertEquals(1, mover.player().mapId());
-        assertEquals(List.of(MessageName.PLAYER_MOVE, MessageName.REMOVE_PLAYER),
-                commands(drain(observer)));
     }
 
     @Test
-    void finishLoadWaitsBehindPriorZoneAction() throws Exception {
+    void disconnectWhileTravellingNeverLeavesAClosedPlayerInTheDestination() throws Exception {
         GameplayServices maps = mapsWithoutMonsters();
-        Session joining = session(player(1, 0, 0), maps);
-        Zone zone = maps.findZone(0, 0);
-        CountDownLatch priorStarted = new CountDownLatch(1);
-        CountDownLatch releasePrior = new CountDownLatch(1);
-        assertTrue(zone.submit(() -> {
-            priorStarted.countDown();
-            awaitRelease(releasePrior);
+        Session moving = session(at(player(1, 0, 0), WAYPOINT_X, WAYPOINT_Y), maps);
+        maps.finishLoad(moving);
+        Zone destination = maps.findZone(1, 0);
+        CountDownLatch destinationBusy = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        assertTrue(ZoneTestHooks.submit(destination, () -> {
+            destinationBusy.countDown();
+            await(release);
         }));
-        assertTrue(priorStarted.await(5, TimeUnit.SECONDS));
+        assertTrue(destinationBusy.await(5, TimeUnit.SECONDS));
 
-        AtomicBoolean joined = new AtomicBoolean();
-        CountDownLatch joinFinished = new CountDownLatch(1);
-        Thread join = Thread.ofVirtual().start(() -> {
-            try {
-                joined.set(maps.mapManager().finishLoad(joining));
-            } finally {
-                joinFinished.countDown();
-            }
-        });
-
-        assertFalse(joinFinished.await(100, TimeUnit.MILLISECONDS));
-        assertEquals(0, maps.memberCount(0, 0));
-        releasePrior.countDown();
-        assertTrue(joinFinished.await(5, TimeUnit.SECONDS));
-        join.join();
-
-        assertTrue(joined.get());
-        assertEquals(1, maps.memberCount(0, 0));
-    }
-
-    @Test
-    void finishLoadAdmissionBlocksConcurrentChangeMapUntilPresenceIsAdmitted()
-            throws Exception {
-        GameplayServices maps = mapsWithoutMonsters();
-        Session source = session(at(player(1, 0, 0), 4464, 936), maps);
-        Session joining = session(player(2, 0, 0), maps);
-        assertTrue(maps.mapManager().finishLoad(source));
-        drain(source);
-
-        BlockingOfferQueue joiningQueue = new BlockingOfferQueue();
-        replaceSendQueue(joining, joiningQueue);
-        AtomicBoolean joined = new AtomicBoolean();
-        CountDownLatch joinFinished = new CountDownLatch(1);
-        Thread join = Thread.ofVirtual().start(() -> {
-            try {
-                joined.set(maps.mapManager().finishLoad(joining));
-            } finally {
-                joinFinished.countDown();
-            }
-        });
-        assertTrue(joiningQueue.offerEntered.await(5, TimeUnit.SECONDS));
-
-        AtomicBoolean changed = new AtomicBoolean();
-        CountDownLatch changeFinished = new CountDownLatch(1);
-        Thread changeMap = Thread.ofVirtual().start(() -> {
-            try {
-                changed.set(maps.mapManager().changeMap(source) != null);
-            } finally {
-                changeFinished.countDown();
-            }
-        });
-
-        assertFalse(changeFinished.await(100, TimeUnit.MILLISECONDS));
-        assertEquals(0, source.player().mapId());
-
-        joiningQueue.releaseOffer.countDown();
-        join.join(5_000);
-        changeMap.join(5_000);
-
-        assertFalse(join.isAlive());
-        assertFalse(changeMap.isAlive());
-        assertTrue(joined.get());
-        assertTrue(changed.get());
-        assertEquals(1, maps.memberCount(0, 0));
-        assertEquals(0, maps.memberCount(1, 0));
-        assertEquals(1, source.player().mapId());
-        assertEquals(List.of(MessageName.ADD_PLAYER), commands(drain(source)));
-        assertEquals(List.of(MessageName.ADD_PLAYER, MessageName.REMOVE_PLAYER),
-                commands(drain(joining)));
-    }
-
-    @Test
-    void leaveWaitsBehindPriorZoneAction() throws Exception {
-        GameplayServices maps = mapsWithoutMonsters();
-        Session leaving = session(player(1, 0, 0), maps);
-        assertTrue(maps.mapManager().finishLoad(leaving));
-        drain(leaving);
-        Zone zone = maps.findZone(0, 0);
-        CountDownLatch priorStarted = new CountDownLatch(1);
-        CountDownLatch releasePrior = new CountDownLatch(1);
-        assertTrue(zone.submit(() -> {
-            priorStarted.countDown();
-            awaitRelease(releasePrior);
+        // Rời map 0; việc "vào map 1" xếp hàng sau việc đang chặn Zone đích.
+        Zone source = moving.zone();
+        assertTrue(ZoneTestHooks.run(source, moving.player(), () -> {
+            moving.player().requestChangeMap();
+            return true;
         }));
-        assertTrue(priorStarted.await(5, TimeUnit.SECONDS));
+        assertNull(moving.zone());
+        assertSame(destination, moving.player().travelingTo());
 
-        CountDownLatch leaveFinished = new CountDownLatch(1);
-        Thread leave = Thread.ofVirtual().start(() -> {
-            try {
-                maps.mapManager().leave(leaving);
-            } finally {
-                leaveFinished.countDown();
-            }
-        });
-
-        assertFalse(leaveFinished.await(100, TimeUnit.MILLISECONDS));
-        assertTrue(zone.hasPlayer(leaving.player()));
-        releasePrior.countDown();
-        assertTrue(leaveFinished.await(5, TimeUnit.SECONDS));
-        leave.join();
-
-        assertFalse(zone.hasPlayer(leaving.player()));
-        assertEquals(0, maps.memberCount(0, 0));
-    }
-
-    @Test
-    void leaveNotifiesOtherMembersOnce() throws Exception {
-        GameplayServices maps = mapsWithoutMonsters();
-        Session first = session(player(1, 0, 0));
-        Session second = session(player(2, 0, 0));
-        maps.mapManager().finishLoad(first);
-        maps.mapManager().finishLoad(second);
-        drain(first);
-        drain(second);
-
-        maps.mapManager().leave(second);
-        List<Message> removed = drain(first);
-        assertEquals(List.of(MessageName.REMOVE_PLAYER), commands(removed));
-        var reader = removed.get(0).reader();
-        assertEquals(2, reader.readInt());
-        assertEquals(0, reader.remaining());
-        assertEquals(1, maps.memberCount(0, 0));
-
-        maps.mapManager().leave(second);
-        assertEquals(List.of(), drain(first));
-    }
-
-    @Test
-    void repeatedFinishLoadDoesNotDuplicateMembershipOrPresence() throws Exception {
-        GameplayServices maps = mapsWithoutMonsters();
-        Session first = session(player(1, 0, 0));
-
-        maps.mapManager().finishLoad(first);
-        maps.mapManager().finishLoad(first);
-
-        assertEquals(1, maps.memberCount(0, 0));
-        assertEquals(List.of(), drain(first));
-    }
-
-    @Test
-    void finishLoadRejectsDifferentSessionWithSamePlayerId() throws Exception {
-        GameplayServices maps = mapsWithoutMonsters();
-        Session first = session(player(7, 0, 0));
-        Session conflicting = session(player(7, 0, 0));
-
-        assertTrue(maps.mapManager().finishLoad(first));
-        drain(first);
-
-        assertFalse(maps.mapManager().finishLoad(conflicting));
-        assertEquals(1, maps.memberCount(0, 0));
-        Zone zone = zoneFor(maps, 0, 0);
-        assertTrue(zone.hasPlayer(first.player()));
-        assertFalse(zone.hasPlayer(conflicting.player()));
-        assertEquals(List.of(), drain(first));
-        assertEquals(List.of(), drain(conflicting));
-    }
-
-    @Test
-    void closedMembersAreNotSentPackets() throws Exception {
-        GameplayServices maps = mapsWithoutMonsters();
-        Session first = session(player(1, 0, 0));
-        Session second = session(player(2, 0, 0));
-        maps.mapManager().finishLoad(first);
-        maps.mapManager().finishLoad(second);
-        drain(first);
-        drain(second);
-        second.close();
-        drain(first);
-
-        assertTrue(maps.movePlayer(first, 1260, 640));
-        assertEquals(List.of(), drain(first));
-    }
-
-    @Test
-    void simultaneousSameZoneJoinsExchangeOnePresencePacketEach() throws Exception {
-        GameplayServices maps = mapsWithoutMonsters();
-        Session first = session(player(1, 0, 0));
-        Session second = session(player(2, 0, 0));
-        CyclicBarrier start = new CyclicBarrier(3);
         AtomicReference<Throwable> failure = new AtomicReference<>();
-        Thread firstJoin = Thread.ofVirtual().start(() -> joinAtBarrier(start, maps, first, failure));
-        Thread secondJoin = Thread.ofVirtual().start(() -> joinAtBarrier(start, maps, second, failure));
-
-        start.await();
-        firstJoin.join();
-        secondJoin.join();
-
-        if (failure.get() != null) {
-            throw new AssertionError("concurrent join failed", failure.get());
-        }
-        assertEquals(2, maps.memberCount(0, 0));
-        List<Message> firstMessages = drain(first);
-        List<Message> secondMessages = drain(second);
-        assertEquals(List.of(MessageName.ADD_PLAYER), commands(firstMessages));
-        assertEquals(List.of(MessageName.ADD_PLAYER), commands(secondMessages));
-        var firstReader = firstMessages.get(0).reader();
-        var secondReader = secondMessages.get(0).reader();
-        assertEquals(2, firstReader.readInt());
-        assertEquals(1, secondReader.readInt());
-    }
-
-    @Test
-    void simultaneousFinishLoadAdmissionEnforcesCapacityAtomically() throws Exception {
-        GameplayServices maps = policyMaps("ONLINE", "ONLINE", 1, 1);
-        Session first = session(player(1, 0, 0), maps);
-        Session second = session(player(2, 0, 0), maps);
-        CyclicBarrier start = new CyclicBarrier(3);
-        AtomicInteger successes = new AtomicInteger();
-        AtomicInteger failures = new AtomicInteger();
-        AtomicReference<Throwable> failure = new AtomicReference<>();
-
-        Thread firstJoin = Thread.ofVirtual().start(() -> finishLoadAtBarrier(
-                start, maps, first, successes, failures, failure));
-        Thread secondJoin = Thread.ofVirtual().start(() -> finishLoadAtBarrier(
-                start, maps, second, successes, failures, failure));
-
-        start.await();
-        firstJoin.join();
-        secondJoin.join();
-
-        if (failure.get() != null) {
-            throw new AssertionError("concurrent finish-load failed", failure.get());
-        }
-        assertEquals(1, successes.get());
-        assertEquals(1, failures.get());
-        assertEquals(1, maps.memberCount(0, 0));
-    }
-
-    @Test
-    void leaveLastThenRejoinUsesRetainedZoneAndRemainsDiscoverable() throws Exception {
-        GameplayServices maps = mapsWithoutMonsters();
-        Session first = session(player(1, 0, 0));
-        Session second = session(player(2, 0, 0));
-
-        maps.mapManager().finishLoad(first);
-        maps.mapManager().leave(first);
-        assertEquals(0, maps.memberCount(0, 0));
-
-        maps.mapManager().finishLoad(second);
-        assertEquals(1, maps.memberCount(0, 0));
-        maps.mapManager().finishLoad(first);
-
-        List<Message> firstMessages = drain(first);
-        List<Message> secondMessages = drain(second);
-        assertEquals(List.of(MessageName.ADD_PLAYER), commands(firstMessages));
-        assertEquals(List.of(MessageName.ADD_PLAYER), commands(secondMessages));
-        var firstReader = firstMessages.get(0).reader();
-        var secondReader = secondMessages.get(0).reader();
-        assertEquals(2, firstReader.readInt());
-        assertEquals(1, secondReader.readInt());
-        assertEquals(2, maps.memberCount(0, 0));
-    }
-
-    @Test
-    void disconnectCannotFinishWhileJoinPresenceEnqueueIsInProgress() throws Exception {
-        GameplayServices maps = mapsWithoutMonsters();
-        Session leaving = session(player(1, 0, 0), maps);
-        Session joining = session(player(2, 0, 0), maps);
-        maps.mapManager().finishLoad(leaving);
-        drain(leaving);
-
-        BlockingOfferQueue joiningQueue = new BlockingOfferQueue();
-        replaceSendQueue(joining, joiningQueue);
-        Thread join = Thread.ofVirtual().start(() -> maps.mapManager().finishLoad(joining));
-        assertTrue(joiningQueue.offerEntered.await(5, TimeUnit.SECONDS));
-
-        CountDownLatch disconnectFinished = new CountDownLatch(1);
-        Thread disconnect = Thread.ofVirtual().start(() -> {
-            leaving.close();
-            disconnectFinished.countDown();
-        });
-        assertFalse(disconnectFinished.await(100, TimeUnit.MILLISECONDS));
-
-        joiningQueue.releaseOffer.countDown();
-        join.join();
-        disconnect.join();
-        assertEquals(List.of(MessageName.ADD_PLAYER, MessageName.REMOVE_PLAYER),
-                commands(drain(joining)));
-    }
-
-    @Test
-    void finishLoadDoesNotReaddClosedSessionAfterQueuedLeave() throws Exception {
-        GameplayServices maps = mapsWithoutMonsters();
-        Session joining = session(player(1, 0, 0), maps);
-        Zone zone = maps.findZone(0, 0);
-        CountDownLatch priorStarted = new CountDownLatch(1);
-        CountDownLatch releasePrior = new CountDownLatch(1);
-        assertTrue(zone.submit(() -> {
-            priorStarted.countDown();
-            awaitRelease(releasePrior);
-        }));
-        assertTrue(priorStarted.await(5, TimeUnit.SECONDS));
-
-        CountDownLatch finishStarted = new CountDownLatch(1);
-        AtomicBoolean joined = new AtomicBoolean();
-        Thread finishLoad = Thread.ofVirtual().start(() -> {
-            finishStarted.countDown();
-            joined.set(maps.mapManager().finishLoad(joining));
-        });
-        assertTrue(finishStarted.await(5, TimeUnit.SECONDS));
-
-        CountDownLatch closeStarted = new CountDownLatch(1);
         Thread close = Thread.ofVirtual().start(() -> {
-            closeStarted.countDown();
-            joining.close();
-        });
-        assertTrue(closeStarted.await(5, TimeUnit.SECONDS));
-        awaitClosed(joining);
-
-        releasePrior.countDown();
-        finishLoad.join(1_000);
-        close.join(1_000);
-
-        assertFalse(finishLoad.isAlive());
-        assertFalse(close.isAlive());
-        assertFalse(joined.get());
-        assertEquals(0, maps.memberCount(0, 0));
-    }
-
-    @Test
-    void deadPlayerCannotMove() throws Exception {
-        GameplayServices maps = mapsWithoutMonsters();
-        Session dead = session(hp(player(1, 0, 0), 0), maps);
-        maps.mapManager().finishLoad(dead);
-        drain(dead);
-
-        int xBefore = dead.player().x();
-        int yBefore = dead.player().y();
-        assertFalse(maps.movePlayer(dead, xBefore + 100, yBefore + 100));
-        assertEquals(xBefore, dead.player().x());
-        assertEquals(yBefore, dead.player().y());
-        assertEquals(List.of(), drain(dead));
-    }
-
-    @Test
-    void closedNonMemberCannotMoveOrMutatePlayer() throws Exception {
-        GameplayServices maps = mapsWithoutMonsters();
-        Session closed = session(player(1, 0, 0), maps);
-        maps.mapManager().finishLoad(closed);
-        drain(closed);
-        closed.close();
-
-        Player before = closed.player();
-        assertFalse(maps.movePlayer(closed, before.x() + 100, before.y() + 100));
-        assertEquals(before, closed.player());
-        assertEquals(0, maps.memberCount(0, 0));
-    }
-
-    @Test
-    void deadPlayerCannotUseNormalMapChange() throws Exception {
-        GameplayServices maps = mapsWithoutMonsters();
-        Session dead = session(hp(player(1, 0, 0), 0), maps);
-        Session observer = session(player(2, 0, 0), maps);
-        maps.mapManager().finishLoad(dead);
-        maps.mapManager().finishLoad(observer);
-        drain(dead);
-        drain(observer);
-
-        Player before = dead.player();
-        assertNull(maps.mapManager().changeMap(dead));
-        assertEquals(before, dead.player());
-        assertEquals(2, maps.memberCount(0, 0));
-        assertEquals(List.of(), drain(observer));
-    }
-
-    @Test
-    void returnTownWaitsForPriorLethalDamageInTheSourceZone() throws Exception {
-        GameplayServices maps = mapsWithoutMonsters();
-        Session dead = session(player(1, 1, 0), maps);
-        assertTrue(maps.mapManager().finishLoad(dead));
-        Zone source = maps.findZone(1, 0);
-        CountDownLatch priorStarted = new CountDownLatch(1);
-        CountDownLatch releasePrior = new CountDownLatch(1);
-        assertTrue(source.submit(() -> {
-            priorStarted.countDown();
-            awaitRelease(releasePrior);
-            dead.player().injure(dead.player().hp());
-        }));
-        assertTrue(priorStarted.await(5, TimeUnit.SECONDS));
-
-        AtomicReference<MapManager.MapChange> change = new AtomicReference<>();
-        CountDownLatch finished = new CountDownLatch(1);
-        Thread returnTown = Thread.ofVirtual().start(() -> {
             try {
-                change.set(maps.mapManager().returnHomeFromDeath(dead));
-            } finally {
-                finished.countDown();
-            }
-        });
-
-        assertFalse(finished.await(100, TimeUnit.MILLISECONDS));
-        releasePrior.countDown();
-        assertTrue(finished.await(5, TimeUnit.SECONDS));
-        returnTown.join();
-
-        assertNotNull(change.get());
-        assertEquals(0, change.get().saveData().mapId());
-        assertTrue(change.get().saveData().hp() > 0);
-    }
-
-    @Test
-    void changeMapWaitsForPriorMovementBeforeFindingWaypoint() throws Exception {
-        GameplayServices maps = mapsWithoutMonsters();
-        Session mover = session(player(1, 0, 0), maps);
-        assertTrue(maps.mapManager().finishLoad(mover));
-        Zone source = maps.findZone(0, 0);
-        CountDownLatch priorStarted = new CountDownLatch(1);
-        CountDownLatch releasePrior = new CountDownLatch(1);
-        assertTrue(source.submit(() -> {
-            priorStarted.countDown();
-            awaitRelease(releasePrior);
-            mover.player().move(4464, 936);
-        }));
-        assertTrue(priorStarted.await(5, TimeUnit.SECONDS));
-
-        AtomicReference<MapManager.MapChange> change = new AtomicReference<>();
-        CountDownLatch finished = new CountDownLatch(1);
-        Thread changeMap = Thread.ofVirtual().start(() -> {
-            try {
-                change.set(maps.mapManager().changeMap(mover));
-            } finally {
-                finished.countDown();
-            }
-        });
-
-        assertFalse(finished.await(100, TimeUnit.MILLISECONDS));
-        releasePrior.countDown();
-        assertTrue(finished.await(5, TimeUnit.SECONDS));
-        changeMap.join();
-
-        assertNotNull(change.get());
-        assertEquals(1, change.get().saveData().mapId());
-        assertEquals(0, change.get().zoneId());
-    }
-
-    @Test
-    void returnTownFromDeathRemovesSourcePresenceAndRevivesAtDefaultSpawn() throws Exception {
-        GameplayServices maps = mapsWithMonsters();
-        Session dead = session(hp(player(1, 1, 0), 0), maps);
-        Session observer = session(player(2, 1, 0), maps);
-        maps.mapManager().finishLoad(dead);
-        maps.mapManager().finishLoad(observer);
-        drain(dead);
-        drain(observer);
-
-        Player revived = dead.player();
-        assertNotNull(maps.mapManager().returnHomeFromDeath(dead));
-
-        assertEquals(0, revived.mapId());
-        assertEquals(0, revived.zoneId());
-        assertEquals(1250, revived.x());
-        assertEquals(648, revived.y());
-        assertEquals(revived.currentStats().maxHp(), revived.hp());
-        assertEquals(revived.currentStats().maxMp(), revived.mp());
-        assertSame(revived, dead.player());
-        assertEquals(1, maps.memberCount(1, 0));
-        assertEquals(0, maps.memberCount(0, 0));
-
-        List<Message> observerMessages = drain(observer);
-        assertEquals(List.of(MessageName.REMOVE_PLAYER), commands(observerMessages));
-        var reader = observerMessages.getFirst().reader();
-        assertEquals(dead.player().id(), reader.readInt());
-        assertEquals(0, reader.remaining());
-    }
-
-    @Test
-    void returnTownFromDeathIgnoresLivingPlayer() {
-        GameplayServices maps = mapsWithoutMonsters();
-        Session alive = session(player(1, 0, 0), maps);
-        Player original = alive.player();
-
-        assertNull(maps.mapManager().returnHomeFromDeath(alive));
-        assertEquals(original, alive.player());
-    }
-
-    @Test
-    void sameZoneReturnTownCapturesStableStateWithoutRemovingPresence() throws Exception {
-        GameplayServices maps = mapsWithoutMonsters();
-        Session dead = session(hp(player(1, 0, 0), 0), maps);
-        Session observer = session(player(2, 0, 0), maps);
-        maps.mapManager().finishLoad(dead);
-        maps.mapManager().finishLoad(observer);
-        drain(dead);
-        drain(observer);
-
-        MapManager.MapChange change = maps.mapManager().returnHomeFromDeath(dead);
-        assertNotNull(change);
-        assertEquals(2, maps.memberCount(0, 0));
-        assertEquals(List.of(), drain(observer));
-
-        PlayerSaveData stable = change.saveData();
-        assertTrue(maps.movePlayer(dead, 1260, 640));
-        assertEquals(1260, dead.player().x());
-        assertEquals(stable.x(), change.saveData().x());
-        assertEquals(stable.y(), change.saveData().y());
-        assertEquals(List.of(MessageName.PLAYER_MOVE), commands(drain(observer)));
-    }
-
-    @Test
-    void duplicateReturnTownFromDeathIsHarmless() {
-        GameplayServices maps = mapsWithoutMonsters();
-        Session dead = session(hp(player(1, 1, 0), 0), maps);
-        maps.mapManager().finishLoad(dead);
-
-        Player once = dead.player();
-        assertNotNull(maps.mapManager().returnHomeFromDeath(dead));
-        assertNull(maps.mapManager().returnHomeFromDeath(dead));
-        assertSame(once, dead.player());
-    }
-
-    @Test
-    void returnTownFromDeathSerializesWithConcurrentJoin() throws Exception {
-        GameplayServices maps = mapsWithoutMonsters();
-        Session dead = session(hp(player(1, 1, 0), 0), maps);
-        Session observer = session(player(2, 1, 0), maps);
-        Session joining = session(player(3, 1, 0), maps);
-        maps.mapManager().finishLoad(dead);
-        maps.mapManager().finishLoad(observer);
-        drain(dead);
-        drain(observer);
-
-        BlockingOfferQueue observerQueue = new BlockingOfferQueue();
-        replaceSendQueue(observer, observerQueue);
-        Thread revive = Thread.ofVirtual().start(() -> maps.mapManager().returnHomeFromDeath(dead));
-        assertTrue(observerQueue.offerEntered.await(5, TimeUnit.SECONDS));
-
-        CountDownLatch joinFinished = new CountDownLatch(1);
-        AtomicBoolean joined = new AtomicBoolean();
-        Thread join = Thread.ofVirtual().start(() -> {
-            try {
-                joined.set(maps.mapManager().finishLoad(joining));
-            } finally {
-                joinFinished.countDown();
-            }
-        });
-        assertFalse(joinFinished.await(100, TimeUnit.MILLISECONDS));
-
-        observerQueue.releaseOffer.countDown();
-        revive.join();
-        assertTrue(joinFinished.await(5, TimeUnit.SECONDS));
-        join.join();
-
-        assertTrue(joined.get());
-        assertEquals(2, maps.memberCount(1, 0));
-        assertEquals(0, maps.memberCount(0, 0));
-        assertEquals(List.of(MessageName.REMOVE_PLAYER, MessageName.ADD_PLAYER),
-                commands(drain(observer)));
-        assertEquals(List.of(MessageName.ADD_PLAYER), commands(drain(joining)));
-    }
-
-    @Test
-    void finishLoadRejectsFullZoneWithoutBroadcast() throws Exception {
-        GameplayServices maps = policyMaps("ONLINE", "ONLINE", 1, 2);
-        Session first = session(player(1, 0, 0), maps);
-        Session second = session(player(2, 0, 0), maps);
-
-        assertTrue(maps.mapManager().finishLoad(first));
-        drain(first);
-
-        assertFalse(maps.mapManager().finishLoad(second));
-        assertEquals(1, maps.memberCount(0, 0));
-        assertEquals(0, second.queuedMessages());
-    }
-
-    @Test
-    void changeMapRejectsFullDestinationBeforeRemovingSourceMember() throws Exception {
-        GameplayServices maps = policyMaps("ONLINE", "ONLINE", 2, 1);
-        Player sourcePlayer = player(1, 0, 0);
-        sourcePlayer.changeMap(0, 0, 4464, 936);
-        Session source = session(sourcePlayer, maps);
-        Session blocker = session(player(2, 1, 0), maps);
-        maps.mapManager().finishLoad(source);
-        maps.mapManager().finishLoad(blocker);
-        drain(source);
-        drain(blocker);
-        Player before = source.player();
-
-        assertNull(maps.mapManager().changeMap(source));
-
-        assertEquals(before, source.player());
-        assertEquals(1, maps.memberCount(0, 0));
-        assertEquals(1, maps.memberCount(1, 0));
-        assertEquals(List.of(), drain(source));
-    }
-
-    @Test
-    void changeMapRejectsOfflineAndOutOfRangeDestinations() throws Exception {
-        GameplayServices maps = policyMaps("ONLINE", "OFFLINE", 1, 1);
-        Player sourcePlayer = player(1, 0, 0);
-        sourcePlayer.changeMap(0, 0, 4464, 936);
-        Session source = session(sourcePlayer, maps);
-        maps.mapManager().finishLoad(source);
-        Player before = source.player();
-
-        assertNull(maps.mapManager().changeMap(source));
-        assertNull(maps.mapManager().changeMap(source));
-        assertEquals(before, source.player());
-        assertEquals(1, maps.memberCount(0, 0));
-    }
-
-    @Test
-    void deathReturnRejectsFullTownWithoutRemovingSourceMember() throws Exception {
-        GameplayServices maps = policyMaps("ONLINE", "ONLINE", 1, 1);
-        Session dead = session(hp(player(1, 1, 0), 0), maps);
-        Session blocker = session(player(2, 0, 0), maps);
-        maps.mapManager().finishLoad(dead);
-        maps.mapManager().finishLoad(blocker);
-        Player before = dead.player();
-
-        assertNull(maps.mapManager().returnHomeFromDeath(dead));
-
-        assertEquals(before, dead.player());
-        assertEquals(1, maps.memberCount(1, 0));
-        assertEquals(1, maps.memberCount(0, 0));
-    }
-
-    @Test
-    void deathReturnReservesTownBeforeDetachingSource() throws Exception {
-        GameplayServices maps = policyMaps("ONLINE", "ONLINE", 2, 1);
-        Session firstDead = session(hp(player(1, 1, 0), 0), maps);
-        Session secondDead = session(hp(player(2, 1, 1), 0), maps);
-        Session townPlayer = session(player(3, 0, 0), maps);
-        assertTrue(maps.mapManager().finishLoad(firstDead));
-        assertTrue(maps.mapManager().finishLoad(secondDead));
-        assertTrue(maps.mapManager().finishLoad(townPlayer));
-        drain(firstDead);
-        drain(secondDead);
-        drain(townPlayer);
-
-        assertNotNull(maps.mapManager().returnHomeFromDeath(firstDead));
-        assertNull(firstDead.zone());
-        assertEquals(1, maps.findZone(0, 0).reservedCount());
-        assertEquals(1, maps.memberCount(0, 0));
-
-        assertNull(maps.mapManager().returnHomeFromDeath(secondDead));
-        assertSame(maps.findZone(1, 1), secondDead.zone());
-        assertTrue(secondDead.player().isDead());
-        assertEquals(1, maps.findZone(0, 0).reservedCount());
-    }
-
-    @Test
-    void changeMapReservesDestinationBeforeDetachingSource() throws Exception {
-        GameplayServices maps = policyMaps("ONLINE", "ONLINE", 1, 1);
-        Session source = session(at(player(1, 0, 0), 4464, 936), maps);
-        Session blocked = session(at(player(2, 0, 1), 4464, 936), maps);
-
-        assertTrue(maps.mapManager().finishLoad(source));
-        assertTrue(maps.mapManager().finishLoad(blocked));
-        drain(source);
-        drain(blocked);
-
-        MapManager.MapChange change = maps.mapManager().changeMap(source);
-
-        assertNotNull(change);
-        assertNull(source.zone());
-        Zone destination = maps.findZone(1, 0);
-        assertFalse(maps.findZone(0, 0).hasPlayer(source.player()));
-        assertFalse(destination.hasPlayer(source.player()));
-        assertEquals(1, source.player().mapId());
-        assertEquals(0, source.player().zoneId());
-        assertEquals(1, destination.reservedCount());
-        assertEquals(0, maps.memberCount(1, 0));
-        assertNull(maps.mapManager().changeMap(blocked));
-        assertSame(maps.findZone(0, 1), blocked.zone());
-        assertEquals(0, blocked.player().mapId());
-        assertEquals(1, blocked.player().zoneId());
-        assertEquals(1, maps.findZone(1, 0).reservedCount());
-    }
-
-    @Test
-    void finishLoadConsumesDestinationReservationOnce() throws Exception {
-        GameplayServices maps = policyMaps("ONLINE", "ONLINE", 1, 2);
-        Session observer = session(player(1, 1, 0), maps);
-        Session moving = session(at(player(2, 0, 0), 4464, 936), maps);
-
-        assertTrue(maps.mapManager().finishLoad(observer));
-        drain(observer);
-        assertTrue(maps.mapManager().finishLoad(moving));
-        drain(moving);
-
-        assertNotNull(maps.mapManager().changeMap(moving));
-        assertEquals(1, maps.findZone(1, 0).reservedCount());
-        assertTrue(maps.mapManager().finishLoad(moving));
-        assertEquals(0, maps.findZone(1, 0).reservedCount());
-        assertEquals(2, maps.memberCount(1, 0));
-        assertEquals(List.of(MessageName.ADD_PLAYER), commands(drain(observer)));
-        assertEquals(List.of(MessageName.ADD_PLAYER), commands(drain(moving)));
-
-        assertTrue(maps.mapManager().finishLoad(moving));
-        assertEquals(List.of(), drain(observer));
-        assertEquals(List.of(), drain(moving));
-    }
-
-    @Test
-    void competingSourceZonesAllowOnlyOneDestinationReservation() throws Exception {
-        GameplayServices maps = policyMaps("ONLINE", "ONLINE", 1, 1);
-        Session first = session(at(player(1, 0, 0), 4464, 936), maps);
-        Session second = session(at(player(2, 0, 1), 4464, 936), maps);
-        assertTrue(maps.mapManager().finishLoad(first));
-        assertTrue(maps.mapManager().finishLoad(second));
-        drain(first);
-        drain(second);
-
-        CyclicBarrier start = new CyclicBarrier(3);
-        AtomicReference<MapManager.MapChange> firstChange = new AtomicReference<>();
-        AtomicReference<MapManager.MapChange> secondChange = new AtomicReference<>();
-        AtomicReference<Throwable> failure = new AtomicReference<>();
-        Thread firstThread = Thread.ofVirtual().start(() -> changeAtBarrier(
-                start, maps, first, firstChange, failure));
-        Thread secondThread = Thread.ofVirtual().start(() -> changeAtBarrier(
-                start, maps, second, secondChange, failure));
-        start.await();
-        firstThread.join(5_000);
-        secondThread.join(5_000);
-
-        if (failure.get() != null) {
-            throw new AssertionError("concurrent map change failed", failure.get());
-        }
-        assertFalse(firstThread.isAlive());
-        assertFalse(secondThread.isAlive());
-        assertEquals(1, (firstChange.get() == null ? 0 : 1)
-                + (secondChange.get() == null ? 0 : 1));
-        Session loser = firstChange.get() == null ? first : second;
-        assertEquals(0, loser.player().mapId());
-        assertEquals(loser == first ? 0 : 1, loser.player().zoneId());
-        assertTrue(loser.zone().hasPlayer(loser.player()));
-        assertEquals(0, maps.memberCount(1, 0));
-        assertEquals(1, maps.findZone(1, 0).reservedCount());
-    }
-
-    @Test
-    void disconnectBeforeFinishLoadReleasesDestinationReservation() throws Exception {
-        GameplayServices maps = policyMaps("ONLINE", "ONLINE", 1, 1);
-        Session disconnected = session(at(player(1, 0, 0), 4464, 936), maps);
-        assertTrue(maps.mapManager().finishLoad(disconnected));
-        drain(disconnected);
-        assertNotNull(maps.mapManager().changeMap(disconnected));
-        Zone destination = maps.findZone(1, 0);
-        assertEquals(1, destination.reservedCount());
-
-        disconnected.close();
-
-        assertEquals(SessionState.CLOSED, disconnected.state());
-        assertEquals(0, destination.reservedCount());
-        assertEquals(0, destination.size());
-        PlayerSaveData saved = maps.mapManager().leave(disconnected);
-        assertEquals(1, saved.mapId());
-    }
-
-    @Test
-    void disconnectDuringCommittedHandoffReleasesDestinationCapacity() throws Exception {
-        GameplayServices maps = policyMaps("ONLINE", "ONLINE", 1, 1);
-        Session moving = session(at(player(1, 0, 0), 4464, 936), maps);
-        assertTrue(maps.mapManager().finishLoad(moving));
-        Zone source = moving.zone();
-        Zone destination = maps.findZone(1, 0);
-        BlockingMonsters monsters = new BlockingMonsters();
-        replaceZoneField(source, "monsters", monsters);
-        BlockingQueue<?> sourceInputs = zoneInputs(source);
-        AtomicReference<Throwable> failure = new AtomicReference<>();
-        AtomicReference<MapManager.MapChange> change = new AtomicReference<>();
-        Thread transition = startTask(failure,
-                () -> change.set(maps.mapManager().changeMap(moving)));
-        Thread close = null;
-        try {
-            assertTrue(monsters.entered.await(5, TimeUnit.SECONDS),
-                    "handoff did not reach source removal after revalidation");
-            assertSame(source, moving.zone());
-            close = startTask(failure, moving::close);
-            awaitCondition(() -> moving.state() == SessionState.CLOSED
-                            && !sourceInputs.isEmpty(),
-                    "disconnect did not queue source cleanup before backlink detach");
-        } finally {
-            monsters.release.countDown();
-            joinTasks(transition, close);
-        }
-
-        assertNull(failure.get());
-        assertNotNull(change.get(), "source revalidation already accepted the handoff");
-        assertEquals(SessionState.CLOSED, moving.state());
-        assertNull(moving.zone());
-        assertFalse(source.hasPlayer(moving.player()));
-        assertFalse(destination.hasPlayer(moving.player()));
-        assertFalse(destination.hasReservation(moving.player()));
-
-        // A fresh Session for the same Player must be able to reuse the only slot.
-        Session replacement = session(at(player(1, 0, 0), 4464, 936), maps);
-        try {
-            assertTrue(maps.mapManager().finishLoad(replacement));
-            assertNotNull(maps.mapManager().changeMap(replacement));
-            assertTrue(maps.mapManager().finishLoad(replacement));
-            assertSame(destination, replacement.zone());
-        } finally {
-            replacement.close();
-        }
-    }
-
-    @Test
-    void disconnectBeforeEnterBacklinkBindDoesNotLeaveClosedMember() throws Exception {
-        GameplayServices maps = policyMaps("ONLINE", "ONLINE", 1, 1);
-        Session joining = session(player(1, 1, 0), maps);
-        Zone destination = maps.findZone(1, 0);
-        BlockingMembers members = new BlockingMembers();
-        replaceZoneField(destination, "players", members);
-        BlockingQueue<?> destinationInputs = zoneInputs(destination);
-        AtomicReference<Throwable> failure = new AtomicReference<>();
-        Thread enter = startTask(failure, () -> maps.mapManager().finishLoad(joining));
-        Thread close = null;
-        try {
-            assertTrue(members.entered.await(5, TimeUnit.SECONDS),
-                    "enter did not insert membership before binding the backlink");
-            assertNull(joining.zone());
-            close = startTask(failure, joining::close);
-            awaitCondition(() -> joining.state() == SessionState.CLOSED
-                            && !destinationInputs.isEmpty(),
-                    "disconnect did not queue cleanup while the backlink was absent");
-        } finally {
-            members.release.countDown();
-            joinTasks(enter, close);
-        }
-
-        assertNull(failure.get());
-        assertEquals(SessionState.CLOSED, joining.state());
-        assertNull(joining.zone());
-        assertFalse(destination.hasPlayer(joining.player()));
-        assertFalse(destination.hasReservation(joining.player()));
-        Session replacement = session(player(1, 1, 0), maps);
-        try {
-            assertTrue(maps.mapManager().finishLoad(replacement));
-            assertSame(destination, replacement.zone());
-        } finally {
-            replacement.close();
-        }
-    }
-
-    @Test
-    void disconnectWhileReserveIsQueuedDoesNotAdmitLateReservation() throws Exception {
-        GameplayServices maps = policyMaps("ONLINE", "ONLINE", 1, 1);
-        Session moving = session(at(player(1, 0, 0), 4464, 936), maps);
-        Session replacement = session(player(2, 1, 0), maps);
-        assertTrue(maps.mapManager().finishLoad(moving));
-        Zone source = moving.zone();
-        Zone destination = maps.findZone(1, 0);
-        BlockingQueue<?> destinationInputs = zoneInputs(destination);
-        CountDownLatch destinationStarted = new CountDownLatch(1);
-        CountDownLatch releaseDestination = new CountDownLatch(1);
-        CountDownLatch sourceStarted = new CountDownLatch(1);
-        CountDownLatch releaseSource = new CountDownLatch(1);
-        AtomicReference<Throwable> failure = new AtomicReference<>();
-        AtomicReference<MapManager.MapChange> change = new AtomicReference<>();
-        AtomicBoolean joined = new AtomicBoolean();
-        Thread transition = null;
-        Thread close = null;
-        Thread enter = null;
-        try {
-            assertTrue(destination.submit(() -> {
-                destinationStarted.countDown();
-                awaitRelease(releaseDestination);
-            }));
-            assertTrue(destinationStarted.await(5, TimeUnit.SECONDS));
-            transition = startTask(failure,
-                    () -> change.set(maps.mapManager().changeMap(moving)));
-            awaitCondition(() -> !destinationInputs.isEmpty(),
-                    "destination reservation was not queued");
-            close = startTask(failure, moving::close);
-            awaitCondition(() -> moving.state() == SessionState.CLOSED && moving.zone() == null,
-                    "disconnect did not detach the source while reserve was pending");
-
-            // Keep source revalidation/rollback pending while destination admission runs.
-            assertTrue(source.submit(() -> {
-                sourceStarted.countDown();
-                awaitRelease(releaseSource);
-            }));
-            assertTrue(sourceStarted.await(5, TimeUnit.SECONDS));
-            enter = startTask(failure,
-                    () -> joined.set(maps.mapManager().finishLoad(replacement)));
-            Thread pendingEnter = enter;
-            awaitCondition(() -> destinationInputs.size() >= 2
-                            && pendingEnter.getState() == Thread.State.WAITING,
-                    "replacement admission was not queued behind the closed Session reserve");
-            releaseDestination.countDown();
-            joinTasks(enter);
-            assertTrue(joined.get(),
-                    "a CLOSED Session took destination capacity before source rollback");
-        } finally {
-            releaseDestination.countDown();
-            releaseSource.countDown();
-            joinTasks(transition, close, enter);
-            replacement.close();
-        }
-
-        assertNull(failure.get());
-        assertNull(change.get());
-        assertFalse(source.hasPlayer(moving.player()));
-        assertFalse(destination.hasPlayer(moving.player()));
-        assertFalse(destination.hasReservation(moving.player()));
-        assertNull(moving.zone());
-    }
-
-    @Test
-    void duplicateHandoffDoesNotCancelWinningDestinationReservation() throws Exception {
-        GameplayServices maps = policyMaps("ONLINE", "ONLINE", 1, 1);
-        Session moving = session(at(player(1, 0, 0), 4464, 936), maps);
-        assertTrue(maps.mapManager().finishLoad(moving));
-        Zone source = moving.zone();
-        Zone destination = maps.findZone(1, 0);
-        BlockingQueue<?> sourceInputs = zoneInputs(source);
-        BlockingQueue<?> destinationInputs = zoneInputs(destination);
-        CountDownLatch destinationStarted = new CountDownLatch(1);
-        CountDownLatch releaseDestination = new CountDownLatch(1);
-        CountDownLatch sourceStarted = new CountDownLatch(1);
-        CountDownLatch releaseSource = new CountDownLatch(1);
-        AtomicReference<Throwable> failure = new AtomicReference<>();
-        AtomicReference<MapManager.MapChange> firstChange = new AtomicReference<>();
-        AtomicReference<MapManager.MapChange> duplicateChange = new AtomicReference<>();
-        Thread first = null;
-        Thread duplicate = null;
-        try {
-            assertTrue(destination.submit(() -> {
-                destinationStarted.countDown();
-                awaitRelease(releaseDestination);
-            }));
-            assertTrue(destinationStarted.await(5, TimeUnit.SECONDS));
-            first = startTask(failure,
-                    () -> firstChange.set(maps.mapManager().changeMap(moving)));
-            awaitCondition(() -> !destinationInputs.isEmpty(),
-                    "first handoff did not queue its destination reservation");
-            duplicate = startTask(failure,
-                    () -> duplicateChange.set(maps.mapManager().changeMap(moving)));
-            Thread pendingDuplicate = duplicate;
-            awaitCondition(() -> destinationInputs.size() >= 2 || !pendingDuplicate.isAlive(),
-                    "duplicate neither rejected nor reached destination reservation");
-            assertTrue(source.submit(() -> {
-                sourceStarted.countDown();
-                awaitRelease(releaseSource);
-            }));
-            assertTrue(sourceStarted.await(5, TimeUnit.SECONDS));
-            releaseDestination.countDown();
-            awaitCondition(() -> !sourceInputs.isEmpty()
-                            && (sourceInputs.size() >= 2 || !pendingDuplicate.isAlive()),
-                    "handoffs did not reach source commit or duplicate rejection");
-        } finally {
-            releaseDestination.countDown();
-            releaseSource.countDown();
-            joinTasks(first, duplicate);
-        }
-
-        assertNull(failure.get());
-        assertEquals(1, (firstChange.get() == null ? 0 : 1)
-                + (duplicateChange.get() == null ? 0 : 1));
-        assertNull(moving.zone());
-        assertFalse(source.hasPlayer(moving.player()));
-        Session competing = session(player(2, 1, 0), maps);
-        try {
-            assertFalse(maps.mapManager().finishLoad(competing),
-                    "the losing duplicate released the winning handoff's only destination slot");
-            assertTrue(destination.hasReservation(moving.player()));
-            assertTrue(maps.mapManager().finishLoad(moving));
-            assertSame(destination, moving.zone());
-            assertEquals(1, destination.size());
-        } finally {
-            competing.close();
-            moving.close();
-        }
-    }
-
-    @Test
-    void oldFinishLoadDoesNotClearNewHandoffToSameDestination() throws Exception {
-        GameplayServices maps = policyMaps("ONLINE", "ONLINE", 1, 2);
-        Session moving = session(at(player(1, 0, 0), 4464, 936), maps);
-        Session observer = session(player(2, 1, 0), maps);
-        Session remaining = session(player(3, 1, 0), maps);
-        assertTrue(maps.mapManager().finishLoad(observer));
-        ClosingTransport transport = new ClosingTransport();
-        replaceTransport(observer, transport);
-        LinkedBlockingQueue<Message> fullQueue = new LinkedBlockingQueue<>(1);
-        fullQueue.add(new Message(MessageName.ADD_PLAYER, new byte[0]));
-        replaceSendQueue(observer, fullQueue);
-        assertTrue(maps.mapManager().finishLoad(moving));
-        assertNotNull(maps.mapManager().changeMap(moving));
-        Zone source = maps.findZone(0, 0);
-        Zone destination = maps.findZone(1, 0);
-        BlockingQueue<?> sourceInputs = zoneInputs(source);
-        BlockingQueue<?> destinationInputs = zoneInputs(destination);
-        CountDownLatch admissionStarted = new CountDownLatch(1);
-        CountDownLatch releaseAdmission = new CountDownLatch(1);
-        CountDownLatch reserveStarted = new CountDownLatch(1);
-        CountDownLatch releaseReserve = new CountDownLatch(1);
-        CountDownLatch sourceStarted = new CountDownLatch(1);
-        CountDownLatch releaseSource = new CountDownLatch(1);
-        AtomicReference<Throwable> failure = new AtomicReference<>();
-        AtomicBoolean firstEntered = new AtomicBoolean();
-        AtomicBoolean secondEntered = new AtomicBoolean();
-        AtomicReference<MapManager.MapChange> change = new AtomicReference<>();
-        AtomicReference<MapManager.MapChange> duplicateChange = new AtomicReference<>();
-        Thread first = null;
-        Thread second = null;
-        Thread transition = null;
-        Thread duplicate = null;
-        try {
-            assertTrue(destination.submit(() -> {
-                admissionStarted.countDown();
-                awaitRelease(releaseAdmission);
-            }));
-            assertTrue(admissionStarted.await(5, TimeUnit.SECONDS));
-            first = startTask(failure,
-                    () -> firstEntered.set(maps.mapManager().finishLoad(moving)));
-            awaitCondition(() -> destinationInputs.size() == 1,
-                    "first detached finishLoad was not queued");
-            second = startTask(failure,
-                    () -> secondEntered.set(maps.mapManager().finishLoad(moving)));
-            awaitCondition(() -> destinationInputs.size() == 2,
-                    "both finishLoad calls did not select the detached admission branch");
-            releaseAdmission.countDown();
-            assertTrue(transport.entered.await(5, TimeUnit.SECONDS),
-                    "first enter did not close its rejected observer after admission");
-            joinTasks(second);
-            assertTrue(secondEntered.get());
-            assertTrue(destination.hasPlayer(moving.player()));
-            assertFalse(destination.hasPlayer(observer.player()));
-            assertTrue(maps.mapManager().finishLoad(remaining));
-
-            // Return to the original source, then prepare a fresh handoff to the same Zone.
-            assertTrue(ZoneTestHooks.move(destination, moving, 0, 1008));
-            assertNotNull(maps.mapManager().changeMap(moving));
-            assertTrue(maps.mapManager().finishLoad(moving));
-            assertTrue(ZoneTestHooks.move(source, moving, 4464, 936));
-            assertTrue(destination.submit(() -> {
-                reserveStarted.countDown();
-                awaitRelease(releaseReserve);
-            }));
-            assertTrue(reserveStarted.await(5, TimeUnit.SECONDS));
-            transition = startTask(failure,
-                    () -> change.set(maps.mapManager().changeMap(moving)));
-            awaitCondition(() -> !destinationInputs.isEmpty(),
-                    "new handoff did not queue its destination reservation");
-
-            // The old admission caller returns only after the new handoff already exists.
-            transport.release.countDown();
-            joinTasks(first);
-            assertTrue(firstEntered.get());
-            duplicate = startTask(failure,
-                    () -> duplicateChange.set(maps.mapManager().changeMap(moving)));
-            Thread pendingDuplicate = duplicate;
-            awaitCondition(() -> destinationInputs.size() >= 2 || !pendingDuplicate.isAlive(),
-                    "duplicate neither rejected nor reached destination reservation");
-            assertTrue(source.submit(() -> {
-                sourceStarted.countDown();
-                awaitRelease(releaseSource);
-            }));
-            assertTrue(sourceStarted.await(5, TimeUnit.SECONDS));
-            releaseReserve.countDown();
-            awaitCondition(() -> !sourceInputs.isEmpty()
-                            && (sourceInputs.size() >= 2 || !pendingDuplicate.isAlive()),
-                    "handoffs did not reach source commit or duplicate rejection");
-        } finally {
-            releaseAdmission.countDown();
-            transport.release.countDown();
-            releaseReserve.countDown();
-            releaseSource.countDown();
-            joinTasks(first, second, transition, duplicate);
-        }
-
-        assertNull(failure.get());
-        assertEquals(1, (change.get() == null ? 0 : 1)
-                + (duplicateChange.get() == null ? 0 : 1));
-        assertNull(moving.zone());
-        Session competing = session(player(4, 1, 0), maps);
-        try {
-            assertFalse(maps.mapManager().finishLoad(competing),
-                    "old finishLoad cleared the new handoff and allowed its slot to be canceled");
-            assertTrue(destination.hasReservation(moving.player()));
-            assertTrue(maps.mapManager().finishLoad(moving));
-            assertSame(destination, moving.zone());
-        } finally {
-            competing.close();
-            moving.close();
-            remaining.close();
-            observer.close();
-        }
-    }
-
-    @Test
-    void finishLoadWithStaleHandoffReadConsumesCurrentAdmissionGuard() throws Exception {
-        assertStaleFinishLoadConsumesCurrentAdmissionGuard(true);
-    }
-
-    @Test
-    void finishLoadWithInitiallyMissingHandoffConsumesCurrentAdmissionGuard() throws Exception {
-        assertStaleFinishLoadConsumesCurrentAdmissionGuard(false);
-    }
-
-    @Test
-    void disconnectAfterObserverDeliveryFailureCleansPendingDestinationAndNormalizesPlayer()
-            throws Exception {
-        GameplayServices maps = policyMaps("ONLINE", "ONLINE", 2, 1);
-        Session moving = session(at(player(1, 0, 0), 4464, 936), maps);
-        Session observer = session(player(2, 0, 0), maps);
-        assertTrue(maps.mapManager().finishLoad(moving));
-        assertTrue(maps.mapManager().finishLoad(observer));
-        drain(moving);
-        drain(observer);
-        Zone source = moving.zone();
-        Zone destination = maps.findZone(1, 0);
-        BlockingReservations reservations = new BlockingReservations();
-        replaceZoneField(destination, "reservedPlayers", reservations);
-        replaceSendQueue(observer, new ThrowingOfferQueue());
-        BlockingQueue<?> destinationInputs = zoneInputs(destination);
-        AtomicReference<Throwable> failure = new AtomicReference<>();
-        AtomicReference<MapManager.MapChange> change = new AtomicReference<>();
-        Thread transition = startTask(failure,
-                () -> change.set(maps.mapManager().changeMap(moving)));
-        Thread close = null;
-        try {
-            assertTrue(reservations.entered.await(5, TimeUnit.SECONDS),
-                    "destination did not insert the pending reservation");
-            source.call(() -> {
-                moving.player().injure(moving.player().hp());
-                return null;
-            });
-            close = startTask(failure, moving::close);
-            // Reserve has not returned, so source commit cannot send REMOVE_PLAYER.
-            // Its observer failure therefore belongs to disconnect's source cleanup.
-            awaitCondition(() -> moving.state() == SessionState.CLOSED
-                            && moving.zone() == null && !destinationInputs.isEmpty(),
-                    "source delivery failure prevented pending destination cleanup");
-            assertFalse(source.hasPlayer(moving.player()));
-            assertTrue(source.hasPlayer(observer.player()));
-        } finally {
-            reservations.release.countDown();
-            joinTasks(transition, close);
-        }
-
-        assertNull(failure.get());
-        assertNull(change.get());
-        assertEquals(SessionState.CLOSED, moving.state());
-        assertNull(moving.zone());
-        assertFalse(source.hasPlayer(moving.player()));
-        assertFalse(destination.hasPlayer(moving.player()));
-        assertFalse(destination.hasReservation(moving.player()));
-        assertFalse(moving.player().isDead());
-        assertEquals(moving.player().currentStats().maxHp(), moving.player().hp());
-        assertEquals(0, moving.player().mapId());
-        assertEquals(0, moving.player().zoneId());
-        assertEquals(1250, moving.player().x());
-        assertEquals(648, moving.player().y());
-
-        Session replacement = session(player(1, 1, 0), maps);
-        try {
-            assertTrue(maps.mapManager().finishLoad(replacement));
-            assertSame(destination, replacement.zone());
-        } finally {
-            replacement.close();
-            observer.close();
-        }
-    }
-
-    @Test
-    void sourceRevalidationFailureRollsBackDestinationReservation() throws Exception {
-        GameplayServices maps = policyMaps("ONLINE", "ONLINE", 2, 1);
-        Session source = session(at(player(1, 0, 0), 4464, 936), maps);
-        assertTrue(maps.mapManager().finishLoad(source));
-        drain(source);
-        Zone sourceZone = maps.findZone(0, 0);
-        Zone destination = maps.findZone(1, 0);
-        CountDownLatch destinationStarted = new CountDownLatch(1);
-        CountDownLatch releaseDestination = new CountDownLatch(1);
-        assertTrue(destination.submit(() -> {
-            destinationStarted.countDown();
-            awaitRelease(releaseDestination);
-        }));
-        assertTrue(destinationStarted.await(5, TimeUnit.SECONDS));
-
-        AtomicReference<MapManager.MapChange> change = new AtomicReference<>();
-        AtomicReference<Throwable> failure = new AtomicReference<>();
-        Thread transition = Thread.ofVirtual().start(() -> {
-            try {
-                change.set(maps.mapManager().changeMap(source));
-            } catch (Throwable exception) {
-                failure.compareAndSet(null, exception);
-            }
-        });
-        try {
-            awaitWaiting(transition);
-            sourceZone.call(() -> {
-                source.player().move(1250, 648);
-                return null;
-            });
-            releaseDestination.countDown();
-            transition.join(5_000);
-        } finally {
-            releaseDestination.countDown();
-            transition.join(5_000);
-        }
-
-        assertFalse(transition.isAlive());
-        if (failure.get() != null) {
-            throw new AssertionError("source revalidation failed", failure.get());
-        }
-        assertNull(change.get());
-        assertTrue(sourceZone.hasPlayer(source.player()));
-        assertSame(sourceZone, source.zone());
-        assertEquals(0, source.player().mapId());
-        assertEquals(0, source.player().zoneId());
-        assertEquals(1250, source.player().x());
-        assertEquals(648, source.player().y());
-        assertEquals(0, destination.reservedCount());
-
-        Session next = session(at(player(2, 0, 0), 4464, 936), maps);
-        assertTrue(maps.mapManager().finishLoad(next));
-        assertNotNull(maps.mapManager().changeMap(next));
-        assertTrue(maps.mapManager().finishLoad(next));
-        assertEquals(1, maps.memberCount(1, 0));
-    }
-
-    @Test
-    void deathReturnRevalidationFailureKeepsSourceAndReleasesHomeCapacity() throws Exception {
-        GameplayServices maps = policyMaps("ONLINE", "ONLINE", 1, 2);
-        Session dead = session(hp(player(1, 1, 0), 0), maps);
-        assertTrue(maps.mapManager().finishLoad(dead));
-        Zone source = dead.zone();
-        Zone home = maps.findZone(0, 0);
-        CountDownLatch homeStarted = new CountDownLatch(1);
-        CountDownLatch releaseHome = new CountDownLatch(1);
-        assertTrue(home.submit(() -> {
-            homeStarted.countDown();
-            awaitRelease(releaseHome);
-        }));
-        assertTrue(homeStarted.await(5, TimeUnit.SECONDS));
-        AtomicReference<MapManager.MapChange> change = new AtomicReference<>();
-        AtomicReference<Throwable> failure = new AtomicReference<>();
-        Thread transition = Thread.ofVirtual().start(() -> {
-            try {
-                change.set(maps.mapManager().returnHomeFromDeath(dead));
+                moving.close();
             } catch (Throwable exception) {
                 failure.set(exception);
             }
         });
-        try {
-            awaitWaiting(transition);
-            source.call(() -> {
-                dead.player().changeMap(1, 0, 500, 600);
-                return null;
-            });
-        } finally {
-            releaseHome.countDown();
-            transition.join(5_000);
-        }
-        assertFalse(transition.isAlive());
+        release.countDown();
+        close.join(5_000);
+
+        assertFalse(close.isAlive());
         assertNull(failure.get());
-        assertNull(change.get());
-        assertSame(source, dead.zone());
-        assertTrue(source.hasPlayer(dead.player()));
-        assertTrue(dead.player().isDead());
-        assertEquals(1, dead.player().mapId());
-        assertEquals(500, dead.player().x());
-        assertEquals(600, dead.player().y());
-        assertEquals(0, home.reservedCount());
-
-        Session next = session(hp(player(2, 1, 0), 0), maps);
-        assertTrue(maps.mapManager().finishLoad(next));
-        assertNotNull(maps.mapManager().returnHomeFromDeath(next));
-        assertTrue(maps.mapManager().finishLoad(next));
-        assertEquals(1, home.size());
+        assertEquals(SessionState.CLOSED, moving.state());
+        assertNull(moving.zone());
+        assertNull(moving.player().travelingTo());
+        assertEquals(0, maps.memberCount(1, 0));
     }
 
     @Test
-    void postCommitChangeFailureKeepsDestinationReservation() throws Exception {
-        GameplayServices maps = policyMaps("ONLINE", "ONLINE", 2, 1);
-        Session source = session(at(player(1, 0, 0), 4464, 936), maps);
-        Session observer = session(player(2, 0, 0), maps);
-        assertTrue(maps.mapManager().finishLoad(source));
-        assertTrue(maps.mapManager().finishLoad(observer));
-        drain(source);
-        drain(observer);
-        replaceSendQueue(observer, new ThrowingOfferQueue());
+    void travelAndDisconnectRacingAlwaysEndWithPlayerNowhere() throws Exception {
+        for (int round = 0; round < 50; round++) {
+            GameplayServices maps = mapsWithoutMonsters();
+            Session moving = session(at(player(1, 0, 0), WAYPOINT_X, WAYPOINT_Y), maps);
+            maps.finishLoad(moving);
+            Player player = moving.player();
+            Zone source = moving.zone();
 
-        assertThrows(IllegalStateException.class, () -> maps.mapManager().changeMap(source));
-
-        Zone destination = maps.findZone(1, 0);
-        assertNull(source.zone());
-        assertEquals(1, source.player().mapId());
-        assertEquals(0, source.player().zoneId());
-        assertEquals(1, destination.reservedCount());
-        assertTrue(maps.mapManager().finishLoad(source));
-        assertEquals(1, maps.memberCount(1, 0));
-    }
-
-    @Test
-    void postCommitDeathReturnFailureKeepsTownReservation() throws Exception {
-        GameplayServices maps = policyMaps("ONLINE", "ONLINE", 2, 2);
-        Session dead = session(hp(player(1, 1, 0), 0), maps);
-        Session observer = session(player(2, 1, 0), maps);
-        assertTrue(maps.mapManager().finishLoad(dead));
-        assertTrue(maps.mapManager().finishLoad(observer));
-        drain(dead);
-        drain(observer);
-        replaceSendQueue(observer, new ThrowingOfferQueue());
-
-        assertThrows(IllegalStateException.class,
-                () -> maps.mapManager().returnHomeFromDeath(dead));
-
-        Zone town = maps.findZone(0, 0);
-        assertNull(dead.zone());
-        assertEquals(0, dead.player().mapId());
-        assertEquals(0, dead.player().zoneId());
-        assertFalse(dead.player().isDead());
-        assertEquals(1, town.reservedCount());
-        assertTrue(maps.mapManager().finishLoad(dead));
-        assertEquals(1, maps.memberCount(0, 0));
-    }
-
-    @Test
-    void changeMapRejectsZoneWriterReentryBeforeReservationOrMutation() throws Exception {
-        GameplayServices maps = policyMaps("ONLINE", "ONLINE", 2, 2);
-        Session source = session(at(player(1, 0, 0), 4464, 936), maps);
-        assertTrue(maps.mapManager().finishLoad(source));
-        drain(source);
-
-        Zone sourceZone = maps.findZone(0, 0);
-        Zone destination = maps.findZone(1, 0);
-        PlayerSaveData before = PlayerSaveData.capture(source.player());
-
-        assertThrows(IllegalStateException.class, () -> sourceZone.call(() -> {
-            maps.mapManager().changeMap(source);
-            return null;
-        }));
-
-        assertTrue(sourceZone.hasPlayer(source.player()));
-        assertSame(sourceZone, source.zone());
-        assertEquals(before, PlayerSaveData.capture(source.player()));
-        assertEquals(0, destination.reservedCount());
-    }
-
-    @Test
-    void returnTownFromDeathRejectsZoneWriterReentryBeforeReservationOrMutation() throws Exception {
-        GameplayServices maps = policyMaps("ONLINE", "ONLINE", 2, 2);
-        Session dead = session(hp(player(1, 1, 0), 0), maps);
-        assertTrue(maps.mapManager().finishLoad(dead));
-        drain(dead);
-
-        Zone sourceZone = maps.findZone(1, 0);
-        Zone town = maps.findZone(0, 0);
-        PlayerSaveData before = PlayerSaveData.capture(dead.player());
-
-        assertThrows(IllegalStateException.class, () -> sourceZone.call(() -> {
-            maps.mapManager().returnHomeFromDeath(dead);
-            return null;
-        }));
-
-        assertTrue(dead.player().isDead());
-        assertTrue(sourceZone.hasPlayer(dead.player()));
-        assertSame(sourceZone, dead.zone());
-        assertEquals(before, PlayerSaveData.capture(dead.player()));
-        assertEquals(0, town.reservedCount());
-    }
-
-    @Test
-    void changeMapRejectsForeignZoneWriterBeforeReservationOrMutation() throws Exception {
-        GameplayServices maps = policyMaps("ONLINE", "ONLINE", 2, 2);
-        Session source = session(at(player(1, 0, 0), 4464, 936), maps);
-        assertTrue(maps.mapManager().finishLoad(source));
-        drain(source);
-
-        Zone sourceZone = maps.findZone(0, 0);
-        Zone destination = maps.findZone(1, 0);
-        Zone unrelated = maps.findZone(0, 1);
-        PlayerSaveData before = PlayerSaveData.capture(source.player());
-
-        assertThrows(IllegalStateException.class, () -> unrelated.call(() -> {
-            maps.mapManager().changeMap(source);
-            return null;
-        }));
-
-        assertTrue(sourceZone.hasPlayer(source.player()));
-        assertSame(sourceZone, source.zone());
-        assertEquals(before, PlayerSaveData.capture(source.player()));
-        assertEquals(0, destination.reservedCount());
-    }
-
-    @Test
-    void returnTownFromDeathRejectsForeignZoneWriterBeforeReservationOrMutation()
-            throws Exception {
-        GameplayServices maps = policyMaps("ONLINE", "ONLINE", 2, 2);
-        Session dead = session(hp(player(1, 1, 0), 0), maps);
-        assertTrue(maps.mapManager().finishLoad(dead));
-        drain(dead);
-
-        Zone sourceZone = maps.findZone(1, 0);
-        Zone town = maps.findZone(0, 0);
-        Zone unrelated = maps.findZone(0, 1);
-        PlayerSaveData before = PlayerSaveData.capture(dead.player());
-
-        assertThrows(IllegalStateException.class, () -> unrelated.call(() -> {
-            maps.mapManager().returnHomeFromDeath(dead);
-            return null;
-        }));
-
-        assertTrue(dead.player().isDead());
-        assertTrue(sourceZone.hasPlayer(dead.player()));
-        assertSame(sourceZone, dead.zone());
-        assertEquals(before, PlayerSaveData.capture(dead.player()));
-        assertEquals(0, town.reservedCount());
-    }
-
-    private static void assertStaleFinishLoadConsumesCurrentAdmissionGuard(boolean initialHandoff)
-            throws Exception {
-        GameplayServices maps = policyMaps("ONLINE", "ONLINE", 1, 1);
-        Session moving;
-        if (initialHandoff) {
-            moving = session(at(player(1, 0, 0), 4464, 936), maps);
-            assertTrue(maps.mapManager().finishLoad(moving));
-            assertNotNull(maps.mapManager().changeMap(moving));
-        } else {
-            moving = session(player(1, 1, 0), maps);
-        }
-        Zone source = maps.findZone(0, 0);
-        Zone destination = maps.findZone(1, 0);
-        DelayedMapLookup route = new DelayedMapLookup();
-        replaceRuntimeMaps(maps.mapManager(), route);
-        AtomicReference<Throwable> failure = new AtomicReference<>();
-        AtomicBoolean entered = new AtomicBoolean();
-        Thread oldFinish = startTask(failure, () -> {
-            route.delayedThread.set(Thread.currentThread());
-            entered.set(maps.mapManager().finishLoad(moving));
-        });
-        try {
-            assertTrue(route.entered.await(5, TimeUnit.SECONDS),
-                    "old finishLoad did not reach detached destination lookup");
-            assertNull(moving.zone());
-            // A different caller admits the Player, then completes an entire round trip.
-            assertTrue(maps.mapManager().finishLoad(moving));
-            assertTrue(ZoneTestHooks.move(destination, moving, 0, 1008));
-            assertNotNull(maps.mapManager().changeMap(moving));
-            assertTrue(maps.mapManager().finishLoad(moving));
-            assertTrue(ZoneTestHooks.move(source, moving, 4464, 936));
-            assertNotNull(maps.mapManager().changeMap(moving));
-            assertTrue(destination.hasReservation(moving.player()));
-
-            // Old route selection now admits the fresh handoff, regardless of its old read.
-            route.release.countDown();
-            joinTasks(oldFinish);
-            assertNull(failure.get());
-            assertTrue(entered.get());
-            assertTrue(destination.hasPlayer(moving.player()));
-            assertFalse(destination.hasReservation(moving.player()));
-            assertTrue(maps.mapManager().finishLoad(moving));
-            assertTrue(ZoneTestHooks.move(destination, moving, 0, 1008));
-            assertNotNull(maps.mapManager().changeMap(moving),
-                    "successful admission left a stale handoff guard blocking valid travel");
-            assertTrue(maps.mapManager().finishLoad(moving));
-            assertSame(source, moving.zone());
-        } finally {
-            route.release.countDown();
-            joinTasks(oldFinish);
+            source.post(player, player::requestChangeMap);
             moving.close();
+
+            assertNull(player.zone(), "round " + round);
+            assertNull(player.travelingTo(), "round " + round);
+            assertEquals(0, maps.memberCount(0, 0), "round " + round);
+            assertEquals(0, maps.memberCount(1, 0), "round " + round);
         }
     }
 
-    private static GameplayServices policyMaps(
-            String map0Type, String map1Type, int map0MaxPlayer, int map1MaxPlayer) {
+    // ------------------------------------------------------------------
+
+    private static GameplayServices twoZoneMaps(int map0MaxPlayer, int map1MaxPlayer) {
         java.util.Map<Integer, MapTemplate> canonical = MapTestSupport.canonicalMaps();
-        MapTemplate map0 = withPolicy(
-                canonical.get(0), map0Type, 2, 2, map0MaxPlayer);
-        MapTemplate map1 = withPolicy(
-                canonical.get(1), map1Type, 2, 2, map1MaxPlayer);
+        MapTemplate map0 = withPolicy(canonical.get(0), map0MaxPlayer);
+        MapTemplate map1 = withPolicy(canonical.get(1), map1MaxPlayer);
         return new GameplayServices(
                 java.util.Map.of(map0.id(), map0, map1.id(), map1), GameResources.unavailable());
     }
 
-    private static GameplayServices publicZoneRequestMaps() {
-        java.util.Map<Integer, MapTemplate> canonical = MapTestSupport.canonicalMaps();
-        MapTemplate map0 = withPolicy(canonical.get(0), "ONLINE", 1, 10, 1);
-        MapTemplate map1 = withPolicy(canonical.get(1), "ONLINE", 1, 10, 1);
-        return new GameplayServices(
-                java.util.Map.of(map0.id(), map0, map1.id(), map1), GameResources.unavailable());
-    }
-
-    private static MapTemplate withPolicy(
-            MapTemplate map, String type, int minZone, int maxZone, int maxPlayer) {
-        return new MapTemplate(
-                map.id(), map.name(), type, map.planet(), minZone, maxZone, maxPlayer,
+    private static MapTemplate withPolicy(MapTemplate map, int maxPlayer) {
+        return new MapTemplate(map.id(), map.name(), "ONLINE", map.planet(), 2, 2, maxPlayer,
                 map.dataId(), map.data(), map.waypoints());
     }
 
-    private static void finishLoadAtBarrier(
-            CyclicBarrier start,
-            GameplayServices maps,
-            Session session,
-            AtomicInteger successes,
-            AtomicInteger failures,
-            AtomicReference<Throwable> failure) {
+    private static void await(CountDownLatch latch) {
         try {
-            start.await();
-            if (maps.mapManager().finishLoad(session)) {
-                successes.incrementAndGet();
-            } else {
-                failures.incrementAndGet();
-            }
-        } catch (Throwable exception) {
-            failure.compareAndSet(null, exception);
-        }
-    }
-
-    private static void changeAtBarrier(
-            CyclicBarrier start,
-            GameplayServices maps,
-            Session session,
-            AtomicReference<MapManager.MapChange> change,
-            AtomicReference<Throwable> failure) {
-        try {
-            start.await();
-            change.set(maps.mapManager().changeMap(session));
-        } catch (Throwable exception) {
-            failure.compareAndSet(null, exception);
-        }
-    }
-
-    private static void moveAndSignal(
-            GameplayServices maps,
-            Session session,
-            int x,
-            int y,
-            AtomicBoolean moved,
-            CountDownLatch started,
-            CountDownLatch finished) {
-        started.countDown();
-        try {
-            moved.set(maps.movePlayer(session, x, y));
-        } finally {
-            finished.countDown();
-        }
-    }
-
-    private static void awaitRelease(CountDownLatch release) {
-        try {
-            if (!release.await(5, TimeUnit.SECONDS)) {
-                throw new AssertionError("prior Zone action was not released");
-            }
+            latch.await(5, TimeUnit.SECONDS);
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
-            throw new AssertionError(exception);
         }
-    }
-
-    private static void awaitWaiting(Thread thread) {
-        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
-        while (thread.getState() != Thread.State.WAITING
-                && thread.getState() != Thread.State.TERMINATED
-                && System.nanoTime() < deadline) {
-            Thread.onSpinWait();
-        }
-        assertEquals(Thread.State.WAITING, thread.getState(),
-                "changeMap did not reach cross-Zone coordination");
-    }
-
-    private static final class ThrowingOfferQueue extends LinkedBlockingQueue<Message> {
-        @Override
-        public boolean offer(Message message) {
-            throw new IllegalStateException("injected packet enqueue failure");
-        }
-    }
-
-    private static void replaceZoneField(Zone zone, String name, Object replacement)
-            throws Exception {
-        Field field = Zone.class.getDeclaredField(name);
-        field.setAccessible(true);
-        field.set(zone, replacement);
-    }
-
-    @SuppressWarnings("unchecked")
-    private static void replaceRuntimeMaps(MapManager maps, DelayedMapLookup replacement)
-            throws Exception {
-        Field field = MapManager.class.getDeclaredField("maps");
-        field.setAccessible(true);
-        replacement.putAll((java.util.Map<Integer, Map>) field.get(maps));
-        field.set(maps, replacement);
-    }
-
-    private static void replaceTransport(Session session, ClientTransport replacement)
-            throws Exception {
-        Field field = Session.class.getDeclaredField("transport");
-        field.setAccessible(true);
-        field.set(session, replacement);
-    }
-
-    private static BlockingQueue<?> zoneInputs(Zone zone) throws Exception {
-        Field writerField = Zone.class.getDeclaredField("writer");
-        writerField.setAccessible(true);
-        Field inputsField = ZoneWriter.class.getDeclaredField("inputs");
-        inputsField.setAccessible(true);
-        return (BlockingQueue<?>) inputsField.get(writerField.get(zone));
-    }
-
-    private static Thread startTask(AtomicReference<Throwable> failure, Runnable action) {
-        return Thread.ofVirtual().start(() -> {
-            try {
-                action.run();
-            } catch (Throwable exception) {
-                failure.compareAndSet(null, exception);
-            }
-        });
-    }
-
-    private static void joinTasks(Thread... tasks) throws InterruptedException {
-        for (Thread task : tasks) {
-            if (task != null) {
-                task.join(5_000);
-            }
-        }
-        for (Thread task : tasks) {
-            if (task != null) {
-                assertFalse(task.isAlive(), "controlled task did not finish after release");
-            }
-        }
-    }
-
-    private static void awaitCondition(java.util.function.BooleanSupplier condition, String message) {
-        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
-        while (!condition.getAsBoolean() && System.nanoTime() < deadline) {
-            Thread.onSpinWait();
-        }
-        assertTrue(condition.getAsBoolean(), message);
-    }
-
-    /** Holds source removal after revalidation, before location mutation/backlink detach. */
-    private static final class BlockingMonsters extends LinkedHashMap<Integer, Monster> {
-        private final AtomicBoolean first = new AtomicBoolean(true);
-        private final CountDownLatch entered = new CountDownLatch(1);
-        private final CountDownLatch release = new CountDownLatch(1);
-
-        @Override
-        public Collection<Monster> values() {
-            if (first.compareAndSet(true, false)) {
-                entered.countDown();
-                awaitRelease(release);
-            }
-            return super.values();
-        }
-    }
-
-    /** Holds enter after the membership insert, before Player.enterZone. */
-    private static final class BlockingMembers extends LinkedHashMap<Integer, Player> {
-        private final AtomicBoolean first = new AtomicBoolean(true);
-        private final CountDownLatch entered = new CountDownLatch(1);
-        private final CountDownLatch release = new CountDownLatch(1);
-
-        @Override
-        public Player put(Integer id, Player player) {
-            Player previous = super.put(id, player);
-            if (first.compareAndSet(true, false)) {
-                entered.countDown();
-                awaitRelease(release);
-            }
-            return previous;
-        }
-    }
-
-    /** Holds a newly reserved slot before the reserve call can submit source commit. */
-    private static final class BlockingReservations extends LinkedHashMap<Integer, Player> {
-        private final CountDownLatch entered = new CountDownLatch(1);
-        private final CountDownLatch release = new CountDownLatch(1);
-
-        @Override
-        public Player put(Integer id, Player player) {
-            Player previous = super.put(id, player);
-            entered.countDown();
-            awaitRelease(release);
-            return previous;
-        }
-    }
-
-    /** Delays one caller's detached route lookup without holding a Zone writer. */
-    private static final class DelayedMapLookup extends TreeMap<Integer, Map> {
-        private final AtomicReference<Thread> delayedThread = new AtomicReference<>();
-        private final AtomicBoolean first = new AtomicBoolean(true);
-        private final CountDownLatch entered = new CountDownLatch(1);
-        private final CountDownLatch release = new CountDownLatch(1);
-
-        @Override
-        public Map get(Object key) {
-            Map map = super.get(key);
-            if (Integer.valueOf(1).equals(key) && Thread.currentThread() == delayedThread.get()
-                    && first.compareAndSet(true, false)) {
-                entered.countDown();
-                awaitRelease(release);
-            }
-            return map;
-        }
-    }
-
-    /** Holds rejected-observer close after its gameplay cleanup, outside every Zone writer. */
-    private static final class ClosingTransport implements ClientTransport {
-        private final CountDownLatch entered = new CountDownLatch(1);
-        private final CountDownLatch release = new CountDownLatch(1);
-
-        @Override
-        public InputStream input() {
-            return new ByteArrayInputStream(new byte[0]);
-        }
-
-        @Override
-        public OutputStream output() {
-            return new ByteArrayOutputStream();
-        }
-
-        @Override
-        public String remoteAddress() {
-            return "map-test";
-        }
-
-        @Override
-        public void close() {
-            entered.countDown();
-            awaitRelease(release);
-        }
-    }
-
-    private static void awaitClosed(Session session) throws InterruptedException {
-        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
-        while (session.state() != SessionState.CLOSED && System.nanoTime() < deadline) {
-            Thread.sleep(1);
-        }
-        assertEquals(SessionState.CLOSED, session.state());
     }
 }

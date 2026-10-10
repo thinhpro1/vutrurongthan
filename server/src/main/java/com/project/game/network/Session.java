@@ -17,6 +17,9 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -42,6 +45,9 @@ public final class Session implements AutoCloseable {
     private final PlayerManager playerManager;
     private final Object writeLock = new Object();
     private final Object checkpointLock = new Object();
+    // Checkpoint từ thread của Zone: lưu lần lượt theo thứ tự, ngoài Zone.
+    private final ExecutorService checkpoints =
+            Executors.newSingleThreadExecutor(Thread.ofVirtual().name("checkpoint-", 0).factory());
     private final MessageHandler handler;
     private final Set<Integer> sentMapTemplates = ConcurrentHashMap.newKeySet();
     private volatile String accountName;
@@ -226,6 +232,26 @@ public final class Session implements AutoCloseable {
         }
     }
 
+    /**
+     * Lưu checkpoint mà không chờ (gọi được từ thread của Zone). Các lần lưu chạy lần lượt;
+     * Session đã đóng thì lần lưu đến muộn bị bỏ, lần lưu cuối do close() làm.
+     */
+    public void saveLater(PlayerSaveData player) {
+        Objects.requireNonNull(player, "player");
+        try {
+            checkpoints.execute(() -> {
+                try {
+                    savePlayer(player);
+                } catch (RuntimeException exception) {
+                    LOGGER.log(Level.WARNING,
+                            "PLAYER checkpoint failed playerId=" + player.id(), exception);
+                }
+            });
+        } catch (RejectedExecutionException closed) {
+            // Session đã đóng: lần lưu cuối của close() là bản đúng.
+        }
+    }
+
     @Override
     public void close() {
         close("requested");
@@ -283,6 +309,7 @@ public final class Session implements AutoCloseable {
         } catch (IOException ignored) {
             // Đóng socket đã hỏng chỉ được thực hiện theo khả năng tốt nhất.
         }
+        checkpoints.shutdown();
         manager.remove(this);
     }
 

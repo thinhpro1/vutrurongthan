@@ -76,7 +76,7 @@ public final class MonsterManager {
         RandomGenerator random = newRandom.get(); // chỉ dùng trên thread gọi, lần lượt từng Zone
         for (com.project.game.map.Map map : maps.maps()) {
             for (Zone zone : map.zones()) {
-                zone.update(nowMillis, random);
+                zone.tick(nowMillis, random);
             }
         }
     }

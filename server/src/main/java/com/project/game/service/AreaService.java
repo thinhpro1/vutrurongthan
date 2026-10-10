@@ -1,14 +1,20 @@
 package com.project.game.service;
 
+import com.project.game.map.MapTemplate;
+import com.project.game.map.Waypoint;
 import com.project.game.map.Zone;
 import com.project.game.monster.Monster;
 import com.project.game.network.Session;
 import com.project.game.network.SessionState;
 import com.project.game.network.message.Message;
+import com.project.game.network.packet.MapPacketWriter;
 import com.project.game.network.packet.MonsterPacketWriter;
 import com.project.game.network.packet.PlayerPacketWriter;
 import com.project.game.player.Player;
 
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
 
@@ -19,6 +25,7 @@ import java.util.Objects;
 public final class AreaService {
     private final PlayerPacketWriter playerPackets;
     private final MonsterPacketWriter monsterPackets;
+    private final MapPacketWriter mapPackets = new MapPacketWriter();
 
     public AreaService(PlayerPacketWriter playerPackets, MonsterPacketWriter monsterPackets) {
         this.playerPackets = Objects.requireNonNull(playerPackets, "playerPackets");
@@ -29,14 +36,49 @@ public final class AreaService {
     // Player
     // ------------------------------------------------------------------
 
-    /** Player mới vào và những người đang ở trong Zone thấy nhau. */
-    public void addPlayer(Zone zone, Player joining, List<Player> existing) {
+    /** MAP_INFO cho Player vừa tới Zone: map, vị trí, waypoint và quái đang có (giống setMapInfo). */
+    public void mapInfo(Player player) {
+        Zone zone = player.zone();
+        Session session = player.session();
+        if (session == null) {
+            return;
+        }
+        MapTemplate template = zone.map().template();
+        boolean sendTemplate = !session.hasSentMapTemplate(template.id());
+        List<String> waypointNames = new ArrayList<>();
+        for (Waypoint waypoint : template.waypoints()) {
+            waypointNames.add(zone.map().waypointName(waypoint));
+        }
+        Message packet;
+        try {
+            packet = mapPackets.mapInfo(zone.zoneId(), player.x(), player.y(), template,
+                    sendTemplate, waypointNames, List.copyOf(zone.monsters()));
+        } catch (IOException exception) {
+            zone.kick(player); // dữ liệu map hỏng: không thể vào map này
+            return;
+        }
+        if (send(zone, player, packet) && sendTemplate) {
+            session.markMapTemplateSent(template.id());
+        }
+    }
+
+    /** Báo hồi sinh cho chính Player (sau MAP_INFO khi về nhà lúc chết). */
+    public void wakeUpFromDie(Player player) {
+        send(player.zone(), player, playerPackets.wakeUpFromDie(
+                player.id(), player.x(), player.y(), player.hp(), player.mp()));
+    }
+
+    /** Player tải map xong và những người đang ở trong Zone thấy nhau. */
+    public void addPlayer(Zone zone, Player joining, Collection<Player> existing) {
         for (Player member : existing) {
             if (member == joining) {
                 continue;
             }
             if (isClosed(member)) {
                 continue;
+            }
+            if (member.isLoading()) {
+                continue; // người này sẽ thấy cả khu vực khi họ tải xong
             }
             if (!send(zone, joining, playerPackets.addPlayer(member))) {
                 return;
@@ -92,6 +134,9 @@ public final class AreaService {
         Message selfDeath = playerPackets.meDie(target.x(), target.y());
         Message observedDeath = playerPackets.playerDie(target.id(), target.x(), target.y());
         for (Player member : zone.players()) {
+            if (member.isLoading()) {
+                continue;
+            }
             if (member == target) {
                 send(zone, member, selfDeath);
             } else {
@@ -106,6 +151,9 @@ public final class AreaService {
         for (Player member : zone.players()) {
             if (member == except) {
                 continue;
+            }
+            if (member.isLoading()) {
+                continue; // client còn đang tải map
             }
             send(zone, member, packet);
         }

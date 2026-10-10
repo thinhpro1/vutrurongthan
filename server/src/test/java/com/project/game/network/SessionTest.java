@@ -1,5 +1,6 @@
 package com.project.game.network;
 
+import com.project.game.testsupport.TestMaps;
 import com.project.game.testsupport.TestPlayers;
 import com.project.game.testsupport.TestServices;
 import com.project.game.network.codec.LegacyPacketCodec;
@@ -39,11 +40,10 @@ import java.io.PipedInputStream;
 import java.io.PipedOutputStream;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
-import java.lang.reflect.Constructor;
-import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.lang.reflect.Method;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -69,9 +69,9 @@ class SessionTest {
         Session session = new Session(manager.nextId(), new TestTransport(), manager,
                 new LegacyPacketCodec(1024), "abc".getBytes(StandardCharsets.US_ASCII), 4,
                 TestServices.serverServices(), ClientConfig.defaults());
-        Zone first = new Zone(0, 0, 10, List.of(),
+        Zone first = new Zone(TestMaps.emptyMap(0, 10), 0, List.of(),
                 new AreaService(new PlayerPacketWriter(), new MonsterPacketWriter()));
-        Zone second = new Zone(0, 1, 10, List.of(),
+        Zone second = new Zone(TestMaps.emptyMap(0, 10), 1, List.of(),
                 new AreaService(new PlayerPacketWriter(), new MonsterPacketWriter()));
         Player player = TestPlayers.initial(1L, 7, "alpha1", 0);
         session.bindPlayer(player);
@@ -200,8 +200,8 @@ class SessionTest {
                 services, createPlayer(players, 101L, "alpha1", 0), "user01");
         Session observer = managedSession(
                 services, createPlayer(players, 202L, "beta22", 0), "user02");
-        gameplay.mapManager().finishLoad(mover);
-        gameplay.mapManager().finishLoad(observer);
+        gameplay.finishLoad(mover);
+        gameplay.finishLoad(observer);
         GameplayTestSupport.drain(mover);
         GameplayTestSupport.drain(observer);
 
@@ -247,7 +247,7 @@ class SessionTest {
         Player player = createPlayer(repository, 101L, "alpha1", 0);
         player.changeMap(1, 0, 1250, 648);
         Session attacker = managedSession(services, player, "user01");
-        assertTrue(gameplay.mapManager().finishLoad(attacker));
+        assertTrue(gameplay.finishLoad(attacker));
         GameplayTestSupport.drain(attacker);
         for (int hit = 0; hit < 29; hit++) {
             assertTrue(gameplay.attackMonster(attacker, 101));
@@ -275,7 +275,7 @@ class SessionTest {
             assertNotSame(rejectedOutput.writerThread.get(), repository.checkpointThread.get());
             assertEquals(11L, repository.savedPlayer.get().potential());
             assertEquals(11L, attacker.player().potential());
-            assertEquals(0L, zone.monsterSnapshots().getFirst().hp());
+            assertEquals(0L, ZoneTestHooks.monsterSnapshots(zone).getFirst().hp());
             assertEquals(SessionState.CLOSED, attacker.state());
             assertFalse(zone.hasPlayer(attacker.player()));
             assertNull(attacker.zone());
@@ -311,7 +311,7 @@ class SessionTest {
         SessionServices services = TestServices.serverServices(auth, resources, gameplay, players);
         Session session = managedSession(
                 services, createPlayer(players, 101L, "alpha1", 0), "user01");
-        assertTrue(gameplay.mapManager().finishLoad(session));
+        assertTrue(gameplay.finishLoad(session));
         GameplayTestSupport.drain(session);
         var zone = gameplay.findZone(0, 0);
 
@@ -337,7 +337,7 @@ class SessionTest {
 
         Thread close = Thread.ofVirtual().start(session::close);
         waitForCloseStarted(session);
-        assertEquals(1, gameplay.memberCount(0, 0));
+        assertEquals(1, zone.playerCount());
         assertFalse(repository.updateEntered.await(100, TimeUnit.MILLISECONDS));
 
         releasePrior.countDown();
@@ -365,7 +365,7 @@ class SessionTest {
                 services, createPlayer(players, 101L, "alpha1", 0), "user01");
         Session joining = managedSession(
                 services, createPlayer(players, 202L, "beta22", 0), "user02");
-        assertTrue(gameplay.mapManager().finishLoad(observer));
+        assertTrue(gameplay.finishLoad(observer));
         GameplayTestSupport.drain(observer);
 
         ArrayBlockingQueue<Message> fullQueue = new ArrayBlockingQueue<>(1);
@@ -374,10 +374,9 @@ class SessionTest {
 
         AtomicBoolean joined = new AtomicBoolean();
         Thread finishLoad = Thread.ofVirtual().start(() ->
-                joined.set(gameplay.mapManager().finishLoad(joining)));
+                joined.set(gameplay.finishLoad(joining)));
 
         assertTrue(repository.updateEntered.await(5, TimeUnit.SECONDS));
-        assertTrue(finishLoad.isAlive());
         CountDownLatch nextZoneAction = new CountDownLatch(1);
         assertTrue(ZoneTestHooks.submit(gameplay.findZone(0, 0), nextZoneAction::countDown));
         assertTrue(nextZoneAction.await(5, TimeUnit.SECONDS));
@@ -440,8 +439,8 @@ class SessionTest {
         Player observerProfile = createPlayer(players, 202L, "beta22", 0);
         Session mover = managedSession(services, moverProfile, "user01");
         Session observer = managedSession(services, observerProfile, "user02");
-        gameplay.mapManager().finishLoad(mover);
-        gameplay.mapManager().finishLoad(observer);
+        gameplay.finishLoad(mover);
+        gameplay.finishLoad(observer);
         GameplayTestSupport.drain(mover);
         GameplayTestSupport.drain(observer);
 
@@ -497,8 +496,8 @@ class SessionTest {
         observerProfile.changeMap(1, 0, 1250, 648);
         Session target = managedSession(services, targetProfile, "user01");
         Session observer = managedSession(services, observerProfile, "user02");
-        gameplay.mapManager().finishLoad(target);
-        gameplay.mapManager().finishLoad(observer);
+        gameplay.finishLoad(target);
+        gameplay.finishLoad(observer);
         GameplayTestSupport.drain(target);
         GameplayTestSupport.drain(observer);
         assertTrue(gameplay.attackMonster(target, 101));
@@ -647,31 +646,33 @@ class SessionTest {
                 new AccountAuth(new TestAccountRepository()), resources, gameplay, repository);
         Session session = managedSession(
                 services, createPlayer(repository, 101L, "alpha1", 0), "user01");
-        assertTrue(gameplay.mapManager().finishLoad(session));
+        assertTrue(gameplay.finishLoad(session));
         GameplayTestSupport.drain(session);
         Zone owner = session.zone();
         ZoneTestHooks.call(owner, () -> session.player().injure(200));
-        Object handler = mapHandler(session, services);
         AtomicReference<Throwable> failure = new AtomicReference<>();
-        Thread transition = startDeathReturn(handler, failure);
+        Thread transition = startDeathReturn(session, failure);
         Thread close = null;
 
         try {
             assertTrue(repository.firstSaveEntered.await(5, TimeUnit.SECONDS));
-            assertSame(owner, session.zone(), "same-Zone death return keeps its writer");
-            int latestHp = ZoneTestHooks.call(owner, () -> session.player().injure(10));
+            // Về nhà không chờ lượt lưu: Player đã sang Zone ở nhà trong lúc lượt lưu còn treo.
+            ZoneTestHooks.awaitTravel(session.player());
+            Zone home = session.zone();
+            assertNotNull(home);
+            int latestHp = ZoneTestHooks.call(home, () -> session.player().injure(10));
             assertEquals(190, latestHp);
             close = startClose(session, failure);
             waitForCloseStarted(session);
-            waitForCheckpointWaitOrCompletion(session, owner, close);
+            waitForCheckpointWaitOrCompletion(session, home, close);
 
             assertTrue(close.isAlive(), "final save must wait for the earlier checkpoint");
             assertEquals(1, repository.checkpointCalls.get());
             assertSame(session, session.manager().findByAccount("user01"));
-            assertFalse(owner.hasPlayer(session.player()));
+            assertFalse(home.hasPlayer(session.player()));
             assertNull(session.zone());
             CountDownLatch writerAvailable = new CountDownLatch(1);
-            assertTrue(ZoneTestHooks.submit(owner, writerAvailable::countDown));
+            assertTrue(ZoneTestHooks.submit(home, writerAvailable::countDown));
             assertTrue(writerAvailable.await(5, TimeUnit.SECONDS));
 
             repository.allowFirstSave.countDown();
@@ -706,7 +707,7 @@ class SessionTest {
                 new AccountAuth(new TestAccountRepository()), resources, gameplay, repository);
         Session session = managedSession(
                 services, createPlayer(repository, 101L, "alpha1", 0), "user01");
-        assertTrue(gameplay.mapManager().finishLoad(session));
+        assertTrue(gameplay.finishLoad(session));
         Zone owner = session.zone();
         try {
             ZoneTestHooks.call(owner, () -> {
@@ -735,21 +736,16 @@ class SessionTest {
                 new AccountAuth(new TestAccountRepository()), resources, gameplay, repository);
         Session session = managedSession(
                 services, createPlayer(repository, 101L, "alpha1", 0), "user01");
-        assertTrue(gameplay.mapManager().finishLoad(session));
+        assertTrue(gameplay.finishLoad(session));
         GameplayTestSupport.drain(session);
         Zone owner = session.zone();
-        ZoneTestHooks.call(owner, () -> session.player().injure(200));
-        MapManager.MapChange earlier = gameplay.mapManager().returnHomeFromDeath(session);
-        assertNotNull(earlier);
-        assertEquals(200, earlier.saveData().hp());
+        PlayerSaveData earlier = ZoneTestHooks.call(owner, () -> PlayerSaveData.capture(session.player()));
+        assertEquals(200, earlier.hp());
         int latestHp = ZoneTestHooks.call(owner, () -> session.player().injure(10));
         assertEquals(190, latestHp);
-        Object handler = mapHandler(session, services);
 
         session.close();
-        Method save = handler.getClass().getDeclaredMethod("save", PlayerSaveData.class);
-        save.setAccessible(true);
-        save.invoke(handler, earlier.saveData());
+        session.saveLater(earlier); // checkpoint đến sau khi đã đóng: phải bị bỏ
 
         assertEquals(SessionState.CLOSED, session.state());
         assertEquals(1, repository.checkpointCalls.get(), "late checkpoint must not reach persistence");
@@ -771,7 +767,7 @@ class SessionTest {
                 initial.appearance(), initial.coin(), initial.coinLock(), initial.diamond(), initial.ruby(),
                 1, 0, 4464, 936);
         Session session = managedSession(services, player, "user01");
-        assertTrue(gameplay.mapManager().finishLoad(session));
+        assertTrue(gameplay.finishLoad(session));
         GameplayTestSupport.drain(session);
         Zone owner = session.zone();
         ZoneTestHooks.call(owner, () -> player.injure(450));
@@ -863,22 +859,25 @@ class SessionTest {
                 new AccountAuth(new TestAccountRepository()), resources, gameplay, repository);
         Session session = managedSession(
                 services, createPlayer(repository, 101L, "alpha1", 0), "user01");
-        assertTrue(gameplay.mapManager().finishLoad(session));
+        assertTrue(gameplay.finishLoad(session));
         GameplayTestSupport.drain(session);
         Zone owner = session.zone();
         ZoneTestHooks.call(owner, () -> session.player().injure(200));
-        Object handler = mapHandler(session, services);
         AtomicReference<Throwable> failure = new AtomicReference<>();
-        Thread transition = startDeathReturn(handler, failure);
+        Thread transition = startDeathReturn(session, failure);
         Thread close = null;
 
         try {
             assertTrue(repository.firstSaveEntered.await(5, TimeUnit.SECONDS));
-            int latestHp = ZoneTestHooks.call(owner, () -> session.player().injure(10));
+            // Về nhà không chờ lượt lưu: Player đã sang Zone ở nhà trong lúc lượt lưu còn treo.
+            ZoneTestHooks.awaitTravel(session.player());
+            Zone home = session.zone();
+            assertNotNull(home);
+            int latestHp = ZoneTestHooks.call(home, () -> session.player().injure(10));
             assertEquals(190, latestHp);
             close = startClose(session, failure);
             waitForCloseStarted(session);
-            waitForCheckpointWaitOrCompletion(session, owner, close);
+            waitForCheckpointWaitOrCompletion(session, home, close);
 
             assertTrue(close.isAlive(), "account remains reserved while the earlier save is pending");
             assertSame(session, session.manager().findByAccount("user01"));
@@ -900,7 +899,7 @@ class SessionTest {
             assertEquals(200, delegate.requireByAccountId(101L).hp());
             assertNull(session.manager().findByAccount("user01"));
             assertEquals(0, session.manager().onlineCount());
-            assertFalse(owner.hasPlayer(session.player()));
+            assertFalse(home.hasPlayer(session.player()));
             assertNull(session.zone());
         } finally {
             repository.allowFirstSave.countDown();
@@ -922,7 +921,7 @@ class SessionTest {
                 new AccountAuth(new TestAccountRepository()), resources, gameplay, repository);
         Session session = managedSession(
                 services, createPlayer(repository, 101L, "alpha1", 0), "user01");
-        assertTrue(gameplay.mapManager().finishLoad(session));
+        assertTrue(gameplay.finishLoad(session));
         GameplayTestSupport.drain(session);
         Zone owner = session.zone();
         PlayerSaveData earlier = ZoneTestHooks.call(owner, () -> PlayerSaveData.capture(session.player()));
@@ -982,7 +981,7 @@ class SessionTest {
                 new AccountAuth(new TestAccountRepository()), resources, gameplay, repository);
         Session session = managedSession(
                 services, createPlayer(repository, 101L, "alpha1", 0), "user01");
-        assertTrue(gameplay.mapManager().finishLoad(session));
+        assertTrue(gameplay.finishLoad(session));
         GameplayTestSupport.drain(session);
         Zone owner = session.zone();
         PlayerSaveData earlier = ZoneTestHooks.call(owner, () -> PlayerSaveData.capture(session.player()));
@@ -1050,20 +1049,12 @@ class SessionTest {
                 List.of(), List.of(), java.util.Map.of());
     }
 
-    private static Object mapHandler(Session session, SessionServices services) throws Exception {
-        Class<?> type = Class.forName("com.project.game.network.handler.MapHandler");
-        Constructor<?> constructor = type.getDeclaredConstructor(
-                Session.class, MapManager.class, GameResources.class);
-        constructor.setAccessible(true);
-        return constructor.newInstance(session, services.maps(), services.resources());
-    }
-
-    private static Thread startDeathReturn(Object handler, AtomicReference<Throwable> failure) throws Exception {
-        Method returnHome = handler.getClass().getDeclaredMethod("handleReturnTownFromDie", Message.class);
-        returnHome.setAccessible(true);
+    /** Như client bấm "về nhà" khi đã chết: lệnh chạy trên Zone hiện tại của Player. */
+    private static Thread startDeathReturn(Session session, AtomicReference<Throwable> failure) {
         return Thread.ofVirtual().start(() -> {
             try {
-                returnHome.invoke(handler, new Message(MessageName.RETURN_TOWN_FROM_DIE));
+                Player player = session.player();
+                assertTrue(player.zone().post(player, player::returnTownFromDead));
             } catch (Throwable exception) {
                 failure.compareAndSet(null, exception);
             }

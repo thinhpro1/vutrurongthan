@@ -23,7 +23,7 @@ public final class TestZone {
         MonsterManager monsters = new MonsterManager(GameResources.fromFrameRoot(
                 Path.of("resources", "json"), MapTestSupport.canonicalMaps(), 2,
                 MonsterTestSupport.canonicalRepository()));
-        zone = new Zone(1, 0, Integer.MAX_VALUE, monsters.createForMap(1),
+        zone = new Zone(TestMaps.emptyMap(1, Integer.MAX_VALUE), 0, monsters.createForMap(1),
                 new AreaService(new PlayerPacketWriter(), new MonsterPacketWriter()));
     }
 
@@ -38,7 +38,7 @@ public final class TestZone {
 
     public Player join(Player player) {
         Session session = GameplayTestSupport.session(player);
-        if (!zone.enter(player)) {
+        if (!ZoneTestHooks.join(zone, player)) {
             throw new AssertionError("player " + player.id() + " could not enter test zone");
         }
         try {

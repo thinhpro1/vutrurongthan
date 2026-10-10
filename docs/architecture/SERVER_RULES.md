@@ -41,8 +41,10 @@ Chủ dự án không chuyên code. Mọi code gameplay phải đọc được n
 | Quái: đi lại, đuổi, đánh, chọn mục tiêu | `monster/Monster.java` | `update()`, `updateMove()`, `updateAttack()`, `findTarget()` |
 | Quái: bị đánh, chết, thưởng, hồi sinh | `monster/Monster.java` | `injure()`, `die()`, `respawn()` |
 | Dữ liệu quái (máu, dame, tốc độ) | DB / `monster/MonsterTemplate.java` | — |
-| Trong một khu vực có gì, chạy theo nhịp nào | `map/Zone.java` | `update()`, `enter()`, `leave()` |
-| Map có những khu vực nào, waypoint | `map/Map.java` | `findZone()`, `findWaypoint()` |
+| Trong một khu vực có gì, chạy theo nhịp nào | `map/Zone.java` | `update()`, `enter()`, `finishLoadMap()`, `leave()` |
+| Map có những khu vực nào, waypoint, chọn khu vực | `map/Map.java` | `findZone()`, `findOrRandomZone()`, `findWaypoint()` |
+| Đi map, vào game, thoát game | `map/MapManager.java` | `travel()`, `enterGame()`, `leave()` |
+| Nhịp update, hàng đợi lệnh (chỉ hạ tầng) | `map/ZoneWriter.java` | — |
 | Gói tin gửi cho người chơi khi có sự kiện | `service/AreaService.java` | `monsterAttack()`, `playerMove()`… |
 | Bytes của gói tin | `network/packet/*PacketWriter.java` | — |
 | Đọc gói tin client gửi lên | `network/handler/*Handler.java` | `handleXxx()` |
@@ -186,13 +188,13 @@ Thời gian (`now`) do Handler lấy một lần và truyền vào, để test �
    - Trước khi chạy `action`, Zone kiểm tra `player` còn là thành viên **của Zone này**; không còn thì bỏ. Vì vậy Handler đọc `player.zone()` cũ cũng an toàn.
    - Kiểm tra membership chỉ ở cửa này, không lặp trong từng hành động.
 3. **Chờ kết quả (`call`) chỉ dùng ở biên hạ tầng** (đăng nhập, thoát game, test). Không bao giờ gọi từ trong một writer.
-4. **Vòng update:** `Zone.update(now)` mỗi 100 ms khi Zone còn Player.
+4. **Vòng update:** `Zone.update(now)` mỗi 100 ms khi Zone còn Player đã tải xong map.
    - Nhịp kế tiếp tính từ lúc nhịp trước kết thúc: input luôn có lượt, nhịp trễ không dồn.
    - Zone trống thì ngủ (thread kết thúc); input mới đánh thức.
    - Mọi bộ hẹn giờ dùng **mốc thời gian tuyệt đối** (`respawnAt`, `effectEndAt`, `cooldownUntil`), để ngủ rồi thức vẫn đúng.
    - Mỗi Zone có `RandomGenerator` riêng.
 5. **Không chặn writer:** JDBC, socket, file, HTTP, chờ Zone khác đều chạy ngoài.
-6. **Gửi packet không chặn:** `session.trySend`. Hàng đợi gửi đầy thì Session bị kick; việc đóng Session chạy **ngoài** writer.
+6. **Gửi packet không chặn:** `session.trySend`. Hàng đợi gửi đầy thì `zone.kick(player)`; việc đóng Session chạy **ngoài** writer, sau việc hiện tại (`ZoneWriter.later`).
 7. **Sang Zone khác:** chỉ `otherZone.post(...)`, không chờ. Không giữ tham chiếu để sửa entity của Zone khác.
 8. **Trạng thái dùng chung của nhiều Zone** (Dungeon, sự kiện) có writer riêng và chỉ nhận việc qua `post`.
 9. **Thứ tự trong một Zone là thứ tự của writer.** Không dùng timestamp của client để phân xử.
@@ -232,24 +234,25 @@ Thời gian (`now`) do Handler lấy một lần và truyền vào, để test �
 ## 8. Map, Zone và đi lại
 
 - `MapManager` tạo đúng `minZone` Zone cho mỗi Map public lúc khởi động. Đang chơi không tạo thêm Zone public.
-- `Map.findOrRandomZone()`: ưu tiên Zone ít người, bỏ qua Zone đầy.
+- `Map.findOrRandomZone()` (giống `findOrRandomZone(-1)` src cũ): Zone đầu tiên còn chỗ, để người đi cùng nhau vào chung khu; tất cả đầy thì Zone ít người nhất. **Sức chứa là mềm**: không bao giờ từ chối người chơi vì đầy.
 - **Mọi kiểu đi lại dùng một đường chung.** Player tự tính đích, rồi gọi `maps.travel(this, mapId, x, y)`:
   - `requestChangeMap()` → waypoint (trong dungeon thì hỏi `dungeon.findMap` trước);
   - `returnTownFromDead()` → hồi sinh rồi về nhà;
   - `goBack()` → vị trí đã lưu;
   - `teleport(...)` → đích chỉ định.
 - **`travel` chạy trên writer của Zone nguồn:**
-  1. kiểm tra lại điều kiện;
-  2. `source.leave(player)` (báo người còn lại);
-  3. đặt vị trí mới cho Player;
-  4. `destination.post(enter player)`, không chờ.
+  1. kiểm tra lại điều kiện; chọn Zone đích;
+  2. `player.startTravel(destination)` (để thoát game giữa đường vẫn tìm thấy Player);
+  3. `source.leave(player)` (báo người còn lại);
+  4. đặt vị trí mới, `session.saveLater(...)` (lưu ngoài writer, đúng thứ tự);
+  5. `destination.postEnter(player)`, không chờ.
 - **`Zone.enter(player)` chạy trên writer của Zone đích:**
-  1. Session đã đóng → không vào, chuyển sang lưu cuối (mục 10);
-  2. Zone đầy → thử Zone khác của cùng Map;
+  1. Session đã đóng → không vào, kết thúc chuyến đi (lưu cuối do `close()` làm, mục 10);
+  2. cùng nhân vật đang ở đây bằng kết nối khác → kick kết nối mới;
   3. thêm vào `players`, đánh dấu `loading`;
-  4. gửi `MAP_INFO` dựng từ dữ liệu đang sống (giống `Zone.enter → setMapInfo` của src cũ);
-  5. báo người khác có Player mới.
-- `FINISH_LOAD_MAP` → `zone.post(player, player::finishLoadMap)`: bỏ cờ `loading`, gửi danh sách người đang ở trong Zone cho Player.
+  4. gửi `MAP_INFO` dựng từ dữ liệu đang sống (giống `Zone.enter → setMapInfo` của src cũ).
+- `FINISH_LOAD_MAP` → `zone.finishLoadMap(player)`: bỏ cờ `loading`, Player và người trong Zone thấy nhau (`ADD_PLAYER` hai chiều).
+- Đang `loading`: lệnh qua `post` bị bỏ, quái không đánh, người khác chưa thấy.
 - Trong lúc đi giữa hai Zone, Player **thuộc về chuyến đi**, không Zone nào sửa nó. Thoát game giữa chừng thì Zone đích xử lý ở bước enter (1).
 
 ## 9. Dungeon
@@ -348,12 +351,12 @@ Code chạy đúng nhưng khó đọc hơn src cũ mà không có lý do correct
 |---|---|---|
 | ~~`Zone` giữ `Session`; mỗi hành động là một method trên Zone~~ | **Đã chuyển (2026-10-10):** Zone giữ `Player`; Handler → `zone.post` → `Player.move/useSkill/attack` | 2, 3, 4 |
 | ~~`Monster` trả `Damage/Attack/Move/Respawn`; Zone so trước/sau để gửi packet~~ | **Đã chuyển (2026-10-10):** Monster gọi `zone.service()` | 7 |
-| `MAP_INFO` gửi từ Handler, đọc Monster qua `Monster.Snapshot` | `Zone.enter` gửi `MAP_INFO` từ dữ liệu sống; bỏ `Snapshot` | 8 |
-| Chuyển map: giữ chỗ ở đích + `Trip` + vào Zone lúc `FINISH_LOAD_MAP` | `travel`: leave nguồn → `post(enter)` đích | 8 |
-| `MapManager.changeMap/returnHomeFromDeath` | `Player.requestChangeMap/returnTownFromDead` → `maps.travel` | 5, 8 |
+| ~~`MAP_INFO` gửi từ Handler, đọc Monster qua `Monster.Snapshot`~~ | **Đã chuyển (2026-10-10):** `Zone.enter` gửi `MAP_INFO` từ dữ liệu sống | 8 |
+| ~~Chuyển map: giữ chỗ ở đích + `Trip` + vào Zone lúc `FINISH_LOAD_MAP`~~ | **Đã chuyển (2026-10-10):** `travel`: leave nguồn → `postEnter` đích | 8 |
+| ~~`MapManager.changeMap/returnHomeFromDeath`~~ | **Đã chuyển (2026-10-10):** `Player.requestChangeMap/returnTownFromDead` → `MapManager.travel` | 5, 8 |
 | `MonsterManager.start/stop` bật vòng update của Zone | `MapManager.start/stop` | 7, 8 |
-| `Zone` dùng `synchronized` cho truy vấn từ thread khác | truy vấn qua `post`/`call` ở biên; bỏ `synchronized` | 11 |
+| ~~`Zone` dùng `synchronized` cho truy vấn từ thread khác~~ | **Đã chuyển (2026-10-10):** phần thread nằm trong `ZoneWriter`; Zone không còn `synchronized` | 11 |
 | `Player.move` nhận mọi tọa độ; đánh không kiểm tra tầm/cooldown | kiểm tra tường, quãng đường, tầm, cooldown | 5, 3 |
-| Chưa có `Character`, `Boss`, `Effects`, `Dungeon`, `goBack`, `teleport`, `findOrRandomZone` | theo mục 5–9 | — |
+| Chưa có `Character`, `Boss`, `Effects`, `Dungeon`, `goBack`, `teleport` | theo mục 5–9 | — |
 
-Thứ tự đề xuất: ~~luồng mẫu (move + attack monster, Zone giữ Player)~~ (xong) → travel + `MAP_INFO` khi enter → kiểm tra di chuyển/tầm/cooldown → `Character` + `Effects` → Boss → Dungeon.
+Thứ tự đề xuất: ~~luồng mẫu (move + attack monster, Zone giữ Player)~~ (xong) → ~~travel + `MAP_INFO` khi enter~~ (xong) → kiểm tra di chuyển/tầm/cooldown → `Character` + `Effects` → Boss → Dungeon.

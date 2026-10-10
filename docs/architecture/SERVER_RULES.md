@@ -1,1586 +1,309 @@
-# SERVER RULES V2.2
+# SERVER RULES V3
 
-> **Status:** Sole authoritative architecture, coding, readability, ownership, concurrency, persistence, and safety contract for `server/**`
->
-> **Applies to:** planning, implementation, refactor, review, testing, protocol, persistence, gameplay, concurrency, naming, package/file structure, and Java style.
->
-> **Reference source:** sibling legacy project `../rongthanchibi` / legacy `rongthan` source is the main readability and gameplay-flow reference.
->
-> **Primary goal:** preserve correctness while keeping gameplay code simple enough that a beginner Java developer can follow the normal flow without first learning architecture jargon.
+> **Phạm vi:** toàn bộ `server/**`. Không áp dụng cho client Unity.
+> **Ngày:** 2026-10-10. Thay thế V2.2 (đã chuyển vào `docs/archive/`).
+> **Nguồn tham khảo cách viết:** src cũ `rongthan` (`../rongthanchibi`).
+> **Mục tiêu:** đọc code gameplay giống đọc src cũ (handler → hành động của nhân vật → báo cho khu vực),
+> nhưng an toàn khi nhiều người chơi cùng lúc nhờ **1 Zone = 1 virtual thread**.
 
----
-
-# 1. Non-negotiable rules
-
-These rules override style preferences and must be checked on every gameplay task.
-
-```text
-1. Feature.java owns the main feature behavior.
-2. Manager does not become the default place for gameplay logic.
-3. Service means message / packet / send / broadcast unless explicitly approved otherwise.
-4. Zone owns execution timing and serial mutation ordering.
-5. Entity owns the behavior that naturally describes that entity.
-6. Repository owns persistence.
-7. Handler owns protocol parsing/dispatch, not gameplay.
-8. Packet writer owns binary serialization.
-9. One mutable gameplay concept must have one authoritative owner.
-10. Do not add abstraction for hypothetical future needs.
-11. Prefer simple imperative Java over clever Java when both are correct.
-12. Avoid unnecessary file jumps.
-13. Inspect the equivalent legacy feature before changing an existing gameplay feature.
-14. Do not block Zone execution on JDBC, socket I/O, HTTP, filesystem I/O, or external waits.
-15. Do not nest cross-Zone owner waits.
-16. Do not change protocol bytes, DB schema, persistence ordering, or gameplay behavior unless explicitly approved.
-17. Do not silently turn temporary coordination code into permanent feature ownership.
-18. If ownership is unclear, stop planning implementation and resolve ownership first.
-19. Zone decides WHEN runtime mutation runs; Entity decides WHAT its gameplay behavior does.
-20. Do not impose global entity-update phases without a demonstrated gameplay or correctness requirement.
-21. Same-Zone combat ordering is decided by the server-side Zone writer, never by client timestamps.
-```
+Quyết định và lý do nằm ở `docs/architecture/DECISIONS.md`. File này chỉ nói **phải viết thế nào**.
 
 ---
 
-# 2. Authority order
+## 0. Đọc file này thế nào
 
-When sources disagree, use this order:
-
-```text
-1. Locked correctness invariants
-   - protocol compatibility
-   - database schema/data safety
-   - Zone single-writer ownership
-   - persistence ordering
-   - Session/account ordering
-   - approved concurrency invariants
-
-2. docs/architecture/SERVER_RULES.md
-
-3. Newly approved task/fix plan created after this rule
-
-4. server/README.md for operational commands
-
-5. Older plans/specifications
-
-6. Legacy source
-```
-
-## V2.2 explicit supersession
-
-The former P2 Monster rule:
-
-```text
-move ALL monsters
-→ respawn ALL monsters
-→ attack ALL monsters
-```
-
-is **retired**.
-
-It must NOT be treated as a locked correctness invariant after V2.2.
-
-The correctness invariants that remain are:
-
-```text
-1 Zone = 1 writer.
-
-All mutable gameplay operations owned by one Zone are serialized by that Zone writer.
-
-A Monster can transition from alive to dead only once for one HP state.
-
-The Player attack that changes Monster HP from > 0 to 0 is the finisher for that death.
-
-Later attacks must observe the Monster as dead and must not produce another kill/reward for the same death.
-```
-
-Important:
-
-```text
-Current code structure is NOT automatically authoritative.
-```
-
-Existing production structure may be temporary or wrong.
-
-A coding model must not justify bad ownership by saying:
-
-```text
-"the current code already does it this way"
-```
-
-Only locked correctness behavior has priority over this rule.
+- Đây là **hình dạng đích**. Code hiện tại chưa theo hết; mục 16 liệt kê những chỗ chưa chuyển.
+- Mỗi lần chạm vào một tính năng, chuyển **trọn tính năng đó** sang hình dạng đích. Không sửa lan sang tính năng khác.
+- Các bất biến ở mục 4 (thread) và mục 10 (lưu dữ liệu) luôn đúng, kể cả với code chưa chuyển.
+- Không đổi protocol (bytes gửi/nhận với Unity) hay schema DB nếu task không yêu cầu rõ.
 
 ---
 
-# 3. Mandatory pre-coding gate
+## 1. Mười hai nguyên tắc
 
-Before planning or changing `server/**`, the coding model MUST:
-
-```text
-1. Read this file.
-2. Inspect the current implementation.
-3. Identify the feature center.
-4. Identify the Manager responsibility.
-5. Identify the Service responsibility.
-6. Identify protocol impact.
-7. Identify persistence impact.
-8. Identify concurrency/execution owner.
-9. Identify authoritative mutable state.
-10. Inspect the equivalent legacy implementation when available.
-11. State behavior that must remain unchanged.
-12. State focused tests required.
-```
-
-If this file cannot be read:
-
-```text
-STOP before changing server code.
-```
-
-If ownership is still unclear after inspection:
-
-```text
-STOP before implementation.
-Resolve ownership first.
-```
+1. **Nhân vật là trung tâm.** Hành động của người chơi nằm trong `Player` (hoặc phần con của Player). Mở `Player.java` là biết người chơi làm được gì.
+2. **Zone quyết định KHI NÀO, entity quyết định LÀM GÌ.** Zone chỉ chạy tuần tự; không chứa luật chơi của Player/Monster.
+3. **Handler chỉ đọc packet rồi chuyển việc.** Không có quyết định gameplay trong Handler.
+4. **Entity báo kết quả bằng từ ngữ game qua `zone.service`.** Service đóng gói và gửi; PacketWriter lo bytes.
+5. **Mỗi trạng thái có một chủ.** HP, vị trí, membership, cooldown… chỉ một nơi được sửa.
+6. **Không chờ chéo giữa các Zone.** Gửi việc sang Zone khác bằng `post` (không chờ), không bao giờ `call` lồng.
+7. **Không I/O chặn trên writer.** JDBC, socket, file, HTTP chạy ngoài Zone.
+8. **Không tin client.** Server kiểm tra vị trí, tầm đánh, cooldown, phần thưởng.
+9. **Manager quản lý tập hợp, không chứa gameplay.** `init`, `load`, `find`, `create`, `open/close`.
+10. **Tách theo mảng gameplay, không tách theo tầng kỹ thuật.** Không `PlayerService`, `MapService`, `XxxProcessor`, `XxxCoordinator`.
+11. **Java phổ thông, đọc từ trên xuống.** Kiểm tra trước, thay đổi sau, báo cuối. Ít lambda, ít record, không Stream/Optional trong gameplay.
+12. **Xem tính năng tương ứng ở src cũ trước khi viết.** Giữ tên và luồng dễ hiểu; bỏ phần không an toàn (mục 13).
 
 ---
 
-# 4. Default feature shape
+## 2. Ai làm gì
 
-The default gameplay feature shape is:
-
-```text
-Feature.java
-    runtime state
-    main gameplay behavior
-    update/run logic
-    normal feature actions
-
-FeatureTemplate.java
-    static definition/configuration
-
-FeatureManager.java
-    init/load
-    catalog
-    create/find
-    global collection when genuinely needed
-    open/close lifecycle of many instances
-
-FeatureService.java
-    packet/message/send/broadcast only when needed
-
-Repository
-    persistence only
-```
-
-Not every feature needs every file.
-
-Do not create files just to make folders symmetrical.
-
-Good:
-
-```text
-Monster.java
-MonsterTemplate.java
-MonsterManager.java
-```
-
-Avoid automatically adding:
-
-```text
-Factory
-Registry
-Coordinator
-Processor
-Context
-Result
-Runtime
-Facade
-Mapper
-Snapshot
-Scheduler
-Operation
-```
-
-unless each type solves a demonstrated problem.
+| Thành phần | Làm | Không làm |
+|---|---|---|
+| `MessageHandler` + các `XxxHandler` | đọc/kiểm tra định dạng packet, tìm `Player`, `zone.post(...)` | quyết định gameplay, sửa state |
+| `Zone` | giữ `players`, `bosses`, `monsters` (sau: `npcs`, `itemMaps`); `update()`; `post()`; `enter/leave`; `service` | luật chơi của entity |
+| `ZoneWriter` | hàng đợi, virtual thread, nhịp update, ngủ/thức | bất kỳ state gameplay nào |
+| `Player` | hành động của người chơi; giữ tham chiếu `session` để gửi | parse packet, tạo bytes, JDBC, lock |
+| Phần con của Player (`Inventory`, `PlayerTask`, `Trade`…) | một mảng gameplay riêng của Player | tự đi tìm Zone/Manager khác |
+| `Character` | phần chung của Player và Boss: vị trí, HP/MP, chỉ số, skill, effect, `injure`, `die`, `useSkill` | phần riêng người chơi (session, túi đồ, nhiệm vụ, lưu) |
+| `Boss` | AI: chọn skill, chọn mục tiêu, phase, phần thưởng | — |
+| `Monster` | `update`, `updateMove`, `updateAttack`, `findTarget`, `injure`, `die`, `respawn` | gửi bytes, biết Session |
+| `Map` | template, các Zone, `findZone`, `findOrRandomZone`, `findWaypoint`, `isWall`, `groundY` | tạo Zone public mới khi đang chơi |
+| `MapManager` | danh sách Map public, `findMap`, bật/tắt vòng update, `travel(...)` | hành động khác của Player |
+| `Dungeon` | lượt chơi riêng: các Map riêng, thời gian, người tham gia, `update`, `close` | — |
+| `XxxManager` | `init/load`, catalog template, `find/create`, mở/đóng nhiều instance | gameplay của một instance |
+| `AreaService` (`zone.service`) | tên hàm theo sự kiện game, gửi cho người trong Zone | quyết định gameplay |
+| `XxxPacketWriter` | bytes của packet | gameplay |
+| `XxxRepository` | đọc/ghi DB | gameplay |
+| `Session` | kết nối, hàng đợi gửi, trạng thái đăng nhập, lưu checkpoint ngoài Zone | là đối tượng gameplay |
 
 ---
 
-# 5. Feature center rule
+## 3. Luồng mẫu: Player đánh Monster
 
-Every gameplay feature must have one obvious first file to open.
-
-Examples:
-
-```text
-Player behavior       → Player.java
-Monster behavior      → Monster.java
-Npc behavior          → Npc.java
-Item behavior         → Item.java
-Shop behavior         → Shop.java
-Map structure         → Map.java
-Zone runtime/world    → Zone.java
-```
-
-A reviewer should be able to understand the normal flow with few file jumps.
-
-If understanding one gameplay action requires:
-
-```text
-Manager
-→ Service
-→ Coordinator
-→ Result
-→ Context
-→ Feature
-```
-
-the design is probably too fragmented.
-
-Line count alone is NOT a reason to split a cohesive feature.
-
-A large cohesive file is acceptable if it is easier to read than many tiny files.
-
----
-
-# 6. Manager rule
-
-A `Manager` is NOT the default home for gameplay behavior.
-
-A Manager may own:
-
-```text
-init
-load
-catalog
-global collection
-create
-find
-register/remove
-open/close
-lifecycle of many instances
-```
-
-Good examples:
-
-```text
-MonsterManager.init()
-MonsterManager.findTemplate()
-
-NpcManager.init()
-
-ItemManager.createItem()
-ItemManager.findTemplate()
-
-MapManager.init()
-MapManager.findMap()
-MapManager.close()
-```
-
-Strong review warnings:
-
-```text
-MapManager.movePlayer()
-MonsterManager.attack()
-MonsterManager.moveMonster()
-NpcManager.chat()
-ItemManager.upgradeItem()
-PlayerManager.injure()
-```
-
-If logic naturally describes what one runtime object does, prefer the runtime object.
-
-```text
-Player.move()
-Monster.attack()
-Npc.chat()
-Item.upgrade()
-```
-
----
-
-# 7. Service rule
-
-In this project:
-
-```text
-Service = message / packet / send / broadcast
-```
-
-Examples:
-
-```text
-AreaService.addPlayer(...)
-AreaService.removePlayer(...)
-AreaService.move(...)
-```
-
-Do NOT use `Service` as a generic business layer.
-
-Avoid:
-
-```text
-PlayerService.move()
-MapService.changeMap()
-MonsterService.attack()
-UpgradeService.processUpgrade()
-```
-
-Cross-owner coordination does NOT automatically justify creating a `Service`.
-
-If a cross-owner operation is truly needed:
-
-```text
-design its owner explicitly in the approved task plan
-```
-
-Do not invent a `Service` merely because no obvious owner exists yet.
-
----
-
-# 8. Repository, Handler, Packet boundaries
-
-Repository owns persistence.
-
-```text
-load
-insert
-update
-delete
-query
-```
-
-Gameplay objects must not know JDBC/SQL details.
-
-Preferred:
-
-```text
-Player
-→ PlayerSaveData
-→ PlayerRepository
-→ JDBC
-```
-
-Handler owns protocol boundary:
-
-```text
-read packet fields
-validate packet shape
-call gameplay entry point
-send response
-```
-
-Handler must not contain gameplay decisions.
-
-Packet writers own binary encoding.
-
-Gameplay decides:
-
-```text
-what happened
-```
-
-Packet writer decides:
-
-```text
-how it is serialized
-```
-
----
-
-# 9. Data / Template / Runtime distinction
-
-Keep separate:
-
-```text
-Persistence row
-→ durable DB representation
-
-Template
-→ canonical static definition
-
-Runtime object
-→ live mutable gameplay state
-```
-
-Example:
-
-```text
-DB/resource data
-→ MonsterTemplate
-→ Monster
-```
-
-Do not make gameplay understand SQL rows.
-
-Do not duplicate Template data into runtime state without a reason.
-
----
-
-# 10. Newbie-readable Java style
-
-Default style:
-
-```text
-simple
-imperative
-explicit
-top-to-bottom
-easy to debug
-```
-
-Prefer:
+Mọi tính năng mới viết theo đúng hình dạng này.
 
 ```java
-Player player = session.player();
-
-if (player == null) {
-    return false;
-}
-
-if (player.isDead()) {
-    return false;
-}
-
-player.move(x, y);
-return true;
-```
-
-Avoid dense validation + mutation:
-
-```java
-if (player == null || player.isDead() || !player.move(x, y)) {
-    return false;
-}
-```
-
-Do not hide important side effects inside compound boolean expressions.
-
-Preferred rule:
-
-```text
-validation first
-mutation second
-output/broadcast last
-```
-
----
-
-# 11. Java syntax restraint
-
-## Prefer early return
-
-```java
-if (player == null) {
-    return;
-}
-
-if (player.isDead()) {
-    return;
-}
-```
-
-Avoid deep nesting when early return is clearer.
-
-## Prefer explicit types
-
-Preferred:
-
-```java
-List<Session> rejected = area.removePlayer(...);
-Player player = session.player();
-Zone zone = map.findZone(zoneId);
-```
-
-Avoid `var` in normal gameplay code.
-
-## Prefer normal loops
-
-Preferred:
-
-```java
-for (Player player : players) {
-    if (player.isDead()) {
-        continue;
+// CombatHandler: đọc packet, chuyển việc. Lambda duy nhất của luồng nằm ở đây.
+void handleAttackMonster(Message message) throws IOException {
+    MessageReader reader = message.reader();
+    int monsterId = reader.readInt();
+    if (reader.remaining() != 0) {
+        throw new IOException("trailing attack payload");
     }
+    Player player = session.player();
+    Zone zone = player.zone();
+    if (zone == null) {
+        return; // đang đi giữa hai Zone
+    }
+    zone.post(player, () -> player.attackMonster(monsterId));
+}
 
-    ...
+// Player.java: chạy trên writer của Zone, không cần lock
+public void attackMonster(int monsterId) {
+    if (isDead()) {
+        return;
+    }
+    Monster monster = zone.findMonster(monsterId);
+    if (monster == null) {
+        return;
+    }
+    if (!isInRange(monster)) {
+        return;
+    }
+    if (!skill.isReady(now())) {
+        return;
+    }
+    skill.use(now());
+    monster.injure(this, damage());
+}
+
+// Monster.java
+public void injure(Player attacker, long damage) {
+    if (isDead()) {
+        return; // single writer: chỉ một người kết liễu
+    }
+    hp = Math.max(0, hp - damage);
+    addEnemy(attacker);
+    zone.service.monsterInjure(this, attacker, damage);
+    if (hp == 0) {
+        die(attacker);
+    }
+}
+
+private void die(Player killer) {
+    status = DIE;
+    respawnAt = zone.now() + respawnDelay();
+    zone.service.monsterDie(this, killer);
+    killer.addPotential(template.potentialReward());
+}
+
+// AreaService.java
+public void monsterInjure(Monster monster, Player attacker, long damage) {
+    sendToAll(monsterPackets.injure(monster, attacker, damage));
 }
 ```
 
-Use Stream only when it is clearly shorter and equally readable.
+Đọc luồng: **4 file** (Handler → Player → Monster → AreaService), không record trung gian, không lock.
 
-## Limit Optional
+---
 
-Do not use `Optional` as normal gameplay control flow.
+## 4. Thread và Zone (bất biến)
 
-Preferred:
+1. **1 Zone = 1 virtual thread = 1 writer.** Mọi thay đổi state của Zone và entity trong Zone chạy trên writer đó.
+2. **Một cửa vào:** `zone.post(player, action)`.
+   - Không chờ; hàng đợi có giới hạn; đầy thì bỏ lệnh (client gửi lại được).
+   - Trước khi chạy `action`, Zone kiểm tra `player` còn là thành viên **của Zone này**; không còn thì bỏ. Vì vậy Handler đọc `player.zone()` cũ cũng an toàn.
+   - Kiểm tra membership chỉ ở cửa này, không lặp trong từng hành động.
+3. **Chờ kết quả (`call`) chỉ dùng ở biên hạ tầng** (đăng nhập, thoát game, test). Không bao giờ gọi từ trong một writer.
+4. **Vòng update:** `Zone.update(now)` mỗi 100 ms khi Zone còn Player.
+   - Nhịp kế tiếp tính từ lúc nhịp trước kết thúc: input luôn có lượt, nhịp trễ không dồn.
+   - Zone trống thì ngủ (thread kết thúc); input mới đánh thức.
+   - Mọi bộ hẹn giờ dùng **mốc thời gian tuyệt đối** (`respawnAt`, `effectEndAt`, `cooldownUntil`), để ngủ rồi thức vẫn đúng.
+   - Mỗi Zone có `RandomGenerator` riêng.
+5. **Không chặn writer:** JDBC, socket, file, HTTP, chờ Zone khác đều chạy ngoài.
+6. **Gửi packet không chặn:** `session.trySend`. Hàng đợi gửi đầy thì Session bị kick; việc đóng Session chạy **ngoài** writer.
+7. **Sang Zone khác:** chỉ `otherZone.post(...)`, không chờ. Không giữ tham chiếu để sửa entity của Zone khác.
+8. **Trạng thái dùng chung của nhiều Zone** (Dungeon, sự kiện) có writer riêng và chỉ nhận việc qua `post`.
+9. **Thứ tự trong một Zone là thứ tự của writer.** Không dùng timestamp của client để phân xử.
+10. **Lỗi trong một hành động hoặc một nhịp** chỉ ghi log; writer chạy tiếp.
+
+---
+
+## 5. Player
+
+- `Player.java` = lõi nhân vật: danh tính, vị trí, HP/MP, `move`, `attackMonster`, `injure`, `die`, `revive`, `requestChangeMap`, `returnTownFromDead`, `goBack`, `teleport`.
+- **Tách khi** có một nhóm field + method chỉ làm việc với nhau (túi đồ, nhiệm vụ, giao dịch, bang hội…):
+  - tạo class theo tên game (`Inventory`, `PlayerTask`, `Trade`), Player giữ làm field;
+  - Handler gọi `player.inventory.useItem(index)` qua `zone.post`;
+  - xem lại khi `Player.java` vượt khoảng 1.000–1.500 dòng.
+- **Không tách** bằng cách đưa hành động sang Zone, Manager, Service hay Handler.
+- `Player.move(x, y)` kiểm tra tường (`map.isWall`) và quãng đường theo thời gian; sai thì kéo về vị trí cũ.
+- Player giữ `session` để gửi riêng cho mình (`zone.service.xxx(player)` dùng `player.session()`). Gameplay không đọc trạng thái kết nối của Session.
+
+## 6. Character, Boss, đệ tử
+
+- `Character` (abstract, mỏng) là phần chung: vị trí, HP/MP, chỉ số, `skills`, `effects`, `injure`, `die`, `useSkill`, `zone`.
+- `Player extends Character`; `Boss extends Character`; sau này đệ tử cũng `extends Character`.
+- Boss lấy dữ liệu từ `BossTemplate` (chỉ số, skill, câu thoại, lịch xuất hiện). **Chỉ boss có cơ chế riêng** (phase, triệu hồi) mới có class con.
+- Client hiển thị Boss bằng gói player; `AreaService` gửi Boss như player.
+- Zone giữ `players` và `bosses` là hai danh sách riêng.
+- `Effects` (choáng, trói, hóa đá, DoT) là một class dùng chung, gắn làm field của `Character` và `Monster`, cập nhật trong `update()`.
+
+## 7. Monster
+
+- `Monster.update(now)`: chết thì xét hồi sinh; sống thì `effects.update` → `updateMove` → `updateAttack` → `findTarget`.
+- Monster tự báo qua `zone.service` (`monsterMove`, `monsterAttack`, `monsterInjure`, `monsterDie`, `monsterRespawn`). Zone không so trạng thái trước/sau để đoán Monster vừa làm gì.
+- Quái tinh anh/thủ lĩnh là **field** (`levelBoss`), không phải class con.
+- Hằng số AI (tầm đánh, tầm đuổi, tốc độ) đi dần vào `MonsterTemplate`.
+- `MonsterManager`: load template, `findTemplate`, `createForMap`. Không chạy vòng lặp, không gameplay.
+- Monster bỏ qua Player đang tải map (`player.isLoading()`).
+
+## 8. Map, Zone và đi lại
+
+- `MapManager` tạo đúng `minZone` Zone cho mỗi Map public lúc khởi động. Đang chơi không tạo thêm Zone public.
+- `Map.findOrRandomZone()`: ưu tiên Zone ít người, bỏ qua Zone đầy.
+- **Mọi kiểu đi lại dùng một đường chung.** Player tự tính đích, rồi gọi `maps.travel(this, mapId, x, y)`:
+  - `requestChangeMap()` → waypoint (trong dungeon thì hỏi `dungeon.findMap` trước);
+  - `returnTownFromDead()` → hồi sinh rồi về nhà;
+  - `goBack()` → vị trí đã lưu;
+  - `teleport(...)` → đích chỉ định.
+- **`travel` chạy trên writer của Zone nguồn:**
+  1. kiểm tra lại điều kiện;
+  2. `source.leave(player)` (báo người còn lại);
+  3. đặt vị trí mới cho Player;
+  4. `destination.post(enter player)`, không chờ.
+- **`Zone.enter(player)` chạy trên writer của Zone đích:**
+  1. Session đã đóng → không vào, chuyển sang lưu cuối (mục 10);
+  2. Zone đầy → thử Zone khác của cùng Map;
+  3. thêm vào `players`, đánh dấu `loading`;
+  4. gửi `MAP_INFO` dựng từ dữ liệu đang sống (giống `Zone.enter → setMapInfo` của src cũ);
+  5. báo người khác có Player mới.
+- `FINISH_LOAD_MAP` → `zone.post(player, player::finishLoadMap)`: bỏ cờ `loading`, gửi danh sách người đang ở trong Zone cho Player.
+- Trong lúc đi giữa hai Zone, Player **thuộc về chuyến đi**, không Zone nào sửa nó. Thoát game giữa chừng thì Zone đích xử lý ở bước enter (1).
+
+## 9. Dungeon
+
+- `Dungeon` theo kiểu `Expansion` của src cũ:
+  - giữ các Map riêng (tạo từ `MapTemplate` dùng chung, không nằm trong danh sách Map public);
+  - giữ thời hạn và người tham gia;
+  - có `update()` và `close()`.
+- `DungeonManager`: tạo, tìm, đóng các lượt dungeon.
+- Mỗi loại dungeon có luật riêng thì `extends Dungeon`.
+- **Mỗi Dungeon có writer riêng** cho trạng thái chung. Zone báo bằng `dungeon.post(() -> dungeon.finishMap(mapId))`.
+- Player có field `dungeon`; hết giờ hoặc thua thì `dungeon.close()` gửi từng Player về nhà bằng `travel`.
+
+## 10. Lưu dữ liệu (bất biến)
+
+- Nguồn sự thật lúc đang chơi: entity trong Zone. DB là checkpoint.
+- Luồng lưu: **trên writer** chụp `PlayerSaveData` → **ngoài writer** `Repository` ghi DB.
+- Thoát game, theo đúng thứ tự:
+  1. xử lý xong việc đang chờ của Zone;
+  2. tách Player khỏi Zone;
+  3. chết thì hồi sinh về nhà;
+  4. chụp `PlayerSaveData`;
+  5. lưu DB ngoài Zone;
+  6. nhả tài khoản cho lần đăng nhập mới.
+- Lần lưu thường và lần lưu cuối dùng chung một thứ tự; Session đã đóng thì lần lưu đến muộn bị bỏ.
+- Gameplay không biết SQL. Entity không tự lưu.
+
+---
+
+## 11. Cách viết Java
 
 ```java
-Monster monster = zone.findMonster(id);
-
-if (monster == null) {
+// Nên: kiểm tra trước, thay đổi sau, báo cuối; mỗi điều kiện một dòng
+if (isDead()) {
     return;
 }
-```
-
-## Limit lambdas
-
-Lambda is acceptable at a real execution boundary:
-
-```java
-zone.call(() -> {
-    player.move(x, y);
-    return null;
-});
-```
-
-Do not turn normal gameplay into functional chains for style.
-
-Execution-boundary lambdas must remain implementation detail.
-
-A normal gameplay flow should not require a reader to follow nested lambdas before understanding the action.
-
----
-
-# 12. Record / Result / Snapshot rule
-
-These types are allowed when they represent a real boundary.
-
-Valid reasons include:
-
-```text
-persistence boundary
-packet boundary
-cross-thread boundary
-cross-Zone boundary
-stable handoff
-```
-
-Examples:
-
-```text
-PlayerSaveData
-MapTemplate
-stable cross-Zone intent/handoff data
-```
-
-Do not create wrappers only because a method returns multiple values.
-
-Avoid unnecessary:
-
-```text
-MoveResult
-AttackResult
-DamageResult
-RuntimeContext
-OperationResult
-```
-
-For every new Result/record/Snapshot, the coding model must answer:
-
-```text
-What real boundary requires this type?
-Why is direct control flow less clear or less safe?
-```
-
-If there is no concrete answer, do not create the type.
-
-If several small result wrappers exist only to move ordinary gameplay control through Zone execution plumbing, review whether they can be removed or hidden without weakening correctness.
-
----
-
-# 13. Naming rule
-
-Use direct gameplay vocabulary.
-
-Prefer:
-
-```text
-init
-load
-save
-create
-find
-add
-remove
-enter
-leave
-move
-moveTo
-attack
-update
-updateAttack
-findTarget
-injure
-die
-respawn
-revive
-upgrade
-chat
-open
-close
-```
-
-Avoid unnecessary technical naming:
-
-```text
-executePlayerMovement
-processRuntimeTransition
-resolveGameplayOperation
-performAttackResolution
-coordinateMapMovement
-```
-
-The class already provides context.
-
-Inside `Player`:
-
-```text
-move()
-```
-
-not:
-
-```text
-movePlayer()
-```
-
-Inside `Monster`:
-
-```text
-attack()
-```
-
-not:
-
-```text
-executeMonsterAttack()
-```
-
----
-
-# 14. find / get / create naming contract
-
-Use names consistently.
-
-```text
-findX()
-= search only
-= does not create
-= may return null
-
-getX()
-= return an expected existing object
-= does not silently create
-= may throw if missing when that contract is clear
-
-createX()
-= create a new object
-
-getOrCreateX()
-= may return existing or create new
-```
-
-Do NOT hide creation behind an ordinary `getX()` name.
-
-Example:
-
-```text
-Map.findZone(zoneId)
-Map.getZone(zoneId)          // only if Zone must already exist
-Map.getOrCreateZone(zoneId)  // if creation is allowed
-```
-
-Names must expose side effects.
-
----
-
-# 15. Legacy-reference gate
-
-The legacy source is the approved reference for:
-
-```text
-feature center
-class responsibilities
-Manager usage
-Service usage
-gameplay vocabulary
-normal call flow
-method naming
-file count
-top-to-bottom readability
-```
-
-Before changing an existing feature, report:
-
-```text
-Legacy feature center:
-- exact file/class
-
-Legacy Manager responsibilities:
-- exact responsibilities
-
-Legacy runtime-object responsibilities:
-- exact responsibilities
-
-Legacy Service responsibilities:
-- exact responsibilities
-
-Legacy normal flow:
-- concise call flow
-
-Adopt:
-- readability/naming/ownership strengths
-
-Reject:
-- unsafe or obsolete choices
-```
-
-Example:
-
-```text
-Legacy feature center:
-Monster.java
-
-Legacy MonsterManager:
-init/load templates only
-
-Legacy Monster:
-update
-findTarget
-attack
-injure
-die
-respawn
-
-Legacy Zone:
-calls monster.update()
-
-Legacy Service:
-broadcast/send monster packets
-```
-
-The statement:
-
-```text
-"legacy inspected"
-```
-
-is not enough.
-
-When legacy flow is easier to read but technically unsafe, preserve the readable responsibility shape while replacing only the unsafe implementation detail.
-
-Example:
-
-```text
-Adopt:
-Zone → monster.update()
-
-Reject:
-Zone extends Thread
-per-entity lock ownership
-direct network coupling from Monster
-```
-
----
-
-# 16. What must NOT be copied from legacy
-
-Do NOT copy:
-
-```text
-global singleton architecture
-direct JDBC inside gameplay
-packet construction inside runtime entities
-network Message parsing inside entities
-platform-thread-per-Zone as a default
-arbitrary multi-thread mutation
-large lock-per-entity concurrency model
-unsafe global mutable state
-obsolete protocol/data behavior
-client-controlled combat ordering
-```
-
-Use legacy for readability and responsibility shape, not obsolete technical architecture.
-
----
-
-# 17. Mutable state authority rule
-
-Every mutable gameplay concept must have one authoritative owner.
-
-Examples of concepts:
-
-```text
-current Zone membership
-Player position
-Player HP
-Monster HP
-Monster target
-Zone capacity
-effect lifetime
-```
-
-Duplicate representations are allowed only when their role is explicit:
-
-```text
-authority
-cache
-durable checkpoint
-network binding
-derived value
-```
-
-Two mutable fields must not silently both act as authority.
-
-When reviewing a duplicate state, explicitly answer:
-
-```text
-Which field/object is authoritative?
-Which copy is derived or cached?
-When is it synchronized?
-Who may mutate it?
-```
-
-If these answers are unclear, ownership is not finished.
-
----
-
-# 18. Player / Session / Zone boundary
-
-`Player` is the gameplay runtime object.
-
-`Session` is network/session state.
-
-`Zone` is realtime execution/world ownership.
-
-Player owns behavior such as:
-
-```text
-move
-injure
-revive
-addPotential
-change its own location fields
-future inventory/skill/task behavior
-```
-
-Session may:
-
-```text
-hold connection state
-bind Player
-send messages
-track connection lifecycle
-hold necessary online binding metadata
-```
-
-Zone owns:
-
-```text
-runtime execution
-membership
-admission/capacity
-mutation ordering
-live world collections
-```
-
-## Session / Player / Zone authority
-
-Joined realtime membership authority is `Zone.members`, keyed by exact
-`Session` identity. `Zone.hasPlayer(session)` is the membership truth.
-
-`Session.zone` is a routing/back-reference and candidate owner. It is not proof
-that the Session is currently a member of that Zone.
-
-`Player.mapId`/`zoneId`/`x`/`y` are logical location and handoff state.
-`mapId`/`x`/`y` participate in persistence; `zoneId` is runtime-only and is not
-persisted. None of these fields proves realtime Zone membership.
-
-`Zone.reservedPlayers` is destination admission state for a pending handoff and
-is separate from active `Zone.members`.
-
-For a joined Session, the invariant is: `Session.zone == Zone`, exact Session
-membership in that Zone, and Player map/zone location matches that Zone. During
-a committed cross-Map handoff, the Session is intentionally detached from the
-source Zone while the destination reservation and Player destination location
-await `FINISH_LOAD_MAP` admission.
-
-Important:
-
-```text
-Zone decides WHEN Player mutation runs.
-Player decides WHAT Player mutation does.
-```
-
-Do not make Session the general gameplay model.
-
-Do not spread new `Session → player()` dependencies through gameplay without review.
-
-Do not change the current `Session / Player / Zone` membership representation casually.
-
-Specifically, a coding model MUST NOT independently:
-
-```text
-change Zone members from Session to Player
-create ZoneMember / PlayerContext / OnlinePlayer wrappers
-move Zone authority into Session
-duplicate another currentZone authority
-```
-
-Such changes require a dedicated approved design task.
-
----
-
-# 19. Map / MapManager contract
-
-Ownership tree:
-
-```text
-MapManager
-→ Map
-→ Zone
-```
-
-`Map` owns:
-
-```text
-MapTemplate
-Zones
-findZone
-zones
-findWaypoint
-map-specific rules
-```
-
-Public/world Map contract:
-
-```text
-MapManager owns the public Map registry.
-Map owns the Zones inside each public Map.
-Public Map construction creates exactly minZone Zones.
-Normal gameplay uses Map.findZone(zoneId) for existing Zones.
-An absent public Zone is rejected.
-Normal Player/Monster/client paths must not create a public Zone.
-maxZone does not authorize public lazy Zone creation.
-```
-
-`MapManager` primarily owns:
-
-```text
-Map init/create
-Map registry
-find Map
-open/close Map lifecycle
-global Map collection
-```
-
-A future Dungeon run may own private runtime Maps created from shared
-MapTemplate/static data. Those private Maps are not automatically part of the
-public `MapManager` registry. Dungeon runtime creation requires its own
-approved feature design.
-
-Do not duplicate Map-owned Zone APIs in MapManager without a demonstrated global need.
-
-Default:
-
-```java
-Map map = mapManager.findMap(mapId);
-
-if (map == null) {
-    return;
+if (!map.isWall(x, y)) {
+    this.x = x;
+    this.y = y;
 }
+zone.service.move(this);
 
-Zone zone = map.findZone(zoneId);
+// Tránh: gộp kiểm tra và thay đổi trong một điều kiện
+if (player == null || player.isDead() || !player.move(x, y)) { ... }
 ```
 
-Strong review warnings:
+- Early return; kiểu rõ ràng (không `var`); vòng `for` thường.
+- Không `Optional`, `Stream` trong gameplay. `Optional` chỉ ở biên Repository nếu thật cần.
+- **Lambda chỉ ở biên thực thi** (`zone.post(...)`, `dungeon.post(...)`). Không lồng lambda.
+- **Record chỉ ở biên**: `XxxTemplate`, `PlayerSaveData`, dữ liệu đọc từ DB/file, `Message`. Không tạo `XxxResult`, `XxxContext`, `XxxSnapshot` để chuyền kết quả trong gameplay.
+- Không `synchronized`/lock trong gameplay. Lock chỉ ở hạ tầng (Session, writer).
+- File lớn mà cùng một chủ đề thì được phép; không tách chỉ vì số dòng.
+- Comment giải thích **vì sao**, viết tiếng Việt hoặc tiếng Anh đều được, ngắn.
 
-```text
-MapManager.movePlayer()
-MapManager.injurePlayer()
-MapManager.attackMonster()
-```
+## 12. Đặt tên
 
-Cross-Map/cross-Zone transition is a special technical boundary.
+- Dùng từ của game và của src cũ: `update`, `move`, `attack`, `injure`, `die`, `respawn`, `revive`, `enter`, `leave`, `findTarget`, `requestChangeMap`, `returnTownFromDead`, `teleport`, `addEffect`, `addItem`.
+- Class đã nói ngữ cảnh thì method không lặp lại: trong `Monster` là `attack()`, không phải `monsterAttack()`.
+- Riêng `AreaService` đặt tên theo sự kiện kèm chủ thể (`monsterAttack`, `playerMove`), vì một service gửi cho nhiều loại entity.
+- `findX` = tìm, có thể null, không tạo. `getX` = phải có, thiếu thì lỗi. `createX` = tạo mới.
+- Không dùng tên kỹ thuật thay hành động game: `Processor`, `Coordinator`, `Orchestrator`, `Facade`, `Operation`, `Transition`, `Resolution`.
 
-Its final owner MUST be explicitly approved by the task plan.
+## 13. Không chép từ src cũ
 
-A coding model must not independently decide:
+- Singleton toàn cục (`MapManager.getInstance()`), state toàn cục dùng chung.
+- `Zone extends Thread` (platform thread), lock trên từng entity, `ReadWriteLock` chồng.
+- Entity parse `Message` hoặc tạo bytes; entity gọi DB.
+- `Player.java` vạn dòng: tách theo mục 5.
+- `Boss extends Player`: dùng `Character` (mục 6).
+- Hằng số phát tán, `Utils` khổng lồ.
 
-```text
-"put it in MapManager"
-"put it in Player"
-"create MapService"
-"create TransitionCoordinator"
-```
+## 14. Test
 
-because the operation crosses owners.
+- Test qua hành vi quan sát được: packet gửi ra, state của entity, DB checkpoint.
+- Test concurrency điều khiển thứ tự bằng latch/barrier, không dựa `Thread.sleep` để đồng bộ.
+- Lỗi concurrency phải có test **tái hiện được** (fail trước khi sửa, pass sau khi sửa).
+- Không mở rộng API production chỉ để test. Truy cập package-private cho test tập trung là được; tránh reflection.
+- Bắt buộc có test cho: chuyển map, Zone đầy, chết rồi thoát, thoát giữa chuyến đi, nhiều người đánh một Monster (một người kết liễu), lưu/tải.
+- Cổng chung: `mvn test` trong `server/` phải xanh trước khi push.
 
-Legacy `Player.requestChangeMap()` / `joinMap()` is a readability reference for a direct game flow, but its direct source-leave → destination-enter mutation model must NOT be copied when it would violate the new single-writer/cross-Zone safety rules.
+## 15. Quy trình một task
+
+1. Đọc file này; mở tính năng tương ứng ở src cũ (ghi lại 1–2 dòng: file nào, tên/luồng nào giữ).
+2. Viết theo luồng mẫu (mục 3).
+3. Thêm/sửa test cho đúng hành vi đổi.
+4. `mvn test` xanh.
+5. Báo ngắn: đã đổi gì, test nào, **những gì chưa chạy** (DB thật, Unity, tải).
+
+Code chạy đúng nhưng khó đọc hơn src cũ mà không có lý do correctness thì **chưa đạt**.
 
 ---
 
-# 20. Zone contract
-
-Zone is the realtime execution owner.
-
-Target:
-
-```text
-1 ACTIVE Zone
-= 1 virtual thread
-= 1 writer
-```
-
-Zone owns:
-
-```text
-runtime writer
-membership
-enter/leave
-capacity/admission
-entity collections
-mutation ordering
-Zone lifecycle
-```
-
-Zone decides:
-
-```text
-WHEN Player/Monster/Npc/etc. runtime mutation is allowed to run.
-```
-
-The entity decides:
-
-```text
-WHAT its own gameplay update/action does.
-```
-
-Default direction:
-
-```java
-for (Monster monster : monsters) {
-    monster.update(...);
-}
-```
-
-not:
-
-```java
-for (Monster monster : monsters) {
-    monster.updateMove(...);
-}
-
-for (Monster monster : monsters) {
-    monster.updateRespawn(...);
-}
-
-for (Monster monster : monsters) {
-    monster.updateAttack(...);
-}
-```
-
-unless a real gameplay/correctness requirement explicitly needs global phases.
-
-There is NO default requirement that:
-
-```text
-all Monsters move
-before all Monsters respawn
-before all Monsters attack
-```
-
-A difference in which Monster moves or attacks first is not, by itself, a correctness problem.
-
-Zone should call entity behavior:
-
-```java
-player.update();
-monster.update();
-```
-
-Zone should not absorb or micromanage the internal lifecycle of the entity.
-
-Bad long-term direction:
-
-```text
-Zone.findMonsterTarget()
-Zone.calculateMonsterAttack()
-Zone.moveMonster()
-Zone.respawnMonster()
-Zone.updateMonsterEffect()
-Zone.updateMonsterSkill()
-```
-
-Preferred:
-
-```text
-Monster.update()
-Monster.findTarget()
-Monster.attack()
-Monster.move()
-Monster.respawn()
-```
-
-Zone provides:
-
-```text
-execution ownership
-world membership
-world/entity lookup
-mutation ordering
-the minimum world context the entity genuinely needs
-```
-
-The technical writer machinery may use queues, lambdas, calls, locks, or wait primitives when correctness requires them, but that machinery should remain an implementation detail.
-
-A reader opening `Zone.java` should encounter the game-facing Zone API clearly and should not need to understand the writer implementation before understanding:
-
-```text
-enter
-leave
-move
-members
-monsters
-update
-```
-
----
-
-# 21. Feature ownership examples
-
-## Monster
-
-Feature center:
-
-```text
-Monster.java
-```
-
-Monster should own:
-
-```text
-update
-findTarget
-move/patrol/chase
-attack
-injure
-death
-respawn
-aggro/enemy behavior
-```
-
-Preferred normal lifecycle:
-
-```text
-Zone
-→ Monster.update(...)
-
-Monster.update(...)
-→ decides its own respawn/move/attack flow
-→ calls direct Monster behavior methods
-```
-
-The internal order inside one Monster update is Monster behavior.
-
-Do not require Zone to know every Monster lifecycle phase.
-
-MonsterManager should mainly own:
-
-```text
-template/catalog init
-create/find when meaningful
-global lifecycle start/stop only if genuinely needed
-```
-
-A separate `Factory`, `Scheduler`, `Registry`, or similar type should not exist when the same responsibility fits naturally and clearly in `MonsterManager`.
-
-### Monster combat authority
-
-Monster HP is live mutable gameplay state.
-
-For attacks against a Monster in a Zone:
-
-```text
-Zone writer serializes the attacks.
-Monster.injure(...) owns the Monster-local HP/death transition.
-```
-
-Example:
-
-```text
-Monster HP = 100
-
-Player A attack = 60
-Player B attack = 70
-```
-
-If Zone writer processes A then B:
-
-```text
-A: 100 → 40
-B: 40 → 0
-B is the finisher.
-```
-
-If Zone writer processes B then A:
-
-```text
-B: 100 → 30
-A: 30 → 0
-A is the finisher.
-```
-
-Both orders are valid.
-
-The server does NOT attempt to reconstruct a “true simultaneous order” from client timestamps.
-
-The attack that performs the alive → dead transition owns that kill result.
-
-A later attack must observe the Monster as dead and must not:
-
-```text
-kill it again
-award the same kill again
-award duplicate death rewards
-```
-
-## Npc
-
-Npc owns NPC behavior.
-
-NpcManager mainly owns template/catalog/init/create/find.
-
-## Item
-
-Item owns item behavior.
-
-ItemManager mainly owns template/catalog/init/create/find.
-
-Do not move normal feature actions into Manager for convenience.
-
----
-
-# 22. Concurrency / blocking / lifecycle invariants
-
-Cross-Zone operations must avoid circular waits.
-
-Never:
-
-```text
-sourceZone.call(...)
-    → destinationZone.call(...)
-```
-
-while holding source ownership.
-
-Required shape:
-
-```text
-capture source intent
-→ leave source execution
-→ destination admission/reservation
-→ source revalidation/commit
-→ handoff
-```
-
-## Same-Zone mutation ordering
-
-Inside one Zone:
-
-```text
-the Zone writer order is the authoritative server order.
-```
-
-This applies to gameplay mutations such as:
-
-```text
-Player movement
-Player damage
-Monster damage
-Monster death
-Monster respawn
-effect application
-future item/entity mutation owned by that Zone
-```
-
-Two commands that arrive close together do not need a separate timestamp arbitration system.
-
-Do NOT use:
-
-```text
-client timestamp
-client frame order
-client-declared hit time
-client clock
-```
-
-to override the server-side Zone writer order.
-
-Do not add:
-
-```text
-combat priority queue
-attack timestamp resolver
-simultaneous-hit coordinator
-```
-
-unless a future gameplay rule explicitly requires one.
-
-Single-writer serialization is sufficient for ordinary same-Zone ordering.
-
-## Blocking rules
-
-Do not block Zone gameplay execution on:
-
-```text
-JDBC
-HTTP
-filesystem I/O
-socket read/write
-external Future waits
-unbounded blocking queue submission
-```
-
-Zone lifecycle target:
-
-```text
-ACTIVE
-FROZEN
-STOPPED
-```
-
-FROZEN preserves runtime state.
-
-Time-based mechanics should prefer absolute deadlines where suitable:
-
-```text
-respawnAt
-effectEndAt
-cooldownUntil
-itemExpireAt
-```
-
----
-
-# 23. Persistence / hot-path invariants
-
-Runtime authority:
-
-```text
-Zone + live runtime objects
-```
-
-Durable checkpoint:
-
-```text
-MySQL
-```
-
-Preferred persistence flow:
-
-```text
-runtime mutation
-→ stable SaveData capture
-→ Repository outside Zone
-→ DB
-```
-
-Final disconnect ordering:
-
-```text
-process prior Zone work
-→ detach realtime mutation
-→ capture stable save state
-→ DB save outside Zone
-→ release account reservation
-```
-
-Hot paths include:
-
-```text
-Zone tick
-Monster AI
-target search
-movement
-combat
-Effect/DoT
-crowded broadcast
-```
-
-Prefer:
-
-```text
-direct runtime state
-simple loops
-few allocations
-few wrappers
-```
-
-Do not use Snapshot/Optional/Stream/DTO/Result in hot paths without a concrete reason.
-
-Do not split one entity's normal update into multiple world-level passes only for abstract determinism.
-
-A global phase is justified only when the gameplay rule itself requires all entities to complete one phase before another phase starts.
-
----
-
-# 24. Testing rule
-
-Tests must validate production design, not distort it.
-
-Do not add public production APIs only for tests.
-
-Concurrency tests should be deterministic.
-
-Avoid:
-
-```text
-Thread.sleep(...)
-```
-
-for synchronization.
-
-Prefer:
-
-```text
-CountDownLatch
-explicit barriers
-deterministic state coordination
-```
-
-Tests should prefer observable behavior over internal counters.
-
-Example:
-
-```text
-prove destination capacity can be reused
-```
-
-is stronger than only asserting:
-
-```text
-reservedCount == 0
-```
-
-For contested Monster kills, focused tests should prove:
-
-```text
-two Player attacks are serialized
-only one attack performs alive → dead
-the finisher is the attack that reduces HP to 0
-a later attack cannot produce a second kill/reward for the same death
-```
-
-The test should control server-side execution order directly.
-
-Do not test finisher ownership using client timestamps.
-
-Package-private access may be used when a focused test genuinely needs it, but production API must not be expanded casually.
-
----
-
-# 25. Touched-slice and final review gate
-
-When a task owns a feature slice, that slice must leave the task compliant with this rule.
-
-For every touched top-level type, review:
-
-```text
-Is this still the correct feature center?
-Is Manager doing gameplay?
-Is Service doing business logic?
-Is Zone doing entity behavior instead of only execution/world ownership?
-Is Zone micromanaging entity lifecycle phases that belong in Feature.java?
-Is Handler doing gameplay?
-Is a Result/record/wrapper truly required?
-Is there duplicate mutable authority?
-Did a convenience API hide ownership?
-Did a method hide side effects?
-Did we increase file jumps without a correctness reason?
-Did we introduce global phases without a demonstrated gameplay/correctness requirement?
-```
-
-Before implementation, report:
-
-```text
-Current feature center:
-
-Legacy feature center:
-Legacy files/classes inspected:
-
-Legacy Manager responsibilities:
-Legacy runtime-object responsibilities:
-Legacy Service responsibilities:
-Legacy normal flow:
-
-Authoritative mutable state:
-
-Adopt:
-Reject:
-
-Target feature center:
-Target Manager responsibilities:
-Target Service responsibilities:
-Target execution owner:
-
-Files expected to change:
-Behavior/contracts preserved:
-Focused tests:
-```
-
-After implementation, report:
-
-```text
-Final feature center:
-Normal gameplay flow:
-Manager responsibilities:
-Service responsibilities:
-Authoritative mutable state:
-Files changed:
-Files removed/merged/renamed:
-Names simplified:
-Focused tests run:
-Full Maven gate:
-Manual/DB/Unity/TLS gates not run:
-Known remaining debt:
-```
-
-Final reviewer must be able to answer quickly:
-
-```text
-Where do I start reading this feature?
-What object contains the main gameplay logic?
-What does the Manager actually manage?
-What does Service actually send?
-Who owns execution?
-Who owns mutable state?
-Who owns persistence?
-Where is packet encoding?
-How many files must I open for the normal flow?
-Can a beginner follow the method top-to-bottom?
-Does Zone call high-level entity behavior, or does it micromanage entity internals?
-```
-
-Desired result:
-
-```text
-easy to find
-easy to read
-easy to debug
-few file jumps
-simple Java
-direct game vocabulary
-correct ownership
-safe concurrency
-safe persistence
-```
-
-When architecture purity and readability conflict without a correctness reason:
-
-> **Prefer the implementation that reads more directly as game logic.**
-
-When a clever Java construct and a simple Java construct are equally correct:
-
-> **Prefer the simpler one.**
+## 16. Phần code chưa theo rule (chuyển dần, theo thứ tự)
+
+| Hiện tại | Đích | Mục |
+|---|---|---|
+| `Zone` giữ `Session`; mỗi hành động là một method trên Zone (`move`, `attackMonster`, `canTargetMonster`) | `Zone` giữ `Player`; Handler → `zone.post` → method của Player | 2, 3, 4 |
+| `Monster` trả `Damage/Attack/Move/Respawn`; Zone so trước/sau để gửi packet | Monster gọi `zone.service` | 7 |
+| `MAP_INFO` gửi từ Handler, đọc Monster qua `Monster.Snapshot` | `Zone.enter` gửi `MAP_INFO` từ dữ liệu sống; bỏ `Snapshot` | 8 |
+| Chuyển map: giữ chỗ ở đích + `Trip` + vào Zone lúc `FINISH_LOAD_MAP` | `travel`: leave nguồn → `post(enter)` đích | 8 |
+| `MapManager.changeMap/returnHomeFromDeath` | `Player.requestChangeMap/returnTownFromDead` → `maps.travel` | 5, 8 |
+| `MonsterManager.start/stop` bật vòng update của Zone | `MapManager.start/stop` | 7, 8 |
+| `Zone` dùng `synchronized` cho truy vấn từ thread khác | truy vấn qua `post`/`call` ở biên; bỏ `synchronized` | 11 |
+| `Player.move` nhận mọi tọa độ; đánh không kiểm tra tầm/cooldown | kiểm tra tường, quãng đường, tầm, cooldown | 5, 3 |
+| Chưa có `Character`, `Boss`, `Effects`, `Dungeon`, `goBack`, `teleport`, `findOrRandomZone` | theo mục 5–9 | — |
+
+Thứ tự đề xuất: luồng mẫu (move + attack monster, Zone giữ Player) → travel + `MAP_INFO` khi enter → Monster gọi service → kiểm tra di chuyển/tầm/cooldown → `Character` + `Effects` → Boss → Dungeon.
